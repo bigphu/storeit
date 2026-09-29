@@ -1,3 +1,4 @@
 package worker
 
-// TODO(M5): job CommitImport, gọi service.CommitImport
+// TODO(M5): CommitImportWorker cho job.CommitImportArgs (args ở inventory/job),
+// RestoreActor rồi gọi service.CommitImport

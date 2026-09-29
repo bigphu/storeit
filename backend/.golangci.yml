@@ -5,7 +5,8 @@
 # Rule nào có deny kèm allow phải để list-mode: lax, không thì deny luôn thắng.
 # Một import phải qua hết mọi rule khớp với file.
 #
-# Thêm module: thêm rule <module>-boundary và thêm module vào allow của từng tầng.
+# Thêm module: thêm rule <module>-boundary và thêm module vào allow của từng tầng
+# (gồm cả <module>/job ở service, repository, entrypoints).
 version: "2"
 
 linters:
@@ -104,6 +105,18 @@ linters:
           allow: *pure-allow
           deny: *pure-deny
 
+        # job: args của job nền (struct, Kind, InsertOpts), dùng chung giữa chỗ
+        # enqueue (repository trong tx, hoặc service) và worker. Chỉ dữ liệu,
+        # và vì không phải contract nên module khác không import được
+        job:
+          list-mode: strict
+          files: ["**/internal/*/job/**"]
+          allow:
+            - $gostd
+            - github.com/google/uuid
+            - github.com/riverqueue/river
+            - storeit/internal/platform/jobs
+
         # service: không chi, net/http, pgx, River, sqlc. Gọi repository qua interface trong domain
         service:
           list-mode: lax
@@ -131,14 +144,19 @@ linters:
             - storeit/internal/platform
             - storeit/internal/identity/domain
             - storeit/internal/identity/contract
+            - storeit/internal/identity/job
             - storeit/internal/directory/domain
             - storeit/internal/directory/contract
+            - storeit/internal/directory/job
             - storeit/internal/inventory/domain
             - storeit/internal/inventory/contract
+            - storeit/internal/inventory/job
             - storeit/internal/activity/domain
             - storeit/internal/activity/contract
+            - storeit/internal/activity/job
 
-        # repository: nơi duy nhất dùng repository/db (sqlc), không biết HTTP
+        # repository: nơi duy nhất dùng repository/db (sqlc), không biết HTTP.
+        # Job đi kèm một thay đổi thì enqueue ở đây, trong cùng WithTx
         repository:
           list-mode: lax
           files: ["**/internal/*/repository/**"]
@@ -156,15 +174,19 @@ linters:
             - storeit/internal/identity/domain
             - storeit/internal/identity/contract
             - storeit/internal/identity/repository
+            - storeit/internal/identity/job
             - storeit/internal/directory/domain
             - storeit/internal/directory/contract
             - storeit/internal/directory/repository
+            - storeit/internal/directory/job
             - storeit/internal/inventory/domain
             - storeit/internal/inventory/contract
             - storeit/internal/inventory/repository
+            - storeit/internal/inventory/job
             - storeit/internal/activity/domain
             - storeit/internal/activity/contract
             - storeit/internal/activity/repository
+            - storeit/internal/activity/job
 
         # handler: chỉ gọi service, không đụng DB
         handler:
@@ -194,7 +216,7 @@ linters:
             - storeit/internal/activity/service
             - storeit/internal/activity/domain
 
-        # worker, subscriber: chỉ gọi service
+        # worker, subscriber: chỉ gọi service. Worker đọc args từ <module>/job
         entrypoints:
           list-mode: lax
           files: ["**/internal/*/worker/**", "**/internal/*/subscriber/**"]
@@ -212,15 +234,19 @@ linters:
             - storeit/internal/identity/service
             - storeit/internal/identity/domain
             - storeit/internal/identity/contract
+            - storeit/internal/identity/job
             - storeit/internal/directory/service
             - storeit/internal/directory/domain
             - storeit/internal/directory/contract
+            - storeit/internal/directory/job
             - storeit/internal/inventory/service
             - storeit/internal/inventory/domain
             - storeit/internal/inventory/contract
+            - storeit/internal/inventory/job
             - storeit/internal/activity/service
             - storeit/internal/activity/domain
             - storeit/internal/activity/contract
+            - storeit/internal/activity/job
 
         # spreadsheet: chỉ biết dòng và ô, không biết asset
         spreadsheet:
