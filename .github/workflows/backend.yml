@@ -1,0 +1,48 @@
+# CI của backend: chạy đúng các make target như trên máy dev
+name: backend
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Build
+        run: go build ./...
+
+      - name: Format + vet
+        run: make fmt-check vet
+
+      - name: Lint (golangci-lint + depguard boundaries)
+        run: make lint
+
+      - name: Test
+        run: make test
+
+      # Fail nếu sửa spec hay query mà chưa commit code sinh lại
+      - name: Generated code is up to date
+        run: make generate-check
