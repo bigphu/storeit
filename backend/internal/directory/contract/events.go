@@ -1,0 +1,3 @@
+package contract
+
+// TODO(M3): event member_created, member_updated, member_offboarded...

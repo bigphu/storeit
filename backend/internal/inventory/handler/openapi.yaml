@@ -1,0 +1,26 @@
+# API của module inventory. Sửa spec trước, rồi `make generate` để sinh api/api.gen.go.
+# operationId đặt trùng tên method của service, JSON dùng snake_case.
+#
+# Endpoint dự kiến (M4):
+#   /assets, /assets/{assetID}
+#   POST /assets/{assetID}/check-out, /check-in, /status, /parent; GET /children
+#   GET /assets/{assetID}/qr.svg
+#   GET /members/{memberID}/assets
+#   /categories, /statuses
+#   M5: POST /imports, GET /imports/{importID}, POST /imports/{importID}/commit, GET /imports/{importID}/errors.xlsx
+#   M5: GET /assets/import-template.xlsx, GET /assets/export.xlsx, GET /assets/export.csv
+openapi: 3.0.3
+info:
+  title: Inventory API
+  version: 0.1.0
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths: {}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

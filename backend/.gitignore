@@ -1,0 +1,76 @@
+# --- Binaries & output ---
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/bin/
+/build/
+/dist/
+/out/
+
+# --- Testing & coverage artifacts ---
+*.test
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+/coverage/
+
+# --- Go workspace ---
+go.work
+go.work.sum
+
+# --- Dependency ---
+/vendor/
+
+# --- Environment & secrets ---
+.env
+.env.*
+!.env.example
+!.env.local.example
+!.env.prod.example
+*.pem
+*.key
+*.crt
+*.p12
+/secrets/
+/certs/
+/deploy/postgres/secrets/
+/deploy/postgres/certs/
+/deploy/postgres/logs/
+/deploy/pgadmin/secrets/
+/deploy/app/secrets/
+
+# --- Local data & logs ---
+*.log
+/logs/
+/tmp/
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Air (live reload) ---
+/tmp/
+.air.toml.local
+
+# --- Debugging ---
+__debug_bin*
+*.pprof
+ 
+# --- Editors & IDEs ---
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+*~
+ 
+# --- OS files ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Docker local overrides ---
+docker-compose.override.yml

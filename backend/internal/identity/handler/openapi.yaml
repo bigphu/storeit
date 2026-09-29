@@ -1,0 +1,24 @@
+# API của module identity. Sửa spec trước, rồi `make generate` để sinh api/api.gen.go.
+# operationId đặt trùng tên method của service, JSON dùng snake_case.
+#
+# Endpoint dự kiến (M1):
+#   POST /auth/login (public)
+#   GET /me
+#   /accounts, /accounts/{accountID}, /accounts/{accountID}/roles
+#   /roles, /roles/{roleID}
+#   GET /permissions
+openapi: 3.0.3
+info:
+  title: Identity API
+  version: 0.1.0
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths: {}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

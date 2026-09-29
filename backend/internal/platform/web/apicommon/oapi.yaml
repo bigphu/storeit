@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/v2.8.0/configuration-schema.json
+# Config cho oapi-codegen, chạy qua //go:generate trong doc.go
+package: apicommon
+output: apicommon.gen.go
+generate:
+  models: true
+output-options:
+  # Spec này không có path nào dùng schema, không tắt prune thì sinh ra rỗng
+  skip-prune: true

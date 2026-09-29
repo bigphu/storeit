@@ -1,0 +1,233 @@
+# Chạy bằng `make lint`. depguard giữ ranh giới giữa các module và giữa các tầng.
+#
+# Cách đọc: import bị chặn nếu khớp deny, trừ khi khớp một allow dài hơn.
+# Vd deny "storeit/internal/" + allow "storeit/internal/x/domain" = chỉ được import domain.
+# Rule nào có deny kèm allow phải để list-mode: lax, không thì deny luôn thắng.
+# Một import phải qua hết mọi rule khớp với file.
+#
+# Thêm module: thêm rule <module>-boundary và thêm module vào allow của từng tầng.
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - depguard
+
+  settings:
+    depguard:
+      rules:
+        # --- platform ---
+        platform:
+          list-mode: lax
+          files: ["**/internal/platform/**"]
+          deny:
+            - pkg: storeit/internal/identity
+              desc: platform không được import module nghiệp vụ
+            - pkg: storeit/internal/directory
+              desc: platform không được import module nghiệp vụ
+            - pkg: storeit/internal/inventory
+              desc: platform không được import module nghiệp vụ
+            - pkg: storeit/internal/activity
+              desc: platform không được import module nghiệp vụ
+
+        # --- Giữa các module: chỉ qua contract ---
+        identity-boundary:
+          list-mode: lax
+          files: ["**/internal/identity/**"]
+          deny:
+            - pkg: storeit/internal/
+              desc: module khác chỉ được dùng qua <module>/contract
+          allow:
+            - storeit/internal/identity
+            - storeit/internal/platform
+            - storeit/internal/directory/contract
+            - storeit/internal/inventory/contract
+            - storeit/internal/activity/contract
+
+        directory-boundary:
+          list-mode: lax
+          files: ["**/internal/directory/**"]
+          deny:
+            - pkg: storeit/internal/
+              desc: module khác chỉ được dùng qua <module>/contract
+          allow:
+            - storeit/internal/directory
+            - storeit/internal/platform
+            - storeit/internal/identity/contract
+            - storeit/internal/inventory/contract
+            - storeit/internal/activity/contract
+
+        inventory-boundary:
+          list-mode: lax
+          files: ["**/internal/inventory/**"]
+          deny:
+            - pkg: storeit/internal/
+              desc: module khác chỉ được dùng qua <module>/contract
+          allow:
+            - storeit/internal/inventory
+            - storeit/internal/platform
+            - storeit/internal/identity/contract
+            - storeit/internal/directory/contract
+            - storeit/internal/activity/contract
+
+        activity-boundary:
+          list-mode: lax
+          files: ["**/internal/activity/**"]
+          deny:
+            - pkg: storeit/internal/
+              desc: module khác chỉ được dùng qua <module>/contract
+          allow:
+            - storeit/internal/activity
+            - storeit/internal/platform
+            - storeit/internal/identity/contract
+            - storeit/internal/directory/contract
+            - storeit/internal/inventory/contract
+
+        # --- Các tầng trong một module ---
+        # domain, contract: chỉ stdlib, uuid và platform/errs
+        domain:
+          list-mode: strict
+          files: ["**/internal/*/domain/**"]
+          allow: &pure-allow
+            - $gostd
+            - github.com/google/uuid
+            - storeit/internal/platform/errs
+          deny: &pure-deny
+            - pkg: net/http
+              desc: domain/contract không biết HTTP
+            - pkg: database/sql
+              desc: domain/contract không biết SQL, dùng repository interface
+
+        contract:
+          list-mode: strict
+          files: ["**/internal/*/contract/**"]
+          allow: *pure-allow
+          deny: *pure-deny
+
+        # service: không chi, net/http, pgx, River, sqlc. Gọi repository qua interface trong domain
+        service:
+          list-mode: lax
+          files: ["**/internal/*/service/**"]
+          deny:
+            - pkg: storeit/internal/
+              desc: service chỉ dùng domain, contract và platform
+            - pkg: github.com/go-chi
+              desc: service không biết HTTP
+            - pkg: net/http
+              desc: service không biết HTTP
+            - pkg: github.com/jackc/pgx
+              desc: SQL và transaction thuộc repository
+            - pkg: github.com/riverqueue
+              desc: job và event đi qua repository
+            - pkg: storeit/internal/platform/web
+              desc: service không biết HTTP
+            - pkg: storeit/internal/platform/database
+              desc: transaction thuộc repository
+            - pkg: storeit/internal/platform/server
+              desc: service không biết HTTP
+            - pkg: storeit/internal/platform/middleware
+              desc: service không biết HTTP
+          allow:
+            - storeit/internal/platform
+            - storeit/internal/identity/domain
+            - storeit/internal/identity/contract
+            - storeit/internal/directory/domain
+            - storeit/internal/directory/contract
+            - storeit/internal/inventory/domain
+            - storeit/internal/inventory/contract
+            - storeit/internal/activity/domain
+            - storeit/internal/activity/contract
+
+        # repository: nơi duy nhất dùng repository/db (sqlc), không biết HTTP
+        repository:
+          list-mode: lax
+          files: ["**/internal/*/repository/**"]
+          deny:
+            - pkg: storeit/internal/
+              desc: repository chỉ dùng domain, contract, db và platform
+            - pkg: github.com/go-chi
+              desc: repository không biết HTTP
+            - pkg: net/http
+              desc: repository không biết HTTP
+            - pkg: storeit/internal/platform/web
+              desc: repository không biết HTTP
+          allow:
+            - storeit/internal/platform
+            - storeit/internal/identity/domain
+            - storeit/internal/identity/contract
+            - storeit/internal/identity/repository
+            - storeit/internal/directory/domain
+            - storeit/internal/directory/contract
+            - storeit/internal/directory/repository
+            - storeit/internal/inventory/domain
+            - storeit/internal/inventory/contract
+            - storeit/internal/inventory/repository
+            - storeit/internal/activity/domain
+            - storeit/internal/activity/contract
+            - storeit/internal/activity/repository
+
+        # handler: chỉ gọi service, không đụng DB
+        handler:
+          list-mode: lax
+          files: ["**/internal/*/handler/**"]
+          deny:
+            - pkg: storeit/internal/
+              desc: handler chỉ gọi service của module mình
+            - pkg: github.com/jackc/pgx
+              desc: handler không truy cập DB
+            - pkg: github.com/riverqueue
+              desc: handler không enqueue job trực tiếp, gọi service
+            - pkg: storeit/internal/platform/database
+              desc: handler không truy cập DB
+          allow:
+            - storeit/internal/platform
+            - storeit/internal/identity/handler
+            - storeit/internal/identity/service
+            - storeit/internal/identity/domain
+            - storeit/internal/directory/handler
+            - storeit/internal/directory/service
+            - storeit/internal/directory/domain
+            - storeit/internal/inventory/handler
+            - storeit/internal/inventory/service
+            - storeit/internal/inventory/domain
+            - storeit/internal/activity/handler
+            - storeit/internal/activity/service
+            - storeit/internal/activity/domain
+
+        # worker, subscriber: chỉ gọi service
+        entrypoints:
+          list-mode: lax
+          files: ["**/internal/*/worker/**", "**/internal/*/subscriber/**"]
+          deny:
+            - pkg: storeit/internal/
+              desc: worker/subscriber chỉ gọi service của module mình
+            - pkg: github.com/jackc/pgx
+              desc: worker/subscriber không truy cập DB
+            - pkg: github.com/go-chi
+              desc: worker/subscriber không biết HTTP
+            - pkg: net/http
+              desc: worker/subscriber không biết HTTP
+          allow:
+            - storeit/internal/platform
+            - storeit/internal/identity/service
+            - storeit/internal/identity/domain
+            - storeit/internal/identity/contract
+            - storeit/internal/directory/service
+            - storeit/internal/directory/domain
+            - storeit/internal/directory/contract
+            - storeit/internal/inventory/service
+            - storeit/internal/inventory/domain
+            - storeit/internal/inventory/contract
+            - storeit/internal/activity/service
+            - storeit/internal/activity/domain
+            - storeit/internal/activity/contract
+
+        # spreadsheet: chỉ biết dòng và ô, không biết asset
+        spreadsheet:
+          list-mode: lax
+          files: ["**/internal/*/spreadsheet/**"]
+          deny:
+            - pkg: storeit/internal/
+              desc: spreadsheet không được biết tới nghiệp vụ
+          allow:
+            - storeit/internal/platform/errs

@@ -1,0 +1,163 @@
+name: storeit
+
+x-timezone: &timezone
+  TZ: UTC
+  PGTZ: UTC
+
+# Env chung cho mọi service Go
+x-go-env: &go-env
+  <<: *timezone
+  PGHOST: postgres
+  PGPORT: "5432"
+  PGDATABASE: ${APP_DB_NAME:-storeit}
+  PGUSER: ${APP_DB_USER:-app_user}
+  PGPASSWORD_FILE: /run/secrets/pg_app_pw
+  PGSSLMODE: verify-full
+  PGSSLROOTCERT: /certs/rootCA.pem
+  JWT_KEYS_FILE: /run/secrets/jwt_keys
+  JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-v1}
+  JWT_ISSUER: ${JWT_ISSUER:-storeit}
+  # Dev đọc log dùng pretty; production để mặc định (json, info)
+  LOG_FORMAT: pretty
+
+# Build, secrets, volumes chung (image dev, source mount)
+x-go-dev: &go-dev
+  build:
+    context: .
+    target: dev
+  init: true
+  secrets: [pg_app_pw, jwt_keys]
+  volumes:
+    - .:/src
+    - gomod:/go/pkg/mod
+    - gobuild:/root/.cache/go-build
+    - ./deploy/postgres/certs/rootCA.pem:/certs/rootCA.pem:ro
+
+services:
+  # Chạy migration xong rồi thoát; app chỉ start khi migrate thành công
+  migrate:
+    <<: *go-dev
+    command: ["go", "run", "./cmd/migrate"]
+    environment: *go-env
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  app:
+    <<: *go-dev
+    environment:
+      <<: *go-env
+      PORT: "8080"
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  # worker: giống app, nhưng Air build ./cmd/worker (air.worker.toml riêng)
+  # worker:
+  #   <<: *go-dev
+  #   command: ["air", "-c", "air.worker.toml"]
+  #   environment: *go-env
+  #   depends_on:
+  #     migrate: { condition: service_completed_successfully }
+  #   restart: unless-stopped
+
+  postgres:
+    image: postgres:18-alpine
+    # Mặc định 64MB, dễ lỗi với query song song
+    shm_size: 256mb                       
+    stop_grace_period: 30s
+    # Để pgAdmin kết nối
+    ports:
+      - "127.0.0.1:${PG_PORT:-5432}:5432"
+    environment:
+      <<: *timezone
+      POSTGRES_USER_FILE: /run/secrets/pg_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_pw
+      POSTGRES_DB: postgres
+      # Dùng bởi initdb/01-app.sh
+      APP_DB_NAME: ${APP_DB_NAME:-storeit}
+      APP_DB_USER: ${APP_DB_USER:-app_user}
+    secrets:
+      - pg_user
+      - pg_pw
+      - pg_app_pw
+    volumes:
+      # PG18+: mount thư mục cha, PGDATA=/var/lib/postgresql/18/docker
+      - pgdata:/var/lib/postgresql               
+      - ./deploy/postgres/certs:/certs-src:ro
+      - ./deploy/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        mkdir -p /etc/ssl/pg
+        cp /certs-src/server.crt /certs-src/server.key /etc/ssl/pg/
+        chown postgres:postgres /etc/ssl/pg/server.crt /etc/ssl/pg/server.key
+        chmod 600 /etc/ssl/pg/server.key
+        exec docker-entrypoint.sh postgres \
+          -c ssl=on \
+          -c ssl_min_protocol_version=TLSv1.2 \
+          -c ssl_cert_file=/etc/ssl/pg/server.crt \
+          -c ssl_key_file=/etc/ssl/pg/server.key \
+          -c log_min_duration_statement=500 \
+          -c log_connections=on \
+          -c log_disconnections=on \
+          -c shared_preload_libraries=pg_stat_statements \
+          -c pg_stat_statements.track=all
+
+    healthcheck:
+      # Kiểm tra qua TCP: trong lúc chạy initdb, server tạm chỉ nghe unix socket,
+      # nên check này chỉ pass khi server thật đã sẵn sàng
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U \"$$(cat /run/secrets/pg_user)\" -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+      start_interval: 2s
+    restart: unless-stopped
+  
+  pgadmin:
+    image: dpage/pgadmin4:9.18
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@storeit.dev}
+      PGADMIN_DEFAULT_PASSWORD_FILE: /run/secrets/pgadmin_pw
+      # Bỏ qua pgAdmin màn hình login khi dev local
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    secrets:
+      - pgadmin_pw
+    ports:
+      - "127.0.0.1:${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin:/var/lib/pgadmin
+      - ./deploy/pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - ./deploy/postgres/certs/rootCA.pem:/certs/rootCA.pem:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    # Không chạy khi `docker compose up`
+    profiles: ["tools"]
+
+  # sqlc và golangci-lint chạy bằng `docker run` trong Makefile
+
+secrets:
+  pg_user:
+    file: ./deploy/postgres/secrets/pg_user.txt
+  pg_pw:
+    file: ./deploy/postgres/secrets/pg_pw.txt
+  pg_app_pw:
+    file: ./deploy/postgres/secrets/pg_app_pw.txt
+  pgadmin_pw:
+    file: ./deploy/pgadmin/secrets/pgadmin_pw.txt
+  jwt_keys:
+    file: ./deploy/app/secrets/jwt_keys.txt
+
+volumes:
+  pgdata:
+  pgadmin:
+  gomod:
+  gobuild:

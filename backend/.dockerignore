@@ -1,0 +1,34 @@
+# Secrets & local config
+.env
+.env.*
+!.env.example
+deploy/
+secrets/
+certs/
+*.pem
+*.key
+*.crt
+
+# Build output, Air temp dir, logs
+bin/
+tmp/
+logs/
+*.log
+*.test
+*.out
+__debug_bin*
+
+# Tài liệu (không cần khi build). KHÔNG ignore migrations/: được embed vào cmd/migrate
+docs/
+
+# --- Toolings & Editors & IDEs ---
+.git
+.gitignore
+.gitattributes
+.idea/
+.vscode/
+Dockerfile
+dockerfile
+.dockerignore
+compose*.yml
+docker-compose*.yml

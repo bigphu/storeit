@@ -1,0 +1,3 @@
+package contract
+
+// TODO(M4): event asset_created, asset_updated, asset_checked_out...

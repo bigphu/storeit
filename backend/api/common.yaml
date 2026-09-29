@@ -1,0 +1,68 @@
+# Schema dùng chung cho spec của mọi module, sinh một lần vào
+# internal/platform/web/apicommon (make generate). Module tham chiếu qua
+# import-mapping trong oapi.yaml:
+#
+#   $ref: '../../../api/common.yaml#/components/schemas/Problem'
+openapi: 3.0.3
+info:
+  title: Common schemas
+  version: 1.0.0
+paths: {}
+components:
+  parameters:
+    # Danh sách nhận page, page_size và trả {"items": [...], "total": 123}
+    Page:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: page_size
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+
+  schemas:
+    ID:
+      type: string
+      format: uuid
+
+    # Ghép với items của từng danh sách bằng allOf
+    Paged:
+      type: object
+      required: [total]
+      properties:
+        total: { type: integer, format: int64, minimum: 0 }
+
+    # Mọi lỗi (application/problem+json, RFC 9457), do web.WriteProblem ghi từ
+    # errs.Error. Spec chỉ khai báo lỗi dưới response default với schema này.
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          description: Định danh loại lỗi, ổn định, client so sánh bằng field này
+          example: /errors/asset-not-available
+        title:
+          type: string
+          description: Câu ngắn, giống nhau mọi lần xảy ra
+        status:
+          type: integer
+        detail:
+          type: string
+          description: Giải thích cho lần xảy ra này
+        errors:
+          type: array
+          description: Field sai, khi status là 422
+          items: { $ref: '#/components/schemas/FieldError' }
+
+    FieldError:
+      type: object
+      required: [field, detail]
+      properties:
+        field:
+          type: string
+          description: Đường dẫn JSON của field, vd address.city
+        detail:
+          type: string

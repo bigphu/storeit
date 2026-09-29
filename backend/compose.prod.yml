@@ -1,0 +1,148 @@
+# Production trên 1 server: image đã build sẵn (target prod), không mount source, không Air.
+#   cp .env.prod.example .env && sửa STOREIT_IMAGE
+#   sh deploy/scripts/init.sh                 # secrets + cert MỚI cho server (không copy từ dev)
+#   docker compose -f compose.prod.yml up -d
+#
+# Tên project khác dev => volume riêng (storeit-prod_pgdata), không đụng dữ liệu dev.
+name: storeit-prod
+
+x-timezone: &timezone
+  TZ: UTC
+  PGTZ: UTC
+
+# Docker giữ log (stdout/stderr) có giới hạn, không đầy ổ đĩa
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+# Env chung cho mọi binary Go
+x-go-env: &go-env
+  <<: *timezone
+  PGHOST: postgres
+  PGPORT: "5432"
+  PGDATABASE: ${APP_DB_NAME:-storeit}
+  PGUSER: ${APP_DB_USER:-app_user}
+  PGPASSWORD_FILE: /run/secrets/pg_app_pw
+  PGSSLMODE: verify-full
+  PGSSLROOTCERT: /certs/rootCA.pem
+  JWT_KEYS_FILE: /run/secrets/jwt_keys
+  JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-v1}
+  JWT_ISSUER: ${JWT_ISSUER:-storeit}
+
+# Cùng 1 image cho server / worker / migrate, chỉ khác entrypoint
+x-go-prod: &go-prod
+  image: ${STOREIT_IMAGE:?set STOREIT_IMAGE, ví dụ registry.example.com/storeit:1.4.0}
+  init: true
+  environment: *go-env
+  secrets: [pg_app_pw, jwt_keys]
+  volumes:
+    - ./deploy/postgres/certs/rootCA.pem:/certs/rootCA.pem:ro
+  # Hardening: FS chỉ đọc, không capability, không leo quyền
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  logging: *logging
+
+services:
+  # Chạy migration rồi thoát; app/worker chỉ start khi migrate thành công
+  migrate:
+    <<: *go-prod
+    entrypoint: ["/app/migrate"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  app:
+    <<: *go-prod
+    environment:
+      <<: *go-env
+      PORT: "8080"
+    # Chỉ nghe 127.0.0.1: đặt reverse proxy (Caddy/nginx) phía trước để lo HTTPS
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  # Tạm tắt bằng profile: cmd/worker chưa có code, chạy sẽ thoát ngay => restart liên tục.
+  # Bỏ `profiles` khi worker đã được viết.
+  worker:
+    <<: *go-prod
+    entrypoint: ["/app/worker"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    # Cho job đang chạy thời gian kết thúc khi deploy/restart
+    stop_grace_period: 30s
+    restart: unless-stopped
+    profiles: ["worker"]
+
+  # Postgres trên cùng server. Dùng DB managed thì xoá service này (+ volume pgdata),
+  # đổi PGHOST ở x-go-env và bỏ depends_on postgres của migrate.
+  postgres:
+    image: postgres:18-alpine
+    shm_size: 256mb
+    stop_grace_period: 60s
+    # Không publish port: chỉ app/worker/migrate trong network compose truy cập được.
+    # Cần psql từ ngoài: `docker compose -f compose.prod.yml exec postgres psql ...` hoặc SSH tunnel.
+    environment:
+      <<: *timezone
+      POSTGRES_USER_FILE: /run/secrets/pg_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_pw
+      POSTGRES_DB: postgres
+      # Dùng bởi initdb/01-app.sh
+      APP_DB_NAME: ${APP_DB_NAME:-storeit}
+      APP_DB_USER: ${APP_DB_USER:-app_user}
+    secrets: [pg_user, pg_pw, pg_app_pw]
+    volumes:
+      # PG18+: mount thư mục cha, PGDATA=/var/lib/postgresql/18/docker
+      - pgdata:/var/lib/postgresql
+      - ./deploy/postgres/certs:/certs-src:ro
+      - ./deploy/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        mkdir -p /etc/ssl/pg
+        cp /certs-src/server.crt /certs-src/server.key /etc/ssl/pg/
+        chown postgres:postgres /etc/ssl/pg/server.crt /etc/ssl/pg/server.key
+        chmod 600 /etc/ssl/pg/server.key
+        exec docker-entrypoint.sh postgres \
+          -c ssl=on \
+          -c ssl_min_protocol_version=TLSv1.2 \
+          -c ssl_cert_file=/etc/ssl/pg/server.crt \
+          -c ssl_key_file=/etc/ssl/pg/server.key \
+          -c log_min_duration_statement=500 \
+          -c log_connections=on \
+          -c log_disconnections=on \
+          -c shared_preload_libraries=pg_stat_statements \
+          -c pg_stat_statements.track=all
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U \"$$(cat /run/secrets/pg_user)\" -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+      start_interval: 2s
+    logging: *logging
+    restart: unless-stopped
+
+# Secret dạng file = bind mount: container đọc bằng uid của nó (app: 65532, postgres: 70),
+# nên file phải có quyền đọc (644). Bảo vệ bằng thư mục cha trên host: chmod 700.
+secrets:
+  pg_user:
+    file: ./deploy/postgres/secrets/pg_user.txt
+  pg_pw:
+    file: ./deploy/postgres/secrets/pg_pw.txt
+  pg_app_pw:
+    file: ./deploy/postgres/secrets/pg_app_pw.txt
+  jwt_keys:
+    file: ./deploy/app/secrets/jwt_keys.txt
+
+volumes:
+  pgdata:

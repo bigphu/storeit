@@ -1,0 +1,23 @@
+# API của module directory. Sửa spec trước, rồi `make generate` để sinh api/api.gen.go.
+# operationId đặt trùng tên method của service, JSON dùng snake_case.
+#
+# Endpoint dự kiến (M3):
+#   /members, /members/{memberID}, POST /members/{memberID}/offboard
+#   /departments, /departments/{departmentID}
+#   /locations, /locations/{locationID}
+#   tree endpoints
+openapi: 3.0.3
+info:
+  title: Directory API
+  version: 0.1.0
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths: {}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

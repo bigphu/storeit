@@ -1,0 +1,3 @@
+package contract
+
+// TODO(M1): event account_created, account_disabled, roles_assigned...

@@ -1,0 +1,22 @@
+root = "."
+# Thư mục riêng: clean_on_exit không xoá binary của app
+tmp_dir = "tmp/worker"
+
+[build]
+  cmd = "go build -o ./tmp/worker/worker ./cmd/worker"
+  entrypoint = ["./tmp/worker/worker"]
+  include_ext = ["go", "sql", "html", "tmpl"]
+  exclude_dir = ["tmp", "deploy", "vendor", ".git"]
+  exclude_regex = ["_test\\.go$"]
+  poll = true
+  poll_interval = 500
+  delay = 300
+  send_interrupt = true
+  kill_delay = "3s"
+  stop_on_error = true
+
+[log]
+  time = true
+
+[misc]
+  clean_on_exit = true

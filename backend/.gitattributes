@@ -1,0 +1,7 @@
+# Mọi file text dùng LF (script chạy trong container Linux, tránh diff CRLF)
+* text=auto eol=lf
+
+*.pdf  binary
+*.png  binary
+*.jpg  binary
+*.xlsx binary
