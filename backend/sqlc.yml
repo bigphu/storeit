@@ -67,13 +67,13 @@ sql:
   # vì sqlc báo lỗi nếu thư mục queries còn trống.
 
   # M1
-  # - engine: "postgresql"
-  #   schema: "migrations"
-  #   queries: "internal/identity/repository/queries"
-  #   gen:
-  #     go:
-  #       <<: *go_defaults
-  #       out: "internal/identity/repository/db"
+  - engine: "postgresql"
+    schema: "migrations"
+    queries: "internal/identity/repository/queries"
+    gen:
+      go:
+        <<: *go_defaults
+        out: "internal/identity/repository/db"
 
   # M2
   # - engine: "postgresql"
