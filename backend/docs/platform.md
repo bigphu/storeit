@@ -22,6 +22,7 @@ exact signatures. Keep this file in sync when a platform API changes.
 | `events` | Transactional outbox, subscriber registry, delivery worker (River) |
 | `jobs` | Background jobs on River: `Enqueuer`, client constructors, actor propagation |
 | `storage` | File storage (`Store` interface, `Local` implementation) |
+| `mail` | Send email: `smtp`, `resend` or `log` transport, permanent-error classification for jobs |
 | `web/apicommon` | Generated types from `api/common.yaml` (`Problem`, `FieldError`, `ID`, `Paged`) |
 
 ## Configuration
@@ -41,6 +42,7 @@ the default" (configs built by hand in tests); negative values are rejected.
 | `jwt.Config` | `JWT_KEYS_FILE` (required; file of `kid:base64`, comma or newline separated, >= 32-byte secrets), `JWT_ACTIVE_KID` (required), `JWT_ISSUER` (required), `JWT_AUDIENCE` (storeit-api), `JWT_ACCESS_TOKEN_TTL` (15m) |
 | `storage.Config` | `STORAGE_DIR` (./tmp/storage) |
 | `jobs.Config` | `JOBS_DEFAULT_MAX_WORKERS` (10), `JOBS_EVENTS_MAX_WORKERS` (10). Worker only |
+| `mail.Config` | `MAIL_TRANSPORT` (required: smtp \| resend \| log), `MAIL_FROM` (required, `Name <addr>`), `MAIL_REPLY_TO`, `MAIL_SMTP_HOST`, `MAIL_SMTP_PORT` (587), `MAIL_SMTP_USERNAME`, `MAIL_SMTP_PASSWORD_FILE`, `MAIL_SMTP_TLS` (starttls \| tls \| none), `MAIL_RESEND_API_KEY_FILE`. Worker only |
 
 Compose files set `HTTP_ADDR`, `LOG_*`, `JWT_*` and `PG*`. In production behind the
 reverse proxy, set `HTTP_TRUSTED_PROXIES` to the Docker network CIDR, otherwise the
@@ -239,6 +241,25 @@ doesn't stack), `ReadTimeout(d)` (d <= 0 removes the deadline),
 (accepts `X-Request-Id` matching `[A-Za-z0-9._-]{1,64}`, else a UUID; echoed in the
 response), `RequestLogger(log)` (one line: method, path, client_ip, route, status,
 bytes, dur, aborted), `Recoverer()`, `NoSniff`.
+
+### mail
+
+- `sender, err := mail.New(cfg.Mail, log)` (worker only; no network until `Send`).
+  `sender.Send(ctx, mail.Message{To: mail.Address{Name, Email}, Subject, Text, HTML, IdempotencyKey})`.
+  From and Reply-To come from config.
+- Send from a River job, never inside a request. Set `IdempotencyKey` (e.g.
+  `identity/invite/<token id>`): Resend drops a repeat with the same key for 24h, so a
+  job retried after a successful send does not mail twice. SMTP and log ignore it.
+- `mail.IsPermanent(err)`: Resend 4xx except 408/429, SMTP 5xx, invalid addresses.
+  Return `river.JobCancel(err)` for these; everything else (network, 5xx from Resend,
+  SMTP 4xx) retries.
+- Resend errors are `*mail.StatusError{Status, Reason}`. `Reason` holds only the
+  `name`/`message` fields, truncated, with the API key redacted; transport errors
+  never carry the URL.
+- `log` prints the message (including the text body, so any link) at WARN. Dev and
+  tests only. `smtp` with `MAIL_SMTP_TLS=none` is for Mailpit only.
+- SMTP sends open one connection each, with a 30s timeout (go-mail passes ctx only
+  to dial).
 
 ### storage
 
