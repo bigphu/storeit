@@ -125,7 +125,7 @@ func (s *Service) ResetPassword(ctx context.Context, id uuid.UUID, password stri
 	if err != nil {
 		return err
 	}
-	return s.accounts.SetPassword(ctx, id, h, nil, true)
+	return s.accounts.SetPassword(ctx, id, h, nil)
 }
 
 // AssignRoles thay toàn bộ role của account. Không tự bỏ role Administrator của mình.

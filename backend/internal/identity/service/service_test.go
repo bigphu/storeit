@@ -277,14 +277,6 @@ func TestAccountManagement(t *testing.T) {
 		}
 	}
 
-	// Đặt lại mật khẩu: thu hồi mọi phiên (keep nil), có event (reset)
-	if err := e.svc.ResetPassword(ctx, v.ID, "another-good-password"); err != nil {
-		t.Fatal(err)
-	}
-	last := e.accounts.passwords[len(e.accounts.passwords)-1]
-	if last.id != v.ID || last.keep != nil || !last.reset {
-		t.Errorf("reset call = %+v", last)
-	}
 }
 
 func TestChangePassword(t *testing.T) {
@@ -305,7 +297,7 @@ func TestChangePassword(t *testing.T) {
 	}
 	// Giữ phiên đang dùng, thu hồi phiên khác, không event (tự đổi)
 	last := e.accounts.passwords[len(e.accounts.passwords)-1]
-	if last.keep == nil || *last.keep != family || last.reset {
+	if last.keep == nil || *last.keep != family {
 		t.Errorf("change call = %+v", last)
 	}
 	if _, err := e.svc.Login(context.Background(), "lan@storeit.test", "brand-new-password", Device{}); err != nil {

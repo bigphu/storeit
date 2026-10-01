@@ -10,7 +10,9 @@ const (
 	EventAccountUpdated         = "identity.account_updated"
 	EventAccountDisabled        = "identity.account_disabled"
 	EventAccountEnabled         = "identity.account_enabled"
-	EventPasswordReset          = "identity.password_reset"
+	EventInvitationResent       = "identity.invitation_resent"
+	EventInvitationAccepted     = "identity.invitation_accepted"
+	EventPasswordResetSent      = "identity.password_reset_sent"
 	EventRolesAssigned          = "identity.roles_assigned"
 	EventRoleCreated            = "identity.role_created"
 	EventRoleUpdated            = "identity.role_updated"
@@ -52,8 +54,20 @@ type AccountEnabled struct {
 	AccountID uuid.UUID `json:"account_id"`
 }
 
-// PasswordReset: quản trị đặt lại mật khẩu. Người dùng tự đổi thì không có event.
-type PasswordReset struct {
+// InvitationResent: quản trị gửi lại lời mời (kể cả khi bấm "gửi link đặt lại"
+// cho account chưa nhận lời)
+type InvitationResent struct {
+	AccountID uuid.UUID `json:"account_id"`
+}
+
+// InvitationAccepted: người được mời đặt mật khẩu lần đầu; actor là chính account
+type InvitationAccepted struct {
+	AccountID uuid.UUID `json:"account_id"`
+}
+
+// PasswordResetSent: quản trị gửi link đặt lại mật khẩu. Người dùng tự yêu cầu
+// hay tự đổi mật khẩu thì không có event.
+type PasswordResetSent struct {
 	AccountID uuid.UUID `json:"account_id"`
 }
 

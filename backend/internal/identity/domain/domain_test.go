@@ -86,7 +86,7 @@ func TestNormalizeEmail(t *testing.T) {
 }
 
 func TestCanLogin(t *testing.T) {
-	if err := (Account{Active: true}).CanLogin(); err != nil {
+	if err := (Account{Active: true, PasswordHash: "$2a$h"}).CanLogin(); err != nil {
 		t.Errorf("active: %v", err)
 	}
 	if err := (Account{Active: false}).CanLogin(); !errors.Is(err, ErrAccountDisabled) {
@@ -123,5 +123,76 @@ func TestRoleGuards(t *testing.T) {
 	}
 	if err := CheckRolePermissions(custom.ID, nil); err != nil {
 		t.Errorf("custom role may have no permissions: %v", err)
+	}
+}
+
+func TestAccountStatus(t *testing.T) {
+	tests := []struct {
+		name string
+		acc  Account
+		want AccountStatus
+		pw   bool
+	}{
+		{"invited", Account{Active: true}, StatusInvited, false},
+		{"active", Account{Active: true, PasswordHash: "$2a$h"}, StatusActive, true},
+		{"disabled with password", Account{PasswordHash: "$2a$h"}, StatusDisabled, true},
+		{"disabled before accepting", Account{}, StatusDisabled, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.acc.Status(); got != tc.want {
+				t.Errorf("Status() = %q, want %q", got, tc.want)
+			}
+			if got := tc.acc.HasPassword(); got != tc.pw {
+				t.Errorf("HasPassword() = %v, want %v", got, tc.pw)
+			}
+		})
+	}
+}
+
+// Account mời chưa nhận lời thì không đăng nhập được, giống email lạ
+func TestCanLoginInvited(t *testing.T) {
+	if err := (Account{Active: true}).CanLogin(); !errors.Is(err, ErrBadCredentials) {
+		t.Errorf("CanLogin(invited) = %v, want ErrBadCredentials", err)
+	}
+}
+
+func TestPasswordTokenUsable(t *testing.T) {
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	invited := Account{Active: true}
+	active := Account{Active: true, PasswordHash: "$2a$h"}
+	tok := func(p TokenPurpose, exp time.Time) PasswordToken {
+		return PasswordToken{Purpose: p, ExpiresAt: exp}
+	}
+	tests := []struct {
+		name string
+		tok  PasswordToken
+		acc  Account
+		ok   bool
+	}{
+		{"invite for invited account", tok(PurposeInvite, now.Add(time.Hour)), invited, true},
+		{"reset for active account", tok(PurposeReset, now.Add(time.Minute)), active, true},
+		{"expired", tok(PurposeReset, now), active, false},
+		{"account disabled", tok(PurposeReset, now.Add(time.Hour)), Account{PasswordHash: "$2a$h"}, false},
+		// Lời mời chỉ để đặt mật khẩu lần đầu
+		{"invite after password set", tok(PurposeInvite, now.Add(time.Hour)), active, false},
+		{"reset for invited account", tok(PurposeReset, now.Add(time.Hour)), invited, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.tok.Usable(tc.acc, now)
+			if tc.ok && err != nil {
+				t.Fatalf("Usable() = %v, want nil", err)
+			}
+			if !tc.ok && !errors.Is(err, ErrInvalidPasswordToken) {
+				t.Fatalf("Usable() = %v, want ErrInvalidPasswordToken", err)
+			}
+		})
+	}
+}
+
+func TestPurposeValid(t *testing.T) {
+	if !PurposeInvite.Valid() || !PurposeReset.Valid() || TokenPurpose("other").Valid() {
+		t.Error("TokenPurpose.Valid wrong")
 	}
 }

@@ -90,9 +90,8 @@ func (f *fakeRoles) Permissions(context.Context) ([]domain.Permission, error) {
 }
 
 type passwordCall struct {
-	id    uuid.UUID
-	keep  *uuid.UUID
-	reset bool
+	id   uuid.UUID
+	keep *uuid.UUID
 }
 
 type fakeAccounts struct {
@@ -196,13 +195,13 @@ func (f *fakeAccounts) SetActive(_ context.Context, id uuid.UUID, active bool) (
 	return a, nil
 }
 
-func (f *fakeAccounts) SetPassword(_ context.Context, id uuid.UUID, hash string, keep *uuid.UUID, reset bool) error {
+func (f *fakeAccounts) SetPassword(_ context.Context, id uuid.UUID, hash string, keep *uuid.UUID) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	a := f.accounts[id]
 	a.PasswordHash = hash
 	f.accounts[id] = a
-	f.passwords = append(f.passwords, passwordCall{id: id, keep: keep, reset: reset})
+	f.passwords = append(f.passwords, passwordCall{id: id, keep: keep})
 	return nil
 }
 

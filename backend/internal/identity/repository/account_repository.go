@@ -173,7 +173,7 @@ func (r *AccountRepository) SetActive(ctx context.Context, id uuid.UUID, active 
 	return out, err
 }
 
-func (r *AccountRepository) SetPassword(ctx context.Context, id uuid.UUID, hash string, keepFamily *uuid.UUID, reset bool) error {
+func (r *AccountRepository) SetPassword(ctx context.Context, id uuid.UUID, hash string, keepFamily *uuid.UUID) error {
 	return database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
 		q := r.q.WithTx(tx)
 		if _, err := accountOrNotFound(q.GetAccountForUpdate(ctx, id)); err != nil {
@@ -187,10 +187,7 @@ func (r *AccountRepository) SetPassword(ctx context.Context, id uuid.UUID, hash 
 		}); err != nil {
 			return fmt.Errorf("identity: revoke sessions: %w", err)
 		}
-		if !reset {
-			return nil
-		}
-		return r.append(ctx, tx, contract.EventPasswordReset, id, contract.PasswordReset{AccountID: id})
+		return nil
 	})
 }
 

@@ -144,7 +144,7 @@ func (s *Service) ChangePassword(ctx context.Context, current, next, refreshToke
 	if err != nil {
 		return err
 	}
-	return s.accounts.SetPassword(ctx, a.ID, h, keep, false)
+	return s.accounts.SetPassword(ctx, a.ID, h, keep)
 }
 
 func (s *Service) startSession(ctx context.Context, a domain.Account, dev Device) (Session, error) {

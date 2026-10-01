@@ -21,9 +21,11 @@ type AccountFilter struct {
 type NewAccount struct {
 	Email        string // đã NormalizeEmail
 	Name         string
-	PasswordHash string
+	PasswordHash string // rỗng: account được mời, đặt mật khẩu qua Invite
 	MemberID     *uuid.UUID
 	RoleIDs      []uuid.UUID
+	// Invite phát cùng transaction tạo account (kèm job gửi thư)
+	Invite *IssuedToken
 }
 
 // ProfileChange: field nil là giữ nguyên. Version là version client đang có.
@@ -35,7 +37,8 @@ type ProfileChange struct {
 }
 
 type AccountRepository interface {
-	// Create: ErrEmailTaken, ErrUnknownRoles; event account_created
+	// Create: ErrEmailTaken, ErrUnknownRoles; event account_created; có
+	// Invite thì ghi token và xếp job gửi thư trong cùng transaction
 	Create(ctx context.Context, in NewAccount) (Account, error)
 	// Get, GetByEmail: ErrAccountNotFound
 	Get(ctx context.Context, id uuid.UUID) (Account, error)
@@ -44,16 +47,35 @@ type AccountRepository interface {
 	List(ctx context.Context, f AccountFilter) ([]Account, int64, error)
 	// UpdateProfile: ErrAccountChanged khi version cũ; event account_updated
 	UpdateProfile(ctx context.Context, id uuid.UUID, ch ProfileChange) (Account, error)
-	// SetActive: khoá thì thu hồi mọi phiên (admin); event account_disabled/enabled
+	// SetActive: khoá thì thu hồi mọi phiên (admin) và xoá link đặt mật khẩu;
+	// event account_disabled/enabled
 	SetActive(ctx context.Context, id uuid.UUID, active bool) (Account, error)
-	// SetPassword thu hồi mọi phiên của account trừ keepFamily; reset=true là
-	// quản trị đặt lại (event password_reset), false là tự đổi (không event)
-	SetPassword(ctx context.Context, id uuid.UUID, hash string, keepFamily *uuid.UUID, reset bool) error
+	// SetPassword (người dùng tự đổi) thu hồi mọi phiên của account trừ
+	// keepFamily; không event
+	SetPassword(ctx context.Context, id uuid.UUID, hash string, keepFamily *uuid.UUID) error
 	// ReplaceRoles: ErrUnknownRoles; event roles_assigned
 	ReplaceRoles(ctx context.Context, id uuid.UUID, roleIDs []uuid.UUID) (Account, error)
 	Roles(ctx context.Context, id uuid.UUID) ([]Role, error)
 	Permissions(ctx context.Context, id uuid.UUID) ([]string, error)
 	Count(ctx context.Context) (int64, error)
+}
+
+// TokenRepository lưu link đặt mật khẩu (invite, reset)
+type TokenRepository interface {
+	// Issue ghi đè token cùng loại của account, xếp job gửi thư và ghi event
+	// ev, trong một transaction
+	Issue(ctx context.Context, accountID uuid.UUID, t IssuedToken, ev TokenEvent) error
+	// Use dùng token có hash này để đặt mật khẩu, trong một transaction: xoá
+	// token, kiểm tra Usable, đặt mật khẩu. Reset thì thu hồi mọi phiên;
+	// invite thì ghi event invitation_accepted. Mọi thất bại:
+	// ErrInvalidPasswordToken.
+	Use(ctx context.Context, hash []byte, now time.Time, passwordHash string) (UsedToken, error)
+	// Get: ErrInvalidPasswordToken khi không còn (đã dùng hoặc bị thay)
+	Get(ctx context.Context, id uuid.UUID) (PasswordToken, error)
+	// Latest trả token hiện có của account cho purpose, nil nếu không có
+	Latest(ctx context.Context, accountID uuid.UUID, p TokenPurpose) (*PasswordToken, error)
+	// Prune xoá token hết hạn trước cutoff
+	Prune(ctx context.Context, cutoff time.Time) (int64, error)
 }
 
 type RoleRepository interface {

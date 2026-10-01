@@ -56,4 +56,16 @@ var (
 
 	ErrUnknownPermissions = errs.Unprocessable("/errors/unknown-permissions", "Unknown permissions",
 		errs.WithFields(errs.FieldError{Field: "permissions", Detail: "contains a permission that does not exist"}))
+
+	// Mọi lý do một link đặt mật khẩu không dùng được đều chung một lỗi: không
+	// tồn tại, đã dùng, đã bị thay, hết hạn, account bị khoá
+	ErrInvalidPasswordToken = errs.Unprocessable("/errors/invalid-password-token", "Invalid or expired link",
+		errs.WithDetail("This link is invalid or has expired. Ask for a new one."),
+		errs.WithFields(errs.FieldError{Field: "token", Detail: "is invalid or has expired"}))
+
+	ErrNotInvited = errs.Conflict("/errors/not-invited", "Account already active",
+		errs.WithDetail("This account has already set a password. Send a password reset link instead."))
+
+	ErrAccountInactive = errs.Conflict("/errors/account-inactive", "Account disabled",
+		errs.WithDetail("Enable the account before sending it a link."))
 )
