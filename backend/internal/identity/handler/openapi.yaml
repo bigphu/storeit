@@ -1,24 +1,527 @@
 # API của module identity. Sửa spec trước, rồi `make generate` để sinh api/api.gen.go.
 # operationId đặt trùng tên method của service, JSON dùng snake_case.
-#
-# Endpoint dự kiến (M1):
-#   POST /auth/login (public)
-#   GET /me
-#   /accounts, /accounts/{accountID}, /accounts/{accountID}/roles
-#   /roles, /roles/{roleID}
-#   GET /permissions
 openapi: 3.0.3
 info:
   title: Identity API
-  version: 0.1.0
+  version: 1.0.0
 servers:
   - url: /api/v1
 security:
   - bearerAuth: []
-paths: {}
+
+paths:
+  /auth/login:
+    post:
+      operationId: login
+      summary: Sign in with email and password
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/UserAgent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        "200":
+          description: Signed in; the refresh token is set as an HttpOnly cookie
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetCookie' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionResponse' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /auth/refresh:
+    post:
+      operationId: refresh
+      summary: Rotate the refresh cookie and get a new access token
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RefreshCookie'
+      responses:
+        "200":
+          description: New access token; the cookie holds the next refresh token
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetCookie' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionResponse' }
+        "401":
+          description: Missing, invalid, expired, revoked or reused refresh token; the cookie is cleared
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetCookie' }
+          content:
+            application/problem+json:
+              schema: { $ref: '../../../api/common.yaml#/components/schemas/Problem' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: Sign out this device
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RefreshCookie'
+      responses:
+        "204":
+          description: Signed out; the cookie is cleared
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetCookie' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /auth/password:
+    put:
+      operationId: changePassword
+      summary: Change your own password; signs out your other devices
+      parameters:
+        - $ref: '#/components/parameters/RefreshCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        "204": { description: Password changed }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /me:
+    get:
+      operationId: getMe
+      summary: The signed-in account with its roles and permissions
+      responses:
+        "200":
+          description: Current account
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /accounts:
+    get:
+      operationId: listAccounts
+      summary: List accounts (identity.account.read)
+      parameters:
+        - $ref: '../../../api/common.yaml#/components/parameters/Page'
+        - $ref: '../../../api/common.yaml#/components/parameters/PageSize'
+        - name: q
+          in: query
+          description: Search by name or email
+          schema: { type: string, maxLength: 200 }
+        - name: active
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Page of accounts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountList' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createAccount
+      summary: Create an account (identity.account.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAccountRequest' }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /accounts/{accountID}:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    get:
+      operationId: getAccount
+      summary: Get an account with its roles (identity.account.read)
+      responses:
+        "200":
+          description: Account
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateAccount
+      summary: Update name or member link (identity.account.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAccountRequest' }
+      responses:
+        "200":
+          description: Updated account
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /accounts/{accountID}/disable:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    post:
+      operationId: disableAccount
+      summary: Disable an account and sign out all its devices (identity.account.manage)
+      responses:
+        "200":
+          description: Disabled account
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /accounts/{accountID}/enable:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    post:
+      operationId: enableAccount
+      summary: Enable a disabled account (identity.account.manage)
+      responses:
+        "200":
+          description: Enabled account
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /accounts/{accountID}/password:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    put:
+      operationId: resetPassword
+      summary: Set a new password and sign out all the account's devices (identity.account.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResetPasswordRequest' }
+      responses:
+        "204": { description: Password reset }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /accounts/{accountID}/roles:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    put:
+      operationId: assignRoles
+      summary: Replace the account's roles (identity.account.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssignRolesRequest' }
+      responses:
+        "200":
+          description: Account with its new roles
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /roles:
+    get:
+      operationId: listRoles
+      summary: Roles with their permissions (identity.role.read)
+      responses:
+        "200":
+          description: All roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Role' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createRole
+      summary: Create a role (identity.role.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateRoleRequest' }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Role' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /roles/{roleID}:
+    parameters:
+      - $ref: '#/components/parameters/RoleID'
+    get:
+      operationId: getRole
+      summary: Get a role (identity.role.read)
+      responses:
+        "200":
+          description: Role
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Role' }
+        default: { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateRole
+      summary: Rename or describe a role; system roles cannot be renamed (identity.role.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateRoleRequest' }
+      responses:
+        "200":
+          description: Updated role
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Role' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: deleteRole
+      summary: Delete an unassigned custom role (identity.role.manage)
+      responses:
+        "204": { description: Deleted }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /roles/{roleID}/permissions:
+    parameters:
+      - $ref: '#/components/parameters/RoleID'
+    put:
+      operationId: updateRolePermissions
+      summary: Replace the role's permissions (identity.role.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RolePermissionsRequest' }
+      responses:
+        "200":
+          description: Role with its new permissions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Role' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /permissions:
+    get:
+      operationId: listPermissions
+      summary: The permission catalogue (identity.role.read)
+      responses:
+        "200":
+          description: All permissions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Permission' }
+        default: { $ref: '#/components/responses/Problem' }
+
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
+  parameters:
+    AccountID:
+      name: accountID
+      in: path
+      required: true
+      schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+    RoleID:
+      name: roleID
+      in: path
+      required: true
+      schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+    RefreshCookie:
+      name: storeit_refresh
+      in: cookie
+      required: false
+      schema: { type: string, maxLength: 128 }
+    UserAgent:
+      name: User-Agent
+      in: header
+      required: false
+      schema: { type: string }
+
+  headers:
+    SetCookie:
+      description: The refresh-token cookie (HttpOnly, SameSite=Strict, Path=/api/v1/auth)
+      schema: { type: string }
+
+  responses:
+    Problem:
+      description: Error (RFC 9457 problem details)
+      content:
+        application/problem+json:
+          schema: { $ref: '../../../api/common.yaml#/components/schemas/Problem' }
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 1024 }
+
+    SessionResponse:
+      type: object
+      required: [access_token, token_type, expires_at, account]
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, enum: [Bearer] }
+        expires_at: { type: string, format: date-time }
+        account: { $ref: '#/components/schemas/Account' }
+
+    ChangePasswordRequest:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password: { type: string, minLength: 1, maxLength: 1024 }
+        new_password: { type: string, minLength: 12, maxLength: 72 }
+
+    Account:
+      type: object
+      required: [id, email, name, active, version, created_at, updated_at]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        email: { type: string }
+        name: { type: string }
+        member_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        active: { type: boolean }
+        version: { type: integer, format: int32 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    RoleSummary:
+      type: object
+      required: [id, name]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        name: { type: string }
+
+    AccountDetail:
+      allOf:
+        - $ref: '#/components/schemas/Account'
+        - type: object
+          required: [roles]
+          properties:
+            roles:
+              type: array
+              items: { $ref: '#/components/schemas/RoleSummary' }
+
+    AccountList:
+      allOf:
+        - $ref: '../../../api/common.yaml#/components/schemas/Paged'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/Account' }
+
+    Me:
+      type: object
+      required: [account, roles, permissions]
+      properties:
+        account: { $ref: '#/components/schemas/Account' }
+        roles:
+          type: array
+          items: { $ref: '#/components/schemas/RoleSummary' }
+        permissions:
+          type: array
+          items: { type: string }
+
+    CreateAccountRequest:
+      type: object
+      required: [email, name, password]
+      properties:
+        email: { type: string, minLength: 3, maxLength: 254 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        password: { type: string, minLength: 12, maxLength: 72 }
+        member_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        role_ids:
+          type: array
+          maxItems: 50
+          items: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+
+    UpdateAccountRequest:
+      type: object
+      required: [version]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        member_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        clear_member_id:
+          type: boolean
+          description: Remove the member link
+        version:
+          type: integer
+          format: int32
+          description: The version you last read; a newer one returns 409
+
+    ResetPasswordRequest:
+      type: object
+      required: [password]
+      properties:
+        password: { type: string, minLength: 12, maxLength: 72 }
+
+    AssignRolesRequest:
+      type: object
+      required: [role_ids]
+      properties:
+        role_ids:
+          type: array
+          maxItems: 50
+          items: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+
+    Role:
+      type: object
+      required: [id, name, description, is_system, permissions]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        name: { type: string }
+        description: { type: string }
+        is_system: { type: boolean }
+        permissions:
+          type: array
+          items: { type: string }
+
+    CreateRoleRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+        permissions:
+          type: array
+          maxItems: 200
+          items: { type: string }
+
+    UpdateRoleRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+
+    RolePermissionsRequest:
+      type: object
+      required: [permissions]
+      properties:
+        permissions:
+          type: array
+          maxItems: 200
+          items: { type: string }
+
+    Permission:
+      type: object
+      required: [code, description]
+      properties:
+        code: { type: string }
+        description: { type: string }
