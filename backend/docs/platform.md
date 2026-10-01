@@ -253,7 +253,8 @@ invalid keys give `ErrInvalidKey`. All access goes through `os.Root`.
   Postgres container per test binary, goose and River migrations applied, shared
   between tests (use fresh IDs and table names, don't assume an empty DB).
 - Without Docker these tests **skip** locally. With several packages starting
-  containers at once the health check can also skip them. Run
-  `CI=true go test ./...` to make skips fail, and keep Docker Desktop running.
+  containers at once the health check can skip them, or testcontainers can fail to
+  create its Docker provider on Windows. Run `CI=true go test -p 1 ./...` (skips fail,
+  one package at a time) and keep Docker Desktop running.
 - `internal/platform/events/db` is sqlc output; fake its `DBTX` interface to unit-test
   worker logic without Postgres (see `events/worker_test.go`).
