@@ -66,16 +66,20 @@ func New(d Deps) (*Module, error) {
 		tokens = d.Tokens
 	}
 	svc := service.New(service.Deps{
-		Accounts: repository.NewAccountRepository(d.Pool, d.Outbox, d.Jobs),
-		Roles:    repository.NewRoleRepository(d.Pool, d.Outbox),
-		Sessions: repository.NewSessionRepository(d.Pool),
-		Hasher:   service.NewBcrypt(0),
-		Tokens:   tokens,
+		Accounts:       repository.NewAccountRepository(d.Pool, d.Outbox, d.Jobs),
+		Roles:          repository.NewRoleRepository(d.Pool, d.Outbox),
+		Sessions:       repository.NewSessionRepository(d.Pool),
+		PasswordTokens: repository.NewTokenRepository(d.Pool, d.Outbox, d.Jobs),
+		Hasher:         service.NewBcrypt(0),
+		Tokens:         tokens,
 		Settings: service.Settings{
 			SlidingTTL:  cfg.RefreshSlidingTTL,
 			AbsoluteTTL: cfg.RefreshAbsoluteTTL,
 			Grace:       cfg.RefreshGracePeriod,
 			Retention:   cfg.RefreshRetention,
+			// Tạm thời: task sau chuyển sang identity.Config
+			InviteTTL: 72 * time.Hour,
+			ResetTTL:  time.Hour,
 		},
 	})
 	return &Module{

@@ -10,10 +10,10 @@ import (
 	"storeit/internal/platform/auth"
 )
 
+// CreateAccountInput: không có mật khẩu. Người dùng tự đặt qua link mời.
 type CreateAccountInput struct {
 	Email    string
 	Name     string
-	Password string
 	MemberID *uuid.UUID
 	RoleIDs  []uuid.UUID
 }
@@ -30,15 +30,12 @@ func (s *Service) CreateAccount(ctx context.Context, in CreateAccountInput) (Acc
 	if err != nil {
 		return AccountView{}, err
 	}
-	if err := domain.ValidatePassword(in.Password); err != nil {
-		return AccountView{}, err
-	}
-	h, err := s.hasher.Hash(in.Password)
+	invite, err := s.newToken(domain.PurposeInvite)
 	if err != nil {
 		return AccountView{}, err
 	}
 	a, err := s.accounts.Create(ctx, domain.NewAccount{
-		Email: email, Name: name, PasswordHash: h, MemberID: in.MemberID, RoleIDs: in.RoleIDs,
+		Email: email, Name: name, MemberID: in.MemberID, RoleIDs: in.RoleIDs, Invite: &invite,
 	})
 	if err != nil {
 		return AccountView{}, err
@@ -108,24 +105,6 @@ func (s *Service) EnableAccount(ctx context.Context, id uuid.UUID) (AccountView,
 		return AccountView{}, err
 	}
 	return s.view(ctx, a)
-}
-
-// ResetPassword: quản trị đặt lại mật khẩu, thu hồi mọi phiên của account đó
-func (s *Service) ResetPassword(ctx context.Context, id uuid.UUID, password string) error {
-	if _, err := auth.Require(ctx, domain.PermAccountManage); err != nil {
-		return err
-	}
-	if err := domain.ValidatePassword(password); err != nil {
-		return err
-	}
-	if _, err := s.accounts.Get(ctx, id); err != nil {
-		return err
-	}
-	h, err := s.hasher.Hash(password)
-	if err != nil {
-		return err
-	}
-	return s.accounts.SetPassword(ctx, id, h, nil)
 }
 
 // AssignRoles thay toàn bộ role của account. Không tự bỏ role Administrator của mình.

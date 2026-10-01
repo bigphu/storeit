@@ -24,6 +24,8 @@ type env struct {
 	sessions *fakeSessions
 	tokens   *fakeTokens
 	hasher   *countingHasher
+	pwTokens *fakePasswordTokens
+	mail     *fakeMail
 	now      time.Time
 }
 
@@ -38,11 +40,18 @@ func newEnv(t *testing.T) *env {
 		hasher:   &countingHasher{Hasher: NewBcrypt(4)},
 		now:      time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC),
 	}
+	now := func() time.Time { return e.now }
+	e.pwTokens = newFakePasswordTokens(e.accounts, now)
+	e.mail = &fakeMail{}
 	e.svc = New(Deps{
 		Accounts: e.accounts, Roles: e.roles, Sessions: e.sessions,
-		Hasher: e.hasher, Tokens: e.tokens,
-		Settings: Settings{SlidingTTL: 14 * 24 * time.Hour, AbsoluteTTL: 30 * 24 * time.Hour, Grace: 30 * time.Second, Retention: 30 * 24 * time.Hour},
-		Now:      func() time.Time { return e.now },
+		Hasher: e.hasher, Tokens: e.tokens, PasswordTokens: e.pwTokens,
+		Mail: e.mail, AppURL: "http://app.test/",
+		Settings: Settings{
+			SlidingTTL: 14 * 24 * time.Hour, AbsoluteTTL: 30 * 24 * time.Hour, Grace: 30 * time.Second, Retention: 30 * 24 * time.Hour,
+			InviteTTL: 72 * time.Hour, ResetTTL: time.Hour,
+		},
+		Now: now,
 	})
 	return e
 }
@@ -80,6 +89,9 @@ func TestLogin(t *testing.T) {
 	e := newEnv(t)
 	a := e.seed(t, "lan@storeit.test", true, domain.AdministratorRoleID)
 	e.seed(t, "off@storeit.test", false)
+	if _, err := e.accounts.Create(context.Background(), domain.NewAccount{Email: "new@storeit.test", Name: "New"}); err != nil {
+		t.Fatal(err)
+	}
 	dev := Device{UserAgent: "test", IP: "203.0.113.5"}
 
 	sess, err := e.svc.Login(context.Background(), "  LAN@StoreIT.test ", goodPassword, dev)
@@ -112,6 +124,8 @@ func TestLogin(t *testing.T) {
 		"unknown email":  {"ghost@storeit.test", goodPassword, domain.ErrBadCredentials},
 		"malformed":      {"not-an-email", goodPassword, domain.ErrBadCredentials},
 		"disabled":       {"off@storeit.test", goodPassword, domain.ErrAccountDisabled},
+		// Được mời, chưa đặt mật khẩu: giống email lạ
+		"invited": {"new@storeit.test", goodPassword, domain.ErrBadCredentials},
 	} {
 		before := e.hasher.compares
 		_, err := e.svc.Login(context.Background(), tc.email, tc.pw, dev)
@@ -188,20 +202,21 @@ func TestPermissionChecks(t *testing.T) {
 		},
 		"GetAccount": func(ctx context.Context) error { _, err := e.svc.GetAccount(ctx, id); return err },
 		"CreateAccount": func(ctx context.Context) error {
-			_, err := e.svc.CreateAccount(ctx, CreateAccountInput{Email: "n@storeit.test", Name: "N", Password: goodPassword})
+			_, err := e.svc.CreateAccount(ctx, CreateAccountInput{Email: "n@storeit.test", Name: "N"})
 			return err
 		},
 		"UpdateAccount": func(ctx context.Context) error {
 			_, err := e.svc.UpdateAccount(ctx, id, domain.ProfileChange{})
 			return err
 		},
-		"DisableAccount": func(ctx context.Context) error { _, err := e.svc.DisableAccount(ctx, id); return err },
-		"EnableAccount":  func(ctx context.Context) error { _, err := e.svc.EnableAccount(ctx, id); return err },
-		"ResetPassword":  func(ctx context.Context) error { return e.svc.ResetPassword(ctx, id, goodPassword) },
-		"AssignRoles":    func(ctx context.Context) error { _, err := e.svc.AssignRoles(ctx, id, nil); return err },
-		"ListRoles":      func(ctx context.Context) error { _, err := e.svc.ListRoles(ctx); return err },
-		"GetRole":        func(ctx context.Context) error { _, err := e.svc.GetRole(ctx, domain.EmployeeRoleID); return err },
-		"CreateRole":     func(ctx context.Context) error { _, err := e.svc.CreateRole(ctx, "X", "", nil); return err },
+		"DisableAccount":    func(ctx context.Context) error { _, err := e.svc.DisableAccount(ctx, id); return err },
+		"EnableAccount":     func(ctx context.Context) error { _, err := e.svc.EnableAccount(ctx, id); return err },
+		"ResendInvitation":  func(ctx context.Context) error { return e.svc.ResendInvitation(ctx, id) },
+		"SendPasswordReset": func(ctx context.Context) error { return e.svc.SendPasswordReset(ctx, id) },
+		"AssignRoles":       func(ctx context.Context) error { _, err := e.svc.AssignRoles(ctx, id, nil); return err },
+		"ListRoles":         func(ctx context.Context) error { _, err := e.svc.ListRoles(ctx); return err },
+		"GetRole":           func(ctx context.Context) error { _, err := e.svc.GetRole(ctx, domain.EmployeeRoleID); return err },
+		"CreateRole":        func(ctx context.Context) error { _, err := e.svc.CreateRole(ctx, "X", "", nil); return err },
 		"UpdateRole": func(ctx context.Context) error {
 			_, err := e.svc.UpdateRole(ctx, domain.EmployeeRoleID, nil, nil)
 			return err
@@ -255,7 +270,7 @@ func TestAccountManagement(t *testing.T) {
 	ctx := as(admin.ID, domain.PermAccountManage, domain.PermAccountRead)
 
 	v, err := e.svc.CreateAccount(ctx, CreateAccountInput{
-		Email: " Minh@StoreIT.test", Name: "  Minh  ", Password: goodPassword, RoleIDs: []uuid.UUID{domain.EmployeeRoleID},
+		Email: " Minh@StoreIT.test", Name: "  Minh  ", RoleIDs: []uuid.UUID{domain.EmployeeRoleID},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -263,14 +278,13 @@ func TestAccountManagement(t *testing.T) {
 	if v.Email != "minh@storeit.test" || v.Name != "Minh" || len(v.Roles) != 1 {
 		t.Errorf("created = %+v", v)
 	}
-	if e.hasher.Compare(v.PasswordHash, goodPassword) == false {
-		t.Error("password not hashed with bcrypt")
+	if v.Status() != domain.StatusInvited || v.PasswordHash != "" {
+		t.Errorf("created account status = %s, want invited without password", v.Status())
 	}
 
 	for name, in := range map[string]CreateAccountInput{
-		"weak password": {Email: "a@storeit.test", Name: "A", Password: "short"},
-		"bad email":     {Email: "nope", Name: "A", Password: goodPassword},
-		"blank name":    {Email: "b@storeit.test", Name: "   ", Password: goodPassword},
+		"bad email":  {Email: "nope", Name: "A"},
+		"blank name": {Email: "b@storeit.test", Name: "   "},
 	} {
 		if _, err := e.svc.CreateAccount(ctx, in); status(err) != 422 {
 			t.Errorf("%s: %v, want 422", name, err)
@@ -372,8 +386,12 @@ func ptr[T any](v T) *T { return &v }
 func TestPruneSessions(t *testing.T) {
 	e := newEnv(t)
 	res, err := e.svc.PruneSessions(context.Background())
-	if err != nil || res.Families != 2 || res.Tokens != 5 {
+	if err != nil || res.Families != 2 || res.Tokens != 5 || res.PasswordTokens != 3 {
 		t.Errorf("prune = %+v, %v", res, err)
+	}
+	// Link hết hạn là rác ngay, không cần chờ Retention
+	if !e.pwTokens.pruned.Equal(e.now) {
+		t.Errorf("password token cutoff = %v, want now %v", e.pwTokens.pruned, e.now)
 	}
 	if want := e.now.Add(-30 * 24 * time.Hour); !e.sessions.pruneCutoff.Equal(want) {
 		t.Errorf("cutoff = %v, want %v", e.sessions.pruneCutoff, want)

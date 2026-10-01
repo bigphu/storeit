@@ -37,6 +37,11 @@ func (s *Service) Login(ctx context.Context, email, password string, dev Device)
 	if err != nil {
 		return Session{}, err
 	}
+	// Chưa nhận lời mời: không có hash để so, vẫn tốn một lần bcrypt như email lạ
+	if !a.HasPassword() {
+		s.hasher.Compare(s.dummy(), password)
+		return Session{}, domain.ErrBadCredentials
+	}
 	if !s.hasher.Compare(a.PasswordHash, password) {
 		return Session{}, domain.ErrBadCredentials
 	}

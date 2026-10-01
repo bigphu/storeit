@@ -14,6 +14,7 @@ import (
 	"storeit/internal/identity/domain"
 	"storeit/internal/platform/auth"
 	"storeit/internal/platform/jwt"
+	"storeit/internal/platform/mail"
 )
 
 // TokenIssuer phát access token; *jwt.Provider thoả interface này
@@ -28,6 +29,9 @@ type Settings struct {
 	Grace       time.Duration
 	// Giữ hàng phiên đã chết bao lâu trước khi PruneSessions xoá
 	Retention time.Duration
+	// Hạn của link mời và link đặt lại mật khẩu
+	InviteTTL time.Duration
+	ResetTTL  time.Duration
 }
 
 type Deps struct {
@@ -36,6 +40,12 @@ type Deps struct {
 	Sessions domain.SessionRepository
 	Hasher   Hasher
 	Tokens   TokenIssuer
+	// PasswordTokens lưu link mời / đặt lại mật khẩu
+	PasswordTokens domain.TokenRepository
+	// Mail chỉ cần cho SendAccountEmail (worker); API để nil
+	Mail mail.Sender
+	// AppURL là gốc của frontend, link trong thư trỏ về đây
+	AppURL   string
 	Settings Settings
 	// Now cho test điều khiển thời gian; nil là time.Now
 	Now func() time.Time
@@ -47,6 +57,9 @@ type Service struct {
 	sessions domain.SessionRepository
 	hasher   Hasher
 	tokens   TokenIssuer
+	pwTokens domain.TokenRepository
+	mail     mail.Sender
+	appURL   string
 	settings Settings
 	now      func() time.Time
 
@@ -62,7 +75,8 @@ func New(d Deps) *Service {
 	}
 	return &Service{
 		accounts: d.Accounts, roles: d.Roles, sessions: d.Sessions,
-		hasher: d.Hasher, tokens: d.Tokens, settings: d.Settings, now: now,
+		hasher: d.Hasher, tokens: d.Tokens, pwTokens: d.PasswordTokens, mail: d.Mail,
+		appURL: strings.TrimRight(d.AppURL, "/"), settings: d.Settings, now: now,
 	}
 }
 

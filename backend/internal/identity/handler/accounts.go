@@ -39,7 +39,7 @@ func (h *Handler) ListAccounts(ctx context.Context, req api.ListAccountsRequestO
 
 func (h *Handler) CreateAccount(ctx context.Context, req api.CreateAccountRequestObject) (api.CreateAccountResponseObject, error) {
 	v, err := h.svc.CreateAccount(ctx, service.CreateAccountInput{
-		Email: req.Body.Email, Name: req.Body.Name, Password: req.Body.Password,
+		Email: req.Body.Email, Name: req.Body.Name,
 		MemberID: req.Body.MemberId, RoleIDs: ids(req.Body.RoleIds),
 	})
 	if err != nil {
@@ -86,7 +86,8 @@ func (h *Handler) EnableAccount(ctx context.Context, req api.EnableAccountReques
 }
 
 func (h *Handler) ResetPassword(ctx context.Context, req api.ResetPasswordRequestObject) (api.ResetPasswordResponseObject, error) {
-	if err := h.svc.ResetPassword(ctx, req.AccountID, req.Body.Password); err != nil {
+	// Tạm thời tới khi spec bỏ route này (task tiếp theo)
+	if err := h.svc.SendPasswordReset(ctx, req.AccountID); err != nil {
 		return nil, err
 	}
 	return api.ResetPassword204Response{}, nil

@@ -1,0 +1,9 @@
+Hello {{.Name}},
+
+An administrator has created a StoreIt account for you. Choose your password to activate it:
+
+{{.Link}}
+
+This link works once and expires in {{.ExpiresIn}}. If it has expired, use "Forgot password" on the sign-in page or ask your administrator for a new invitation.
+
+If you weren't expecting this email, you can ignore it.
