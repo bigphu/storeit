@@ -60,7 +60,10 @@ func run() error {
 	registry := events.NewRegistry()
 	outbox := events.NewOutbox(registry, insertClient)
 
-	identityMod, err := identity.New(identity.Deps{Pool: pool, Tokens: tokens, Outbox: outbox, Config: cfg.Identity})
+	// API không gửi thư: chỉ xếp job gửi thư trong cùng transaction, worker gửi
+	identityMod, err := identity.New(identity.Deps{
+		Pool: pool, Tokens: tokens, Outbox: outbox, Jobs: jobs.NewRiver(insertClient), Config: cfg.Identity,
+	})
 	if err != nil {
 		return err
 	}

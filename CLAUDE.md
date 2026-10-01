@@ -14,7 +14,7 @@ server, pgx, River, sqlc, goose) and `frontend/`.
   `backend/docs/platform.md` before using or changing them or wiring a module. It is
   the API reference and lists the rules that are easy to get wrong. Update it in the
   same change when a platform API changes.
-- **Identity module** (`backend/internal/identity`: sign-in, rotating refresh tokens,
+- **Identity module** (`backend/internal/identity`: sign-in, rotating refresh tokens, invitations,
   RBAC): reference in `backend/docs/identity.md`. Other modules check permissions with
   `auth.Require` and read accounts only through `identity/contract`.
 - Rules that bite most often:

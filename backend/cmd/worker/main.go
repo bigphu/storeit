@@ -1,5 +1,5 @@
-// cmd/worker chạy job nền trên River: giao event cho subscriber và job định kỳ
-// (dọn phiên đăng nhập đã chết).
+// cmd/worker chạy job nền trên River: giao event cho subscriber, gửi thư
+// (mời, đặt lại mật khẩu) và job định kỳ (dọn phiên đăng nhập đã chết).
 package main
 
 import (
@@ -19,6 +19,7 @@ import (
 	"storeit/internal/platform/events"
 	"storeit/internal/platform/jobs"
 	"storeit/internal/platform/logger"
+	"storeit/internal/platform/mail"
 )
 
 // Thời gian cho job đang chạy hoàn tất khi tắt; compose cho 30s
@@ -56,14 +57,24 @@ func run() error {
 	registry := events.NewRegistry()
 	outbox := events.NewOutbox(registry, insertClient)
 
-	identityMod, err := identity.New(identity.Deps{Pool: pool, Outbox: outbox, Config: cfg.Identity})
+	sender, err := mail.New(cfg.Mail, log)
+	if err != nil {
+		return err
+	}
+	log.Info("mail transport ready", slog.String("transport", string(cfg.Mail.Transport)))
+
+	identityMod, err := identity.New(identity.Deps{
+		Pool: pool, Outbox: outbox, Jobs: jobs.NewRiver(insertClient), Mail: sender, Config: cfg.Identity,
+	})
 	if err != nil {
 		return err
 	}
 
 	workers := river.NewWorkers()
 	events.RegisterWorker(workers, pool, registry, identityMod.LoadActor)
-	identityMod.RegisterWorkers(workers)
+	if err := identityMod.RegisterWorkers(workers); err != nil {
+		return err
+	}
 
 	client, err := jobs.NewWorkerClient(pool, log, cfg.Jobs, workers, identity.PeriodicJobs())
 	if err != nil {

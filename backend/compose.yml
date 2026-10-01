@@ -19,6 +19,8 @@ x-go-env: &go-env
   JWT_ISSUER: ${JWT_ISSUER:-storeit}
   # Dev chạy http: trình duyệt bỏ cookie Secure trên http, kể cả localhost
   IDENTITY_COOKIE_SECURE: "false"
+  # Frontend: link trong thư mời / đặt lại mật khẩu trỏ về đây
+  IDENTITY_APP_URL: ${APP_URL:-http://localhost:3000}
   # Administrator đầu tiên, tạo khi DB chưa có account nào (đặt trong .env)
   ADMIN_EMAIL: ${ADMIN_EMAIL:-}
   ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
@@ -63,9 +65,26 @@ services:
   worker:
     <<: *go-dev
     command: ["air", "-c", "air.worker.toml"]
-    environment: *go-env
+    environment:
+      <<: *go-env
+      # Thư đi vào Mailpit, xem ở http://localhost:8025
+      MAIL_TRANSPORT: smtp
+      MAIL_FROM: "StoreIt <no-reply@storeit.dev>"
+      MAIL_SMTP_HOST: mailpit
+      MAIL_SMTP_PORT: "1025"
+      MAIL_SMTP_TLS: none
     depends_on:
       migrate: { condition: service_completed_successfully }
+      mailpit: { condition: service_started }
+    restart: unless-stopped
+
+  # Hộp thư giả cho dev: nhận mọi thư qua SMTP, xem bằng trình duyệt
+  mailpit:
+    image: axllent/mailpit:v1.31
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
+      # SMTP cho make run-worker chạy trên host
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025"
     restart: unless-stopped
 
   postgres:
