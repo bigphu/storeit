@@ -4,13 +4,16 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/caarlos0/env/v11"
 )
 
 func newLocal(t *testing.T) *Local {
 	t.Helper()
-	s, err := NewLocal(t.TempDir())
+	s, err := NewLocal(Config{Dir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,3 +123,66 @@ func TestLocal_RejectsKeysOutsideRoot(t *testing.T) {
 type iotestErrReader struct{}
 
 func (iotestErrReader) Read([]byte) (int, error) { return 0, errors.New("disk on fire") }
+
+// cancelAfterFirstRead huỷ ctx ngay sau lần Read đầu, như client ngắt giữa
+// lúc upload
+type cancelAfterFirstRead struct {
+	cancel context.CancelFunc
+	reads  int
+}
+
+func (r *cancelAfterFirstRead) Read(p []byte) (int, error) {
+	r.reads++
+	if r.reads > 3 {
+		return 0, io.EOF
+	}
+	r.cancel()
+	return copy(p, "chunk"), nil
+}
+
+func TestLocal_PutStopsWhenCtxCancelled(t *testing.T) {
+	s := newLocal(t)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	err := s.Put(ctx, "imports/x.xlsx", &cancelAfterFirstRead{cancel: cancel})
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if _, err := s.Get(context.Background(), "imports/x.xlsx"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Get after cancelled Put: err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestConfig_FromEnv(t *testing.T) {
+	var cfg struct{ Storage Config }
+	if err := env.ParseWithOptions(&cfg, env.Options{Environment: map[string]string{"STORAGE_DIR": "/data/files"}}); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Storage.Dir != "/data/files" {
+		t.Errorf("Dir = %q, want /data/files", cfg.Storage.Dir)
+	}
+}
+
+// Config dựng tay để trống Dir thì lấy thư mục mặc định, giống envDefault
+func TestNewLocal_EmptyDirUsesDefault(t *testing.T) {
+	t.Chdir(t.TempDir())
+	s, err := NewLocal(Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = s.Close()
+	if _, err := os.Stat(defaultDir); err != nil {
+		t.Errorf("default dir not created: %v", err)
+	}
+}
+
+func TestConfig_EnvDefaultMatchesDefaultDir(t *testing.T) {
+	var cfg struct{ Storage Config }
+	if err := env.ParseWithOptions(&cfg, env.Options{Environment: map[string]string{}}); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Storage.Dir != defaultDir {
+		t.Errorf("envDefault %q != defaultDir %q", cfg.Storage.Dir, defaultDir)
+	}
+}

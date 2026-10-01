@@ -30,6 +30,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
+	"storeit/internal/platform/database"
 	"storeit/migrations"
 )
 
@@ -69,7 +70,9 @@ func start(ctx context.Context) (*pgxpool.Pool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("connection string: %w", err)
 	}
-	p, err := pgxpool.New(ctx, url)
+	// Mở qua database.Open để test chạy đúng đường của app (pool cùng thông
+	// số mặc định, đủ kết nối cho River worker trong test)
+	p, err := database.Open(ctx, database.Config{URL: url})
 	if err != nil {
 		return nil, fmt.Errorf("open pool: %w", err)
 	}

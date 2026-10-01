@@ -12,4 +12,8 @@
 // bằng AddToScope, để cả log ghi bằng ctx bên ngoài (access log) cũng có:
 //
 //	logger.AddToScope(r.Context(), slog.String("actor_id", id))
+//
+// Attr của ctx luôn ở cấp ngoài cùng của dòng log, kể cả khi logger đang mở
+// group. Code platform cần logger của server (không phải slog.Default) lấy
+// bằng FromContext; RequestLogger đặt vào ctx bằng NewContext.
 package logger

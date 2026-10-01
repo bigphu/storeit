@@ -25,37 +25,46 @@ const (
 // tuần như mặc định 25 của River. Job cần khác thì tự đặt trong InsertOpts().
 const DefaultMaxAttempts = 10
 
-// Số job chạy song song mỗi queue trên một process worker
-const maxWorkersPerQueue = 10
-
 // NewInsertClient dựng client chỉ để insert job, cho cmd/api (không chạy job).
-// MaxAttempts gắn vào job lúc insert, nên default cũng phải đặt ở đây.
-func NewInsertClient(pool *pgxpool.Pool) (*river.Client[pgx.Tx], error) {
-	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
-		Logger:      slog.Default(),
-		MaxAttempts: DefaultMaxAttempts,
-	})
+// MaxAttempts gắn vào job lúc insert, nên default cũng phải đặt ở đây. log nil
+// thì dùng slog.Default().
+func NewInsertClient(pool *pgxpool.Pool, log *slog.Logger) (*river.Client[pgx.Tx], error) {
+	client, err := river.NewClient(riverpgxv5.New(pool), insertConfig(log))
 	if err != nil {
 		return nil, fmt.Errorf("jobs: insert client: %w", err)
 	}
 	return client, nil
 }
 
-// NewWorkerClient dựng client chạy job cho cmd/worker, nghe mọi queue của app.
-// periodic là scheduled job (nhắc hạn trả, hết bảo hành...), có thể nil.
-func NewWorkerClient(pool *pgxpool.Pool, workers *river.Workers, periodic []*river.PeriodicJob) (*river.Client[pgx.Tx], error) {
-	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
-		Logger:      slog.Default(),
-		MaxAttempts: DefaultMaxAttempts,
-		Queues: map[string]river.QueueConfig{
-			QueueDefault: {MaxWorkers: maxWorkersPerQueue},
-			QueueEvents:  {MaxWorkers: maxWorkersPerQueue},
-		},
-		Workers:      workers,
-		PeriodicJobs: periodic,
-	})
+// NewWorkerClient dựng client chạy job cho cmd/worker, nghe mọi queue của app
+// với số worker theo cfg. periodic là scheduled job (nhắc hạn trả, hết bảo
+// hành...), có thể nil. log nil thì dùng slog.Default().
+func NewWorkerClient(pool *pgxpool.Pool, log *slog.Logger, cfg Config, workers *river.Workers, periodic []*river.PeriodicJob) (*river.Client[pgx.Tx], error) {
+	client, err := river.NewClient(riverpgxv5.New(pool), workerConfig(log, cfg, workers, periodic))
 	if err != nil {
 		return nil, fmt.Errorf("jobs: worker client: %w", err)
 	}
 	return client, nil
+}
+
+func insertConfig(log *slog.Logger) *river.Config {
+	if log == nil {
+		log = slog.Default()
+	}
+	return &river.Config{
+		Logger:      log,
+		MaxAttempts: DefaultMaxAttempts,
+	}
+}
+
+func workerConfig(log *slog.Logger, cfg Config, workers *river.Workers, periodic []*river.PeriodicJob) *river.Config {
+	cfg = cfg.withDefaults()
+	rc := insertConfig(log)
+	rc.Queues = map[string]river.QueueConfig{
+		QueueDefault: {MaxWorkers: cfg.DefaultMaxWorkers},
+		QueueEvents:  {MaxWorkers: cfg.EventsMaxWorkers},
+	}
+	rc.Workers = workers
+	rc.PeriodicJobs = periodic
+	return rc
 }

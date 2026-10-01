@@ -57,8 +57,10 @@ func RegisterWorker(workers *river.Workers, pool *pgxpool.Pool, registry *Regist
 func (w *HandleEventWorker) Work(ctx context.Context, job *river.Job[HandleEventArgs]) error {
 	h, ok := w.registry.handler(job.Args.Subscriber)
 	if !ok {
-		// Subscriber đã bị gỡ khỏi code: retry cũng không có ích
-		return river.JobCancel(fmt.Errorf("events: unknown subscriber %q", job.Args.Subscriber))
+		// Không huỷ job: có thể API đã deploy bản có subscriber mới mà worker
+		// chưa. Lỗi thường để River retry (DefaultMaxAttempts, khoảng 7 tiếng);
+		// subscriber đã bị gỡ hẳn thì job bị discard sau lần thử cuối.
+		return fmt.Errorf("events: subscriber %q not registered in this worker", job.Args.Subscriber)
 	}
 
 	row, err := w.q.GetEvent(ctx, job.Args.EventID)

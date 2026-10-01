@@ -19,7 +19,10 @@ func parseKeys(raw, activeKID string) (keyring, error) {
 		activeKID: activeKID,
 	}
 
-	for _, entry := range strings.Split(raw, ",") {
+	// Ngăn cách bằng dấu phẩy hay xuống dòng (thêm key mới trên dòng riêng
+	// khi xoay key)
+	entries := strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == '\n' || r == '\r' })
+	for _, entry := range entries {
 		entry := strings.TrimSpace(entry)
 		if entry == "" {
 			continue
@@ -44,6 +47,9 @@ func parseKeys(raw, activeKID string) (keyring, error) {
 			return keyring{}, fmt.Errorf("kid %q: secret is %d bytes long, minimum length must be %d", kid, len(secret), minSecretLen)
 		}
 
+		if _, dup := ring.keys[kid]; dup {
+			return keyring{}, fmt.Errorf("kid %q appears more than once", kid)
+		}
 		ring.keys[kid] = secret
 	}
 

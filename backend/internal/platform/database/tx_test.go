@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"errors"
+	"runtime"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -13,6 +14,7 @@ type fakeTx struct {
 	pgx.Tx
 	commitErr, rollbackErr error
 	committed, rolledBack  bool
+	rollbackCtxErr         error // ctx.Err() lúc Rollback được gọi
 }
 
 func (t *fakeTx) Commit(context.Context) error {
@@ -20,8 +22,9 @@ func (t *fakeTx) Commit(context.Context) error {
 	return t.commitErr
 }
 
-func (t *fakeTx) Rollback(context.Context) error {
+func (t *fakeTx) Rollback(ctx context.Context) error {
 	t.rolledBack = true
+	t.rollbackCtxErr = ctx.Err()
 	return t.rollbackErr
 }
 
@@ -128,5 +131,42 @@ func TestWithTx_CommitError(t *testing.T) {
 
 	if !errors.Is(err, commitErr) {
 		t.Errorf("err = %v, want %v", err, commitErr)
+	}
+}
+
+// fn thoát bằng runtime.Goexit (t.Fatal/t.FailNow trong test) thì recover()
+// không bắt được; tx vẫn phải rollback, nếu không kết nối bị giữ mãi
+func TestWithTx_RollsBackOnGoexit(t *testing.T) {
+	db := &fakeDB{tx: &fakeTx{}}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = WithTx(context.Background(), db, func(pgx.Tx) error {
+			runtime.Goexit()
+			return nil
+		})
+	}()
+	<-done
+
+	if db.tx.committed || !db.tx.rolledBack {
+		t.Errorf("committed=%v rolledBack=%v, want rollback only", db.tx.committed, db.tx.rolledBack)
+	}
+}
+
+// Request bị huỷ (client ngắt) thì ctx đã huỷ lúc rollback; rollback phải chạy
+// với ctx còn sống, nếu không pgx đóng luôn kết nối thay vì rollback
+func TestWithTx_RollbackIgnoresCancelledCtx(t *testing.T) {
+	db := &fakeDB{tx: &fakeTx{}}
+	ctx, cancel := context.WithCancel(context.Background())
+
+	_ = WithTx(ctx, db, func(pgx.Tx) error {
+		cancel()
+		return ctx.Err()
+	})
+
+	if !db.tx.rolledBack || db.tx.rollbackCtxErr != nil {
+		t.Errorf("rolledBack=%v rollback ctx err=%v, want rollback with live ctx",
+			db.tx.rolledBack, db.tx.rollbackCtxErr)
 	}
 }

@@ -20,7 +20,7 @@ import (
 
 func newOutbox(t *testing.T, pool *pgxpool.Pool, r *Registry) *Outbox {
 	t.Helper()
-	client, err := jobs.NewInsertClient(pool)
+	client, err := jobs.NewInsertClient(pool, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func subscribersOf(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) []string {
 func TestAppend_CommitWritesEventAndOneJobPerSubscriber(t *testing.T) {
 	pool := dbtest.Pool(t)
 	r := NewRegistry()
-	r.On("inventory.asset_checked_out", "notifications.checkout_email", noop)
+	r.On("notifications.checkout_email", noop, "inventory.asset_checked_out")
 	r.OnAll("activity.record", noop)
 	outbox := newOutbox(t, pool, r)
 	actorID := uuid.New()
@@ -160,15 +160,15 @@ func TestHandleEventWorker_DeliversWithOriginalActor(t *testing.T) {
 	}
 	delivered := make(chan delivery, 1)
 	r := NewRegistry()
-	r.On("inventory.asset_checked_out", "test.deliver", func(ctx context.Context, e Event) error {
+	r.On("test.deliver", func(ctx context.Context, e Event) error {
 		a, _ := auth.FromContext(ctx)
 		delivered <- delivery{e, a}
 		return nil
-	})
+	}, "inventory.asset_checked_out")
 
 	workers := river.NewWorkers()
 	RegisterWorker(workers, pool, r, load)
-	client, err := jobs.NewWorkerClient(pool, workers, nil)
+	client, err := jobs.NewWorkerClient(pool, nil, jobs.Config{}, workers, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

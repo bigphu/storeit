@@ -4,6 +4,9 @@ package: apicommon
 output: apicommon.gen.go
 generate:
   models: true
+  # Spec của module $ref sang file này; GetSwagger của module cần bản nhúng
+  # (PathToRawSpec) để dựng spec cho web.ValidateRequests
+  embedded-spec: true
 output-options:
   # Spec này không có path nào dùng schema, không tắt prune thì sinh ra rỗng
   skip-prune: true

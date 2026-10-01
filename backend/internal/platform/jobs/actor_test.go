@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/riverqueue/river/rivertype"
 
 	"storeit/internal/platform/auth"
 )
@@ -83,4 +85,20 @@ func TestRestoreActor(t *testing.T) {
 			t.Errorf("err = %v, want %v", err, boom)
 		}
 	})
+}
+
+// Account đã bị xoá thì retry cũng không nạp được: huỷ job ngay thay vì để
+// River thử lại tới hết MaxAttempts
+func TestRestoreActor_UnknownAccountCancelsJob(t *testing.T) {
+	_, err := RestoreActor(context.Background(), uuid.New(), func(_ context.Context, id uuid.UUID) (auth.Actor, error) {
+		return auth.Actor{}, fmt.Errorf("account %s: %w", id, ErrActorNotFound)
+	})
+
+	var cancel *rivertype.JobCancelError
+	if !errors.As(err, &cancel) {
+		t.Fatalf("err = %v (%T), want JobCancel", err, err)
+	}
+	if !errors.Is(err, ErrActorNotFound) {
+		t.Errorf("err = %v, want it to wrap ErrActorNotFound", err)
+	}
 }

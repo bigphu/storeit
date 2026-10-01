@@ -6,7 +6,7 @@ import (
 )
 
 type Config struct {
-	Keys      string `env:"JWT_KEYS_FILE,file,required,notEmpty"` // file content: "v1:<base64>,v2:<base64>"
+	Keys      string `env:"JWT_KEYS_FILE,file,required,notEmpty"` // file content: "v1:<base64>,v2:<base64>" (phẩy hay xuống dòng)
 	ActiveKID string `env:"JWT_ACTIVE_KID,required,notEmpty"`
 	Issuer    string `env:"JWT_ISSUER,required,notEmpty"`
 	Audience  string `env:"JWT_AUDIENCE" envDefault:"storeit-api"`

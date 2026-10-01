@@ -27,13 +27,20 @@ func NewRegistry() *Registry {
 	}
 }
 
-// On đăng ký subscriber cho một loại event. Tên dạng "<module>.<phản ứng>",
-// là khoá của job nên không được đổi khi còn job đang chờ, và không trùng:
+// On đăng ký subscriber cho một hay nhiều loại event. Tên dạng
+// "<module>.<phản ứng>", là khoá của job nên không được đổi khi còn job đang
+// chờ, và mỗi tên chỉ đăng ký một lần (gom mọi loại event vào một lần gọi):
 //
-//	r.On(invcontract.EventAssetCheckedOut, "notifications.checkout_email", m.subscriber.CheckoutEmail)
-func (r *Registry) On(eventType, subscriber string, h Handler) {
+//	r.On("notifications.checkout_email", m.subscriber.CheckoutEmail,
+//		invcontract.EventAssetCheckedOut, invcontract.EventAssetReturned)
+func (r *Registry) On(subscriber string, h Handler, eventTypes ...string) {
+	if len(eventTypes) == 0 {
+		panic(fmt.Sprintf("events: subscriber %q needs at least one event type", subscriber))
+	}
 	r.add(subscriber, h)
-	r.byType[eventType] = append(r.byType[eventType], subscriber)
+	for _, t := range slices.Compact(slices.Sorted(slices.Values(eventTypes))) {
+		r.byType[t] = append(r.byType[t], subscriber)
+	}
 }
 
 // OnAll đăng ký subscriber nhận mọi event, vd activity ghi audit trail

@@ -15,5 +15,5 @@ func New(w io.Writer, cfg Config) *slog.Logger {
 	} else {
 		h = slog.NewJSONHandler(w, opts)
 	}
-	return slog.New(contextHandler{h})
+	return slog.New(newContextHandler(h))
 }

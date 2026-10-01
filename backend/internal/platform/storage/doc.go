@@ -2,7 +2,7 @@
 //
 // Service nhận Store (interface), main chọn bản cài đặt:
 //
-//	store, err := storage.NewLocal(cfg.Storage.Dir) // STORAGE_DIR
+//	store, err := storage.NewLocal(cfg.Storage) // STORAGE_DIR
 //
 // Key do code tạo từ ID, không lấy tên file người dùng gửi lên:
 //

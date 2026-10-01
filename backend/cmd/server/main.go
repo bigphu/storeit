@@ -17,14 +17,8 @@ import (
 	"storeit/internal/platform/logger"
 )
 
-type Config struct {
-	Log logger.Config `envPrefix:"LOG_"`
-}
-
-func (c *Config) Validate() error { return nil }
-
 func main() {
-	var cfg Config
+	var cfg serverConfig
 	if err := config.Load(&cfg); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

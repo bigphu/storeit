@@ -74,21 +74,78 @@ func scopeAttrs(ctx context.Context) []slog.Attr {
 }
 
 // contextHandler thêm các attr gắn bằng With và AddToScope vào từng bản ghi
-// rồi chuyển cho handler thật
+// rồi chuyển cho handler thật.
+//
+// Attr của ctx luôn ở cấp ngoài cùng, kể cả khi logger đang mở group
+// (log.WithGroup("job")). Attr thêm vào record sẽ rơi vào group đang mở, nên
+// khi đã có group thì dựng lại handler từ root: thêm attr của ctx trước, rồi
+// áp lại các WithAttrs/WithGroup theo đúng thứ tự.
 type contextHandler struct {
-	slog.Handler
+	slog.Handler // đã áp mọi WithAttrs/WithGroup
+
+	root    slog.Handler                      // handler thật, chưa áp gì
+	ops     []func(slog.Handler) slog.Handler // các WithAttrs/WithGroup đã áp
+	grouped bool                              // đã mở group nào chưa
+}
+
+func newContextHandler(h slog.Handler) contextHandler {
+	return contextHandler{Handler: h, root: h}
 }
 
 func (h contextHandler) Handle(ctx context.Context, r slog.Record) error {
-	r.AddAttrs(attrsFrom(ctx)...)
-	r.AddAttrs(scopeAttrs(ctx)...)
-	return h.Handler.Handle(ctx, r)
+	attrs := slices.Concat(attrsFrom(ctx), scopeAttrs(ctx))
+	if len(attrs) == 0 {
+		return h.Handler.Handle(ctx, r)
+	}
+	if !h.grouped {
+		r.AddAttrs(attrs...)
+		return h.Handler.Handle(ctx, r)
+	}
+	inner := h.root.WithAttrs(attrs)
+	for _, op := range h.ops {
+		inner = op(inner)
+	}
+	return inner.Handle(ctx, r)
 }
 
 func (h contextHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return contextHandler{h.Handler.WithAttrs(attrs)}
+	if len(attrs) == 0 {
+		return h
+	}
+	return h.with(func(inner slog.Handler) slog.Handler { return inner.WithAttrs(attrs) }, false)
 }
 
 func (h contextHandler) WithGroup(name string) slog.Handler {
-	return contextHandler{h.Handler.WithGroup(name)}
+	if name == "" { // slog: group rỗng là không có group
+		return h
+	}
+	return h.with(func(inner slog.Handler) slog.Handler { return inner.WithGroup(name) }, true)
+}
+
+func (h contextHandler) with(op func(slog.Handler) slog.Handler, group bool) contextHandler {
+	return contextHandler{
+		Handler: op(h.Handler),
+		root:    h.root,
+		// Clip để handler anh em (cùng cha) không ghi đè ops của nhau
+		ops:     append(slices.Clip(h.ops), op),
+		grouped: h.grouped || group,
+	}
+}
+
+type loggerKey struct{}
+
+// NewContext gắn log vào ctx. RequestLogger gọi cho mỗi request, để code
+// platform cần log (vd web.WriteProblem) dùng đúng logger của server mà không
+// phải đọc biến toàn cục.
+func NewContext(ctx context.Context, log *slog.Logger) context.Context {
+	return context.WithValue(ctx, loggerKey{}, log)
+}
+
+// FromContext trả logger gắn bằng NewContext, không có thì slog.Default()
+// (vd code chạy ngoài HTTP request)
+func FromContext(ctx context.Context) *slog.Logger {
+	if log, ok := ctx.Value(loggerKey{}).(*slog.Logger); ok && log != nil {
+		return log
+	}
+	return slog.Default()
 }

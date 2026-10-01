@@ -18,8 +18,8 @@
 // cmd/api dùng client chỉ insert, cmd/worker dùng client chạy job; bọc client
 // rồi truyền Enqueuer cho repository/service:
 //
-//	client, err := jobs.NewInsertClient(pool)                   // cmd/api
-//	client, err := jobs.NewWorkerClient(pool, workers, periodic) // cmd/worker
+//	client, err := jobs.NewInsertClient(pool, log)                   // cmd/api
+//	client, err := jobs.NewWorkerClient(pool, log, cfg.Jobs, workers, periodic) // cmd/worker
 //	enq := jobs.NewRiver(client)
 //
 // Job đi kèm một thay đổi dữ liệu thì repository enqueue bằng EnqueueTx, trong

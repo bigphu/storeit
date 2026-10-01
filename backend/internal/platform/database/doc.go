@@ -3,7 +3,11 @@
 // Mở một lần trong main, ping luôn nên sai URL hay DB chưa lên thì dừng ngay
 // lúc khởi động, không đợi tới request đầu tiên:
 //
-//	pool, err := database.Open(ctx, cfg.DatabaseURL)
+//	type serverConfig struct {
+//		DB database.Config // DB_MAX_CONNS, DB_CONNECT_TIMEOUT...
+//	}
+//
+//	pool, err := database.Open(ctx, cfg.DB)
 //	if err != nil {
 //		log.Fatal(err)
 //	}

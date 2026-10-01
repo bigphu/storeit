@@ -1,6 +1,7 @@
 package errs
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -78,5 +79,39 @@ func TestNewFrom(t *testing.T) {
 func TestStatus_DefaultsTo500(t *testing.T) {
 	if got := New(0, "/errors/x", "X").Status(); got != http.StatusInternalServerError {
 		t.Errorf("status = %d", got)
+	}
+}
+
+// JSON trả cho client theo RFC 9457 (khớp apicommon.Problem): status luôn có,
+// detail/errors chỉ khi có, cause không bao giờ lộ ra
+func TestMarshalJSON(t *testing.T) {
+	e := Unprocessable("/errors/validation-failed", "Validation failed").With(
+		WithFields(FieldError{Field: "email", Detail: "is required"}),
+		WithCause(errors.New("secret internal cause")))
+
+	b, err := json.Marshal(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"type":"/errors/validation-failed","title":"Validation failed","status":422,"errors":[{"field":"email","detail":"is required"}]}`
+	if string(b) != want {
+		t.Errorf("got  %s\nwant %s", b, want)
+	}
+
+	b, _ = json.Marshal(New(0, "/errors/x", "X"))
+	if string(b) != `{"type":"/errors/x","title":"X","status":500}` {
+		t.Errorf("status 0 should render as 500: %s", b)
+	}
+}
+
+func TestStatusHelpers(t *testing.T) {
+	for want, e := range map[int]*Error{
+		400: Invalid("/t", "t"), 401: Unauthorized("/t", "t"), 403: Forbidden("/t", "t"),
+		404: NotFound("/t", "t"), 409: Conflict("/t", "t"), 422: Unprocessable("/t", "t"),
+		500: Internal("/t", "t"),
+	} {
+		if e.Status() != want {
+			t.Errorf("got %d, want %d", e.Status(), want)
+		}
 	}
 }

@@ -1,16 +1,25 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"net/netip"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/go-chi/chi/v5"
+
+	"storeit/internal/platform/logger"
 )
 
 var discard = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -129,15 +138,16 @@ func TestConfig_Defaults(t *testing.T) {
 		ReadTimeout:       time.Minute, // đã đặt thì giữ
 		IdleTimeout:       60 * time.Second,
 		ShutdownTimeout:   15 * time.Second,
+		MaxBodyBytes:      1 << 20,
 	}
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)
 	}
 }
 
 func TestConfig_FromEnv(t *testing.T) {
 	var cfg struct {
-		HTTP Config `envPrefix:"HTTP_"`
+		HTTP Config // tên biến do package đặt, binary không thêm prefix
 	}
 	// Map rỗng chứ không nil: nil thì env đọc biến môi trường thật
 	err := env.ParseWithOptions(&cfg, env.Options{Environment: map[string]string{
@@ -152,8 +162,104 @@ func TestConfig_FromEnv(t *testing.T) {
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		ShutdownTimeout:   15 * time.Second,
+		MaxBodyBytes:      1 << 20,
 	}
-	if cfg.HTTP != want {
+	if !reflect.DeepEqual(cfg.HTTP, want) {
 		t.Errorf("got %+v, want %+v", cfg.HTTP, want)
+	}
+}
+
+func TestConfig_ValidateRejectsNegative(t *testing.T) {
+	for name, cfg := range map[string]Config{
+		"read timeout":   {ReadTimeout: -time.Second},
+		"idle timeout":   {IdleTimeout: -1},
+		"max body bytes": {MaxBodyBytes: -1},
+	} {
+		if err := cfg.Validate(); err == nil {
+			t.Errorf("%s: want error for negative value", name)
+		}
+	}
+	if err := (Config{}).Validate(); err != nil {
+		t.Errorf("zero Config gets defaults, want valid: %v", err)
+	}
+}
+
+// Response API (JSON, problem+json, kể cả 404 của router) có nosniff, để trình
+// duyệt không đoán lại kiểu nội dung
+func TestServer_NoSniffHeader(t *testing.T) {
+	s := New(Config{}, discard)
+	s.Router().Get("/ping", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+	for _, path := range []string{"/ping", "/nope"} {
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+			t.Errorf("%s: X-Content-Type-Options = %q, want nosniff", path, got)
+		}
+	}
+}
+
+func TestConfig_TrustedProxiesFromEnv(t *testing.T) {
+	var cfg struct{ HTTP Config }
+	err := env.ParseWithOptions(&cfg, env.Options{Environment: map[string]string{
+		"HTTP_TRUSTED_PROXIES": "10.0.0.0/8, 172.16.0.0/12",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8"), netip.MustParsePrefix("172.16.0.0/12")}
+	if !slices.Equal(cfg.HTTP.TrustedProxies, want) {
+		t.Errorf("TrustedProxies = %v, want %v", cfg.HTTP.TrustedProxies, want)
+	}
+}
+
+func TestConfig_TrustedProxiesRejectsGarbage(t *testing.T) {
+	var cfg struct{ HTTP Config }
+	err := env.ParseWithOptions(&cfg, env.Options{Environment: map[string]string{
+		"HTTP_TRUSTED_PROXIES": "not-a-cidr",
+	}})
+	if err == nil {
+		t.Error("want parse error for an invalid CIDR")
+	}
+}
+
+// Access log của server có client_ip; mặc định không tin proxy nào nên
+// X-Forwarded-For bị bỏ qua
+func TestServer_LogsClientIP(t *testing.T) {
+	var buf bytes.Buffer
+	s := New(Config{}, logger.New(&buf, logger.Config{}))
+	// chi chỉ dựng chuỗi middleware khi có route đầu tiên
+	s.Router().Get("/ping", func(http.ResponseWriter, *http.Request) {})
+	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	req.RemoteAddr = "203.0.113.5:1234"
+	req.Header.Set("X-Forwarded-For", "1.1.1.1")
+
+	s.Handler().ServeHTTP(httptest.NewRecorder(), req)
+
+	if !strings.Contains(buf.String(), `"client_ip":"203.0.113.5"`) {
+		t.Errorf("access log missing client_ip:\n%s", buf.String())
+	}
+}
+
+// 405 phải có header Allow (RFC 9110) liệt kê method route nhận
+func TestServer_MethodNotAllowedSetsAllow(t *testing.T) {
+	s := New(Config{}, discard)
+	noop := func(http.ResponseWriter, *http.Request) {}
+	s.Router().Get("/things/{id}", noop)
+	s.Router().Put("/things/{id}", noop)
+	s.Router().Route("/api", func(r chi.Router) {
+		r.Post("/items", noop)
+	})
+
+	for path, want := range map[string]string{
+		"/things/7":  "GET, PUT",
+		"/api/items": "POST",
+	} {
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, path, nil))
+		if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != want {
+			t.Errorf("%s: got %d Allow=%q, want 405 Allow=%q", path, rec.Code, rec.Header().Get("Allow"), want)
+		}
 	}
 }

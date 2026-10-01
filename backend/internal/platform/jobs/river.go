@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
@@ -20,14 +21,18 @@ func NewRiver(client *river.Client[pgx.Tx]) *River {
 
 // Insert một job vào queue worker
 func (r *River) Enqueue(ctx context.Context, job Job, opts ...Option) error {
-	_, err := r.client.Insert(ctx, job, parseOpts(opts...))
-	return err
+	if _, err := r.client.Insert(ctx, job, parseOpts(opts...)); err != nil {
+		return fmt.Errorf("jobs: enqueue %s: %w", job.Kind(), err)
+	}
+	return nil
 }
 
 // Insert một job vào queue worker trong một transaction
 func (r *River) EnqueueTx(ctx context.Context, tx pgx.Tx, job Job, opts ...Option) error {
-	_, err := r.client.InsertTx(ctx, tx, job, parseOpts(opts...))
-	return err
+	if _, err := r.client.InsertTx(ctx, tx, job, parseOpts(opts...)); err != nil {
+		return fmt.Errorf("jobs: enqueue %s: %w", job.Kind(), err)
+	}
+	return nil
 }
 
 // Field nào bằng 0 thì River tự lấy từ InsertOpts() của job, rồi tới default

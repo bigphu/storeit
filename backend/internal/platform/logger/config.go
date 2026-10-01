@@ -6,11 +6,11 @@ import (
 	"strings"
 )
 
-// Config đọc từ LOG_LEVEL, LOG_FORMAT. Nhúng vào Config của binary với
-// `envPrefix:"LOG_"`. Mặc định là info + JSON, hợp cho production
+// Config đọc từ LOG_LEVEL, LOG_FORMAT; binary nhúng nguyên khối, không thêm
+// envPrefix. Mặc định là info + JSON, hợp cho production
 type Config struct {
-	Level  slog.Level `env:"LEVEL" envDefault:"info"` // debug|info|warn|error
-	Format Format     `env:"FORMAT" envDefault:"json"`
+	Level  slog.Level `env:"LOG_LEVEL" envDefault:"info"` // debug|info|warn|error
+	Format Format     `env:"LOG_FORMAT" envDefault:"json"`
 }
 
 type Format string

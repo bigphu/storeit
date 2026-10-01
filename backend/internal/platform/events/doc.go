@@ -17,7 +17,13 @@
 //
 //	func (m *Module) Subscribe(r *events.Registry) {
 //		r.OnAll("activity.record", m.subscriber.Record)
+//		r.On("notifications.email", m.subscriber.Email,
+//			invcontract.EventAssetCheckedOut, invcontract.EventAssetReturned)
 //	}
+//
+// Tên subscriber là khoá của job: mỗi tên đăng ký một lần, không đổi khi còn
+// job đang chờ. Worker gặp tên chưa đăng ký thì retry (API có thể deploy trước
+// worker), không huỷ job.
 //
 // Wiring: cmd/api và cmd/worker dựng cùng registry; worker thêm
 // RegisterWorker. platform.events giữ mọi event sau khi River dọn job, để

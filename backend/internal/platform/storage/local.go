@@ -21,7 +21,12 @@ type Local struct {
 
 var _ Store = (*Local)(nil)
 
-func NewLocal(dir string) (*Local, error) {
+// NewLocal mở (tạo nếu chưa có) thư mục cfg.Dir làm gốc
+func NewLocal(cfg Config) (*Local, error) {
+	dir := cfg.Dir
+	if dir == "" {
+		dir = defaultDir
+	}
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, fmt.Errorf("storage: %w", err)
 	}
@@ -50,7 +55,7 @@ func (l *Local) Put(ctx context.Context, key string, r io.Reader) error {
 
 	// Ghi vào file tạm rồi rename, để người đọc không bao giờ thấy file dở
 	tmp := name + ".tmp-" + rand.Text()
-	if err := l.write(tmp, r); err != nil {
+	if err := l.write(tmp, ctxReader{ctx, r}); err != nil {
 		_ = l.root.Remove(tmp)
 		return fmt.Errorf("storage: put %q: %w", key, err)
 	}
@@ -70,7 +75,26 @@ func (l *Local) write(name string, r io.Reader) error {
 		_ = f.Close()
 		return err
 	}
+	// Sync trước khi rename: máy sập ngay sau rename cũng không để lại file rỗng
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
 	return f.Close()
+}
+
+// ctxReader dừng đọc khi ctx bị huỷ (vd client ngắt giữa lúc upload), để Put
+// không chép nốt cả file rồi mới biết
+type ctxReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (c ctxReader) Read(p []byte) (int, error) {
+	if err := c.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return c.r.Read(p)
 }
 
 func (l *Local) Get(ctx context.Context, key string) (io.ReadCloser, error) {

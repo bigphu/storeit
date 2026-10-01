@@ -1,15 +1,20 @@
-// Package middleware chứa middleware HTTP riêng của app. Middleware chung
-// (RequestID, RealIP, Timeout...) thì lấy thẳng từ chi.
+// Package middleware chứa middleware HTTP riêng của app.
 //
-// Thứ tự quan trọng, gắn một lần ở router gốc:
+// server.New gắn sẵn chuỗi chung ở router gốc, theo thứ tự:
 //
-//	r.Use(
-//		chimw.RequestID,                // tạo request ID
-//		middleware.RequestLogger(log),  // gắn request_id vào ctx, log mỗi request
-//		middleware.Recoverer(log),      // panic => 500 problem+json
-//	)
+//	BodyLimit(HTTP_MAX_BODY_BYTES)  // giới hạn body mọi route (strict server đọc thẳng r.Body)
+//	NoSniff                         // X-Content-Type-Options: nosniff
+//	ClientIP(HTTP_TRUSTED_PROXIES)  // IP client, chỉ tin X-Forwarded-For từ proxy đã khai báo
+//	RequestID                       // X-Request-Id hợp lệ thì giữ, không thì sinh UUID
+//	RequestLogger(log)              // request_id + logger vào ctx, một dòng access log
+//	Recoverer()                     // panic => 500 problem+json (chưa gửi gì) hoặc chỉ log
 //
-// RequestLogger phải đứng sau RequestID (để có ID mà gắn) và bọc ngoài
-// Recoverer: panic khi đó vẫn hiện thành một dòng 500 trong access log, và log
-// panic của Recoverer cũng có request_id.
+// RequestLogger đứng sau RequestID (có ID để gắn) và bọc ngoài Recoverer: panic
+// vẫn thành một dòng 500 trong access log, log panic cũng có request_id.
+//
+// Thông số riêng một operation sinh từ OpenAPI (body lớn hơn, đọc lâu hơn) gắn
+// qua ForOperations trong Middlewares của module, không dùng r.With:
+//
+//	upload := middleware.ForOperations(web.MustOperations(spec, "/api/v1", "POST /api/v1/imports"),
+//		middleware.BodyLimit(50<<20), middleware.ReadTimeout(10*time.Minute))
 package middleware

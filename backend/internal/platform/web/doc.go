@@ -1,6 +1,11 @@
-// Package web gom phần HTTP dùng chung: đọc JSON, trả JSON, trả lỗi problem+json.
+// Package web gom phần HTTP dùng chung: đọc JSON, trả JSON, trả lỗi problem+json,
+// validate request theo spec OpenAPI (ValidateRequests) và kiểm danh sách
+// operation với spec (MustOperations).
 //
-// Handler trả về error, web.Handle đổi error đó thành response:
+// Route sinh từ OpenAPI (strict server) được ValidateRequests kiểm tra theo spec
+// trước khi vào handler, handler không tự validate. Handler viết tay thì trả
+// về error, web.Handle đổi error đó thành response, web.Decode đọc và validate
+// body theo tag validate:
 //
 //	r.Post("/things", web.Handle(func(w http.ResponseWriter, r *http.Request) error {
 //		var in CreateThing

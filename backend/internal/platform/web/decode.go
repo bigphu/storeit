@@ -10,16 +10,20 @@ import (
 	"storeit/internal/platform/errs"
 )
 
-const maxBodyBytes = 1 << 20 // 1 MB
-
+// Decode đọc body JSON của r vào dst rồi validate, cho handler viết tay (route
+// sinh từ OpenAPI đã được ValidateRequests kiểm tra). Giới hạn kích thước do
+// middleware.BodyLimit đặt (server.New gắn cho mọi route); vượt thì 413.
 func Decode(r *http.Request, dst any) error {
-	reader := http.MaxBytesReader(nil, r.Body, maxBodyBytes)
-	dec := json.NewDecoder(reader)
+	dec := json.NewDecoder(r.Body)
 	if err := dec.Decode(dst); err != nil {
 		return decodeError(err)
 	}
 
 	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		var errMaxBytes *http.MaxBytesError
+		if errors.As(err, &errMaxBytes) {
+			return decodeError(err)
+		}
 		return ErrMalformedJSON.With(
 			errs.WithDetail("The request body must contain exactly one JSON value."))
 	}
@@ -30,7 +34,7 @@ func decodeError(err error) error {
 	var errMaxBytes *http.MaxBytesError
 	if errors.As(err, &errMaxBytes) {
 		return ErrRequestTooLarge.With(
-			errs.WithDetailf("The request body must not exceed %d bytes.", maxBodyBytes),
+			errs.WithDetailf("The request body must not exceed %d bytes.", errMaxBytes.Limit),
 			errs.WithCause(err))
 	}
 

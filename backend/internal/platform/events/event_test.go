@@ -50,8 +50,8 @@ func TestNew_UnencodablePayload(t *testing.T) {
 func TestRegistry_For(t *testing.T) {
 	r := NewRegistry()
 	noop := func(context.Context, Event) error { return nil }
-	r.On("inventory.asset_checked_out", "notifications.checkout_email", noop)
-	r.On("inventory.asset_created", "finance.cost_rollup", noop)
+	r.On("notifications.checkout_email", noop, "inventory.asset_checked_out")
+	r.On("finance.cost_rollup", noop, "inventory.asset_created")
 	r.OnAll("activity.record", noop)
 
 	if got, want := r.For("inventory.asset_checked_out"), []string{"activity.record", "notifications.checkout_email"}; !slices.Equal(got, want) {
@@ -66,7 +66,7 @@ func TestRegistry_For(t *testing.T) {
 func TestRegistry_DuplicateSubscriberPanics(t *testing.T) {
 	r := NewRegistry()
 	noop := func(context.Context, Event) error { return nil }
-	r.On("a.x", "activity.record", noop)
+	r.On("activity.record", noop, "a.x")
 
 	defer func() {
 		if recover() == nil {
@@ -77,15 +77,43 @@ func TestRegistry_DuplicateSubscriberPanics(t *testing.T) {
 }
 
 // Subscriber đã bị gỡ khỏi code thì job cũ của nó bị huỷ, không retry vô ích
-func TestHandleEventWorker_UnknownSubscriberCancels(t *testing.T) {
+// Subscriber chưa có trong registry của worker: có thể API đã deploy bản có
+// subscriber mới mà worker chưa. Trả lỗi thường để River retry (tới hết
+// MaxAttempts), không huỷ job, nếu không event mất hẳn với subscriber đó.
+func TestHandleEventWorker_UnknownSubscriberRetries(t *testing.T) {
 	w := &HandleEventWorker{registry: NewRegistry()}
 
 	err := w.Work(context.Background(), &river.Job[HandleEventArgs]{
-		Args: HandleEventArgs{EventID: uuid.New(), Subscriber: "gone.subscriber"},
+		Args: HandleEventArgs{EventID: uuid.New(), Subscriber: "new.subscriber"},
 	})
 
 	var cancel *river.JobCancelError
-	if !errors.As(err, &cancel) {
-		t.Errorf("err = %v, want JobCancel", err)
+	if err == nil || errors.As(err, &cancel) {
+		t.Errorf("err = %v, want a retryable error", err)
 	}
+}
+
+// Một subscriber nghe nhiều loại event (vd gửi mail khi mượn và khi trả)
+func TestRegistry_OneSubscriberManyTypes(t *testing.T) {
+	r := NewRegistry()
+	noop := func(context.Context, Event) error { return nil }
+	r.On("notifications.email", noop, "inventory.asset_checked_out", "inventory.asset_returned")
+
+	for _, typ := range []string{"inventory.asset_checked_out", "inventory.asset_returned"} {
+		if got, want := r.For(typ), []string{"notifications.email"}; !slices.Equal(got, want) {
+			t.Errorf("%s: got %v, want %v", typ, got, want)
+		}
+	}
+	if got := r.For("inventory.asset_created"); len(got) != 0 {
+		t.Errorf("unrelated type: got %v, want none", got)
+	}
+}
+
+func TestRegistry_OnWithoutEventTypePanics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("want panic when On has no event type")
+		}
+	}()
+	NewRegistry().On("notifications.email", func(context.Context, Event) error { return nil })
 }

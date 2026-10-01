@@ -9,14 +9,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Open mở pool rồi ping. url rỗng thì pgx đọc biến PG* (PGHOST, PGUSER...).
-func Open(ctx context.Context, url string) (*pgxpool.Pool, error) {
-	cfg, err := parseConfig(url)
+// Open mở pool theo cfg rồi ping. cfg.URL rỗng thì pgx đọc biến PG* (PGHOST,
+// PGUSER...).
+func Open(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	pc, err := parseConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	pool, err := pgxpool.NewWithConfig(ctx, pc)
 	if err != nil {
 		return nil, fmt.Errorf("db: pool connection: %w", err)
 	}
@@ -29,22 +33,32 @@ func Open(ctx context.Context, url string) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-// parseConfig như pgxpool.ParseConfig, thêm PGPASSWORD_FILE (Docker secret),
-// vì pgx không đọc biến này. Mật khẩu có sẵn trong url hay PGPASSWORD thì thắng.
-func parseConfig(url string) (*pgxpool.Config, error) {
-	cfg, err := pgxpool.ParseConfig(url)
+// parseConfig như pgxpool.ParseConfig(cfg.URL) rồi áp thông số pool của cfg,
+// thêm PGPASSWORD_FILE (Docker secret) vì pgx không đọc biến này. Mật khẩu có
+// sẵn trong URL hay PGPASSWORD thì skip.
+func parseConfig(cfg Config) (*pgxpool.Config, error) {
+	pc, err := pgxpool.ParseConfig(cfg.URL)
 	if err != nil {
 		return nil, fmt.Errorf("db: parse config: %w", err)
 	}
 
-	if file := os.Getenv("PGPASSWORD_FILE"); file != "" && cfg.ConnConfig.Password == "" {
+	if file := os.Getenv("PGPASSWORD_FILE"); file != "" && pc.ConnConfig.Password == "" {
 		b, err := os.ReadFile(file)
 		if err != nil {
 			return nil, fmt.Errorf("db: PGPASSWORD_FILE: %w", err)
 		}
-		cfg.ConnConfig.Password = strings.TrimRight(string(b), "\r\n")
+		pc.ConnConfig.Password = strings.TrimRight(string(b), "\r\n")
 	}
-	return cfg, nil
+
+	cfg = cfg.withDefaults()
+	pc.MaxConns = cfg.MaxConns
+	pc.MinConns = cfg.MinConns
+	pc.MaxConnLifetime = cfg.MaxConnLifetime
+	pc.MaxConnLifetimeJitter = cfg.MaxConnLifetimeJitter
+	pc.MaxConnIdleTime = cfg.MaxConnIdleTime
+	pc.HealthCheckPeriod = cfg.HealthCheckPeriod
+	pc.ConnConfig.ConnectTimeout = cfg.ConnectTimeout
+	return pc, nil
 }
 
 // type Pingers map[string]*pgxpool.Pool

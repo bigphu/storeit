@@ -9,7 +9,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	chimw "github.com/go-chi/chi/v5/middleware"
+
 	"storeit/internal/platform/middleware"
 	"storeit/internal/platform/web"
 )
@@ -20,17 +20,24 @@ type Server struct {
 	router *chi.Mux
 }
 
-// New dựng router có sẵn middleware chung (request ID, access log, bắt panic)
-// và trả 404/405 dạng problem+json. log nil thì dùng slog.Default().
+// New dựng router có sẵn middleware chung (giới hạn body, request ID, access
+// log, bắt panic) và trả 404/405 dạng problem+json. log nil thì dùng
+// slog.Default().
 func New(cfg Config, log *slog.Logger) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
+	cfg = cfg.withDefaults()
 
 	r := chi.NewRouter()
-	r.Use(chimw.RequestID)
+	// Giới hạn body cho mọi route: strict server của oapi-codegen đọc thẳng
+	// r.Body. Operation upload tự nới bằng middleware.ForOperations + BodyLimit
+	r.Use(middleware.BodyLimit(cfg.MaxBodyBytes))
+	r.Use(middleware.NoSniff)
+	r.Use(middleware.ClientIP(cfg.TrustedProxies))
+	r.Use(middleware.RequestID)
 	r.Use(middleware.RequestLogger(log))
-	r.Use(middleware.Recoverer(log))
+	r.Use(middleware.Recoverer())
 
 	// Để 404 và 405 cũng ra problem+json như mọi lỗi khác, thay vì trang text
 	// mặc định của chi -- client chỉ phải hiểu một format lỗi duy nhất
@@ -38,7 +45,7 @@ func New(cfg Config, log *slog.Logger) *Server {
 	r.MethodNotAllowed(web.MethodNotAllowedHandler())
 
 	return &Server{
-		cfg:    cfg.withDefaults(),
+		cfg:    cfg,
 		log:    log,
 		router: r,
 	}

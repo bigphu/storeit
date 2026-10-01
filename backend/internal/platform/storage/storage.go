@@ -25,8 +25,11 @@ type Store interface {
 	Delete(ctx context.Context, key string) error
 }
 
-// Config đọc bằng config.Load, vd với envPrefix:"STORAGE_" là STORAGE_DIR.
-// Hiện chỉ có ổ đĩa; bản S3 thêm vào lúc deploy.
+// Config đọc bằng config.Load từ STORAGE_DIR; binary nhúng nguyên khối, không
+// thêm envPrefix. Hiện chỉ có ổ đĩa; bản S3 thêm vào lúc deploy.
 type Config struct {
-	Dir string `env:"DIR" envDefault:"./tmp/storage"`
+	// Thư mục gốc chứa file. Để trống (dựng tay trong test) thì lấy defaultDir
+	Dir string `env:"STORAGE_DIR" envDefault:"./tmp/storage"`
 }
+
+const defaultDir = "./tmp/storage"

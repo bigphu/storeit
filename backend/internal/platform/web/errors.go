@@ -24,4 +24,7 @@ var (
 
 	ErrMethodNotAllowed = errs.New(http.StatusMethodNotAllowed,
 		"/errors/method-not-allowed", "Method not allowed")
+
+	ErrUnsupportedMediaType = errs.New(http.StatusUnsupportedMediaType,
+		"/errors/unsupported-media-type", "Unsupported media type")
 )

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
+
 	"storeit/internal/platform/errs"
 	"storeit/internal/platform/jwt"
 	"storeit/internal/platform/logger"
@@ -27,11 +29,30 @@ type options struct {
 
 type Option func(*options)
 
-// Public đánh dấu operation không cần token, dạng "METHOD /đường/dẫn/đầy/đủ".
-// Router sinh từ OpenAPI gắn mọi path của module cùng lúc, nên operation
-// public được liệt kê ở đây thay vì tách thành group riêng:
+// Public đánh dấu operation không cần token, dạng "METHOD <route pattern>"
+// giống path trong OpenAPI, vd "GET /api/v1/files/{id}". Router sinh từ
+// OpenAPI gắn mọi path của module cùng lúc, nên operation public được liệt kê
+// ở đây thay vì tách thành group riêng.
 //
-//	r.Use(auth.Middleware(tokens, auth.Public("POST /api/v1/auth/login")))
+// So khớp theo route pattern của chi, nên Middleware phải chạy sau khi chi
+// route xong: gắn qua Middlewares của oapi-codegen, không dùng r.Use:
+//
+//	api.HandlerWithOptions(strict, api.ChiServerOptions{
+//		BaseRouter: r,
+//		BaseURL:    "/api/v1",
+//		// cuối danh sách chạy trước: auth trước khi validate
+//		Middlewares: []api.MiddlewareFunc{
+//			web.ValidateRequests(spec, "/api/v1"),
+//			auth.Middleware(tokens, auth.Public("POST /api/v1/auth/login")),
+//		},
+//		ErrorHandlerFunc: web.RequestError,
+//	})
+//
+// Kiểm danh sách với spec lúc khởi động để bắt lỗi gõ:
+// auth.Public(web.MustOperations(spec, "/api/v1", "POST /api/v1/auth/login")...)
+//
+// Lỡ gắn bằng r.Use thì chưa có route pattern, không operation nào được coi
+// là public: thiếu token là 401 chứ không lặng lẽ mở route ra.
 func Public(ops ...string) Option {
 	return func(o *options) {
 		for _, op := range ops {
@@ -51,7 +72,7 @@ func Middleware(tokens *jwt.Provider, opts ...Option) func(http.Handler) http.Ha
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if o.public[r.Method+" "+r.URL.Path] {
+			if o.public[r.Method+" "+routePattern(r)] {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -79,6 +100,15 @@ func Middleware(tokens *jwt.Provider, opts ...Option) func(http.Handler) http.Ha
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// routePattern là pattern chi đã khớp, vd /api/v1/files/{id}. Chưa route
+// xong (middleware gắn bằng r.Use) thì rỗng hoặc dở dang, không khớp Public nào.
+func routePattern(r *http.Request) string {
+	if rc := chi.RouteContext(r.Context()); rc != nil {
+		return rc.RoutePattern()
+	}
+	return ""
 }
 
 func unauthorized(w http.ResponseWriter, r *http.Request, cause error) {

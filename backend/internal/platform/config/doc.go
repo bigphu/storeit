@@ -1,14 +1,22 @@
-// Package config đọc env vào struct lúc khởi động. Thiếu hoặc sai thì dừng luôn.
+// Package config đọc env vào struct cấu hình của binary lúc khởi động. Thiếu
+// hoặc sai thì dừng luôn.
 //
-//	type Config struct {
-//		Log logger.Config `envPrefix:"LOG_"`
-//		JWT jwt.Config
+// Mỗi package (database, server, jwt...) sở hữu khối cấu hình của mình: tên
+// biến env đầy đủ, mặc định và Validate. Binary chỉ liệt kê khối nó dùng, trong
+// cmd/<binary>/config.go, không thêm envPrefix:
+//
+//	type serverConfig struct {
+//		Log  logger.Config
+//		HTTP server.Config
+//		DB   database.Config
+//		JWT  jwt.Config
 //	}
 //
-//	func (c *Config) Validate() error { return c.JWT.Validate() }
-//
-//	var cfg Config
+//	var cfg serverConfig
 //	if err := config.Load(&cfg); err != nil {
 //		log.Fatal(err)
 //	}
+//
+// Load tự gọi Validate của từng khối. Binary chỉ viết Validate khi cần ràng
+// buộc giữa các khối với nhau.
 package config

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"storeit/internal/platform/jwt"
@@ -121,18 +122,61 @@ func TestMiddleware_BearerSchemeIsCaseInsensitive(t *testing.T) {
 	}
 }
 
-func TestMiddleware_PublicOperations(t *testing.T) {
-	mw := Middleware(newTokens(t), Public("POST /api/v1/auth/login"))
+// route dựng router chi có các route như router sinh từ OpenAPI; auth chạy
+// sau khi chi route xong (Middlewares của oapi-codegen, ở đây là With)
+func routeWithAuth(mw func(http.Handler) http.Handler, next http.Handler) *chi.Mux {
+	r := chi.NewRouter()
+	r.With(mw).Post("/api/v1/auth/login", next.ServeHTTP)
+	r.With(mw).Get("/api/v1/auth/login", next.ServeHTTP)
+	r.With(mw).Get("/api/v1/files/{id}", next.ServeHTTP)
+	return r
+}
 
-	// Public: qua được mà không cần token, và không có actor
-	rec, seen := serve(t, mw, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil))
-	if rec.Code != http.StatusNoContent || seen == nil || seen.AccountID != uuid.Nil {
-		t.Errorf("public: status = %d, actor = %v", rec.Code, seen)
+func TestMiddleware_PublicMatchesRoutePattern(t *testing.T) {
+	mw := Middleware(newTokens(t), Public("POST /api/v1/auth/login", "GET /api/v1/files/{id}"))
+	tests := []struct {
+		name, method, path string
+		want               int
+	}{
+		{"exact path", http.MethodPost, "/api/v1/auth/login", http.StatusNoContent},
+		{"path param", http.MethodGet, "/api/v1/files/7f0c", http.StatusNoContent},
+		{"same path, other method", http.MethodGet, "/api/v1/auth/login", http.StatusUnauthorized},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var seen *Actor
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				a, _ := FromContext(r.Context())
+				seen = &a
+				w.WriteHeader(http.StatusNoContent)
+			})
+			rec := httptest.NewRecorder()
+			routeWithAuth(mw, next).ServeHTTP(rec, httptest.NewRequest(tt.method, tt.path, nil))
 
-	// Cùng path nhưng khác method thì không public
-	if rec, _ := serve(t, mw, httptest.NewRequest(http.MethodGet, "/api/v1/auth/login", nil)); rec.Code != http.StatusUnauthorized {
-		t.Errorf("GET login: status = %d, want 401", rec.Code)
+			if rec.Code != tt.want {
+				t.Fatalf("status = %d, want %d", rec.Code, tt.want)
+			}
+			if tt.want == http.StatusNoContent && seen.AccountID != uuid.Nil {
+				t.Errorf("public route got actor %+v, want none", *seen)
+			}
+		})
+	}
+}
+
+// Gắn nhầm bằng r.Use (chạy trước khi chi route) thì chưa biết route nào,
+// nên không có gì là public: thiếu token là 401, không lặng lẽ mở route ra
+func TestMiddleware_PublicBeforeRoutingFailsClosed(t *testing.T) {
+	r := chi.NewRouter()
+	r.Use(Middleware(newTokens(t), Public("POST /api/v1/auth/login")))
+	r.Post("/api/v1/auth/login", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil))
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", rec.Code)
 	}
 }
 

@@ -18,7 +18,7 @@ import (
 func newRouter(buf *bytes.Buffer) *chi.Mux {
 	log := logger.New(buf, logger.Config{Level: slog.LevelDebug})
 	r := chi.NewRouter()
-	r.Use(chimw.RequestID, RequestLogger(log), Recoverer(log))
+	r.Use(chimw.RequestID, RequestLogger(log), Recoverer())
 	r.Get("/assets/{id}", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("hello"))
 	})
@@ -123,5 +123,67 @@ func TestRequestLogger_ActorSetInside(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Panic sau khi handler đã gửi một phần response: không ghi thêm 500 hay
+// problem+json chồng lên phần đã gửi, nhưng vẫn log panic
+func TestRecoverer_PanicAfterWrite(t *testing.T) {
+	var buf bytes.Buffer
+	r := newRouter(&buf)
+	r.Get("/late-boom", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("partial"))
+		panic("boom")
+	})
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/late-boom", nil))
+
+	if rec.Code != http.StatusOK || rec.Body.String() != "partial" {
+		t.Errorf("got %d %q, want 200 %q", rec.Code, rec.Body.String(), "partial")
+	}
+	var logged bool
+	for _, l := range logLines(t, &buf) {
+		logged = logged || l["msg"] == "panic recovered"
+	}
+	if !logged {
+		t.Errorf("panic not logged:\n%s", buf.String())
+	}
+}
+
+func TestRequestLogger_PutsLoggerInContext(t *testing.T) {
+	log := logger.New(&bytes.Buffer{}, logger.Config{})
+	var got *slog.Logger
+	h := RequestLogger(log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = logger.FromContext(r.Context())
+	}))
+
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if got != log {
+		t.Error("handler does not see the request logger in ctx")
+	}
+}
+
+// Request bị huỷ bằng http.ErrAbortHandler (panic đi xuyên qua) vẫn phải có
+// dòng access log, đánh dấu aborted
+func TestRequestLogger_LogsAbortedRequest(t *testing.T) {
+	var buf bytes.Buffer
+	h := RequestLogger(logger.New(&buf, logger.Config{}))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic(http.ErrAbortHandler)
+	}))
+
+	func() {
+		defer func() {
+			if p := recover(); p != http.ErrAbortHandler {
+				t.Errorf("recovered %v, want ErrAbortHandler to propagate", p)
+			}
+		}()
+		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/download", nil))
+	}()
+
+	lines := logLines(t, &buf)
+	if len(lines) != 1 || lines[0]["msg"] != "http request" || lines[0]["aborted"] != true {
+		t.Errorf("log = %v, want one access line with aborted=true", lines)
 	}
 }

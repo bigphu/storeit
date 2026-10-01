@@ -6,6 +6,8 @@ generate:
   models: true
   chi-server: true
   strict-server: true
+  # GetSwagger() cho web.ValidateRequests (validate request theo spec)
+  embedded-spec: true
 # Schema dùng chung (lỗi, phân trang, ID) nằm ở package apicommon
 import-mapping:
   ../../../api/common.yaml: storeit/internal/platform/web/apicommon
