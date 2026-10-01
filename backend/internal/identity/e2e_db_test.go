@@ -43,7 +43,7 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	m, err := identity.New(identity.Deps{
-		Pool: pool, Tokens: tokens, Outbox: events.NewOutbox(events.NewRegistry(), client),
+		Pool: pool, Tokens: tokens, Outbox: events.NewOutbox(events.NewRegistry(), client), Jobs: jobs.NewRiver(client),
 		Config: identity.Config{AdminEmail: "Root@StoreIT.test", AdminPassword: password},
 	})
 	if err != nil {

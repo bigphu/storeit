@@ -52,6 +52,22 @@ func (h *Handler) Logout(ctx context.Context, req api.LogoutRequestObject) (api.
 	return api.Logout204Response{Headers: api.Logout204ResponseHeaders{SetCookie: h.cookie.clear()}}, nil
 }
 
+// ForgotPassword luôn 202 khi không có lỗi hệ thống: không trả lời được câu
+// "email này có tài khoản không"
+func (h *Handler) ForgotPassword(ctx context.Context, req api.ForgotPasswordRequestObject) (api.ForgotPasswordResponseObject, error) {
+	if err := h.svc.ForgotPassword(ctx, req.Body.Email); err != nil {
+		return nil, err
+	}
+	return api.ForgotPassword202Response{}, nil
+}
+
+func (h *Handler) SetPassword(ctx context.Context, req api.SetPasswordRequestObject) (api.SetPasswordResponseObject, error) {
+	if err := h.svc.SetPassword(ctx, req.Body.Token, req.Body.NewPassword); err != nil {
+		return nil, err
+	}
+	return api.SetPassword204Response{}, nil
+}
+
 func (h *Handler) ChangePassword(ctx context.Context, req api.ChangePasswordRequestObject) (api.ChangePasswordResponseObject, error) {
 	err := h.svc.ChangePassword(ctx, req.Body.CurrentPassword, req.Body.NewPassword, deref(req.Params.StoreitRefresh))
 	if err != nil {

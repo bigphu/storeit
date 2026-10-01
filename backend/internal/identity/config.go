@@ -2,6 +2,8 @@ package identity
 
 import (
 	"errors"
+	"fmt"
+	"net/url"
 	"time"
 )
 
@@ -28,10 +30,17 @@ type Config struct {
 	// nào. Để trống cả hai thì bỏ qua.
 	AdminEmail    string `env:"ADMIN_EMAIL"`
 	AdminPassword string `env:"ADMIN_PASSWORD"`
+
+	// Gốc của frontend; link trong thư mời / đặt lại mật khẩu trỏ về đây
+	AppURL string `env:"IDENTITY_APP_URL" envDefault:"http://localhost:3000"`
+	// Hạn của link mời và link đặt lại mật khẩu
+	InviteTTL time.Duration `env:"IDENTITY_INVITE_TTL" envDefault:"72h"`
+	ResetTTL  time.Duration `env:"IDENTITY_RESET_TTL" envDefault:"1h"`
 }
 
 func (c Config) Validate() error {
-	if c.RefreshSlidingTTL < 0 || c.RefreshAbsoluteTTL < 0 || c.RefreshGracePeriod < 0 || c.RefreshRetention < 0 {
+	if c.RefreshSlidingTTL < 0 || c.RefreshAbsoluteTTL < 0 || c.RefreshGracePeriod < 0 || c.RefreshRetention < 0 ||
+		c.InviteTTL < 0 || c.ResetTTL < 0 {
 		return errors.New("identity: durations must not be negative")
 	}
 	d := c.withDefaults()
@@ -40,6 +49,11 @@ func (c Config) Validate() error {
 	}
 	if (c.AdminEmail == "") != (c.AdminPassword == "") {
 		return errors.New("identity: set both ADMIN_EMAIL and ADMIN_PASSWORD, or neither")
+	}
+	// Link trong thư nối thêm "/<trang>#token=...": query hay fragment sẵn có sẽ làm hỏng nó
+	u, err := url.Parse(d.AppURL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
+		return fmt.Errorf("identity: IDENTITY_APP_URL %q must be an http(s) URL without query or fragment", d.AppURL)
 	}
 	return nil
 }
@@ -56,6 +70,15 @@ func (c Config) withDefaults() Config {
 	}
 	if c.RefreshRetention <= 0 {
 		c.RefreshRetention = 720 * time.Hour
+	}
+	if c.AppURL == "" {
+		c.AppURL = "http://localhost:3000"
+	}
+	if c.InviteTTL <= 0 {
+		c.InviteTTL = 72 * time.Hour
+	}
+	if c.ResetTTL <= 0 {
+		c.ResetTTL = time.Hour
 	}
 	return c
 }

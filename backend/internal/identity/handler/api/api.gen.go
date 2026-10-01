@@ -24,6 +24,48 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for AccountStatus.
+const (
+	AccountStatusActive   AccountStatus = "active"
+	AccountStatusDisabled AccountStatus = "disabled"
+	AccountStatusInvited  AccountStatus = "invited"
+)
+
+// Valid indicates whether the value is a known member of the AccountStatus enum.
+func (e AccountStatus) Valid() bool {
+	switch e {
+	case AccountStatusActive:
+		return true
+	case AccountStatusDisabled:
+		return true
+	case AccountStatusInvited:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountDetailStatus.
+const (
+	AccountDetailStatusActive   AccountDetailStatus = "active"
+	AccountDetailStatusDisabled AccountDetailStatus = "disabled"
+	AccountDetailStatusInvited  AccountDetailStatus = "invited"
+)
+
+// Valid indicates whether the value is a known member of the AccountDetailStatus enum.
+func (e AccountDetailStatus) Valid() bool {
+	switch e {
+	case AccountDetailStatusActive:
+		return true
+	case AccountDetailStatusDisabled:
+		return true
+	case AccountDetailStatusInvited:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SessionResponseTokenType.
 const (
 	Bearer SessionResponseTokenType = "Bearer"
@@ -47,9 +89,15 @@ type Account struct {
 	Id        externalRef0.ID  `json:"id"`
 	MemberId  *externalRef0.ID `json:"member_id,omitempty"`
 	Name      string           `json:"name"`
-	UpdatedAt time.Time        `json:"updated_at"`
-	Version   int32            `json:"version"`
+
+	// Status invited = has not set a password yet
+	Status    AccountStatus `json:"status"`
+	UpdatedAt time.Time     `json:"updated_at"`
+	Version   int32         `json:"version"`
 }
+
+// AccountStatus invited = has not set a password yet
+type AccountStatus string
 
 // AccountDetail defines model for AccountDetail.
 type AccountDetail struct {
@@ -60,9 +108,15 @@ type AccountDetail struct {
 	MemberId  *externalRef0.ID `json:"member_id,omitempty"`
 	Name      string           `json:"name"`
 	Roles     []RoleSummary    `json:"roles"`
-	UpdatedAt time.Time        `json:"updated_at"`
-	Version   int32            `json:"version"`
+
+	// Status invited = has not set a password yet
+	Status    AccountDetailStatus `json:"status"`
+	UpdatedAt time.Time           `json:"updated_at"`
+	Version   int32               `json:"version"`
 }
+
+// AccountDetailStatus invited = has not set a password yet
+type AccountDetailStatus string
 
 // AccountList defines model for AccountList.
 type AccountList struct {
@@ -81,12 +135,11 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
-// CreateAccountRequest defines model for CreateAccountRequest.
+// CreateAccountRequest The account starts invited; the user sets a password from the emailed link
 type CreateAccountRequest struct {
 	Email    string             `json:"email"`
 	MemberId *externalRef0.ID   `json:"member_id,omitempty"`
 	Name     string             `json:"name"`
-	Password string             `json:"password"`
 	RoleIds  *[]externalRef0.ID `json:"role_ids,omitempty"`
 }
 
@@ -95,6 +148,11 @@ type CreateRoleRequest struct {
 	Description *string   `json:"description,omitempty"`
 	Name        string    `json:"name"`
 	Permissions *[]string `json:"permissions,omitempty"`
+}
+
+// ForgotPasswordRequest defines model for ForgotPasswordRequest.
+type ForgotPasswordRequest struct {
+	Email string `json:"email"`
 }
 
 // LoginRequest defines model for LoginRequest.
@@ -114,11 +172,6 @@ type Me struct {
 type Permission struct {
 	Code        string `json:"code"`
 	Description string `json:"description"`
-}
-
-// ResetPasswordRequest defines model for ResetPasswordRequest.
-type ResetPasswordRequest struct {
-	Password string `json:"password"`
 }
 
 // Role defines model for Role.
@@ -151,6 +204,12 @@ type SessionResponse struct {
 
 // SessionResponseTokenType defines model for SessionResponse.TokenType.
 type SessionResponseTokenType string
+
+// SetPasswordRequest defines model for SetPasswordRequest.
+type SetPasswordRequest struct {
+	NewPassword string `json:"new_password"`
+	Token       string `json:"token"`
+}
 
 // UpdateAccountRequest defines model for UpdateAccountRequest.
 type UpdateAccountRequest struct {
@@ -220,9 +279,6 @@ type CreateAccountJSONRequestBody = CreateAccountRequest
 // UpdateAccountJSONRequestBody defines body for UpdateAccount for application/json ContentType.
 type UpdateAccountJSONRequestBody = UpdateAccountRequest
 
-// ResetPasswordJSONRequestBody defines body for ResetPassword for application/json ContentType.
-type ResetPasswordJSONRequestBody = ResetPasswordRequest
-
 // AssignRolesJSONRequestBody defines body for AssignRoles for application/json ContentType.
 type AssignRolesJSONRequestBody = AssignRolesRequest
 
@@ -231,6 +287,12 @@ type LoginJSONRequestBody = LoginRequest
 
 // ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
 type ChangePasswordJSONRequestBody = ChangePasswordRequest
+
+// ForgotPasswordJSONRequestBody defines body for ForgotPassword for application/json ContentType.
+type ForgotPasswordJSONRequestBody = ForgotPasswordRequest
+
+// SetPasswordJSONRequestBody defines body for SetPassword for application/json ContentType.
+type SetPasswordJSONRequestBody = SetPasswordRequest
 
 // CreateRoleJSONRequestBody defines body for CreateRole for application/json ContentType.
 type CreateRoleJSONRequestBody = CreateRoleRequest
@@ -261,9 +323,12 @@ type ServerInterface interface {
 	// EnableAccount Enable a disabled account (identity.account.manage)
 	// (POST /accounts/{accountID}/enable)
 	EnableAccount(w http.ResponseWriter, r *http.Request, accountID AccountID)
-	// ResetPassword Set a new password and sign out all the account's devices (identity.account.manage)
-	// (PUT /accounts/{accountID}/password)
-	ResetPassword(w http.ResponseWriter, r *http.Request, accountID AccountID)
+	// ResendInvitation Email a new invitation link; the previous one stops working (identity.account.manage)
+	// (POST /accounts/{accountID}/invitation)
+	ResendInvitation(w http.ResponseWriter, r *http.Request, accountID AccountID)
+	// SendPasswordReset Email a password reset link, or a new invitation if the account has no password yet (identity.account.manage)
+	// (POST /accounts/{accountID}/password-reset)
+	SendPasswordReset(w http.ResponseWriter, r *http.Request, accountID AccountID)
 	// AssignRoles Replace the account's roles (identity.account.manage)
 	// (PUT /accounts/{accountID}/roles)
 	AssignRoles(w http.ResponseWriter, r *http.Request, accountID AccountID)
@@ -276,6 +341,12 @@ type ServerInterface interface {
 	// ChangePassword Change your own password; signs out your other devices
 	// (PUT /auth/password)
 	ChangePassword(w http.ResponseWriter, r *http.Request, params ChangePasswordParams)
+	// ForgotPassword Email a password reset link (always 202, whether or not the email has an account)
+	// (POST /auth/password/forgot)
+	ForgotPassword(w http.ResponseWriter, r *http.Request)
+	// SetPassword Set a password with the token from an invitation or reset email
+	// (POST /auth/password/set)
+	SetPassword(w http.ResponseWriter, r *http.Request)
 	// Refresh Rotate the refresh cookie and get a new access token
 	// (POST /auth/refresh)
 	Refresh(w http.ResponseWriter, r *http.Request, params RefreshParams)
@@ -345,9 +416,15 @@ func (_ Unimplemented) EnableAccount(w http.ResponseWriter, r *http.Request, acc
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// ResetPassword Set a new password and sign out all the account's devices (identity.account.manage)
-// (PUT /accounts/{accountID}/password)
-func (_ Unimplemented) ResetPassword(w http.ResponseWriter, r *http.Request, accountID AccountID) {
+// ResendInvitation Email a new invitation link; the previous one stops working (identity.account.manage)
+// (POST /accounts/{accountID}/invitation)
+func (_ Unimplemented) ResendInvitation(w http.ResponseWriter, r *http.Request, accountID AccountID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SendPasswordReset Email a password reset link, or a new invitation if the account has no password yet (identity.account.manage)
+// (POST /accounts/{accountID}/password-reset)
+func (_ Unimplemented) SendPasswordReset(w http.ResponseWriter, r *http.Request, accountID AccountID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -372,6 +449,18 @@ func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request, params Log
 // ChangePassword Change your own password; signs out your other devices
 // (PUT /auth/password)
 func (_ Unimplemented) ChangePassword(w http.ResponseWriter, r *http.Request, params ChangePasswordParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ForgotPassword Email a password reset link (always 202, whether or not the email has an account)
+// (POST /auth/password/forgot)
+func (_ Unimplemented) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetPassword Set a password with the token from an invitation or reset email
+// (POST /auth/password/set)
+func (_ Unimplemented) SetPassword(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -628,8 +717,8 @@ func (siw *ServerInterfaceWrapper) EnableAccount(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
-// ResetPassword operation middleware
-func (siw *ServerInterfaceWrapper) ResetPassword(w http.ResponseWriter, r *http.Request) {
+// ResendInvitation operation middleware
+func (siw *ServerInterfaceWrapper) ResendInvitation(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
@@ -644,7 +733,33 @@ func (siw *ServerInterfaceWrapper) ResetPassword(w http.ResponseWriter, r *http.
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ResetPassword(w, r, accountID)
+		siw.Handler.ResendInvitation(w, r, accountID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SendPasswordReset operation middleware
+func (siw *ServerInterfaceWrapper) SendPasswordReset(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "accountID" -------------
+	var accountID AccountID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "accountID", chi.URLParam(r, "accountID"), &accountID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "accountID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SendPasswordReset(w, r, accountID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -782,6 +897,34 @@ func (siw *ServerInterfaceWrapper) ChangePassword(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ChangePassword(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ForgotPassword operation middleware
+func (siw *ServerInterfaceWrapper) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ForgotPassword(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetPassword operation middleware
+func (siw *ServerInterfaceWrapper) SetPassword(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetPassword(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1112,6 +1255,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Put(options.BaseURL+"/auth/password", wrapper.ChangePassword)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/password/forgot", wrapper.ForgotPassword)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/password/set", wrapper.SetPassword)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/me", wrapper.GetMe)
 	})
 	r.Group(func(r chi.Router) {
@@ -1133,7 +1282,10 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/accounts/{accountID}/enable", wrapper.EnableAccount)
 	})
 	r.Group(func(r chi.Router) {
-		r.Put(options.BaseURL+"/accounts/{accountID}/password", wrapper.ResetPassword)
+		r.Post(options.BaseURL+"/accounts/{accountID}/invitation", wrapper.ResendInvitation)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/accounts/{accountID}/password-reset", wrapper.SendPasswordReset)
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/accounts/{accountID}/roles", wrapper.AssignRoles)
@@ -1400,29 +1552,61 @@ func (response EnableAccountdefaultApplicationProblemPlusJSONResponse) VisitEnab
 	return err
 }
 
-type ResetPasswordRequestObject struct {
+type ResendInvitationRequestObject struct {
 	AccountID AccountID `json:"accountID"`
-	Body      *ResetPasswordJSONRequestBody
 }
 
-type ResetPasswordResponseObject interface {
-	VisitResetPasswordResponse(w http.ResponseWriter) error
+type ResendInvitationResponseObject interface {
+	VisitResendInvitationResponse(w http.ResponseWriter) error
 }
 
-type ResetPassword204Response struct {
+type ResendInvitation202Response struct {
 }
 
-func (response ResetPassword204Response) VisitResetPasswordResponse(w http.ResponseWriter) error {
-	w.WriteHeader(204)
+func (response ResendInvitation202Response) VisitResendInvitationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
 	return nil
 }
 
-type ResetPassworddefaultApplicationProblemPlusJSONResponse struct {
+type ResendInvitationdefaultApplicationProblemPlusJSONResponse struct {
 	Body       externalRef0.Problem
 	StatusCode int
 }
 
-func (response ResetPassworddefaultApplicationProblemPlusJSONResponse) VisitResetPasswordResponse(w http.ResponseWriter) error {
+func (response ResendInvitationdefaultApplicationProblemPlusJSONResponse) VisitResendInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendPasswordResetRequestObject struct {
+	AccountID AccountID `json:"accountID"`
+}
+
+type SendPasswordResetResponseObject interface {
+	VisitSendPasswordResetResponse(w http.ResponseWriter) error
+}
+
+type SendPasswordReset202Response struct {
+}
+
+func (response SendPasswordReset202Response) VisitSendPasswordResetResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type SendPasswordResetdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response SendPasswordResetdefaultApplicationProblemPlusJSONResponse) VisitSendPasswordResetResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -1588,6 +1772,72 @@ type ChangePassworddefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ChangePassworddefaultApplicationProblemPlusJSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ForgotPasswordRequestObject struct {
+	Body *ForgotPasswordJSONRequestBody
+}
+
+type ForgotPasswordResponseObject interface {
+	VisitForgotPasswordResponse(w http.ResponseWriter) error
+}
+
+type ForgotPassword202Response struct {
+}
+
+func (response ForgotPassword202Response) VisitForgotPasswordResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type ForgotPassworddefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ForgotPassworddefaultApplicationProblemPlusJSONResponse) VisitForgotPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetPasswordRequestObject struct {
+	Body *SetPasswordJSONRequestBody
+}
+
+type SetPasswordResponseObject interface {
+	VisitSetPasswordResponse(w http.ResponseWriter) error
+}
+
+type SetPassword204Response struct {
+}
+
+func (response SetPassword204Response) VisitSetPasswordResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type SetPassworddefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response SetPassworddefaultApplicationProblemPlusJSONResponse) VisitSetPasswordResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -1997,9 +2247,12 @@ type StrictServerInterface interface {
 	// EnableAccount Enable a disabled account (identity.account.manage)
 	// (POST /accounts/{accountID}/enable)
 	EnableAccount(ctx context.Context, request EnableAccountRequestObject) (EnableAccountResponseObject, error)
-	// ResetPassword Set a new password and sign out all the account's devices (identity.account.manage)
-	// (PUT /accounts/{accountID}/password)
-	ResetPassword(ctx context.Context, request ResetPasswordRequestObject) (ResetPasswordResponseObject, error)
+	// ResendInvitation Email a new invitation link; the previous one stops working (identity.account.manage)
+	// (POST /accounts/{accountID}/invitation)
+	ResendInvitation(ctx context.Context, request ResendInvitationRequestObject) (ResendInvitationResponseObject, error)
+	// SendPasswordReset Email a password reset link, or a new invitation if the account has no password yet (identity.account.manage)
+	// (POST /accounts/{accountID}/password-reset)
+	SendPasswordReset(ctx context.Context, request SendPasswordResetRequestObject) (SendPasswordResetResponseObject, error)
 	// AssignRoles Replace the account's roles (identity.account.manage)
 	// (PUT /accounts/{accountID}/roles)
 	AssignRoles(ctx context.Context, request AssignRolesRequestObject) (AssignRolesResponseObject, error)
@@ -2012,6 +2265,12 @@ type StrictServerInterface interface {
 	// ChangePassword Change your own password; signs out your other devices
 	// (PUT /auth/password)
 	ChangePassword(ctx context.Context, request ChangePasswordRequestObject) (ChangePasswordResponseObject, error)
+	// ForgotPassword Email a password reset link (always 202, whether or not the email has an account)
+	// (POST /auth/password/forgot)
+	ForgotPassword(ctx context.Context, request ForgotPasswordRequestObject) (ForgotPasswordResponseObject, error)
+	// SetPassword Set a password with the token from an invitation or reset email
+	// (POST /auth/password/set)
+	SetPassword(ctx context.Context, request SetPasswordRequestObject) (SetPasswordResponseObject, error)
 	// Refresh Rotate the refresh cookie and get a new access token
 	// (POST /auth/refresh)
 	Refresh(ctx context.Context, request RefreshRequestObject) (RefreshResponseObject, error)
@@ -2248,32 +2507,51 @@ func (sh *strictHandler) EnableAccount(w http.ResponseWriter, r *http.Request, a
 	}
 }
 
-// ResetPassword operation middleware
-func (sh *strictHandler) ResetPassword(w http.ResponseWriter, r *http.Request, accountID AccountID) {
-	var request ResetPasswordRequestObject
+// ResendInvitation operation middleware
+func (sh *strictHandler) ResendInvitation(w http.ResponseWriter, r *http.Request, accountID AccountID) {
+	var request ResendInvitationRequestObject
 
 	request.AccountID = accountID
 
-	var body ResetPasswordJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ResetPassword(ctx, request.(ResetPasswordRequestObject))
+		return sh.ssi.ResendInvitation(ctx, request.(ResendInvitationRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ResetPassword")
+		handler = middleware(handler, "ResendInvitation")
 	}
 
 	response, err := handler(r.Context(), w, r, request)
 
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ResetPasswordResponseObject); ok {
-		if err := validResponse.VisitResetPasswordResponse(w); err != nil {
+	} else if validResponse, ok := response.(ResendInvitationResponseObject); ok {
+		if err := validResponse.VisitResendInvitationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SendPasswordReset operation middleware
+func (sh *strictHandler) SendPasswordReset(w http.ResponseWriter, r *http.Request, accountID AccountID) {
+	var request SendPasswordResetRequestObject
+
+	request.AccountID = accountID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SendPasswordReset(ctx, request.(SendPasswordResetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SendPasswordReset")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SendPasswordResetResponseObject); ok {
+		if err := validResponse.VisitSendPasswordResetResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -2399,6 +2677,68 @@ func (sh *strictHandler) ChangePassword(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ChangePasswordResponseObject); ok {
 		if err := validResponse.VisitChangePasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ForgotPassword operation middleware
+func (sh *strictHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	var request ForgotPasswordRequestObject
+
+	var body ForgotPasswordJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ForgotPassword(ctx, request.(ForgotPasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ForgotPassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ForgotPasswordResponseObject); ok {
+		if err := validResponse.VisitForgotPasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetPassword operation middleware
+func (sh *strictHandler) SetPassword(w http.ResponseWriter, r *http.Request) {
+	var request SetPasswordRequestObject
+
+	var body SetPasswordJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetPassword(ctx, request.(SetPasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetPassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetPasswordResponseObject); ok {
+		if err := validResponse.VisitSetPasswordResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -2658,50 +2998,55 @@ func (sh *strictHandler) UpdateRolePermissions(w http.ResponseWriter, r *http.Re
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"ER7g7I+VeHYy+28AAAD//w==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

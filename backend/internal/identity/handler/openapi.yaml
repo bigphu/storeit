@@ -85,6 +85,34 @@ paths:
         "204": { description: Password changed }
         default: { $ref: '#/components/responses/Problem' }
 
+  /auth/password/forgot:
+    post:
+      operationId: forgotPassword
+      summary: Email a password reset link (always 202, whether or not the email has an account)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ForgotPasswordRequest' }
+      responses:
+        "202": { description: If the email belongs to an active account, a link is on its way }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /auth/password/set:
+    post:
+      operationId: setPassword
+      summary: Set a password with the token from an invitation or reset email
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetPasswordRequest' }
+      responses:
+        "204": { description: Password set; sign in with it }
+        default: { $ref: '#/components/responses/Problem' }
+
   /me:
     get:
       operationId: getMe
@@ -191,19 +219,24 @@ paths:
               schema: { $ref: '#/components/schemas/AccountDetail' }
         default: { $ref: '#/components/responses/Problem' }
 
-  /accounts/{accountID}/password:
+  /accounts/{accountID}/invitation:
     parameters:
       - $ref: '#/components/parameters/AccountID'
-    put:
-      operationId: resetPassword
-      summary: Set a new password and sign out all the account's devices (identity.account.manage)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/ResetPasswordRequest' }
+    post:
+      operationId: resendInvitation
+      summary: Email a new invitation link; the previous one stops working (identity.account.manage)
       responses:
-        "204": { description: Password reset }
+        "202": { description: Invitation queued }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /accounts/{accountID}/password-reset:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    post:
+      operationId: sendPasswordReset
+      summary: Email a password reset link, or a new invitation if the account has no password yet (identity.account.manage)
+      responses:
+        "202": { description: Link queued }
         default: { $ref: '#/components/responses/Problem' }
 
   /accounts/{accountID}/roles:
@@ -389,13 +422,17 @@ components:
 
     Account:
       type: object
-      required: [id, email, name, active, version, created_at, updated_at]
+      required: [id, email, name, active, status, version, created_at, updated_at]
       properties:
         id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
         email: { type: string }
         name: { type: string }
         member_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
         active: { type: boolean }
+        status:
+          type: string
+          enum: [invited, active, disabled]
+          description: invited = has not set a password yet
         version: { type: integer, format: int32 }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -441,11 +478,11 @@ components:
 
     CreateAccountRequest:
       type: object
-      required: [email, name, password]
+      description: The account starts invited; the user sets a password from the emailed link
+      required: [email, name]
       properties:
         email: { type: string, minLength: 3, maxLength: 254 }
         name: { type: string, minLength: 1, maxLength: 200 }
-        password: { type: string, minLength: 12, maxLength: 72 }
         member_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
         role_ids:
           type: array
@@ -466,11 +503,18 @@ components:
           format: int32
           description: The version you last read; a newer one returns 409
 
-    ResetPasswordRequest:
+    ForgotPasswordRequest:
       type: object
-      required: [password]
+      required: [email]
       properties:
-        password: { type: string, minLength: 12, maxLength: 72 }
+        email: { type: string, maxLength: 254 }
+
+    SetPasswordRequest:
+      type: object
+      required: [token, new_password]
+      properties:
+        token: { type: string, minLength: 1, maxLength: 128 }
+        new_password: { type: string, minLength: 12, maxLength: 72 }
 
     AssignRolesRequest:
       type: object

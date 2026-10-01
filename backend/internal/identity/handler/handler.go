@@ -39,7 +39,8 @@ func (h *Handler) Mount(r chi.Router, tokens *jwt.Provider) error {
 		return fmt.Errorf("identity: load openapi spec: %w", err)
 	}
 	public := web.MustOperations(spec, baseURL,
-		"POST /api/v1/auth/login", "POST /api/v1/auth/refresh", "POST /api/v1/auth/logout")
+		"POST /api/v1/auth/login", "POST /api/v1/auth/refresh", "POST /api/v1/auth/logout",
+		"POST /api/v1/auth/password/forgot", "POST /api/v1/auth/password/set")
 
 	strict := api.NewStrictHandlerWithOptions(h, nil, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  web.RequestError,

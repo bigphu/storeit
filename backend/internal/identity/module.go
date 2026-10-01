@@ -3,11 +3,11 @@
 //
 // main dựng module một lần và dùng các phần nó cần:
 //
-//	m, err := identity.New(identity.Deps{Pool: pool, Tokens: tokens, Outbox: outbox, Config: cfg.Identity})
+//	m, err := identity.New(identity.Deps{Pool: pool, Tokens: tokens, Outbox: outbox, Jobs: enq, Config: cfg.Identity})
 //	err = m.Bootstrap(ctx)                     // cmd/server: Administrator đầu tiên
 //	err = m.Mount(srv.Router())                // cmd/server: route /api/v1/...
 //	events.RegisterWorker(..., m.LoadActor)    // cmd/worker
-//	m.RegisterWorkers(workers)                 // cmd/worker, cùng identity.PeriodicJobs()
+//	err = m.RegisterWorkers(workers)           // cmd/worker (cần Deps.Mail), cùng identity.PeriodicJobs()
 //
 // Module khác chỉ dùng identity qua identity/contract (m.AccountReader()).
 package identity
@@ -34,6 +34,7 @@ import (
 	"storeit/internal/platform/jobs"
 	"storeit/internal/platform/jwt"
 	"storeit/internal/platform/logger"
+	"storeit/internal/platform/mail"
 )
 
 type Deps struct {
@@ -42,13 +43,16 @@ type Deps struct {
 	Tokens *jwt.Provider
 	Outbox *events.Outbox
 	// Jobs xếp job gửi thư trong transaction phát link đặt mật khẩu
-	Jobs   jobs.Enqueuer
+	Jobs jobs.Enqueuer
+	// Mail gửi thư mời / đặt lại mật khẩu; chỉ cmd/worker cần (RegisterWorkers)
+	Mail   mail.Sender
 	Config Config
 }
 
 type Module struct {
 	cfg     Config
 	tokens  *jwt.Provider
+	mail    mail.Sender
 	svc     *service.Service
 	handler *handler.Handler
 }
@@ -57,8 +61,8 @@ func New(d Deps) (*Module, error) {
 	if err := d.Config.Validate(); err != nil {
 		return nil, err
 	}
-	if d.Pool == nil || d.Outbox == nil {
-		return nil, fmt.Errorf("identity: Pool and Outbox are required")
+	if d.Pool == nil || d.Outbox == nil || d.Jobs == nil {
+		return nil, fmt.Errorf("identity: Pool, Outbox and Jobs are required")
 	}
 	cfg := d.Config.withDefaults()
 	var tokens service.TokenIssuer
@@ -72,19 +76,21 @@ func New(d Deps) (*Module, error) {
 		PasswordTokens: repository.NewTokenRepository(d.Pool, d.Outbox, d.Jobs),
 		Hasher:         service.NewBcrypt(0),
 		Tokens:         tokens,
+		Mail:           d.Mail,
+		AppURL:         cfg.AppURL,
 		Settings: service.Settings{
 			SlidingTTL:  cfg.RefreshSlidingTTL,
 			AbsoluteTTL: cfg.RefreshAbsoluteTTL,
 			Grace:       cfg.RefreshGracePeriod,
 			Retention:   cfg.RefreshRetention,
-			// Tạm thời: task sau chuyển sang identity.Config
-			InviteTTL: 72 * time.Hour,
-			ResetTTL:  time.Hour,
+			InviteTTL:   cfg.InviteTTL,
+			ResetTTL:    cfg.ResetTTL,
 		},
 	})
 	return &Module{
 		cfg:     cfg,
 		tokens:  d.Tokens,
+		mail:    d.Mail,
 		svc:     svc,
 		handler: handler.New(svc, handler.CookieSettings{Secure: cfg.CookieSecure, Domain: cfg.CookieDomain}),
 	}, nil
@@ -126,9 +132,15 @@ func (m *Module) AccountReader() contract.AccountReader { return m.svc.AccountRe
 // Service cho test và worker
 func (m *Module) Service() *service.Service { return m.svc }
 
-// RegisterWorkers thêm worker của identity vào workers của cmd/worker
-func (m *Module) RegisterWorkers(workers *river.Workers) {
+// RegisterWorkers thêm worker của identity vào workers của cmd/worker. Cần
+// Deps.Mail: không có nó thì job gửi thư không chạy được.
+func (m *Module) RegisterWorkers(workers *river.Workers) error {
+	if m.mail == nil {
+		return fmt.Errorf("identity: RegisterWorkers needs Deps.Mail")
+	}
 	river.AddWorker(workers, worker.NewPruneSessions(m.svc))
+	river.AddWorker(workers, worker.NewSendAccountEmail(m.svc))
+	return nil
 }
 
 // PeriodicJobs: dọn phiên đã chết mỗi giờ

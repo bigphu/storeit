@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"storeit/internal/identity/domain"
 	"storeit/internal/identity/handler"
@@ -31,6 +32,7 @@ const password = "correct-horse-battery"
 type app struct {
 	t        *testing.T
 	h        http.Handler
+	pool     *pgxpool.Pool
 	accounts *repository.AccountRepository
 	hasher   service.Hasher
 }
@@ -50,18 +52,23 @@ func newApp(t *testing.T) *app {
 	if err != nil {
 		t.Fatal(err)
 	}
-	accounts := repository.NewAccountRepository(pool, outbox, jobs.NewRiver(client))
+	enq := jobs.NewRiver(client)
+	accounts := repository.NewAccountRepository(pool, outbox, enq)
 	hasher := service.NewBcrypt(4)
 	svc := service.New(service.Deps{
 		Accounts: accounts, Roles: repository.NewRoleRepository(pool, outbox),
 		Sessions: repository.NewSessionRepository(pool), Hasher: hasher, Tokens: tokens,
-		Settings: service.Settings{SlidingTTL: time.Hour, AbsoluteTTL: 24 * time.Hour, Grace: 30 * time.Second},
+		PasswordTokens: repository.NewTokenRepository(pool, outbox, enq),
+		Settings: service.Settings{
+			SlidingTTL: time.Hour, AbsoluteTTL: 24 * time.Hour, Grace: 30 * time.Second,
+			InviteTTL: 72 * time.Hour, ResetTTL: time.Hour,
+		},
 	})
 	srv := server.New(server.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err := handler.New(svc, handler.CookieSettings{}).Mount(srv.Router(), tokens); err != nil {
 		t.Fatal(err)
 	}
-	return &app{t: t, h: srv.Handler(), accounts: accounts, hasher: hasher}
+	return &app{t: t, h: srv.Handler(), pool: pool, accounts: accounts, hasher: hasher}
 }
 
 // seed tạo account với role cho trước, trả email (ngẫu nhiên: DB dùng chung)
@@ -78,6 +85,21 @@ func (a *app) seed(roleIDs ...uuid.UUID) string {
 		a.t.Fatal(err)
 	}
 	return email
+}
+
+// linkToken đọc token thô của link đang sống (account, purpose) từ job gửi
+// thư, như người dùng đọc từ email
+func (a *app) linkToken(accountID, purpose string) string {
+	a.t.Helper()
+	var raw string
+	err := a.pool.QueryRow(context.Background(), `
+		SELECT j.args->>'token' FROM river_job j
+		JOIN identity.password_tokens p ON p.id = (j.args->>'token_id')::uuid
+		WHERE p.account_id = $1 AND p.purpose = $2`, accountID, purpose).Scan(&raw)
+	if err != nil {
+		a.t.Fatalf("no live %s link for %s: %v", purpose, accountID, err)
+	}
+	return raw
 }
 
 type call struct {
@@ -237,28 +259,25 @@ func TestAccountAndRoleManagement(t *testing.T) {
 	admin, _ := a.login(a.seed(domain.AdministratorRoleID))
 	email := "new-" + uuid.NewString()[:8] + "@storeit.test"
 
-	// Mật khẩu ngắn: validator theo spec chặn trước (422)
+	// Tạo không cần mật khẩu: account ở trạng thái invited, lời mời đi kèm
 	rec := a.do(call{method: "POST", path: "/api/v1/accounts", token: admin, body: map[string]any{
-		"email": email, "name": "New", "password": "short",
-	}})
-	if rec.Code != 422 {
-		t.Errorf("short password: %d %s", rec.Code, rec.Body)
-	}
-
-	rec = a.do(call{method: "POST", path: "/api/v1/accounts", token: admin, body: map[string]any{
-		"email": email, "name": "New", "password": password, "role_ids": []string{domain.EmployeeRoleID.String()},
+		"email": email, "name": "New", "role_ids": []string{domain.EmployeeRoleID.String()},
 	}})
 	var created struct {
-		Id    string                  `json:"id"`
-		Roles []struct{ Name string } `json:"roles"`
+		Id     string                  `json:"id"`
+		Status string                  `json:"status"`
+		Roles  []struct{ Name string } `json:"roles"`
 	}
 	if rec.Code != 201 || json.Unmarshal(rec.Body.Bytes(), &created) != nil || len(created.Roles) != 1 || created.Roles[0].Name != "Employee" {
 		t.Fatalf("create: %d %s", rec.Code, rec.Body)
 	}
+	if created.Status != "invited" {
+		t.Errorf("status = %q, want invited", created.Status)
+	}
 
 	// Trùng email (khác hoa thường): 409
 	rec = a.do(call{method: "POST", path: "/api/v1/accounts", token: admin, body: map[string]any{
-		"email": strings.ToUpper(email), "name": "Dup", "password": password,
+		"email": strings.ToUpper(email), "name": "Dup",
 	}})
 	if rec.Code != 409 {
 		t.Errorf("duplicate email: %d %s", rec.Code, rec.Body)
@@ -271,7 +290,13 @@ func TestAccountAndRoleManagement(t *testing.T) {
 		t.Errorf("assign roles: %d %s", rec.Code, rec.Body)
 	}
 
-	// Người mới đăng nhập được và thấy quyền của role mới
+	// Người mới nhận lời mời (đặt mật khẩu), đăng nhập và thấy quyền của role mới
+	rec = a.do(call{method: "POST", path: "/api/v1/auth/password/set", body: map[string]any{
+		"token": a.linkToken(created.Id, "invite"), "new_password": password,
+	}})
+	if rec.Code != 204 {
+		t.Fatalf("accept invite: %d %s", rec.Code, rec.Body)
+	}
 	token, _ := a.login(email)
 	if rec := a.do(call{method: "GET", path: "/api/v1/accounts", token: token}); rec.Code != 200 {
 		t.Errorf("authorized manager can read accounts: %d", rec.Code)
@@ -294,5 +319,71 @@ func TestAccountAndRoleManagement(t *testing.T) {
 	rec = a.do(call{method: "POST", path: "/api/v1/auth/login", body: map[string]string{"email": email, "password": password}})
 	if rec.Code != 403 || problemType(t, rec) != "/errors/account-disabled" {
 		t.Errorf("login disabled: %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestInvitationAndResetRoutes(t *testing.T) {
+	a := newApp(t)
+	admin, _ := a.login(a.seed(domain.AdministratorRoleID))
+	employee, _ := a.login(a.seed(domain.EmployeeRoleID))
+	activeEmail := a.seed()
+	active, err := a.accounts.GetByEmail(context.Background(), activeEmail)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := a.do(call{method: "POST", path: "/api/v1/accounts", token: admin, body: map[string]any{
+		"email": "inv-" + uuid.NewString()[:8] + "@storeit.test", "name": "Invitee",
+	}})
+	var inv struct{ Id string }
+	if rec.Code != 201 || json.Unmarshal(rec.Body.Bytes(), &inv) != nil {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body)
+	}
+
+	// Đặt mật khẩu trực tiếp không còn: route cũ đã bỏ
+	rec = a.do(call{method: "PUT", path: "/api/v1/accounts/" + inv.Id + "/password", token: admin, body: map[string]any{"password": password}})
+	if rec.Code != 404 && rec.Code != 405 {
+		t.Errorf("old admin set-password route: %d, want 404/405", rec.Code)
+	}
+
+	// Quên mật khẩu: công khai, luôn 202, kể cả email lạ
+	for _, email := range []string{"ghost-" + uuid.NewString()[:8] + "@storeit.test", activeEmail} {
+		if rec := a.do(call{method: "POST", path: "/api/v1/auth/password/forgot", body: map[string]any{"email": email}}); rec.Code != 202 {
+			t.Errorf("forgot %s: %d %s", email, rec.Code, rec.Body)
+		}
+	}
+	reset := a.linkToken(active.ID.String(), "reset")
+
+	rec = a.do(call{method: "POST", path: "/api/v1/auth/password/set", body: map[string]any{"token": "nope", "new_password": password}})
+	if rec.Code != 422 || problemType(t, rec) != "/errors/invalid-password-token" || !strings.Contains(rec.Body.String(), `"token"`) {
+		t.Errorf("bad token: %d %s", rec.Code, rec.Body)
+	}
+	rec = a.do(call{method: "POST", path: "/api/v1/auth/password/set", body: map[string]any{"token": reset, "new_password": "brand-new-password"}})
+	if rec.Code != 204 {
+		t.Errorf("reset: %d %s", rec.Code, rec.Body)
+	}
+	rec = a.do(call{method: "POST", path: "/api/v1/auth/login", body: map[string]string{"email": activeEmail, "password": "brand-new-password"}})
+	if rec.Code != 200 {
+		t.Errorf("login with reset password: %d %s", rec.Code, rec.Body)
+	}
+
+	// Gửi lại lời mời: chỉ cho account chưa nhận lời
+	if rec := a.do(call{method: "POST", path: "/api/v1/accounts/" + inv.Id + "/invitation", token: admin}); rec.Code != 202 {
+		t.Errorf("resend: %d %s", rec.Code, rec.Body)
+	}
+	rec = a.do(call{method: "POST", path: "/api/v1/accounts/" + active.ID.String() + "/invitation", token: admin})
+	if rec.Code != 409 || problemType(t, rec) != "/errors/not-invited" {
+		t.Errorf("resend to active account: %d %s", rec.Code, rec.Body)
+	}
+
+	// Link đặt lại do quản trị gửi: cần identity.account.manage
+	if rec := a.do(call{method: "POST", path: "/api/v1/accounts/" + active.ID.String() + "/password-reset", token: employee}); rec.Code != 403 {
+		t.Errorf("reset link as employee: %d", rec.Code)
+	}
+	if rec := a.do(call{method: "POST", path: "/api/v1/accounts/" + active.ID.String() + "/password-reset", token: admin}); rec.Code != 202 {
+		t.Errorf("reset link as admin: %d %s", rec.Code, rec.Body)
+	}
+	rec = a.do(call{method: "GET", path: "/api/v1/accounts/" + active.ID.String(), token: admin})
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"status":"active"`) {
+		t.Errorf("account status: %d %s", rec.Code, rec.Body)
 	}
 }

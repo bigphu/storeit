@@ -85,12 +85,18 @@ func (h *Handler) EnableAccount(ctx context.Context, req api.EnableAccountReques
 	return api.EnableAccount200JSONResponse(toAPIDetail(v)), nil
 }
 
-func (h *Handler) ResetPassword(ctx context.Context, req api.ResetPasswordRequestObject) (api.ResetPasswordResponseObject, error) {
-	// Tạm thời tới khi spec bỏ route này (task tiếp theo)
+func (h *Handler) ResendInvitation(ctx context.Context, req api.ResendInvitationRequestObject) (api.ResendInvitationResponseObject, error) {
+	if err := h.svc.ResendInvitation(ctx, req.AccountID); err != nil {
+		return nil, err
+	}
+	return api.ResendInvitation202Response{}, nil
+}
+
+func (h *Handler) SendPasswordReset(ctx context.Context, req api.SendPasswordResetRequestObject) (api.SendPasswordResetResponseObject, error) {
 	if err := h.svc.SendPasswordReset(ctx, req.AccountID); err != nil {
 		return nil, err
 	}
-	return api.ResetPassword204Response{}, nil
+	return api.SendPasswordReset202Response{}, nil
 }
 
 func (h *Handler) AssignRoles(ctx context.Context, req api.AssignRolesRequestObject) (api.AssignRolesResponseObject, error) {
