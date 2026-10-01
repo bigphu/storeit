@@ -15,7 +15,7 @@ type IdentityAccount struct {
 	ID           uuid.UUID
 	Email        string
 	Name         string
-	PasswordHash string
+	PasswordHash *string
 	MemberID     *uuid.UUID
 	Active       bool
 	Version      int32
@@ -26,6 +26,15 @@ type IdentityAccount struct {
 type IdentityAccountRole struct {
 	AccountID uuid.UUID
 	RoleID    uuid.UUID
+}
+
+type IdentityPasswordToken struct {
+	AccountID uuid.UUID
+	Purpose   string
+	ID        uuid.UUID
+	TokenHash []byte
+	CreatedAt time.Time
+	ExpiresAt time.Time
 }
 
 type IdentityPermission struct {

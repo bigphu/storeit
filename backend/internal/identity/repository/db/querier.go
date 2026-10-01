@@ -14,6 +14,8 @@ import (
 type Querier interface {
 	AccountPermissions(ctx context.Context, accountID uuid.UUID) ([]string, error)
 	AccountRoleIDs(ctx context.Context, accountID uuid.UUID) ([]uuid.UUID, error)
+	// Dùng token: xoá rồi mới kiểm tra, nên hai lần gửi cùng lúc chỉ một bên thấy hàng
+	ConsumePasswordToken(ctx context.Context, tokenHash []byte) (IdentityPasswordToken, error)
 	CountAccounts(ctx context.Context, arg CountAccountsParams) (int64, error)
 	CountAllAccounts(ctx context.Context) (int64, error)
 	CountRoleAssignments(ctx context.Context, roleID uuid.UUID) (int64, error)
@@ -21,9 +23,11 @@ type Querier interface {
 	CreateFamily(ctx context.Context, arg CreateFamilyParams) error
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) error
 	CreateRole(ctx context.Context, arg CreateRoleParams) (IdentityRole, error)
+	DeleteAccountPasswordTokens(ctx context.Context, accountID uuid.UUID) error
 	DeleteAccountRoles(ctx context.Context, accountID uuid.UUID) error
 	// Dọn rác: family đã chết (thu hồi hoặc hết hạn tuyệt đối) quá retention
 	DeleteDeadFamilies(ctx context.Context, cutoff time.Time) (int64, error)
+	DeleteExpiredPasswordTokens(ctx context.Context, cutoff time.Time) (int64, error)
 	DeleteRole(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteRolePermissions(ctx context.Context, roleID uuid.UUID) error
 	// Token đã dùng trong family còn sống, hết hạn quá retention. Không đụng ngọn.
@@ -33,9 +37,11 @@ type Querier interface {
 	GetAccountByEmail(ctx context.Context, email string) (IdentityAccount, error)
 	// Khoá hàng để đổi trạng thái/mật khẩu/role không chen nhau
 	GetAccountForUpdate(ctx context.Context, id uuid.UUID) (IdentityAccount, error)
+	GetAccountPasswordToken(ctx context.Context, arg GetAccountPasswordTokenParams) (IdentityPasswordToken, error)
 	GetAccountsByIDs(ctx context.Context, ids []uuid.UUID) ([]IdentityAccount, error)
 	// Ngọn của family: token chưa dùng duy nhất (refresh_tokens_live đảm bảo)
 	GetFamilyTip(ctx context.Context, familyID uuid.UUID) (uuid.UUID, error)
+	GetPasswordToken(ctx context.Context, id uuid.UUID) (IdentityPasswordToken, error)
 	// Trái tim của vòng xoay (port từ mimir). Khoá cả hàng token lẫn hàng family:
 	// hai lần refresh song song trên cùng family phải xếp hàng, để lần đến sau đọc
 	// được used_at mới nhất và rẽ vào nhánh ân hạn thay vì chẻ family. Kèm trạng
@@ -62,6 +68,8 @@ type Querier interface {
 	// Optimistic locking: 0 hàng nghĩa là version đã đổi (hoặc không có account)
 	UpdateAccountProfile(ctx context.Context, arg UpdateAccountProfileParams) (IdentityAccount, error)
 	UpdateRole(ctx context.Context, arg UpdateRoleParams) (IdentityRole, error)
+	// Phát token: ghi đè token cùng loại của account (link cũ chết ngay)
+	UpsertPasswordToken(ctx context.Context, arg UpsertPasswordTokenParams) (IdentityPasswordToken, error)
 }
 
 var _ Querier = (*Queries)(nil)

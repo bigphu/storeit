@@ -18,7 +18,7 @@ func toAccount(a db.IdentityAccount) domain.Account {
 		ID:           a.ID,
 		Email:        a.Email,
 		Name:         a.Name,
-		PasswordHash: a.PasswordHash,
+		PasswordHash: deref(a.PasswordHash),
 		MemberID:     a.MemberID,
 		Active:       a.Active,
 		Version:      a.Version,
@@ -66,6 +66,23 @@ func uniqueStrings(s []string) []string {
 	out := slices.Clone(s)
 	slices.Sort(out)
 	return slices.Compact(out)
+}
+
+// deref: NULL thành giá trị rỗng
+func deref[T any](p *T) T {
+	var zero T
+	if p == nil {
+		return zero
+	}
+	return *p
+}
+
+// nilIfEmpty: chuỗi rỗng ghi NULL
+func nilIfEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func newID() (uuid.UUID, error) {

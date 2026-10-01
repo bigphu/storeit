@@ -41,7 +41,7 @@ func (r *AccountRepository) Create(ctx context.Context, in domain.NewAccount) (d
 	err = database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
 		q := r.q.WithTx(tx)
 		row, err := q.CreateAccount(ctx, db.CreateAccountParams{
-			ID: id, Email: in.Email, Name: in.Name, PasswordHash: in.PasswordHash, MemberID: in.MemberID,
+			ID: id, Email: in.Email, Name: in.Name, PasswordHash: nilIfEmpty(in.PasswordHash), MemberID: in.MemberID,
 		})
 		if err != nil {
 			if code, constraint := pgCode(err); code == codeUniqueViolation && constraint == "accounts_email_lower" {
@@ -179,7 +179,7 @@ func (r *AccountRepository) SetPassword(ctx context.Context, id uuid.UUID, hash 
 		if _, err := accountOrNotFound(q.GetAccountForUpdate(ctx, id)); err != nil {
 			return err
 		}
-		if err := q.SetAccountPassword(ctx, db.SetAccountPasswordParams{ID: id, PasswordHash: hash}); err != nil {
+		if err := q.SetAccountPassword(ctx, db.SetAccountPasswordParams{ID: id, PasswordHash: &hash}); err != nil {
 			return fmt.Errorf("identity: set password: %w", err)
 		}
 		if _, err := q.RevokeAccountFamilies(ctx, db.RevokeAccountFamiliesParams{

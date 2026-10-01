@@ -104,7 +104,7 @@ type CreateAccountParams struct {
 	ID           uuid.UUID
 	Email        string
 	Name         string
-	PasswordHash string
+	PasswordHash *string
 	MemberID     *uuid.UUID
 }
 
@@ -338,7 +338,7 @@ UPDATE identity.accounts SET password_hash = $1, updated_at = now() WHERE id = $
 `
 
 type SetAccountPasswordParams struct {
-	PasswordHash string
+	PasswordHash *string
 	ID           uuid.UUID
 }
 

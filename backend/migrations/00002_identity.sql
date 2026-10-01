@@ -9,7 +9,8 @@ CREATE TABLE identity.accounts (
     -- Lưu chữ thường; unique theo lower(email) để chắc chắn không trùng hoa/thường
     email         text        NOT NULL,
     name          text        NOT NULL,
-    password_hash text        NOT NULL,
+    -- NULL: account được mời nhưng chưa đặt mật khẩu (chưa đăng nhập được)
+    password_hash text,
     -- Liên kết tới directory.members; chưa có FK vì module directory làm sau
     member_id     uuid,
     active        boolean     NOT NULL DEFAULT true,
@@ -90,6 +91,25 @@ CREATE INDEX refresh_tokens_family_idx ON identity.refresh_tokens (family_id);
 -- Chẻ family thành hai nhánh sống là tắt phát hiện dùng lại.
 CREATE UNIQUE INDEX refresh_tokens_live ON identity.refresh_tokens (family_id) WHERE used_at IS NULL;
 
+-- Link một lần gửi qua email: invite (đặt mật khẩu lần đầu) và reset (quên
+-- mật khẩu). Mỗi account có tối đa một token mỗi loại: phát token mới ghi đè
+-- token cũ, nên link cũ chết ngay. Dùng xong thì xoá hàng.
+CREATE TABLE identity.password_tokens (
+    account_id uuid        NOT NULL REFERENCES identity.accounts (id) ON DELETE CASCADE,
+    purpose    text        NOT NULL,
+    -- Đổi mỗi lần phát; là idempotency key khi gửi thư
+    id         uuid        NOT NULL,
+    -- Chỉ lưu SHA-256, không bao giờ lưu token thô
+    token_hash bytea       NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    expires_at timestamptz NOT NULL,
+
+    PRIMARY KEY (account_id, purpose),
+    CONSTRAINT password_tokens_hash_key UNIQUE (token_hash),
+    CONSTRAINT password_tokens_id_key UNIQUE (id),
+    CONSTRAINT password_tokens_purpose_check CHECK (purpose IN ('invite', 'reset'))
+);
+
 -- Seed: quyền của identity và bốn role hệ thống (StoreIT-Main, mục 4).
 -- ID role cố định để code và test tham chiếu được Administrator.
 INSERT INTO identity.permissions (code, description) VALUES
@@ -113,6 +133,7 @@ INSERT INTO identity.role_permissions (role_id, permission) VALUES
     ('00000000-0000-7000-8000-000000000002', 'identity.role.read');
 
 -- +goose Down
+DROP TABLE identity.password_tokens;
 DROP TABLE identity.refresh_tokens;
 DROP TABLE identity.refresh_families;
 DROP TABLE identity.account_roles;
