@@ -21,6 +21,14 @@ var (
 	ErrWeakPassword = errs.Unprocessable("/errors/weak-password", "Password does not meet the policy",
 		errs.WithFields(errs.FieldError{Field: "password", Detail: "must be between 12 and 72 bytes"}))
 
+	// Đổi mật khẩu của chính mình mà nhập sai mật khẩu hiện tại. Không dùng
+	// 401: client đang đăng nhập hợp lệ, 401 sẽ khiến nó tưởng phiên đã hết
+	ErrWrongPassword = errs.Unprocessable("/errors/wrong-password", "Current password is incorrect",
+		errs.WithFields(errs.FieldError{Field: "current_password", Detail: "is incorrect"}))
+
+	ErrInvalidName = errs.Unprocessable("/errors/invalid-name", "Invalid name",
+		errs.WithFields(errs.FieldError{Field: "name", Detail: "must not be blank"}))
+
 	ErrEmailTaken = errs.Conflict("/errors/email-taken", "Email already in use",
 		errs.WithDetail("Another account already uses this email address."))
 
