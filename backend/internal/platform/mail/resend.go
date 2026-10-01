@@ -29,7 +29,7 @@ func newResend(cfg Config, from netmail.Address) *resendSender {
 	return &resendSender{
 		baseURL: strings.TrimSuffix(cfg.ResendBaseURL, "/"),
 		apiKey:  cfg.ResendAPIKey,
-		from:    from.String(),
+		from:    formatAddress(from.Name, from.Address),
 		replyTo: cfg.ReplyTo,
 		// Chặn trên cho một lần gửi, không phải hạn của cả job
 		http: &http.Client{Timeout: 30 * time.Second},

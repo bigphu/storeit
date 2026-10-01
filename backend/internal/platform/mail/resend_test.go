@@ -201,3 +201,23 @@ func TestIsPermanentUnwraps(t *testing.T) {
 		t.Error("IsPermanent true for a plain error or nil")
 	}
 }
+
+// MAIL_FROM chỉ có địa chỉ (không tên): gửi đúng địa chỉ trần, không phải "<a@b>"
+func TestResendFromWithoutName(t *testing.T) {
+	var body map[string]any
+	s, _ := newResendForTest(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		_, _ = io.WriteString(w, `{"id":"x"}`)
+	}, func(c *Config) { c.From = "no-reply@storeit.test" })
+	m := testMsg
+	m.To = Address{Email: "lan@storeit.test"}
+	if err := s.Send(context.Background(), m); err != nil {
+		t.Fatal(err)
+	}
+	if body["from"] != "no-reply@storeit.test" {
+		t.Errorf("from = %v, want the bare address", body["from"])
+	}
+	if fmt.Sprint(body["to"]) != "[lan@storeit.test]" {
+		t.Errorf("to = %v, want the bare address", body["to"])
+	}
+}
