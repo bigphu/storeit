@@ -33,9 +33,14 @@ func (s *Service) Bootstrap(ctx context.Context, email, password string) (bool, 
 	}
 	// Không do ai yêu cầu: event ghi actor là hệ thống
 	ctx = auth.WithActor(ctx, auth.SystemActor)
-	if _, err := s.accounts.Create(ctx, domain.NewAccount{
+	_, err = s.accounts.Create(ctx, domain.NewAccount{
 		Email: e, Name: "Administrator", PasswordHash: h, RoleIDs: []uuid.UUID{domain.AdministratorRoleID},
-	}); err != nil {
+	})
+	// Hai server khởi động cùng lúc trên DB trống: bên kia vừa tạo xong, không phải lỗi
+	if errors.Is(err, domain.ErrEmailTaken) {
+		return false, nil
+	}
+	if err != nil {
 		return false, err
 	}
 	return true, nil

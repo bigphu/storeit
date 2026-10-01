@@ -101,6 +101,10 @@ type fakeAccounts struct {
 	roleIDs   map[uuid.UUID][]uuid.UUID
 	roles     *fakeRoles
 	passwords []passwordCall
+
+	// staleCount: Count trả 0 dù đã có account, giả lập hai server khởi động
+	// cùng lúc trên DB trống
+	staleCount bool
 }
 
 func newFakeAccounts(roles *fakeRoles) *fakeAccounts {
@@ -235,6 +239,9 @@ func (f *fakeAccounts) Permissions(ctx context.Context, id uuid.UUID) ([]string,
 func (f *fakeAccounts) Count(context.Context) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.staleCount {
+		return 0, nil
+	}
 	return int64(len(f.accounts)), nil
 }
 

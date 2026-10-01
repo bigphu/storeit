@@ -387,3 +387,18 @@ func TestPruneSessions(t *testing.T) {
 		t.Errorf("cutoff = %v, want %v", e.sessions.pruneCutoff, want)
 	}
 }
+
+// Hai replica khởi động cùng lúc trên DB trống: cả hai thấy 0 account, replica
+// thứ hai tạo trùng email. Không được coi là lỗi khởi động.
+func TestBootstrap_ConcurrentStart(t *testing.T) {
+	e := newEnv(t)
+	if _, err := e.svc.Bootstrap(context.Background(), "root@storeit.test", goodPassword); err != nil {
+		t.Fatal(err)
+	}
+	e.accounts.staleCount = true
+
+	created, err := e.svc.Bootstrap(context.Background(), "root@storeit.test", goodPassword)
+	if err != nil || created {
+		t.Errorf("second replica bootstrap = %v, %v, want no-op", created, err)
+	}
+}
