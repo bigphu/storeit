@@ -15,6 +15,7 @@ import (
 	"storeit/internal/identity/repository/db"
 	"storeit/internal/platform/database"
 	"storeit/internal/platform/events"
+	"storeit/internal/platform/jobs"
 )
 
 // AccountRepository cài đặt domain.AccountRepository. Mọi method ghi chạy
@@ -23,12 +24,13 @@ type AccountRepository struct {
 	pool   *pgxpool.Pool
 	q      *db.Queries
 	outbox *events.Outbox
+	jobs   jobs.Enqueuer
 }
 
 var _ domain.AccountRepository = (*AccountRepository)(nil)
 
-func NewAccountRepository(pool *pgxpool.Pool, outbox *events.Outbox) *AccountRepository {
-	return &AccountRepository{pool: pool, q: db.New(pool), outbox: outbox}
+func NewAccountRepository(pool *pgxpool.Pool, outbox *events.Outbox, enq jobs.Enqueuer) *AccountRepository {
+	return &AccountRepository{pool: pool, q: db.New(pool), outbox: outbox, jobs: enq}
 }
 
 func (r *AccountRepository) Create(ctx context.Context, in domain.NewAccount) (domain.Account, error) {
@@ -51,6 +53,11 @@ func (r *AccountRepository) Create(ctx context.Context, in domain.NewAccount) (d
 		}
 		if err := insertRoles(ctx, q, id, roleIDs); err != nil {
 			return err
+		}
+		if in.Invite != nil {
+			if err := issueToken(ctx, tx, q, r.jobs, id, *in.Invite); err != nil {
+				return err
+			}
 		}
 		out = toAccount(row)
 		return r.append(ctx, tx, contract.EventAccountCreated, id, contract.AccountCreated{
@@ -168,6 +175,10 @@ func (r *AccountRepository) SetActive(ctx context.Context, id uuid.UUID, active 
 		}); err != nil {
 			return fmt.Errorf("identity: revoke sessions: %w", err)
 		}
+		// Link đang chờ (lời mời, đặt lại) cũng chết; mở khoá không hồi lại chúng
+		if err := q.DeleteAccountPasswordTokens(ctx, id); err != nil {
+			return fmt.Errorf("identity: delete password tokens: %w", err)
+		}
 		return r.append(ctx, tx, contract.EventAccountDisabled, id, contract.AccountDisabled{AccountID: id})
 	})
 	return out, err
@@ -247,11 +258,7 @@ func (r *AccountRepository) Count(ctx context.Context) (int64, error) {
 }
 
 func (r *AccountRepository) append(ctx context.Context, tx pgx.Tx, typ string, id uuid.UUID, payload any) error {
-	e, err := events.New(typ, contract.AggregateAccount, id, payload)
-	if err != nil {
-		return err
-	}
-	return r.outbox.Append(ctx, tx, e)
+	return appendAccountEvent(ctx, tx, r.outbox, typ, id, payload)
 }
 
 // insertRoles gán role cho account; role không tồn tại là ErrUnknownRoles

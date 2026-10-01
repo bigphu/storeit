@@ -27,6 +27,16 @@ func toAccount(a db.IdentityAccount) domain.Account {
 	}
 }
 
+func toPasswordToken(t db.IdentityPasswordToken) domain.PasswordToken {
+	return domain.PasswordToken{
+		ID:        t.ID,
+		AccountID: t.AccountID,
+		Purpose:   domain.TokenPurpose(t.Purpose),
+		CreatedAt: t.CreatedAt,
+		ExpiresAt: t.ExpiresAt,
+	}
+}
+
 func toRole(r db.IdentityRole, perms []string) domain.Role {
 	if perms == nil {
 		perms = []string{}

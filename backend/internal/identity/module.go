@@ -31,6 +31,7 @@ import (
 	"storeit/internal/identity/worker"
 	"storeit/internal/platform/auth"
 	"storeit/internal/platform/events"
+	"storeit/internal/platform/jobs"
 	"storeit/internal/platform/jwt"
 	"storeit/internal/platform/logger"
 )
@@ -40,6 +41,8 @@ type Deps struct {
 	// Tokens chỉ cần cho API (đăng nhập, Mount); cmd/worker để nil
 	Tokens *jwt.Provider
 	Outbox *events.Outbox
+	// Jobs xếp job gửi thư trong transaction phát link đặt mật khẩu
+	Jobs   jobs.Enqueuer
 	Config Config
 }
 
@@ -63,7 +66,7 @@ func New(d Deps) (*Module, error) {
 		tokens = d.Tokens
 	}
 	svc := service.New(service.Deps{
-		Accounts: repository.NewAccountRepository(d.Pool, d.Outbox),
+		Accounts: repository.NewAccountRepository(d.Pool, d.Outbox, d.Jobs),
 		Roles:    repository.NewRoleRepository(d.Pool, d.Outbox),
 		Sessions: repository.NewSessionRepository(d.Pool),
 		Hasher:   service.NewBcrypt(0),

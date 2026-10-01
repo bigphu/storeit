@@ -50,7 +50,7 @@ func newApp(t *testing.T) *app {
 	if err != nil {
 		t.Fatal(err)
 	}
-	accounts := repository.NewAccountRepository(pool, outbox)
+	accounts := repository.NewAccountRepository(pool, outbox, jobs.NewRiver(client))
 	hasher := service.NewBcrypt(4)
 	svc := service.New(service.Deps{
 		Accounts: accounts, Roles: repository.NewRoleRepository(pool, outbox),

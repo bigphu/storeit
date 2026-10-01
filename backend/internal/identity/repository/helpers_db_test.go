@@ -21,6 +21,7 @@ type repos struct {
 	accounts *repository.AccountRepository
 	roles    *repository.RoleRepository
 	sessions *repository.SessionRepository
+	tokens   *repository.TokenRepository
 }
 
 func newRepos(t *testing.T) repos {
@@ -31,11 +32,13 @@ func newRepos(t *testing.T) repos {
 		t.Fatal(err)
 	}
 	outbox := events.NewOutbox(events.NewRegistry(), client)
+	enq := jobs.NewRiver(client)
 	return repos{
 		pool:     pool,
-		accounts: repository.NewAccountRepository(pool, outbox),
+		accounts: repository.NewAccountRepository(pool, outbox, enq),
 		roles:    repository.NewRoleRepository(pool, outbox),
 		sessions: repository.NewSessionRepository(pool),
+		tokens:   repository.NewTokenRepository(pool, outbox, enq),
 	}
 }
 
