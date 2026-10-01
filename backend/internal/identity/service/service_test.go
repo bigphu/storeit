@@ -41,7 +41,7 @@ func newEnv(t *testing.T) *env {
 	e.svc = New(Deps{
 		Accounts: e.accounts, Roles: e.roles, Sessions: e.sessions,
 		Hasher: e.hasher, Tokens: e.tokens,
-		Settings: Settings{SlidingTTL: 14 * 24 * time.Hour, AbsoluteTTL: 30 * 24 * time.Hour, Grace: 30 * time.Second},
+		Settings: Settings{SlidingTTL: 14 * 24 * time.Hour, AbsoluteTTL: 30 * 24 * time.Hour, Grace: 30 * time.Second, Retention: 30 * 24 * time.Hour},
 		Now:      func() time.Time { return e.now },
 	})
 	return e
@@ -182,13 +182,19 @@ func TestPermissionChecks(t *testing.T) {
 	target := e.seed(t, "t@storeit.test", true)
 	id := target.ID
 	calls := map[string]func(ctx context.Context) error{
-		"ListAccounts": func(ctx context.Context) error { _, _, err := e.svc.ListAccounts(ctx, domain.AccountFilter{}); return err },
-		"GetAccount":   func(ctx context.Context) error { _, err := e.svc.GetAccount(ctx, id); return err },
+		"ListAccounts": func(ctx context.Context) error {
+			_, _, err := e.svc.ListAccounts(ctx, domain.AccountFilter{})
+			return err
+		},
+		"GetAccount": func(ctx context.Context) error { _, err := e.svc.GetAccount(ctx, id); return err },
 		"CreateAccount": func(ctx context.Context) error {
 			_, err := e.svc.CreateAccount(ctx, CreateAccountInput{Email: "n@storeit.test", Name: "N", Password: goodPassword})
 			return err
 		},
-		"UpdateAccount":  func(ctx context.Context) error { _, err := e.svc.UpdateAccount(ctx, id, domain.ProfileChange{}); return err },
+		"UpdateAccount": func(ctx context.Context) error {
+			_, err := e.svc.UpdateAccount(ctx, id, domain.ProfileChange{})
+			return err
+		},
 		"DisableAccount": func(ctx context.Context) error { _, err := e.svc.DisableAccount(ctx, id); return err },
 		"EnableAccount":  func(ctx context.Context) error { _, err := e.svc.EnableAccount(ctx, id); return err },
 		"ResetPassword":  func(ctx context.Context) error { return e.svc.ResetPassword(ctx, id, goodPassword) },
@@ -369,3 +375,15 @@ func TestLoadActorAndReader(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// Dọn rác: mốc cắt là now - retention, tính một lần ở service
+func TestPruneSessions(t *testing.T) {
+	e := newEnv(t)
+	res, err := e.svc.PruneSessions(context.Background())
+	if err != nil || res.Families != 2 || res.Tokens != 5 {
+		t.Errorf("prune = %+v, %v", res, err)
+	}
+	if want := e.now.Add(-30 * 24 * time.Hour); !e.sessions.pruneCutoff.Equal(want) {
+		t.Errorf("cutoff = %v, want %v", e.sessions.pruneCutoff, want)
+	}
+}

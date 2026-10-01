@@ -26,6 +26,8 @@ type Settings struct {
 	SlidingTTL  time.Duration
 	AbsoluteTTL time.Duration
 	Grace       time.Duration
+	// Giữ hàng phiên đã chết bao lâu trước khi PruneSessions xoá
+	Retention time.Duration
 }
 
 type Deps struct {

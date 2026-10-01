@@ -249,7 +249,7 @@ func TestAccountAndRoleManagement(t *testing.T) {
 		"email": email, "name": "New", "password": password, "role_ids": []string{domain.EmployeeRoleID.String()},
 	}})
 	var created struct {
-		Id    string `json:"id"`
+		Id    string                  `json:"id"`
 		Roles []struct{ Name string } `json:"roles"`
 	}
 	if rec.Code != 201 || json.Unmarshal(rec.Body.Bytes(), &created) != nil || len(created.Roles) != 1 || created.Roles[0].Name != "Employee" {

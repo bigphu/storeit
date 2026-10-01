@@ -246,6 +246,8 @@ type fakeSessions struct {
 	revoked  [][]byte
 	family   *uuid.UUID
 	familyOf map[string]uuid.UUID
+
+	pruneCutoff time.Time
 }
 
 func (f *fakeSessions) Start(_ context.Context, s domain.NewSession) (uuid.UUID, error) {
@@ -278,7 +280,12 @@ func (f *fakeSessions) FamilyOf(_ context.Context, h []byte) (*uuid.UUID, error)
 	return nil, nil
 }
 
-func (f *fakeSessions) Prune(context.Context, time.Time) (int64, int64, error) { return 0, 0, nil }
+func (f *fakeSessions) Prune(_ context.Context, cutoff time.Time) (int64, int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.pruneCutoff = cutoff
+	return 2, 5, nil
+}
 
 // fakeTokens ghi lại quyền được đưa vào access token
 type fakeTokens struct {
