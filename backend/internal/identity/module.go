@@ -36,7 +36,8 @@ import (
 )
 
 type Deps struct {
-	Pool   *pgxpool.Pool
+	Pool *pgxpool.Pool
+	// Tokens chỉ cần cho API (đăng nhập, Mount); cmd/worker để nil
 	Tokens *jwt.Provider
 	Outbox *events.Outbox
 	Config Config
@@ -53,16 +54,20 @@ func New(d Deps) (*Module, error) {
 	if err := d.Config.Validate(); err != nil {
 		return nil, err
 	}
-	if d.Pool == nil || d.Tokens == nil || d.Outbox == nil {
-		return nil, fmt.Errorf("identity: Pool, Tokens and Outbox are required")
+	if d.Pool == nil || d.Outbox == nil {
+		return nil, fmt.Errorf("identity: Pool and Outbox are required")
 	}
 	cfg := d.Config.withDefaults()
+	var tokens service.TokenIssuer
+	if d.Tokens != nil { // interface nil thật, không phải *jwt.Provider nil
+		tokens = d.Tokens
+	}
 	svc := service.New(service.Deps{
 		Accounts: repository.NewAccountRepository(d.Pool, d.Outbox),
 		Roles:    repository.NewRoleRepository(d.Pool, d.Outbox),
 		Sessions: repository.NewSessionRepository(d.Pool),
 		Hasher:   service.NewBcrypt(0),
-		Tokens:   d.Tokens,
+		Tokens:   tokens,
 		Settings: service.Settings{
 			SlidingTTL:  cfg.RefreshSlidingTTL,
 			AbsoluteTTL: cfg.RefreshAbsoluteTTL,
@@ -80,6 +85,9 @@ func New(d Deps) (*Module, error) {
 
 // Mount gắn route /api/v1/... của identity lên router gốc
 func (m *Module) Mount(r chi.Router) error {
+	if m.tokens == nil {
+		return fmt.Errorf("identity: Mount needs Deps.Tokens")
+	}
 	return m.handler.Mount(r, m.tokens)
 }
 

@@ -17,6 +17,11 @@ x-go-env: &go-env
   JWT_KEYS_FILE: /run/secrets/jwt_keys
   JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-v1}
   JWT_ISSUER: ${JWT_ISSUER:-storeit}
+  # Dev chạy http: trình duyệt bỏ cookie Secure trên http, kể cả localhost
+  IDENTITY_COOKIE_SECURE: "false"
+  # Administrator đầu tiên, tạo khi DB chưa có account nào (đặt trong .env)
+  ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
   # Dev đọc log dùng pretty; production để mặc định (json, info)
   LOG_FORMAT: pretty
 
@@ -55,13 +60,13 @@ services:
     restart: unless-stopped
 
   # worker: giống app, nhưng Air build ./cmd/worker (air.worker.toml riêng)
-  # worker:
-  #   <<: *go-dev
-  #   command: ["air", "-c", "air.worker.toml"]
-  #   environment: *go-env
-  #   depends_on:
-  #     migrate: { condition: service_completed_successfully }
-  #   restart: unless-stopped
+  worker:
+    <<: *go-dev
+    command: ["air", "-c", "air.worker.toml"]
+    environment: *go-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
 
   postgres:
     image: postgres:18-alpine

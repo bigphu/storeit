@@ -30,6 +30,10 @@ x-go-env: &go-env
   JWT_KEYS_FILE: /run/secrets/jwt_keys
   JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-v1}
   JWT_ISSUER: ${JWT_ISSUER:-storeit}
+  # Administrator đầu tiên, chỉ dùng khi DB chưa có account nào. Đăng nhập
+  # được rồi thì xoá hai biến này khỏi .env
+  ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
 
 # Cùng 1 image cho server / worker / migrate, chỉ khác entrypoint
 x-go-prod: &go-prod
@@ -69,8 +73,7 @@ services:
       migrate: { condition: service_completed_successfully }
     restart: unless-stopped
 
-  # Tạm tắt bằng profile: cmd/worker chưa có code, chạy sẽ thoát ngay => restart liên tục.
-  # Bỏ `profiles` khi worker đã được viết.
+  # Giao event và chạy job định kỳ (dọn phiên đăng nhập đã chết)
   worker:
     <<: *go-prod
     entrypoint: ["/app/worker"]
@@ -79,7 +82,6 @@ services:
     # Cho job đang chạy thời gian kết thúc khi deploy/restart
     stop_grace_period: 30s
     restart: unless-stopped
-    profiles: ["worker"]
 
   # Postgres trên cùng server. Dùng DB managed thì xoá service này (+ volume pgdata),
   # đổi PGHOST ở x-go-env và bỏ depends_on postgres của migrate.
