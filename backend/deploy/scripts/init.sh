@@ -12,11 +12,24 @@ secret() {                          # secret <file> [giá trị cố định]
   echo "created $1"
 }
 
+placeholder() {                     # placeholder <file> <gợi ý>: không sinh được, người dùng tự điền
+  if [ ! -e "$1" ]; then
+    mkdir -p "$(dirname "$1")"
+    : > "$1"
+    echo "created $1 (empty)"
+  fi
+  [ -s "$1" ] || echo "  -> $1 is empty: $2"
+}
+
 secret deploy/postgres/secrets/pg_user.txt postgres
 secret deploy/postgres/secrets/pg_pw.txt
 secret deploy/postgres/secrets/pg_app_pw.txt
 secret deploy/pgadmin/secrets/pgadmin_pw.txt
 secret deploy/app/secrets/jwt_keys.txt "v1:$(openssl rand -base64 32)"   # keyring kid:base64, 32 byte
+# Mật khẩu SMTP = API key của Resend. Dev chạy Mailpit không cần; production và
+# dev gửi thư thật thì bắt buộc (worker không khởi động nếu thiếu)
+placeholder deploy/app/secrets/smtp_password.txt \
+  "paste your Resend API key (Sending access) to send real email; dev with Mailpit works without it"
 
 C=deploy/postgres/certs
 if [ ! -s "$C/server.crt" ]; then

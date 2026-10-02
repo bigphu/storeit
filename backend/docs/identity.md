@@ -55,8 +55,10 @@ queues `identity.send_account_email` in the same transaction.
 | `IDENTITY_RESET_TTL` | 1h | Password reset link lifetime |
 
 The worker also needs `MAIL_*` (`platform/mail`, see `docs/platform.md`). Dev compose
-sends to Mailpit (web inbox on http://localhost:8025); production uses Resend with the
-key in `deploy/app/secrets/resend_api_key.txt` (create it by hand).
+sends to Mailpit (web inbox on http://localhost:8025) unless `.env` sets the Resend block
+from `.env.example`. Production sends through Resend's SMTP (`smtp.resend.com:465`, TLS,
+username `resend`) with the API key in `deploy/app/secrets/smtp_password.txt`
+(`make init` creates it empty; the worker refuses to start while it is empty).
 
 ## Sessions and token rotation
 

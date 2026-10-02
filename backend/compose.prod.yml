@@ -81,12 +81,17 @@ services:
     entrypoint: ["/app/worker"]
     environment:
       <<: *go-env
-      # Gửi thư qua HTTP API của Resend; MAIL_FROM phải thuộc domain đã xác thực ở Resend
-      MAIL_TRANSPORT: resend
+      # Gửi thư qua SMTP của Resend: username là "resend", mật khẩu là API key.
+      # MAIL_FROM phải thuộc domain đã xác thực ở Resend
+      MAIL_TRANSPORT: smtp
       MAIL_FROM: ${MAIL_FROM:?set MAIL_FROM, ví dụ StoreIt <no-reply@storeit.example.com>}
       MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
-      MAIL_RESEND_API_KEY_FILE: /run/secrets/resend_api_key
-    secrets: [pg_app_pw, jwt_keys, resend_api_key]
+      MAIL_SMTP_HOST: ${MAIL_SMTP_HOST:-smtp.resend.com}
+      MAIL_SMTP_PORT: ${MAIL_SMTP_PORT:-465}
+      MAIL_SMTP_TLS: ${MAIL_SMTP_TLS:-tls}
+      MAIL_SMTP_USERNAME: ${MAIL_SMTP_USERNAME:-resend}
+      MAIL_SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+    secrets: [pg_app_pw, jwt_keys, smtp_password]
     depends_on:
       migrate: { condition: service_completed_successfully }
     # Cho job đang chạy thời gian kết thúc khi deploy/restart
@@ -155,9 +160,10 @@ secrets:
     file: ./deploy/postgres/secrets/pg_app_pw.txt
   jwt_keys:
     file: ./deploy/app/secrets/jwt_keys.txt
-  # Tạo tay: khoá API từ dashboard Resend (quyền "Sending access"), một dòng
-  resend_api_key:
-    file: ./deploy/app/secrets/resend_api_key.txt
+  # API key của Resend (quyền "Sending access"), một dòng. make init / init.sh
+  # tạo file rỗng; dán key vào trước khi chạy worker
+  smtp_password:
+    file: ./deploy/app/secrets/smtp_password.txt
 
 volumes:
   pgdata:

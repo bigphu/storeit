@@ -69,12 +69,18 @@ services:
     command: ["air", "-c", "air.worker.toml"]
     environment:
       <<: *go-env
-      # Thư đi vào Mailpit, xem ở http://localhost:8025
+      # Mặc định thư đi vào Mailpit (http://localhost:8025). Gửi thật qua Resend
+      # SMTP: đặt các biến MAIL_* trong .env (xem .env.example)
       MAIL_TRANSPORT: smtp
-      MAIL_FROM: "StoreIt <no-reply@storeit.dev>"
-      MAIL_SMTP_HOST: mailpit
-      MAIL_SMTP_PORT: "1025"
-      MAIL_SMTP_TLS: none
+      MAIL_FROM: "${MAIL_FROM:-StoreIt <no-reply@storeit.dev>}"
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
+      MAIL_SMTP_HOST: ${MAIL_SMTP_HOST:-mailpit}
+      MAIL_SMTP_PORT: ${MAIL_SMTP_PORT:-1025}
+      MAIL_SMTP_TLS: ${MAIL_SMTP_TLS:-none}
+      MAIL_SMTP_USERNAME: ${MAIL_SMTP_USERNAME:-}
+      # Rỗng: không đọc file nào (Mailpit không cần mật khẩu)
+      MAIL_SMTP_PASSWORD_FILE: ${MAIL_SMTP_PASSWORD_FILE:-}
+    secrets: [pg_app_pw, jwt_keys, smtp_password]
     depends_on:
       migrate: { condition: service_completed_successfully }
       mailpit: { condition: service_started }
@@ -181,6 +187,9 @@ secrets:
     file: ./deploy/pgadmin/secrets/pgadmin_pw.txt
   jwt_keys:
     file: ./deploy/app/secrets/jwt_keys.txt
+  # API key của Resend (make init tạo file rỗng)
+  smtp_password:
+    file: ./deploy/app/secrets/smtp_password.txt
 
 volumes:
   pgdata:
