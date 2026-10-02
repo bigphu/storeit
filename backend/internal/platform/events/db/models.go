@@ -11,6 +11,72 @@ import (
 	"github.com/google/uuid"
 )
 
+type IdentityAccount struct {
+	ID           uuid.UUID
+	Email        string
+	Name         string
+	PasswordHash *string
+	MemberID     *uuid.UUID
+	Active       bool
+	Version      int32
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+type IdentityAccountRole struct {
+	AccountID uuid.UUID
+	RoleID    uuid.UUID
+}
+
+type IdentityPasswordToken struct {
+	AccountID uuid.UUID
+	Purpose   string
+	ID        uuid.UUID
+	TokenHash []byte
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
+type IdentityPermission struct {
+	Code        string
+	Description string
+}
+
+type IdentityRefreshFamily struct {
+	ID                uuid.UUID
+	AccountID         uuid.UUID
+	UserAgent         string
+	Ip                string
+	CreatedAt         time.Time
+	AbsoluteExpiresAt time.Time
+	RevokedAt         *time.Time
+	RevokedReason     *string
+}
+
+type IdentityRefreshToken struct {
+	ID        uuid.UUID
+	FamilyID  uuid.UUID
+	TokenHash []byte
+	ParentID  *uuid.UUID
+	IssuedAt  time.Time
+	ExpiresAt time.Time
+	UsedAt    *time.Time
+}
+
+type IdentityRole struct {
+	ID          uuid.UUID
+	Name        string
+	Description string
+	IsSystem    bool
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type IdentityRolePermission struct {
+	RoleID     uuid.UUID
+	Permission string
+}
+
 type PlatformEvent struct {
 	ID            uuid.UUID
 	Type          string
