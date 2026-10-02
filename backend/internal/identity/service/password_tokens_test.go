@@ -111,54 +111,97 @@ func TestSendPasswordReset(t *testing.T) {
 	if err := e.svc.SendPasswordReset(ctx, active.ID); err != nil || e.pwTokens.issuedCount() != before+1 {
 		t.Errorf("second admin reset: %v, issued %d", err, e.pwTokens.issuedCount()-before)
 	}
+	if call, _ := e.pwTokens.lastIssued(); call.minAge != 0 {
+		t.Errorf("admin reset passed cooldown %v, want 0", call.minAge)
+	}
 }
 
-func TestForgotPassword(t *testing.T) {
+// Request công khai chỉ kiểm dạng email rồi xếp job: email có tài khoản hay
+// không thì request cũng làm đúng một việc như nhau, không lộ qua thời gian
+func TestForgotPasswordQueuesJob(t *testing.T) {
+	e := newEnv(t)
+	e.seed(t, "lan@storeit.test", true)
+	anon := context.Background()
+
+	for _, email := range []string{" LAN@StoreIT.test ", "ghost@storeit.test"} {
+		before := len(e.jobs.queued)
+		if err := e.svc.ForgotPassword(anon, email); err != nil {
+			t.Fatalf("%s: %v", email, err)
+		}
+		if len(e.jobs.queued) != before+1 {
+			t.Fatalf("%s: queued %d jobs, want 1", email, len(e.jobs.queued)-before)
+		}
+		args, ok := e.jobs.queued[len(e.jobs.queued)-1].(job.ForgotPasswordArgs)
+		if !ok || args.Email != strings.ToLower(strings.TrimSpace(email)) {
+			t.Errorf("%s: queued %#v, want ForgotPasswordArgs with the normalized email", email, e.jobs.queued[len(e.jobs.queued)-1])
+		}
+	}
+	if e.pwTokens.issuedCount() != 0 {
+		t.Error("the request itself issued a token; the job should")
+	}
+	// Sai dạng: không có gì để tra, không xếp job
+	before := len(e.jobs.queued)
+	if err := e.svc.ForgotPassword(anon, "not-an-email"); err != nil || len(e.jobs.queued) != before {
+		t.Errorf("malformed: %v, queued %d", err, len(e.jobs.queued)-before)
+	}
+}
+
+func TestProcessForgotPassword(t *testing.T) {
 	e := newEnv(t)
 	ctx := adminCtx(t, e)
 	active := e.seed(t, "lan@storeit.test", true)
 	e.seed(t, "off@storeit.test", false)
 	inv := e.invited(t, ctx, "inv@storeit.test")
-	anon := context.Background()
+	jobCtx := context.Background()
+	process := func(email string) error {
+		return e.svc.ProcessForgotPassword(jobCtx, job.ForgotPasswordArgs{Email: email})
+	}
 
-	// Không lộ gì: email lạ, sai dạng, account khoá đều nil và không phát token
-	for _, email := range []string{"ghost@storeit.test", "not-an-email", "off@storeit.test"} {
+	// Email lạ, account khoá: không phát gì, không lỗi (job xong)
+	for _, email := range []string{"ghost@storeit.test", "off@storeit.test"} {
 		before := e.pwTokens.issuedCount()
-		if err := e.svc.ForgotPassword(anon, email); err != nil {
-			t.Errorf("%s: %v, want nil", email, err)
-		}
-		if e.pwTokens.issuedCount() != before {
-			t.Errorf("%s: issued a token", email)
+		if err := process(email); err != nil || e.pwTokens.issuedCount() != before {
+			t.Errorf("%s: %v, issued %d", email, err, e.pwTokens.issuedCount()-before)
 		}
 	}
 
-	if err := e.svc.ForgotPassword(anon, " LAN@StoreIT.test "); err != nil {
+	if err := process("lan@storeit.test"); err != nil {
 		t.Fatal(err)
 	}
 	call, _ := e.pwTokens.lastIssued()
 	if call.accountID != active.ID || call.token.Purpose != domain.PurposeReset || call.ev != domain.TokenEventNone {
 		t.Errorf("forgot issued %+v, want reset without event", call)
 	}
+	if call.minAge != 60*time.Second {
+		t.Errorf("cooldown passed to the repository = %v, want 60s", call.minAge)
+	}
 
-	// Cooldown 60 giây mỗi account
+	// Cooldown 60 giây mỗi account (repository quyết định, nguyên tử)
 	before := e.pwTokens.issuedCount()
 	e.now = e.now.Add(59 * time.Second)
-	if err := e.svc.ForgotPassword(anon, "lan@storeit.test"); err != nil || e.pwTokens.issuedCount() != before {
+	if err := process("lan@storeit.test"); err != nil || e.pwTokens.issuedCount() != before {
 		t.Errorf("within cooldown: %v, issued %d", err, e.pwTokens.issuedCount()-before)
 	}
 	e.now = e.now.Add(time.Second)
-	if err := e.svc.ForgotPassword(anon, "lan@storeit.test"); err != nil || e.pwTokens.issuedCount() != before+1 {
+	if err := process("lan@storeit.test"); err != nil || e.pwTokens.issuedCount() != before+1 {
 		t.Errorf("after cooldown: %v, issued %d", err, e.pwTokens.issuedCount()-before)
 	}
 
 	// Account chưa nhận lời mời: gửi lời mời mới (lời mời cũ có thể đã hết hạn)
 	e.now = e.now.Add(time.Hour)
-	if err := e.svc.ForgotPassword(anon, "inv@storeit.test"); err != nil {
+	if err := process("inv@storeit.test"); err != nil {
 		t.Fatal(err)
 	}
 	call, _ = e.pwTokens.lastIssued()
 	if call.accountID != inv.ID || call.token.Purpose != domain.PurposeInvite || call.ev != domain.TokenEventNone {
 		t.Errorf("forgot on invited account issued %+v, want invite without event", call)
+	}
+
+	// Account bị khoá giữa lúc xếp job và lúc chạy: repository từ chối, job vẫn xong
+	e.now = e.now.Add(time.Hour)
+	e.pwTokens.refuse = domain.ErrAccountInactive
+	if err := process("lan@storeit.test"); err != nil {
+		t.Errorf("account disabled meanwhile: %v, want nil", err)
 	}
 }
 
@@ -236,7 +279,7 @@ func TestSendAccountEmail(t *testing.T) {
 
 	// Reset dùng trang khác và nói đúng thời hạn
 	e.seed(t, "lan@storeit.test", true)
-	if err := e.svc.ForgotPassword(jobCtx, "lan@storeit.test"); err != nil {
+	if err := e.svc.ProcessForgotPassword(jobCtx, job.ForgotPasswordArgs{Email: "lan@storeit.test"}); err != nil {
 		t.Fatal(err)
 	}
 	reset, _ := e.pwTokens.lastIssued()

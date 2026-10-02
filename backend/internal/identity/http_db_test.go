@@ -18,6 +18,7 @@ import (
 
 	"storeit/internal/identity/domain"
 	"storeit/internal/identity/handler"
+	"storeit/internal/identity/job"
 	"storeit/internal/identity/repository"
 	"storeit/internal/identity/service"
 	"storeit/internal/platform/database/dbtest"
@@ -33,6 +34,7 @@ type app struct {
 	t        *testing.T
 	h        http.Handler
 	pool     *pgxpool.Pool
+	svc      *service.Service
 	accounts *repository.AccountRepository
 	hasher   service.Hasher
 }
@@ -58,7 +60,7 @@ func newApp(t *testing.T) *app {
 	svc := service.New(service.Deps{
 		Accounts: accounts, Roles: repository.NewRoleRepository(pool, outbox),
 		Sessions: repository.NewSessionRepository(pool), Hasher: hasher, Tokens: tokens,
-		PasswordTokens: repository.NewTokenRepository(pool, outbox, enq),
+		PasswordTokens: repository.NewTokenRepository(pool, outbox, enq), Jobs: enq,
 		Settings: service.Settings{
 			SlidingTTL: time.Hour, AbsoluteTTL: 24 * time.Hour, Grace: 30 * time.Second,
 			InviteTTL: 72 * time.Hour, ResetTTL: time.Hour,
@@ -68,7 +70,7 @@ func newApp(t *testing.T) *app {
 	if err := handler.New(svc, handler.CookieSettings{}).Mount(srv.Router(), tokens); err != nil {
 		t.Fatal(err)
 	}
-	return &app{t: t, h: srv.Handler(), pool: pool, accounts: accounts, hasher: hasher}
+	return &app{t: t, h: srv.Handler(), pool: pool, svc: svc, accounts: accounts, hasher: hasher}
 }
 
 // seed tạo account với role cho trước, trả email (ngẫu nhiên: DB dùng chung)
@@ -85,6 +87,14 @@ func (a *app) seed(roleIDs ...uuid.UUID) string {
 		a.t.Fatal(err)
 	}
 	return email
+}
+
+// runForgot chạy job quên mật khẩu như worker (request chỉ xếp job)
+func (a *app) runForgot(email string) {
+	a.t.Helper()
+	if err := a.svc.ProcessForgotPassword(context.Background(), job.ForgotPasswordArgs{Email: email}); err != nil {
+		a.t.Fatal(err)
+	}
 }
 
 // linkToken đọc token thô của link đang sống (account, purpose) từ job gửi
@@ -351,6 +361,7 @@ func TestInvitationAndResetRoutes(t *testing.T) {
 			t.Errorf("forgot %s: %d %s", email, rec.Code, rec.Body)
 		}
 	}
+	a.runForgot(activeEmail)
 	reset := a.linkToken(active.ID.String(), "reset")
 
 	rec = a.do(call{method: "POST", path: "/api/v1/auth/password/set", body: map[string]any{"token": "nope", "new_password": password}})
@@ -385,5 +396,43 @@ func TestInvitationAndResetRoutes(t *testing.T) {
 	rec = a.do(call{method: "GET", path: "/api/v1/accounts/" + active.ID.String(), token: admin})
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"status":"active"`) {
 		t.Errorf("account status: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// Đăng nhập, quên mật khẩu, đặt mật khẩu bị giới hạn theo IP: đoán mật khẩu
+// hay spam form công khai gặp 429 kèm Retry-After
+func TestAuthRateLimits(t *testing.T) {
+	a := newApp(t)
+	email := a.seed()
+	for i := range 10 {
+		rec := a.do(call{method: "POST", path: "/api/v1/auth/login", body: map[string]string{"email": email, "password": "wrong-password-xx"}})
+		if rec.Code != 401 {
+			t.Fatalf("attempt %d: %d, want 401", i+1, rec.Code)
+		}
+	}
+	rec := a.do(call{method: "POST", path: "/api/v1/auth/login", body: map[string]string{"email": email, "password": password}})
+	if rec.Code != 429 || problemType(t, rec) != "/errors/rate-limited" || rec.Header().Get("Retry-After") == "" {
+		t.Errorf("11th login: %d %s, want 429 with Retry-After", rec.Code, rec.Body)
+	}
+
+	for i := range 5 {
+		if rec := a.do(call{method: "POST", path: "/api/v1/auth/password/forgot", body: map[string]any{"email": email}}); rec.Code != 202 {
+			t.Fatalf("forgot %d: %d", i+1, rec.Code)
+		}
+	}
+	if rec := a.do(call{method: "POST", path: "/api/v1/auth/password/forgot", body: map[string]any{"email": email}}); rec.Code != 429 {
+		t.Errorf("6th forgot: %d, want 429", rec.Code)
+	}
+
+	for range 10 {
+		a.do(call{method: "POST", path: "/api/v1/auth/password/set", body: map[string]any{"token": "nope", "new_password": password}})
+	}
+	if rec := a.do(call{method: "POST", path: "/api/v1/auth/password/set", body: map[string]any{"token": "nope", "new_password": password}}); rec.Code != 429 {
+		t.Errorf("11th set password: %d, want 429", rec.Code)
+	}
+
+	// Refresh không bị giới hạn chung với login
+	if rec := a.do(call{method: "POST", path: "/api/v1/auth/refresh"}); rec.Code != 401 {
+		t.Errorf("refresh: %d, want 401 (not rate limited)", rec.Code)
 	}
 }

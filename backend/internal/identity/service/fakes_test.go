@@ -127,7 +127,7 @@ func (f *fakeAccounts) Create(_ context.Context, in domain.NewAccount) (domain.A
 	f.accounts[a.ID] = a
 	f.roleIDs[a.ID] = in.RoleIDs
 	if in.Invite != nil && f.invites != nil {
-		_ = f.invites.Issue(context.Background(), a.ID, *in.Invite, domain.TokenEventNone)
+		_, _ = f.invites.Issue(context.Background(), a.ID, *in.Invite, domain.TokenEventNone, 0)
 	}
 	return a, nil
 }

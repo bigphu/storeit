@@ -176,3 +176,30 @@ func TestAccount_ListFilters(t *testing.T) {
 		t.Errorf("inactive filter total = %d, want 0", total)
 	}
 }
+
+// Tự đổi mật khẩu: giữ phiên đang dùng, thu hồi phiên khác với lý do password_change
+func TestAccount_SetPasswordRevokesOtherSessions(t *testing.T) {
+	r := newRepos(t)
+	ctx := context.Background()
+	a := newAccount(t, r)
+	start := func() uuid.UUID {
+		fam, err := r.sessions.Start(ctx, domain.NewSession{
+			AccountID: a.ID, TokenHash: hash(uuid.NewString()),
+			ExpiresAt: time.Now().Add(time.Hour), AbsoluteExpiresAt: time.Now().Add(2 * time.Hour),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fam
+	}
+	keep, other := start(), start()
+	if err := r.accounts.SetPassword(ctx, a.ID, "$2a$04$changed", &keep); err != nil {
+		t.Fatal(err)
+	}
+	if reason, _ := familyState(t, r, keep); reason != nil {
+		t.Errorf("current session revoked: %v", *reason)
+	}
+	if reason, _ := familyState(t, r, other); reason == nil || *reason != string(domain.RevokePasswordChange) {
+		t.Errorf("other session reason = %v, want password_change", reason)
+	}
+}

@@ -36,9 +36,22 @@ func NewTokenRepository(pool *pgxpool.Pool, outbox *events.Outbox, enq jobs.Enqu
 	return &TokenRepository{pool: pool, q: db.New(pool), outbox: outbox, jobs: enq}
 }
 
-func (r *TokenRepository) Issue(ctx context.Context, accountID uuid.UUID, t domain.IssuedToken, ev domain.TokenEvent) error {
-	return database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
-		if err := issueToken(ctx, tx, r.q.WithTx(tx), r.jobs, accountID, t); err != nil {
+// Thứ tự khoá trong mọi đường ghi token: account trước, token sau (giống
+// SetActive). Ngược thứ tự thì khoá account và dùng link cùng lúc sẽ deadlock.
+
+func (r *TokenRepository) Issue(ctx context.Context, accountID uuid.UUID, t domain.IssuedToken, ev domain.TokenEvent, minAge time.Duration) (bool, error) {
+	var issued bool
+	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
+		q := r.q.WithTx(tx)
+		acc, err := accountOrNotFound(q.GetAccountForUpdate(ctx, accountID))
+		if err != nil {
+			return err
+		}
+		// Khoá account đã xoá link của nó; không phát lại link mới sau đó
+		if !acc.Active {
+			return domain.ErrAccountInactive
+		}
+		if issued, err = issueToken(ctx, tx, q, r.jobs, accountID, t, minAge); err != nil || !issued {
 			return err
 		}
 		switch ev {
@@ -51,24 +64,36 @@ func (r *TokenRepository) Issue(ctx context.Context, accountID uuid.UUID, t doma
 		}
 		return nil
 	})
+	return issued, err
 }
 
 func (r *TokenRepository) Use(ctx context.Context, hash []byte, now time.Time, passwordHash string) (domain.UsedToken, error) {
 	var out domain.UsedToken
 	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
 		q := r.q.WithTx(tx)
-		// Xoá trước rồi mới kiểm tra: hai lần gửi cùng lúc thì lần sau chờ khoá
-		// hàng, rồi không thấy gì để xoá
+		// Tra không khoá để biết account, khoá account, rồi mới xoá token
+		found, err := q.GetPasswordTokenByHash(ctx, hash)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrInvalidPasswordToken
+		}
+		if err != nil {
+			return fmt.Errorf("identity: find password token: %w", err)
+		}
+		acc, err := accountOrNotFound(q.GetAccountForUpdate(ctx, found.AccountID))
+		if errors.Is(err, domain.ErrAccountNotFound) {
+			return domain.ErrInvalidPasswordToken
+		}
+		if err != nil {
+			return err
+		}
+		// Xoá rồi mới kiểm tra: hai lần gửi cùng lúc thì lần sau chờ khoá
+		// account, rồi không thấy gì để xoá
 		row, err := q.ConsumePasswordToken(ctx, hash)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.ErrInvalidPasswordToken
 		}
 		if err != nil {
 			return fmt.Errorf("identity: consume password token: %w", err)
-		}
-		acc, err := accountOrNotFound(q.GetAccountForUpdate(ctx, row.AccountID))
-		if err != nil {
-			return err
 		}
 		tok := toPasswordToken(row)
 		// Không dùng được thì rollback: token hết hạn còn nằm đó tới lần dọn rác,
@@ -87,7 +112,7 @@ func (r *TokenRepository) Use(ctx context.Context, hash []byte, now time.Time, p
 		if tok.Purpose == domain.PurposeReset {
 			// Quên mật khẩu có thể vì mật khẩu đã lộ: đăng xuất mọi thiết bị
 			if _, err := q.RevokeAccountFamilies(ctx, db.RevokeAccountFamiliesParams{
-				AccountID: acc.ID, Reason: ptr(string(domain.RevokeAdmin)),
+				AccountID: acc.ID, Reason: ptr(string(domain.RevokePasswordReset)),
 			}); err != nil {
 				return fmt.Errorf("identity: revoke sessions: %w", err)
 			}
@@ -112,6 +137,8 @@ func (r *TokenRepository) Get(ctx context.Context, id uuid.UUID) (domain.Passwor
 	return toPasswordToken(row), nil
 }
 
+// Latest trả token hiện có của account cho purpose, nil nếu không có. Service
+// không dùng (cooldown nằm trong Issue); để test và công cụ vận hành đọc.
 func (r *TokenRepository) Latest(ctx context.Context, accountID uuid.UUID, p domain.TokenPurpose) (*domain.PasswordToken, error) {
 	row, err := r.q.GetAccountPasswordToken(ctx, db.GetAccountPasswordTokenParams{AccountID: accountID, Purpose: string(p)})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -133,21 +160,29 @@ func (r *TokenRepository) Prune(ctx context.Context, cutoff time.Time) (int64, e
 }
 
 // issueToken ghi token (đè token cùng loại) và xếp job gửi thư, trong tx của
-// người gọi. Dùng chung cho tạo account kèm lời mời và Issue.
-func issueToken(ctx context.Context, tx pgx.Tx, q *db.Queries, enq jobs.Enqueuer, accountID uuid.UUID, t domain.IssuedToken) error {
+// người gọi. Dùng chung cho tạo account kèm lời mời và Issue. minAge > 0:
+// token cùng loại mới hơn thế thì không ghi gì, trả false.
+func issueToken(ctx context.Context, tx pgx.Tx, q *db.Queries, enq jobs.Enqueuer, accountID uuid.UUID, t domain.IssuedToken, minAge time.Duration) (bool, error) {
 	if !t.Purpose.Valid() {
-		return fmt.Errorf("identity: invalid token purpose %q", t.Purpose)
+		return false, fmt.Errorf("identity: invalid token purpose %q", t.Purpose)
 	}
 	_, err := q.UpsertPasswordToken(ctx, db.UpsertPasswordTokenParams{
 		AccountID: accountID, Purpose: string(t.Purpose), ID: t.ID, TokenHash: t.Hash, ExpiresAt: t.ExpiresAt,
+		MinAgeSeconds: minAge.Seconds(),
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil // còn trong cooldown
+	}
 	if err != nil {
 		if code, _ := pgCode(err); code == codeForeignKeyViolation {
-			return domain.ErrAccountNotFound
+			return false, domain.ErrAccountNotFound
 		}
-		return fmt.Errorf("identity: issue password token: %w", err)
+		return false, fmt.Errorf("identity: issue password token: %w", err)
 	}
-	return enq.EnqueueTx(ctx, tx, job.SendAccountEmailArgs{TokenID: t.ID, Purpose: string(t.Purpose), Token: t.Raw})
+	if err := enq.EnqueueTx(ctx, tx, job.SendAccountEmailArgs{TokenID: t.ID, Purpose: string(t.Purpose), Token: t.Raw}); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // appendAccountEvent ghi event của aggregate account vào outbox trong tx

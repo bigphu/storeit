@@ -77,8 +77,9 @@ key in `deploy/app/secrets/resend_api_key.txt` (create it by hand).
 
 - Every refresh failure is the same 401 (`/errors/invalid-refresh-token`) and clears the cookie.
 - Refresh reloads permissions: role and permission changes reach users within one access-token TTL.
-- Disabling an account and completing a password reset revoke all its sessions. Changing
-  your own password (`PUT /auth/password`) keeps the current session, revokes the rest.
+- Disabling an account (reason `admin`) and completing a password reset (`password_reset`)
+  revoke all its sessions. Changing your own password (`PUT /auth/password`) keeps the
+  current session and revokes the rest (`password_change`).
 - `identity.prune_sessions` (hourly, worker) deletes dead families and old used tokens.
 
 ## Invitations and password reset
@@ -96,11 +97,23 @@ key in `deploy/app/secrets/resend_api_key.txt` (create it by hand).
 - Links: `{IDENTITY_APP_URL}/accept-invite#token=…` and `/reset-password#token=…`. The
   token sits in the fragment so it never reaches a server log or `Referer`. The page
   posts it to `POST /auth/password/set`.
-- Using a link (`setPassword`) deletes the row first, then checks expiry and account
-  state, sets the password and deletes the account's other links, in one transaction.
+- Using a link (`setPassword`) locks the account, deletes the row, then checks expiry and
+  account state, sets the password and deletes the account's other links, in one
+  transaction. Every token write locks the account row before the token row (the same
+  order as disabling), so a simultaneous disable and link use cannot deadlock. Issuing a
+  link for a disabled account fails with `ErrAccountInactive`.
   A reset also revokes every session. Concurrent submissions: exactly one wins.
-- `POST /auth/password/forgot` always answers 202. Unknown email, disabled account and
-  a 60-second per-account cooldown are silent. An invited account gets a fresh invite.
+- `POST /auth/password/forgot` always answers 202 and only queues
+  `identity.forgot_password{email}` (unique per email per minute), so the response time is
+  the same whether or not the email has an account. The worker looks the account up:
+  unknown or disabled is silent, an invited account gets a fresh invite. The 60-second
+  per-account cooldown is part of the token upsert (`ON CONFLICT … WHERE created_at <
+  now() - min_age`), so simultaneous requests cannot both send. Admin actions pass no
+  cooldown.
+- Per-IP rate limits (`middleware.RateLimit`, in memory, 429 `/errors/rate-limited` with
+  `Retry-After`): login 10 then 1 per 6 s, forgot 5 then 1 per minute, set password 10
+  then 1 per 6 s. Refresh and logout are not limited. With several API replicas each
+  counts separately.
 - Admin "send reset link" on an invited account sends a fresh invite. Disabling an
   account deletes its links; enabling does not restore them.
 

@@ -77,6 +77,7 @@ func New(d Deps) (*Module, error) {
 		Hasher:         service.NewBcrypt(0),
 		Tokens:         tokens,
 		Mail:           d.Mail,
+		Jobs:           d.Jobs,
 		AppURL:         cfg.AppURL,
 		Settings: service.Settings{
 			SlidingTTL:  cfg.RefreshSlidingTTL,
@@ -140,6 +141,7 @@ func (m *Module) RegisterWorkers(workers *river.Workers) error {
 	}
 	river.AddWorker(workers, worker.NewPruneSessions(m.svc))
 	river.AddWorker(workers, worker.NewSendAccountEmail(m.svc))
+	river.AddWorker(workers, worker.NewForgotPassword(m.svc))
 	return nil
 }
 

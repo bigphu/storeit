@@ -63,17 +63,18 @@ type AccountRepository interface {
 // TokenRepository lưu link đặt mật khẩu (invite, reset)
 type TokenRepository interface {
 	// Issue ghi đè token cùng loại của account, xếp job gửi thư và ghi event
-	// ev, trong một transaction
-	Issue(ctx context.Context, accountID uuid.UUID, t IssuedToken, ev TokenEvent) error
-	// Use dùng token có hash này để đặt mật khẩu, trong một transaction: xoá
-	// token, kiểm tra Usable, đặt mật khẩu. Reset thì thu hồi mọi phiên;
+	// ev, trong một transaction. Khoá account trước (cùng thứ tự với SetActive,
+	// tránh deadlock); account bị khoá: ErrAccountInactive. minAge > 0: token
+	// cùng loại mới phát chưa được minAge thì không phát gì và trả false; kiểm
+	// tra và ghi là một câu SQL nên hai request song song không cùng lọt.
+	Issue(ctx context.Context, accountID uuid.UUID, t IssuedToken, ev TokenEvent, minAge time.Duration) (issued bool, err error)
+	// Use dùng token có hash này để đặt mật khẩu, trong một transaction: khoá
+	// account, xoá token, kiểm tra Usable, đặt mật khẩu. Reset thì thu hồi mọi phiên;
 	// invite thì ghi event invitation_accepted. Mọi thất bại:
 	// ErrInvalidPasswordToken.
 	Use(ctx context.Context, hash []byte, now time.Time, passwordHash string) (UsedToken, error)
 	// Get: ErrInvalidPasswordToken khi không còn (đã dùng hoặc bị thay)
 	Get(ctx context.Context, id uuid.UUID) (PasswordToken, error)
-	// Latest trả token hiện có của account cho purpose, nil nếu không có
-	Latest(ctx context.Context, accountID uuid.UUID, p TokenPurpose) (*PasswordToken, error)
 	// Prune xoá token hết hạn trước cutoff
 	Prune(ctx context.Context, cutoff time.Time) (int64, error)
 }

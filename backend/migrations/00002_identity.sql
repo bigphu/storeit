@@ -70,7 +70,7 @@ CREATE TABLE identity.refresh_families (
 
     CONSTRAINT refresh_families_reason_check CHECK (
         revoked_reason IS NULL
-        OR revoked_reason IN ('logout', 'reuse_detected', 'admin', 'expired'))
+        OR revoked_reason IN ('logout', 'reuse_detected', 'admin', 'expired', 'password_change', 'password_reset'))
 );
 CREATE INDEX refresh_families_live ON identity.refresh_families (account_id) WHERE revoked_at IS NULL;
 

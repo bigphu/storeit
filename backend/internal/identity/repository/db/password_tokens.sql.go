@@ -93,23 +93,48 @@ func (q *Queries) GetPasswordToken(ctx context.Context, id uuid.UUID) (IdentityP
 	return i, err
 }
 
+const getPasswordTokenByHash = `-- name: GetPasswordTokenByHash :one
+SELECT account_id, purpose, id, token_hash, created_at, expires_at FROM identity.password_tokens WHERE token_hash = $1
+`
+
+// Tra token không khoá, để biết account nào cần khoá trước
+func (q *Queries) GetPasswordTokenByHash(ctx context.Context, tokenHash []byte) (IdentityPasswordToken, error) {
+	row := q.db.QueryRow(ctx, getPasswordTokenByHash, tokenHash)
+	var i IdentityPasswordToken
+	err := row.Scan(
+		&i.AccountID,
+		&i.Purpose,
+		&i.ID,
+		&i.TokenHash,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+	)
+	return i, err
+}
+
 const upsertPasswordToken = `-- name: UpsertPasswordToken :one
 INSERT INTO identity.password_tokens (account_id, purpose, id, token_hash, expires_at)
 VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (account_id, purpose) DO UPDATE
 SET id = EXCLUDED.id, token_hash = EXCLUDED.token_hash, created_at = now(), expires_at = EXCLUDED.expires_at
+WHERE $6::float8 = 0
+   OR identity.password_tokens.created_at < now() - make_interval(secs => $6::float8)
 RETURNING account_id, purpose, id, token_hash, created_at, expires_at
 `
 
 type UpsertPasswordTokenParams struct {
-	AccountID uuid.UUID
-	Purpose   string
-	ID        uuid.UUID
-	TokenHash []byte
-	ExpiresAt time.Time
+	AccountID     uuid.UUID
+	Purpose       string
+	ID            uuid.UUID
+	TokenHash     []byte
+	ExpiresAt     time.Time
+	MinAgeSeconds float64
 }
 
-// Phát token: ghi đè token cùng loại của account (link cũ chết ngay)
+// Phát token: ghi đè token cùng loại của account (link cũ chết ngay).
+// min_age_seconds > 0 là cooldown: token cùng loại mới hơn thế thì không ghi,
+// không trả hàng nào. Kiểm tra nằm trong câu upsert (khoá hàng), nên hai
+// request song song không cùng lọt, kể cả khi chưa có hàng nào.
 func (q *Queries) UpsertPasswordToken(ctx context.Context, arg UpsertPasswordTokenParams) (IdentityPasswordToken, error) {
 	row := q.db.QueryRow(ctx, upsertPasswordToken,
 		arg.AccountID,
@@ -117,6 +142,7 @@ func (q *Queries) UpsertPasswordToken(ctx context.Context, arg UpsertPasswordTok
 		arg.ID,
 		arg.TokenHash,
 		arg.ExpiresAt,
+		arg.MinAgeSeconds,
 	)
 	var i IdentityPasswordToken
 	err := row.Scan(

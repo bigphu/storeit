@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"storeit/internal/identity/domain"
+	"storeit/internal/platform/jobs"
 	"storeit/internal/platform/mail"
 )
 
@@ -17,6 +18,7 @@ type issueCall struct {
 	accountID uuid.UUID
 	token     domain.IssuedToken
 	ev        domain.TokenEvent
+	minAge    time.Duration
 }
 
 type storedToken struct {
@@ -34,6 +36,8 @@ type fakePasswordTokens struct {
 	issued   []issueCall
 	used     []domain.UsedToken
 	pruned   time.Time
+	// refuse != nil: Issue trả lỗi này (account bị khoá giữa chừng)
+	refuse error
 }
 
 func newFakePasswordTokens(accounts *fakeAccounts, now func() time.Time) *fakePasswordTokens {
@@ -42,11 +46,17 @@ func newFakePasswordTokens(accounts *fakeAccounts, now func() time.Time) *fakePa
 	return f
 }
 
-func (f *fakePasswordTokens) Issue(_ context.Context, accountID uuid.UUID, t domain.IssuedToken, ev domain.TokenEvent) error {
+func (f *fakePasswordTokens) Issue(_ context.Context, accountID uuid.UUID, t domain.IssuedToken, ev domain.TokenEvent, minAge time.Duration) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.refuse != nil {
+		return false, f.refuse
+	}
 	for id, s := range f.tokens {
 		if s.AccountID == accountID && s.Purpose == t.Purpose {
+			if f.now().Sub(s.CreatedAt) < minAge {
+				return false, nil
+			}
 			delete(f.tokens, id)
 		}
 	}
@@ -54,8 +64,8 @@ func (f *fakePasswordTokens) Issue(_ context.Context, accountID uuid.UUID, t dom
 		PasswordToken: domain.PasswordToken{ID: t.ID, AccountID: accountID, Purpose: t.Purpose, CreatedAt: f.now(), ExpiresAt: t.ExpiresAt},
 		hash:          t.Hash,
 	}
-	f.issued = append(f.issued, issueCall{accountID: accountID, token: t, ev: ev})
-	return nil
+	f.issued = append(f.issued, issueCall{accountID: accountID, token: t, ev: ev, minAge: minAge})
+	return true, nil
 }
 
 func (f *fakePasswordTokens) Use(ctx context.Context, hash []byte, now time.Time, passwordHash string) (domain.UsedToken, error) {
@@ -100,18 +110,6 @@ func (f *fakePasswordTokens) Get(_ context.Context, id uuid.UUID) (domain.Passwo
 	return s.PasswordToken, nil
 }
 
-func (f *fakePasswordTokens) Latest(_ context.Context, accountID uuid.UUID, p domain.TokenPurpose) (*domain.PasswordToken, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for _, s := range f.tokens {
-		if s.AccountID == accountID && s.Purpose == p {
-			t := s.PasswordToken
-			return &t, nil
-		}
-	}
-	return nil, nil
-}
-
 func (f *fakePasswordTokens) Prune(_ context.Context, cutoff time.Time) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -149,5 +147,18 @@ func (f *fakeMail) Send(_ context.Context, m mail.Message) error {
 		return f.err
 	}
 	f.sent = append(f.sent, m)
+	return nil
+}
+
+// fakeJobs ghi lại job service xếp (ngoài transaction)
+type fakeJobs struct {
+	mu     sync.Mutex
+	queued []jobs.Job
+}
+
+func (f *fakeJobs) Enqueue(_ context.Context, j jobs.Job, _ ...jobs.Option) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.queued = append(f.queued, j)
 	return nil
 }

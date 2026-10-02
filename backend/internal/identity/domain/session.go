@@ -85,4 +85,8 @@ const (
 	RevokeReuseDetected RevokeReason = "reuse_detected"
 	RevokeAdmin         RevokeReason = "admin"
 	RevokeExpired       RevokeReason = "expired"
+	// Người dùng tự đổi mật khẩu: các phiên khác bị thu hồi
+	RevokePasswordChange RevokeReason = "password_change"
+	// Đặt mật khẩu mới bằng link đặt lại: mọi phiên bị thu hồi
+	RevokePasswordReset RevokeReason = "password_reset"
 )

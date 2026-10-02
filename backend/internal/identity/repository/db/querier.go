@@ -42,6 +42,8 @@ type Querier interface {
 	// Ngọn của family: token chưa dùng duy nhất (refresh_tokens_live đảm bảo)
 	GetFamilyTip(ctx context.Context, familyID uuid.UUID) (uuid.UUID, error)
 	GetPasswordToken(ctx context.Context, id uuid.UUID) (IdentityPasswordToken, error)
+	// Tra token không khoá, để biết account nào cần khoá trước
+	GetPasswordTokenByHash(ctx context.Context, tokenHash []byte) (IdentityPasswordToken, error)
 	// Trái tim của vòng xoay (port từ mimir). Khoá cả hàng token lẫn hàng family:
 	// hai lần refresh song song trên cùng family phải xếp hàng, để lần đến sau đọc
 	// được used_at mới nhất và rẽ vào nhánh ân hạn thay vì chẻ family. Kèm trạng
@@ -68,7 +70,10 @@ type Querier interface {
 	// Optimistic locking: 0 hàng nghĩa là version đã đổi (hoặc không có account)
 	UpdateAccountProfile(ctx context.Context, arg UpdateAccountProfileParams) (IdentityAccount, error)
 	UpdateRole(ctx context.Context, arg UpdateRoleParams) (IdentityRole, error)
-	// Phát token: ghi đè token cùng loại của account (link cũ chết ngay)
+	// Phát token: ghi đè token cùng loại của account (link cũ chết ngay).
+	// min_age_seconds > 0 là cooldown: token cùng loại mới hơn thế thì không ghi,
+	// không trả hàng nào. Kiểm tra nằm trong câu upsert (khoá hàng), nên hai
+	// request song song không cùng lọt, kể cả khi chưa có hàng nào.
 	UpsertPasswordToken(ctx context.Context, arg UpsertPasswordTokenParams) (IdentityPasswordToken, error)
 }
 

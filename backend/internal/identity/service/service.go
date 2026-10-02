@@ -13,6 +13,7 @@ import (
 
 	"storeit/internal/identity/domain"
 	"storeit/internal/platform/auth"
+	"storeit/internal/platform/jobs"
 	"storeit/internal/platform/jwt"
 	"storeit/internal/platform/mail"
 )
@@ -20,6 +21,12 @@ import (
 // TokenIssuer phát access token; *jwt.Provider thoả interface này
 type TokenIssuer interface {
 	Issue(accountID uuid.UUID, permissions []string) (jwt.Token, error)
+}
+
+// JobQueue xếp job ngoài transaction; *jobs.River thoả interface này. Job đi
+// kèm thay đổi dữ liệu thì repository xếp bằng EnqueueTx, không qua đây.
+type JobQueue interface {
+	Enqueue(ctx context.Context, job jobs.Job, opts ...jobs.Option) error
 }
 
 // Settings là thời hạn phiên (lấy từ identity.Config)
@@ -44,6 +51,8 @@ type Deps struct {
 	PasswordTokens domain.TokenRepository
 	// Mail chỉ cần cho SendAccountEmail (worker); API để nil
 	Mail mail.Sender
+	// Jobs xếp job quên mật khẩu
+	Jobs JobQueue
 	// AppURL là gốc của frontend, link trong thư trỏ về đây
 	AppURL   string
 	Settings Settings
@@ -59,6 +68,7 @@ type Service struct {
 	tokens   TokenIssuer
 	pwTokens domain.TokenRepository
 	mail     mail.Sender
+	jobs     JobQueue
 	appURL   string
 	settings Settings
 	now      func() time.Time
@@ -75,7 +85,7 @@ func New(d Deps) *Service {
 	}
 	return &Service{
 		accounts: d.Accounts, roles: d.Roles, sessions: d.Sessions,
-		hasher: d.Hasher, tokens: d.Tokens, pwTokens: d.PasswordTokens, mail: d.Mail,
+		hasher: d.Hasher, tokens: d.Tokens, pwTokens: d.PasswordTokens, mail: d.Mail, jobs: d.Jobs,
 		appURL: strings.TrimRight(d.AppURL, "/"), settings: d.Settings, now: now,
 	}
 }

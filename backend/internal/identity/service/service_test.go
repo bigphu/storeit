@@ -26,6 +26,7 @@ type env struct {
 	hasher   *countingHasher
 	pwTokens *fakePasswordTokens
 	mail     *fakeMail
+	jobs     *fakeJobs
 	now      time.Time
 }
 
@@ -43,10 +44,11 @@ func newEnv(t *testing.T) *env {
 	now := func() time.Time { return e.now }
 	e.pwTokens = newFakePasswordTokens(e.accounts, now)
 	e.mail = &fakeMail{}
+	e.jobs = &fakeJobs{}
 	e.svc = New(Deps{
 		Accounts: e.accounts, Roles: e.roles, Sessions: e.sessions,
 		Hasher: e.hasher, Tokens: e.tokens, PasswordTokens: e.pwTokens,
-		Mail: e.mail, AppURL: "http://app.test/",
+		Mail: e.mail, Jobs: e.jobs, AppURL: "http://app.test/",
 		Settings: Settings{
 			SlidingTTL: 14 * 24 * time.Hour, AbsoluteTTL: 30 * 24 * time.Hour, Grace: 30 * time.Second, Retention: 30 * 24 * time.Hour,
 			InviteTTL: 72 * time.Hour, ResetTTL: time.Hour,

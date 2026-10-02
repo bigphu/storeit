@@ -55,7 +55,7 @@ func (r *AccountRepository) Create(ctx context.Context, in domain.NewAccount) (d
 			return err
 		}
 		if in.Invite != nil {
-			if err := issueToken(ctx, tx, q, r.jobs, id, *in.Invite); err != nil {
+			if _, err := issueToken(ctx, tx, q, r.jobs, id, *in.Invite, 0); err != nil {
 				return err
 			}
 		}
@@ -194,7 +194,7 @@ func (r *AccountRepository) SetPassword(ctx context.Context, id uuid.UUID, hash 
 			return fmt.Errorf("identity: set password: %w", err)
 		}
 		if _, err := q.RevokeAccountFamilies(ctx, db.RevokeAccountFamiliesParams{
-			AccountID: id, Reason: ptr(string(domain.RevokeAdmin)), Keep: keepFamily,
+			AccountID: id, Reason: ptr(string(domain.RevokePasswordChange)), Keep: keepFamily,
 		}); err != nil {
 			return fmt.Errorf("identity: revoke sessions: %w", err)
 		}

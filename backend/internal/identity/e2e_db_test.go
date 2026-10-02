@@ -177,6 +177,18 @@ func TestEndToEnd(t *testing.T) {
 	if rec := a.do(call{method: "POST", path: "/api/v1/auth/password/forgot", body: map[string]any{"email": "Lan@StoreIT.test"}}); rec.Code != 202 {
 		t.Fatalf("forgot: %d %s", rec.Code, rec.Body)
 	}
+	// Request chỉ xếp job; worker tra account rồi phát link
+	var forgotArgs []byte
+	if err := pool.QueryRow(ctx, `SELECT args FROM river_job WHERE kind = 'identity.forgot_password' ORDER BY id DESC LIMIT 1`).Scan(&forgotArgs); err != nil {
+		t.Fatalf("no forgot job: %v", err)
+	}
+	var fa job.ForgotPasswordArgs
+	if err := json.Unmarshal(forgotArgs, &fa); err != nil || fa.Email != "lan@storeit.test" {
+		t.Fatalf("forgot job args = %s, %v", forgotArgs, err)
+	}
+	if err := worker.NewForgotPassword(m.Service()).Work(ctx, &river.Job[job.ForgotPasswordArgs]{Args: fa}); err != nil {
+		t.Fatal(err)
+	}
 	link, reset := deliver(t, m, box, "lan@storeit.test")
 	if !strings.HasPrefix(link, "https://storeit.example/reset-password#token=") {
 		t.Errorf("reset link = %s", link)

@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"storeit/internal/identity/domain"
+	"storeit/internal/identity/job"
 	"storeit/internal/platform/auth"
 	"storeit/internal/platform/errs"
 )
@@ -31,7 +32,8 @@ func (s *Service) ResendInvitation(ctx context.Context, id uuid.UUID) error {
 	case a.HasPassword():
 		return domain.ErrNotInvited
 	}
-	return s.issueLink(ctx, a.ID, domain.PurposeInvite, domain.TokenEventInvitationResent)
+	_, err = s.issueLink(ctx, a.ID, domain.PurposeInvite, domain.TokenEventInvitationResent, 0)
+	return err
 }
 
 // SendPasswordReset: quản trị gửi link đặt lại mật khẩu. Không thu hồi phiên
@@ -49,20 +51,28 @@ func (s *Service) SendPasswordReset(ctx context.Context, id uuid.UUID) error {
 		return domain.ErrAccountInactive
 	}
 	if !a.HasPassword() {
-		return s.issueLink(ctx, a.ID, domain.PurposeInvite, domain.TokenEventInvitationResent)
+		_, err = s.issueLink(ctx, a.ID, domain.PurposeInvite, domain.TokenEventInvitationResent, 0)
+		return err
 	}
-	return s.issueLink(ctx, a.ID, domain.PurposeReset, domain.TokenEventResetSent)
+	_, err = s.issueLink(ctx, a.ID, domain.PurposeReset, domain.TokenEventResetSent, 0)
+	return err
 }
 
-// ForgotPassword là form công khai "quên mật khẩu". Luôn trả nil khi không có
-// lỗi hệ thống: email lạ, account bị khoá hay đang trong cooldown đều im lặng,
-// để form không trả lời được câu "email này có tài khoản không".
+// ForgotPassword là form công khai "quên mật khẩu": chỉ kiểm dạng email rồi
+// xếp job. Email có tài khoản hay không thì request cũng làm đúng một việc như
+// nhau, nên cả câu trả lời (202) lẫn thời gian phản hồi đều không lộ gì.
 func (s *Service) ForgotPassword(ctx context.Context, email string) error {
 	e, err := domain.NormalizeEmail(email)
 	if err != nil {
 		return nil
 	}
-	a, err := s.accounts.GetByEmail(ctx, e)
+	return s.jobs.Enqueue(ctx, job.ForgotPasswordArgs{Email: e})
+}
+
+// ProcessForgotPassword là việc của job identity.forgot_password. Email lạ,
+// account bị khoá hay đang trong cooldown đều kết thúc job mà không phát gì.
+func (s *Service) ProcessForgotPassword(ctx context.Context, args job.ForgotPasswordArgs) error {
+	a, err := s.accounts.GetByEmail(ctx, args.Email)
 	if errors.Is(err, domain.ErrAccountNotFound) {
 		return nil
 	}
@@ -77,14 +87,11 @@ func (s *Service) ForgotPassword(ctx context.Context, email string) error {
 	if !a.HasPassword() {
 		purpose = domain.PurposeInvite
 	}
-	last, err := s.pwTokens.Latest(ctx, a.ID, purpose)
-	if err != nil {
-		return err
+	_, err = s.issueLink(ctx, a.ID, purpose, domain.TokenEventNone, forgotCooldown)
+	if errors.Is(err, domain.ErrAccountInactive) {
+		return nil // bị khoá sau lúc tra ở trên
 	}
-	if last != nil && s.now().Sub(last.CreatedAt) < forgotCooldown {
-		return nil
-	}
-	return s.issueLink(ctx, a.ID, purpose, domain.TokenEventNone)
+	return err
 }
 
 // SetPassword đặt mật khẩu bằng link trong thư (lời mời hoặc đặt lại). Không
@@ -104,13 +111,14 @@ func (s *Service) SetPassword(ctx context.Context, token, password string) error
 	return err
 }
 
-// issueLink phát token mới cho account, kèm job gửi thư và event ev
-func (s *Service) issueLink(ctx context.Context, accountID uuid.UUID, p domain.TokenPurpose, ev domain.TokenEvent) error {
+// issueLink phát token mới cho account, kèm job gửi thư và event ev. minAge > 0
+// là cooldown: token cùng loại còn mới hơn thế thì không phát (trả false).
+func (s *Service) issueLink(ctx context.Context, accountID uuid.UUID, p domain.TokenPurpose, ev domain.TokenEvent, minAge time.Duration) (bool, error) {
 	t, err := s.newToken(p)
 	if err != nil {
-		return err
+		return false, err
 	}
-	return s.pwTokens.Issue(ctx, accountID, t, ev)
+	return s.pwTokens.Issue(ctx, accountID, t, ev, minAge)
 }
 
 // newToken tạo token thô (vào thư) và hash của nó (vào DB) với hạn theo loại
