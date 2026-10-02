@@ -23,8 +23,13 @@ func (s *Service) GetRole(ctx context.Context, id uuid.UUID) (domain.Role, error
 	return s.roles.Get(ctx, id)
 }
 
+// CreateRole: role mới chỉ được mang quyền người tạo có
 func (s *Service) CreateRole(ctx context.Context, name, description string, perms []string) (domain.Role, error) {
-	if _, err := auth.Require(ctx, domain.PermRoleManage); err != nil {
+	actor, err := auth.Require(ctx, domain.PermRoleManage)
+	if err != nil {
+		return domain.Role{}, err
+	}
+	if err := requireHolds(actor, perms); err != nil {
 		return domain.Role{}, err
 	}
 	n, err := cleanName(name)
@@ -63,15 +68,21 @@ func (s *Service) UpdateRole(ctx context.Context, id uuid.UUID, name, descriptio
 }
 
 // UpdateRolePermissions thay toàn bộ quyền của role. Administrator phải giữ
-// identity.role.manage. Có hiệu lực với người dùng ở lần refresh kế tiếp.
+// identity.role.manage; quyền được thêm hay bị gỡ phải là quyền người sửa có.
+// Có hiệu lực với người dùng ở lần refresh kế tiếp.
 func (s *Service) UpdateRolePermissions(ctx context.Context, id uuid.UUID, perms []string) (domain.Role, error) {
-	if _, err := auth.Require(ctx, domain.PermRoleManage); err != nil {
+	actor, err := auth.Require(ctx, domain.PermRoleManage)
+	if err != nil {
 		return domain.Role{}, err
 	}
-	if _, err := s.roles.Get(ctx, id); err != nil {
+	cur, err := s.roles.Get(ctx, id)
+	if err != nil {
 		return domain.Role{}, err
 	}
 	if err := domain.CheckRolePermissions(id, perms); err != nil {
+		return domain.Role{}, err
+	}
+	if err := requireHolds(actor, symmetricDiff(cur.Permissions, perms)); err != nil {
 		return domain.Role{}, err
 	}
 	return s.roles.ReplacePermissions(ctx, id, perms)

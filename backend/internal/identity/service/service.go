@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 
@@ -120,10 +121,45 @@ func (s *Service) view(ctx context.Context, a domain.Account) (AccountView, erro
 	return AccountView{Account: a, Roles: roles}, nil
 }
 
+// cleanName bỏ khoảng trắng hai đầu; rỗng hay có ký tự điều khiển (xuống
+// dòng, tab, NUL) là lỗi: tên đi vào thư, log và giao diện
 func cleanName(name string) (string, error) {
 	n := strings.TrimSpace(name)
-	if n == "" {
+	if n == "" || strings.ContainsFunc(n, unicode.IsControl) {
 		return "", domain.ErrInvalidName
 	}
 	return n, nil
+}
+
+// requireHolds: actor phải có mọi quyền trong perms. Không ai trao, gỡ hay
+// tác động lên quyền mình không có; SystemActor có mọi quyền.
+func requireHolds(actor auth.Actor, perms []string) error {
+	for _, p := range perms {
+		if !actor.Can(p) {
+			return domain.ErrExceedsOwnPermissions
+		}
+	}
+	return nil
+}
+
+// symmetricDiff trả phần tử chỉ có ở một trong hai tập: thứ bị thêm hoặc bị gỡ
+func symmetricDiff[T comparable](a, b []T) []T {
+	inA := make(map[T]bool, len(a))
+	for _, x := range a {
+		inA[x] = true
+	}
+	inB := make(map[T]bool, len(b))
+	var out []T
+	for _, x := range b {
+		inB[x] = true
+		if !inA[x] {
+			out = append(out, x)
+		}
+	}
+	for _, x := range a {
+		if !inB[x] {
+			out = append(out, x)
+		}
+	}
+	return out
 }

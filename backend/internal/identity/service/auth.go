@@ -136,6 +136,10 @@ func (s *Service) ChangePassword(ctx context.Context, current, next, refreshToke
 	if err != nil {
 		return err
 	}
+	// Access token còn hạn (tối đa 15 phút) sau khi bị khoá: không cho đổi mật khẩu
+	if !a.Active {
+		return domain.ErrAccountDisabled
+	}
 	if !s.hasher.Compare(a.PasswordHash, current) {
 		return domain.ErrWrongPassword
 	}

@@ -66,6 +66,9 @@ func (s *Service) UpdateAccount(ctx context.Context, id uuid.UUID, ch domain.Pro
 	if _, err := auth.Require(ctx, domain.PermAccountManage); err != nil {
 		return AccountView{}, err
 	}
+	if ch.ClearMember && ch.MemberID != nil {
+		return AccountView{}, domain.ErrMemberConflict
+	}
 	if ch.Name != nil {
 		n, err := cleanName(*ch.Name)
 		if err != nil {
@@ -89,6 +92,9 @@ func (s *Service) DisableAccount(ctx context.Context, id uuid.UUID) (AccountView
 	if actor.AccountID == id {
 		return AccountView{}, domain.ErrLockout
 	}
+	if err := s.requireHoldsAccount(ctx, actor, id); err != nil {
+		return AccountView{}, err
+	}
 	a, err := s.accounts.SetActive(ctx, id, false)
 	if err != nil {
 		return AccountView{}, err
@@ -96,8 +102,14 @@ func (s *Service) DisableAccount(ctx context.Context, id uuid.UUID) (AccountView
 	return s.view(ctx, a)
 }
 
+// EnableAccount mở khoá: trả lại cho account mọi quyền của nó, nên người mở
+// cũng phải có đủ các quyền đó
 func (s *Service) EnableAccount(ctx context.Context, id uuid.UUID) (AccountView, error) {
-	if _, err := auth.Require(ctx, domain.PermAccountManage); err != nil {
+	actor, err := auth.Require(ctx, domain.PermAccountManage)
+	if err != nil {
+		return AccountView{}, err
+	}
+	if err := s.requireHoldsAccount(ctx, actor, id); err != nil {
 		return AccountView{}, err
 	}
 	a, err := s.accounts.SetActive(ctx, id, true)
@@ -107,19 +119,37 @@ func (s *Service) EnableAccount(ctx context.Context, id uuid.UUID) (AccountView,
 	return s.view(ctx, a)
 }
 
-// AssignRoles thay toàn bộ role của account. Không tự bỏ role Administrator của mình.
+// AssignRoles thay toàn bộ role của account. Không tự bỏ role Administrator
+// của mình; role được thêm hay bị gỡ chỉ được mang quyền người gán có.
 func (s *Service) AssignRoles(ctx context.Context, id uuid.UUID, roleIDs []uuid.UUID) (AccountView, error) {
 	actor, err := auth.Require(ctx, domain.PermAccountManage)
 	if err != nil {
 		return AccountView{}, err
 	}
-	if actor.AccountID == id && !slices.Contains(roleIDs, domain.AdministratorRoleID) {
-		current, err := s.accounts.Roles(ctx, id)
-		if err != nil {
+	current, err := s.accounts.Roles(ctx, id)
+	if err != nil {
+		return AccountView{}, err
+	}
+	currentIDs := make([]uuid.UUID, len(current))
+	for i, r := range current {
+		currentIDs[i] = r.ID
+	}
+	if actor.AccountID == id && slices.Contains(currentIDs, domain.AdministratorRoleID) &&
+		!slices.Contains(roleIDs, domain.AdministratorRoleID) {
+		return AccountView{}, domain.ErrLockout
+	}
+	all, err := s.roles.List(ctx)
+	if err != nil {
+		return AccountView{}, err
+	}
+	perms := map[uuid.UUID][]string{}
+	for _, r := range all {
+		perms[r.ID] = r.Permissions
+	}
+	// Role không tồn tại không mang quyền nào; ReplaceRoles trả ErrUnknownRoles
+	for _, rid := range symmetricDiff(currentIDs, roleIDs) {
+		if err := requireHolds(actor, perms[rid]); err != nil {
 			return AccountView{}, err
-		}
-		if slices.ContainsFunc(current, func(r domain.Role) bool { return r.ID == domain.AdministratorRoleID }) {
-			return AccountView{}, domain.ErrLockout
 		}
 	}
 	a, err := s.accounts.ReplaceRoles(ctx, id, roleIDs)
@@ -127,4 +157,14 @@ func (s *Service) AssignRoles(ctx context.Context, id uuid.UUID, roleIDs []uuid.
 		return AccountView{}, err
 	}
 	return s.view(ctx, a)
+}
+
+// requireHoldsAccount: tác động lên account (khoá, mở khoá) đòi người làm có mọi
+// quyền account đó đang có
+func (s *Service) requireHoldsAccount(ctx context.Context, actor auth.Actor, id uuid.UUID) error {
+	perms, err := s.accounts.Permissions(ctx, id)
+	if err != nil {
+		return err
+	}
+	return requireHolds(actor, perms)
 }

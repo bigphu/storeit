@@ -68,4 +68,12 @@ var (
 
 	ErrAccountInactive = errs.Conflict("/errors/account-inactive", "Account disabled",
 		errs.WithDetail("Enable the account before sending it a link."))
+
+	// Không trao, gỡ hay tác động lên quyền mình không có: chặn người có
+	// identity.account.manage tự gán Administrator cho mình
+	ErrExceedsOwnPermissions = errs.Forbidden("/errors/exceeds-own-permissions", "Beyond your own permissions",
+		errs.WithDetail("You can only grant, remove or act on permissions you hold yourself."))
+
+	ErrMemberConflict = errs.Unprocessable("/errors/member-conflict", "Conflicting member change",
+		errs.WithFields(errs.FieldError{Field: "clear_member_id", Detail: "cannot be combined with member_id"}))
 )
