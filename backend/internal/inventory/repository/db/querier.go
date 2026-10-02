@@ -11,7 +11,50 @@ import (
 )
 
 type Querier interface {
+	ArchiveStatus(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
+	AttributeHasValues(ctx context.Context, attributeID uuid.UUID) (bool, error)
+	// Chuyển cờ mặc định: bỏ cờ của kind trước, rồi đặt cho status mới (cùng tx)
+	ClearDefaultStatus(ctx context.Context, kind string) error
+	CountAssets(ctx context.Context, arg CountAssetsParams) (int64, error)
+	CreateAsset(ctx context.Context, arg CreateAssetParams) (InventoryAsset, error)
+	CreateAssetType(ctx context.Context, arg CreateAssetTypeParams) (InventoryAssetType, error)
+	CreateAttribute(ctx context.Context, arg CreateAttributeParams) (InventoryAssetTypeAttribute, error)
+	CreateOption(ctx context.Context, arg CreateOptionParams) (InventoryAssetAttributeOption, error)
+	CreateStatus(ctx context.Context, arg CreateStatusParams) (InventoryAssetStatus, error)
+	DeleteAssetValues(ctx context.Context, assetID uuid.UUID) error
+	DeleteAttributeOptions(ctx context.Context, attributeID uuid.UUID) error
+	GetAsset(ctx context.Context, id uuid.UUID) (InventoryAsset, error)
+	// NO KEY UPDATE: không chặn insert tham chiếu tài sản (giá trị thuộc tính, sau này là phiếu mượn)
+	GetAssetForUpdate(ctx context.Context, id uuid.UUID) (InventoryAsset, error)
 	GetAssetType(ctx context.Context, id uuid.UUID) (InventoryAssetType, error)
+	GetAssetTypeForUpdate(ctx context.Context, id uuid.UUID) (InventoryAssetType, error)
+	GetAttributeForUpdate(ctx context.Context, arg GetAttributeForUpdateParams) (InventoryAssetTypeAttribute, error)
+	GetDefaultStatus(ctx context.Context, kind string) (InventoryAssetStatus, error)
+	GetOptionForUpdate(ctx context.Context, arg GetOptionForUpdateParams) (InventoryAssetAttributeOption, error)
+	GetStatus(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
+	GetStatusForUpdate(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
+	InsertAssetValue(ctx context.Context, arg InsertAssetValueParams) error
+	// Loại hệ thống (GENERAL) đứng đầu, rồi theo tên
+	ListAssetTypes(ctx context.Context, includeArchived bool) ([]InventoryAssetType, error)
+	// value_number đọc dạng text (giữ đúng số thập phân, không qua float); "" là không có số
+	ListAssetValues(ctx context.Context, assetID uuid.UUID) ([]ListAssetValuesRow, error)
+	ListAssets(ctx context.Context, arg ListAssetsParams) ([]ListAssetsRow, error)
+	// Mọi thuộc tính của loại, kể cả đã gỡ, theo thứ tự hiển thị
+	ListAttributes(ctx context.Context, assetTypeID uuid.UUID) ([]InventoryAssetTypeAttribute, error)
+	ListOptionsForType(ctx context.Context, assetTypeID uuid.UUID) ([]InventoryAssetAttributeOption, error)
+	ListStatuses(ctx context.Context, includeArchived bool) ([]InventoryAssetStatus, error)
+	RemoveAttribute(ctx context.Context, arg RemoveAttributeParams) (int64, error)
+	RemoveOption(ctx context.Context, arg RemoveOptionParams) (int64, error)
+	RestoreAsset(ctx context.Context, arg RestoreAssetParams) (InventoryAsset, error)
+	RetireAsset(ctx context.Context, arg RetireAssetParams) (InventoryAsset, error)
+	SetAssetTypeArchived(ctx context.Context, arg SetAssetTypeArchivedParams) (InventoryAssetType, error)
+	SetDefaultStatus(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
+	UpdateAsset(ctx context.Context, arg UpdateAssetParams) (InventoryAsset, error)
+	// Optimistic locking: 0 hàng là version đã đổi
+	UpdateAssetType(ctx context.Context, arg UpdateAssetTypeParams) (InventoryAssetType, error)
+	UpdateAttribute(ctx context.Context, arg UpdateAttributeParams) (InventoryAssetTypeAttribute, error)
+	UpdateOption(ctx context.Context, arg UpdateOptionParams) (InventoryAssetAttributeOption, error)
+	UpdateStatus(ctx context.Context, arg UpdateStatusParams) (InventoryAssetStatus, error)
 }
 
 var _ Querier = (*Queries)(nil)

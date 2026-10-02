@@ -11,6 +11,140 @@ import (
 	"github.com/google/uuid"
 )
 
+const attributeHasValues = `-- name: AttributeHasValues :one
+SELECT EXISTS (SELECT 1 FROM inventory.asset_attribute_values WHERE attribute_id = $1)
+`
+
+func (q *Queries) AttributeHasValues(ctx context.Context, attributeID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, attributeHasValues, attributeID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const createAssetType = `-- name: CreateAssetType :one
+INSERT INTO inventory.asset_types (id, code, name, description)
+VALUES ($1, $2, $3, $4)
+RETURNING id, code, name, description, is_system, archived_at, version, created_at, updated_at
+`
+
+type CreateAssetTypeParams struct {
+	ID          uuid.UUID
+	Code        string
+	Name        string
+	Description string
+}
+
+func (q *Queries) CreateAssetType(ctx context.Context, arg CreateAssetTypeParams) (InventoryAssetType, error) {
+	row := q.db.QueryRow(ctx, createAssetType,
+		arg.ID,
+		arg.Code,
+		arg.Name,
+		arg.Description,
+	)
+	var i InventoryAssetType
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.Description,
+		&i.IsSystem,
+		&i.ArchivedAt,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createAttribute = `-- name: CreateAttribute :one
+INSERT INTO inventory.asset_type_attributes (id, asset_type_id, key, label, data_type, unit, is_required, position)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, asset_type_id, key, label, data_type, unit, is_required, position, removed_at, created_at, updated_at
+`
+
+type CreateAttributeParams struct {
+	ID          uuid.UUID
+	AssetTypeID uuid.UUID
+	Key         string
+	Label       string
+	DataType    string
+	Unit        *string
+	IsRequired  bool
+	Position    int32
+}
+
+func (q *Queries) CreateAttribute(ctx context.Context, arg CreateAttributeParams) (InventoryAssetTypeAttribute, error) {
+	row := q.db.QueryRow(ctx, createAttribute,
+		arg.ID,
+		arg.AssetTypeID,
+		arg.Key,
+		arg.Label,
+		arg.DataType,
+		arg.Unit,
+		arg.IsRequired,
+		arg.Position,
+	)
+	var i InventoryAssetTypeAttribute
+	err := row.Scan(
+		&i.ID,
+		&i.AssetTypeID,
+		&i.Key,
+		&i.Label,
+		&i.DataType,
+		&i.Unit,
+		&i.IsRequired,
+		&i.Position,
+		&i.RemovedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createOption = `-- name: CreateOption :one
+INSERT INTO inventory.asset_attribute_options (id, attribute_id, label, position)
+VALUES ($1, $2, $3, $4)
+RETURNING id, attribute_id, data_type, label, position, removed_at, created_at, updated_at
+`
+
+type CreateOptionParams struct {
+	ID          uuid.UUID
+	AttributeID uuid.UUID
+	Label       string
+	Position    int32
+}
+
+func (q *Queries) CreateOption(ctx context.Context, arg CreateOptionParams) (InventoryAssetAttributeOption, error) {
+	row := q.db.QueryRow(ctx, createOption,
+		arg.ID,
+		arg.AttributeID,
+		arg.Label,
+		arg.Position,
+	)
+	var i InventoryAssetAttributeOption
+	err := row.Scan(
+		&i.ID,
+		&i.AttributeID,
+		&i.DataType,
+		&i.Label,
+		&i.Position,
+		&i.RemovedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const deleteAttributeOptions = `-- name: DeleteAttributeOptions :exec
+DELETE FROM inventory.asset_attribute_options WHERE attribute_id = $1
+`
+
+func (q *Queries) DeleteAttributeOptions(ctx context.Context, attributeID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteAttributeOptions, attributeID)
+	return err
+}
+
 const getAssetType = `-- name: GetAssetType :one
 SELECT id, code, name, description, is_system, archived_at, version, created_at, updated_at FROM inventory.asset_types WHERE id = $1
 `
@@ -26,6 +160,371 @@ func (q *Queries) GetAssetType(ctx context.Context, id uuid.UUID) (InventoryAsse
 		&i.IsSystem,
 		&i.ArchivedAt,
 		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getAssetTypeForUpdate = `-- name: GetAssetTypeForUpdate :one
+SELECT id, code, name, description, is_system, archived_at, version, created_at, updated_at FROM inventory.asset_types WHERE id = $1 FOR NO KEY UPDATE
+`
+
+func (q *Queries) GetAssetTypeForUpdate(ctx context.Context, id uuid.UUID) (InventoryAssetType, error) {
+	row := q.db.QueryRow(ctx, getAssetTypeForUpdate, id)
+	var i InventoryAssetType
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.Description,
+		&i.IsSystem,
+		&i.ArchivedAt,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getAttributeForUpdate = `-- name: GetAttributeForUpdate :one
+SELECT id, asset_type_id, key, label, data_type, unit, is_required, position, removed_at, created_at, updated_at FROM inventory.asset_type_attributes
+WHERE id = $1 AND asset_type_id = $2
+FOR NO KEY UPDATE
+`
+
+type GetAttributeForUpdateParams struct {
+	ID          uuid.UUID
+	AssetTypeID uuid.UUID
+}
+
+func (q *Queries) GetAttributeForUpdate(ctx context.Context, arg GetAttributeForUpdateParams) (InventoryAssetTypeAttribute, error) {
+	row := q.db.QueryRow(ctx, getAttributeForUpdate, arg.ID, arg.AssetTypeID)
+	var i InventoryAssetTypeAttribute
+	err := row.Scan(
+		&i.ID,
+		&i.AssetTypeID,
+		&i.Key,
+		&i.Label,
+		&i.DataType,
+		&i.Unit,
+		&i.IsRequired,
+		&i.Position,
+		&i.RemovedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getOptionForUpdate = `-- name: GetOptionForUpdate :one
+SELECT id, attribute_id, data_type, label, position, removed_at, created_at, updated_at FROM inventory.asset_attribute_options
+WHERE id = $1 AND attribute_id = $2
+FOR NO KEY UPDATE
+`
+
+type GetOptionForUpdateParams struct {
+	ID          uuid.UUID
+	AttributeID uuid.UUID
+}
+
+func (q *Queries) GetOptionForUpdate(ctx context.Context, arg GetOptionForUpdateParams) (InventoryAssetAttributeOption, error) {
+	row := q.db.QueryRow(ctx, getOptionForUpdate, arg.ID, arg.AttributeID)
+	var i InventoryAssetAttributeOption
+	err := row.Scan(
+		&i.ID,
+		&i.AttributeID,
+		&i.DataType,
+		&i.Label,
+		&i.Position,
+		&i.RemovedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listAssetTypes = `-- name: ListAssetTypes :many
+SELECT id, code, name, description, is_system, archived_at, version, created_at, updated_at FROM inventory.asset_types
+WHERE $1::boolean OR archived_at IS NULL
+ORDER BY is_system DESC, lower(name), id
+`
+
+// Loại hệ thống (GENERAL) đứng đầu, rồi theo tên
+func (q *Queries) ListAssetTypes(ctx context.Context, includeArchived bool) ([]InventoryAssetType, error) {
+	rows, err := q.db.Query(ctx, listAssetTypes, includeArchived)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InventoryAssetType{}
+	for rows.Next() {
+		var i InventoryAssetType
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.Description,
+			&i.IsSystem,
+			&i.ArchivedAt,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAttributes = `-- name: ListAttributes :many
+SELECT id, asset_type_id, key, label, data_type, unit, is_required, position, removed_at, created_at, updated_at FROM inventory.asset_type_attributes
+WHERE asset_type_id = $1
+ORDER BY position, lower(label), id
+`
+
+// Mọi thuộc tính của loại, kể cả đã gỡ, theo thứ tự hiển thị
+func (q *Queries) ListAttributes(ctx context.Context, assetTypeID uuid.UUID) ([]InventoryAssetTypeAttribute, error) {
+	rows, err := q.db.Query(ctx, listAttributes, assetTypeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InventoryAssetTypeAttribute{}
+	for rows.Next() {
+		var i InventoryAssetTypeAttribute
+		if err := rows.Scan(
+			&i.ID,
+			&i.AssetTypeID,
+			&i.Key,
+			&i.Label,
+			&i.DataType,
+			&i.Unit,
+			&i.IsRequired,
+			&i.Position,
+			&i.RemovedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOptionsForType = `-- name: ListOptionsForType :many
+SELECT o.id, o.attribute_id, o.data_type, o.label, o.position, o.removed_at, o.created_at, o.updated_at FROM inventory.asset_attribute_options o
+JOIN inventory.asset_type_attributes a ON a.id = o.attribute_id
+WHERE a.asset_type_id = $1
+ORDER BY o.position, lower(o.label), o.id
+`
+
+func (q *Queries) ListOptionsForType(ctx context.Context, assetTypeID uuid.UUID) ([]InventoryAssetAttributeOption, error) {
+	rows, err := q.db.Query(ctx, listOptionsForType, assetTypeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InventoryAssetAttributeOption{}
+	for rows.Next() {
+		var i InventoryAssetAttributeOption
+		if err := rows.Scan(
+			&i.ID,
+			&i.AttributeID,
+			&i.DataType,
+			&i.Label,
+			&i.Position,
+			&i.RemovedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const removeAttribute = `-- name: RemoveAttribute :execrows
+UPDATE inventory.asset_type_attributes SET removed_at = now(), updated_at = now()
+WHERE id = $1 AND asset_type_id = $2 AND removed_at IS NULL
+`
+
+type RemoveAttributeParams struct {
+	ID          uuid.UUID
+	AssetTypeID uuid.UUID
+}
+
+func (q *Queries) RemoveAttribute(ctx context.Context, arg RemoveAttributeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeAttribute, arg.ID, arg.AssetTypeID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const removeOption = `-- name: RemoveOption :execrows
+UPDATE inventory.asset_attribute_options SET removed_at = now(), updated_at = now()
+WHERE id = $1 AND attribute_id = $2 AND removed_at IS NULL
+`
+
+type RemoveOptionParams struct {
+	ID          uuid.UUID
+	AttributeID uuid.UUID
+}
+
+func (q *Queries) RemoveOption(ctx context.Context, arg RemoveOptionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeOption, arg.ID, arg.AttributeID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setAssetTypeArchived = `-- name: SetAssetTypeArchived :one
+UPDATE inventory.asset_types
+SET archived_at = CASE WHEN $1::boolean THEN coalesce(archived_at, now()) END,
+    version = version + 1, updated_at = now()
+WHERE id = $2
+RETURNING id, code, name, description, is_system, archived_at, version, created_at, updated_at
+`
+
+type SetAssetTypeArchivedParams struct {
+	Archived bool
+	ID       uuid.UUID
+}
+
+func (q *Queries) SetAssetTypeArchived(ctx context.Context, arg SetAssetTypeArchivedParams) (InventoryAssetType, error) {
+	row := q.db.QueryRow(ctx, setAssetTypeArchived, arg.Archived, arg.ID)
+	var i InventoryAssetType
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.Description,
+		&i.IsSystem,
+		&i.ArchivedAt,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateAssetType = `-- name: UpdateAssetType :one
+UPDATE inventory.asset_types
+SET name = $1, description = $2, version = version + 1, updated_at = now()
+WHERE id = $3 AND version = $4
+RETURNING id, code, name, description, is_system, archived_at, version, created_at, updated_at
+`
+
+type UpdateAssetTypeParams struct {
+	Name        string
+	Description string
+	ID          uuid.UUID
+	Version     int32
+}
+
+// Optimistic locking: 0 hàng là version đã đổi
+func (q *Queries) UpdateAssetType(ctx context.Context, arg UpdateAssetTypeParams) (InventoryAssetType, error) {
+	row := q.db.QueryRow(ctx, updateAssetType,
+		arg.Name,
+		arg.Description,
+		arg.ID,
+		arg.Version,
+	)
+	var i InventoryAssetType
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.Description,
+		&i.IsSystem,
+		&i.ArchivedAt,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateAttribute = `-- name: UpdateAttribute :one
+UPDATE inventory.asset_type_attributes
+SET label = $1, unit = $2, data_type = $3,
+    is_required = $4, position = $5, updated_at = now()
+WHERE id = $6
+RETURNING id, asset_type_id, key, label, data_type, unit, is_required, position, removed_at, created_at, updated_at
+`
+
+type UpdateAttributeParams struct {
+	Label      string
+	Unit       *string
+	DataType   string
+	IsRequired bool
+	Position   int32
+	ID         uuid.UUID
+}
+
+func (q *Queries) UpdateAttribute(ctx context.Context, arg UpdateAttributeParams) (InventoryAssetTypeAttribute, error) {
+	row := q.db.QueryRow(ctx, updateAttribute,
+		arg.Label,
+		arg.Unit,
+		arg.DataType,
+		arg.IsRequired,
+		arg.Position,
+		arg.ID,
+	)
+	var i InventoryAssetTypeAttribute
+	err := row.Scan(
+		&i.ID,
+		&i.AssetTypeID,
+		&i.Key,
+		&i.Label,
+		&i.DataType,
+		&i.Unit,
+		&i.IsRequired,
+		&i.Position,
+		&i.RemovedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateOption = `-- name: UpdateOption :one
+UPDATE inventory.asset_attribute_options
+SET label = $1, position = $2, updated_at = now()
+WHERE id = $3
+RETURNING id, attribute_id, data_type, label, position, removed_at, created_at, updated_at
+`
+
+type UpdateOptionParams struct {
+	Label    string
+	Position int32
+	ID       uuid.UUID
+}
+
+func (q *Queries) UpdateOption(ctx context.Context, arg UpdateOptionParams) (InventoryAssetAttributeOption, error) {
+	row := q.db.QueryRow(ctx, updateOption, arg.Label, arg.Position, arg.ID)
+	var i InventoryAssetAttributeOption
+	err := row.Scan(
+		&i.ID,
+		&i.AttributeID,
+		&i.DataType,
+		&i.Label,
+		&i.Position,
+		&i.RemovedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
