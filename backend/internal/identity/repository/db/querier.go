@@ -17,6 +17,7 @@ type Querier interface {
 	// Dùng token: xoá rồi mới kiểm tra, nên hai lần gửi cùng lúc chỉ một bên thấy hàng
 	ConsumePasswordToken(ctx context.Context, tokenHash []byte) (IdentityPasswordToken, error)
 	CountAccounts(ctx context.Context, arg CountAccountsParams) (int64, error)
+	CountActiveAccountsWithRole(ctx context.Context, roleID uuid.UUID) (int64, error)
 	CountAllAccounts(ctx context.Context) (int64, error)
 	CountRoleAssignments(ctx context.Context, roleID uuid.UUID) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (IdentityAccount, error)
@@ -35,7 +36,9 @@ type Querier interface {
 	FamilyOfToken(ctx context.Context, tokenHash []byte) (uuid.UUID, error)
 	GetAccount(ctx context.Context, id uuid.UUID) (IdentityAccount, error)
 	GetAccountByEmail(ctx context.Context, email string) (IdentityAccount, error)
-	// Khoá hàng để đổi trạng thái/mật khẩu/role không chen nhau
+	// Khoá hàng để đổi trạng thái/mật khẩu/role không chen nhau. NO KEY UPDATE:
+	// không bao giờ đổi khoá chính, nên không chặn insert tham chiếu account (FK
+	// lấy KEY SHARE), vd đăng nhập tạo refresh_families
 	GetAccountForUpdate(ctx context.Context, id uuid.UUID) (IdentityAccount, error)
 	GetAccountPasswordToken(ctx context.Context, arg GetAccountPasswordTokenParams) (IdentityPasswordToken, error)
 	GetAccountsByIDs(ctx context.Context, ids []uuid.UUID) ([]IdentityAccount, error)
@@ -56,6 +59,10 @@ type Querier interface {
 	ListAccounts(ctx context.Context, arg ListAccountsParams) ([]IdentityAccount, error)
 	ListPermissions(ctx context.Context) ([]IdentityPermission, error)
 	ListRoles(ctx context.Context) ([]IdentityRole, error)
+	// Khoá hàng role Administrator: mọi thao tác có thể làm mất một admin (khoá
+	// account, đổi role) chạy lần lượt, để kiểm tra "còn admin" không bị hai
+	// transaction cùng lọt. Luôn khoá trước hàng account.
+	LockRole(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	// Guard used_at IS NULL: 0 hàng là có ai đó đánh dấu trước
 	MarkRefreshTokenUsed(ctx context.Context, arg MarkRefreshTokenUsedParams) (int64, error)
 	// Thu hồi mọi phiên còn sống của account, trừ family đang dùng (nếu có)

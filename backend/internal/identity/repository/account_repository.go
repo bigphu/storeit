@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -92,7 +93,10 @@ func (r *AccountRepository) GetMany(ctx context.Context, ids []uuid.UUID) ([]dom
 func (r *AccountRepository) List(ctx context.Context, f domain.AccountFilter) ([]domain.Account, int64, error) {
 	var q *string
 	if f.Query != "" {
-		q = &f.Query
+		// % và _ người dùng gõ là chữ, không phải ký tự đại diện của ILIKE
+		// (ký tự escape mặc định của ILIKE là dấu gạch ngược)
+		esc := likeEscaper.Replace(f.Query)
+		q = &esc
 	}
 	rows, err := r.q.ListAccounts(ctx, db.ListAccountsParams{Q: q, Active: f.Active, Lim: f.Limit, Off: f.Offset})
 	if err != nil {
@@ -153,6 +157,11 @@ func (r *AccountRepository) SetActive(ctx context.Context, id uuid.UUID, active 
 	var out domain.Account
 	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
 		q := r.q.WithTx(tx)
+		if !active {
+			if err := lockAdminRole(ctx, q); err != nil {
+				return err
+			}
+		}
 		cur, err := accountOrNotFound(q.GetAccountForUpdate(ctx, id))
 		if err != nil {
 			return err
@@ -168,6 +177,13 @@ func (r *AccountRepository) SetActive(ctx context.Context, id uuid.UUID, active 
 		out = toAccount(row)
 		if active {
 			return r.append(ctx, tx, contract.EventAccountEnabled, id, contract.AccountEnabled{AccountID: id})
+		}
+		roles, err := q.AccountRoleIDs(ctx, id)
+		if err != nil {
+			return fmt.Errorf("identity: account roles: %w", err)
+		}
+		if err := ensureAdminRemains(ctx, q, slices.Contains(roles, domain.AdministratorRoleID)); err != nil {
+			return err
 		}
 		// Khoá account: đăng xuất mọi thiết bị ngay, không đợi refresh token hết hạn
 		if _, err := q.RevokeAccountFamilies(ctx, db.RevokeAccountFamiliesParams{
@@ -207,6 +223,9 @@ func (r *AccountRepository) ReplaceRoles(ctx context.Context, id uuid.UUID, role
 	var out domain.Account
 	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
 		q := r.q.WithTx(tx)
+		if err := lockAdminRole(ctx, q); err != nil {
+			return err
+		}
 		cur, err := accountOrNotFound(q.GetAccountForUpdate(ctx, id))
 		if err != nil {
 			return err
@@ -225,6 +244,11 @@ func (r *AccountRepository) ReplaceRoles(ctx context.Context, id uuid.UUID, role
 		}
 		if slices.Equal(before, roleIDs) {
 			return nil
+		}
+		lostAdmin := cur.Active && slices.Contains(before, domain.AdministratorRoleID) &&
+			!slices.Contains(roleIDs, domain.AdministratorRoleID)
+		if err := ensureAdminRemains(ctx, q, lostAdmin); err != nil {
+			return err
 		}
 		return r.append(ctx, tx, contract.EventRolesAssigned, id, contract.RolesAssigned{
 			AccountID: id, From: before, To: roleIDs,
@@ -324,3 +348,31 @@ func accountOrNotFound(row db.IdentityAccount, err error) (domain.Account, error
 }
 
 func ptr[T any](v T) *T { return &v }
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// lockAdminRole xếp hàng mọi thao tác có thể làm mất một admin; gọi trước khi
+// khoá hàng account (cùng một thứ tự ở mọi nơi, tránh deadlock)
+func lockAdminRole(ctx context.Context, q *db.Queries) error {
+	if _, err := q.LockRole(ctx, domain.AdministratorRoleID); err != nil {
+		return fmt.Errorf("identity: lock administrator role: %w", err)
+	}
+	return nil
+}
+
+// ensureAdminRemains: account vừa bị khoá hoặc vừa mất role Administrator
+// trong tx này. Nếu nó từng là admin đang hoạt động thì vẫn phải còn ít nhất
+// một Administrator đang hoạt động; account thường không bị chặn.
+func ensureAdminRemains(ctx context.Context, q *db.Queries, wasAdmin bool) error {
+	if !wasAdmin {
+		return nil
+	}
+	n, err := q.CountActiveAccountsWithRole(ctx, domain.AdministratorRoleID)
+	if err != nil {
+		return fmt.Errorf("identity: count administrators: %w", err)
+	}
+	if n == 0 {
+		return domain.ErrLockout
+	}
+	return nil
+}

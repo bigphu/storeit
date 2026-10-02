@@ -6,9 +6,22 @@ RETURNING *;
 -- name: GetAccount :one
 SELECT * FROM identity.accounts WHERE id = @id;
 
--- Khoá hàng để đổi trạng thái/mật khẩu/role không chen nhau
+-- Khoá hàng để đổi trạng thái/mật khẩu/role không chen nhau. NO KEY UPDATE:
+-- không bao giờ đổi khoá chính, nên không chặn insert tham chiếu account (FK
+-- lấy KEY SHARE), vd đăng nhập tạo refresh_families
 -- name: GetAccountForUpdate :one
-SELECT * FROM identity.accounts WHERE id = @id FOR UPDATE;
+SELECT * FROM identity.accounts WHERE id = @id FOR NO KEY UPDATE;
+
+-- Khoá hàng role Administrator: mọi thao tác có thể làm mất một admin (khoá
+-- account, đổi role) chạy lần lượt, để kiểm tra "còn admin" không bị hai
+-- transaction cùng lọt. Luôn khoá trước hàng account.
+-- name: LockRole :one
+SELECT id FROM identity.roles WHERE id = @id FOR NO KEY UPDATE;
+
+-- name: CountActiveAccountsWithRole :one
+SELECT count(*) FROM identity.accounts a
+JOIN identity.account_roles ar ON ar.account_id = a.id
+WHERE ar.role_id = @role_id AND a.active;
 
 -- name: GetAccountByEmail :one
 SELECT * FROM identity.accounts WHERE lower(email) = lower(@email);

@@ -83,6 +83,19 @@ func (q *Queries) CountAccounts(ctx context.Context, arg CountAccountsParams) (i
 	return count, err
 }
 
+const countActiveAccountsWithRole = `-- name: CountActiveAccountsWithRole :one
+SELECT count(*) FROM identity.accounts a
+JOIN identity.account_roles ar ON ar.account_id = a.id
+WHERE ar.role_id = $1 AND a.active
+`
+
+func (q *Queries) CountActiveAccountsWithRole(ctx context.Context, roleID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveAccountsWithRole, roleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countAllAccounts = `-- name: CountAllAccounts :one
 SELECT count(*) FROM identity.accounts
 `
@@ -183,10 +196,12 @@ func (q *Queries) GetAccountByEmail(ctx context.Context, email string) (Identity
 }
 
 const getAccountForUpdate = `-- name: GetAccountForUpdate :one
-SELECT id, email, name, password_hash, member_id, active, version, created_at, updated_at FROM identity.accounts WHERE id = $1 FOR UPDATE
+SELECT id, email, name, password_hash, member_id, active, version, created_at, updated_at FROM identity.accounts WHERE id = $1 FOR NO KEY UPDATE
 `
 
-// Khoá hàng để đổi trạng thái/mật khẩu/role không chen nhau
+// Khoá hàng để đổi trạng thái/mật khẩu/role không chen nhau. NO KEY UPDATE:
+// không bao giờ đổi khoá chính, nên không chặn insert tham chiếu account (FK
+// lấy KEY SHARE), vd đăng nhập tạo refresh_families
 func (q *Queries) GetAccountForUpdate(ctx context.Context, id uuid.UUID) (IdentityAccount, error) {
 	row := q.db.QueryRow(ctx, getAccountForUpdate, id)
 	var i IdentityAccount
@@ -302,6 +317,20 @@ func (q *Queries) ListAccounts(ctx context.Context, arg ListAccountsParams) ([]I
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockRole = `-- name: LockRole :one
+SELECT id FROM identity.roles WHERE id = $1 FOR NO KEY UPDATE
+`
+
+// Khoá hàng role Administrator: mọi thao tác có thể làm mất một admin (khoá
+// account, đổi role) chạy lần lượt, để kiểm tra "còn admin" không bị hai
+// transaction cùng lọt. Luôn khoá trước hàng account.
+func (q *Queries) LockRole(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, lockRole, id)
+	var id_2 uuid.UUID
+	err := row.Scan(&id_2)
+	return id_2, err
 }
 
 const setAccountActive = `-- name: SetAccountActive :one
