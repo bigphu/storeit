@@ -63,8 +63,10 @@ Seeded IDs are in `domain/permissions.go` (`GeneralTypeID`, `AvailableStatusID`,
   `/errors/status-is-default`); make another one default first. System statuses and the
   `GENERAL` type cannot be archived.
 - Search: `q` matches tag or name as a literal substring, case-insensitive; filters by
-  type, status, status kind, location, holder; sort by tag, name, purchase date, updated
-  date (`-` = descending).
+  type, status, status kind, location, holder; sort by `tag` (default), `name`,
+  `purchase_date`, `updated_at`, `asset_type` (type name), `status` (status position then
+  name, the order of `GET /asset-statuses`), `-` = descending. Location and holder are not
+  sortable until the directory module gives them names.
 - Custom attributes in search (need `type_id`, since a key only means something inside one
   type): `attr=<key>:<op>:<value>`, repeatable (AND, max 10); `sort=attributes.<key>` or
   `-attributes.<key>`. Operators: text `eq` (case-insensitive) and `contains` (literal);

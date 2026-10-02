@@ -374,6 +374,11 @@ func TestListFilterAndSortByAttribute(t *testing.T) {
 		t.Errorf("sorted = %q", got)
 	}
 
+	// Cột thường cũng sắp được, kể cả loại và status
+	for _, s := range []string{"tag", "-name", "purchase_date", "-updated_at", "asset_type", "-status"} {
+		list(url.Values{"type_id": {typ.ID}, "sort": {s}}, 200)
+	}
+
 	// Lỗi: thiếu type_id, key lạ, toán tử sai kiểu
 	for q, field := range map[string]string{
 		"attr=size_in:gte:25":                                  "type_id",

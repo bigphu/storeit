@@ -99,6 +99,10 @@ const (
 	SortPurchaseDateDesc AssetSort = "-purchase_date"
 	SortUpdatedAt        AssetSort = "updated_at"
 	SortUpdatedAtDesc    AssetSort = "-updated_at"
+	SortAssetType        AssetSort = "asset_type" // theo tên loại
+	SortAssetTypeDesc    AssetSort = "-asset_type"
+	SortStatus           AssetSort = "status" // theo thứ tự status (position, rồi tên) như danh sách status
+	SortStatusDesc       AssetSort = "-status"
 )
 
 type AssetFilter struct {

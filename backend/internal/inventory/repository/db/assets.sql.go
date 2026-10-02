@@ -325,6 +325,12 @@ ORDER BY
   CASE WHEN $12::text = '-purchase_date' THEN a.purchase_date END DESC NULLS LAST,
   CASE WHEN $12::text = 'updated_at' THEN a.updated_at END ASC,
   CASE WHEN $12::text = '-updated_at' THEN a.updated_at END DESC,
+  CASE WHEN $12::text = 'asset_type' THEN lower(t.name) END ASC,
+  CASE WHEN $12::text = '-asset_type' THEN lower(t.name) END DESC,
+  CASE WHEN $12::text = 'status' THEN s.position END ASC,
+  CASE WHEN $12::text = 'status' THEN lower(s.name) END ASC,
+  CASE WHEN $12::text = '-status' THEN s.position END DESC,
+  CASE WHEN $12::text = '-status' THEN lower(s.name) END DESC,
   -- theo thuộc tính: không có giá trị luôn ở cuối
   CASE WHEN $12::text = 'attr_text' THEN lower(sv.value_text) END ASC NULLS LAST,
   CASE WHEN $12::text = '-attr_text' THEN lower(sv.value_text) END DESC NULLS LAST,

@@ -310,11 +310,13 @@ paths:
         - name: sort
           in: query
           description: |
-            `tag`, `name`, `purchase_date`, `updated_at` hoặc `attributes.<key>` (cần
-            `type_id`; tài sản không có giá trị ở cuối); tiền tố `-` là giảm dần.
+            `tag`, `name`, `purchase_date`, `updated_at`, `asset_type` (tên loại),
+            `status` (thứ tự status như `GET /asset-statuses`) hoặc `attributes.<key>`
+            (cần `type_id`; tài sản không có giá trị ở cuối); tiền tố `-` là giảm dần.
+            Mặc định `tag`.
           schema:
             type: string
-            pattern: '^-?(tag|name|purchase_date|updated_at|attributes\.[a-z][a-z0-9_]{0,31})$'
+            pattern: '^-?(tag|name|purchase_date|updated_at|asset_type|status|attributes\.[a-z][a-z0-9_]{0,31})$'
         - $ref: '../../../api/common.yaml#/components/parameters/Page'
         - $ref: '../../../api/common.yaml#/components/parameters/PageSize'
       responses:

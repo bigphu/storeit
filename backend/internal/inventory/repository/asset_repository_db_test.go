@@ -384,3 +384,57 @@ func TestAssets_ListByAttribute(t *testing.T) {
 		}
 	}
 }
+
+func TestAssets_SortByTypeAndStatus(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	u := uniq()
+	lap := laptop(t, r) // tên "Laptop …"
+	aard, err := r.types.Create(ctx, domain.NewAssetType{Code: "AAR" + u, Name: "Aardvark " + u})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// thứ tự status theo position trước, tên sau: Zeta (900) đứng trước Alpha (901)
+	zeta, err := r.statuses.Create(ctx, domain.NewStatus{Name: "Zeta " + u, Kind: domain.KindUnavailable, Position: 900})
+	if err != nil {
+		t.Fatal(err)
+	}
+	alpha, err := r.statuses.Create(ctx, domain.NewStatus{Name: "Alpha " + u, Kind: domain.KindUnavailable, Position: 901})
+	if err != nil {
+		t.Fatal(err)
+	}
+	prefix := "SO-" + u + "-"
+	for _, c := range []struct {
+		name          string
+		typ, statusID uuid.UUID
+		vals          []domain.Value
+	}{
+		{"P1", lap.ID, zeta.ID, fullValues(t, lap)[:1]},
+		{"P2", aard.ID, alpha.ID, nil},
+		{"P3", lap.ID, alpha.ID, fullValues(t, lap)[:1]},
+	} {
+		if _, err := r.assets.Create(ctx, prefix+c.name, domain.AssetFields{
+			Name: c.name, TypeID: c.typ, StatusID: c.statusID, Values: c.vals,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for sort, want := range map[domain.AssetSort]string{
+		domain.SortAssetType:     "P2,P1,P3", // hoà thì theo tag
+		domain.SortAssetTypeDesc: "P1,P3,P2",
+		domain.SortStatus:        "P1,P2,P3",
+		domain.SortStatusDesc:    "P2,P3,P1",
+	} {
+		items, _, err := r.assets.List(context.Background(), domain.AssetFilter{Query: prefix, Sort: sort, Limit: 50})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var names []string
+		for _, it := range items {
+			names = append(names, it.Name)
+		}
+		if got := strings.Join(names, ","); got != want {
+			t.Errorf("sort %q = %q, want %q", sort, got, want)
+		}
+	}
+}
