@@ -65,6 +65,17 @@ Seeded IDs are in `domain/permissions.go` (`GeneralTypeID`, `AvailableStatusID`,
 - Search: `q` matches tag or name as a literal substring, case-insensitive; filters by
   type, status, status kind, location, holder; sort by tag, name, purchase date, updated
   date (`-` = descending).
+- Custom attributes in search (need `type_id`, since a key only means something inside one
+  type): `attr=<key>:<op>:<value>`, repeatable (AND, max 10); `sort=attributes.<key>` or
+  `-attributes.<key>`. Operators: text `eq` (case-insensitive) and `contains` (literal);
+  number and date `eq` `gt` `gte` `lt` `lte`; boolean `eq`; select `eq` and `in`
+  (comma-separated option ids, removed options allowed). Assets without a value never
+  match a filter and sort last in both directions; select sorts by option position; ties
+  fall back to tag. `domain.ResolveAttrQuery` checks everything against the type's active
+  attributes; errors are 422 `/errors/invalid-attribute-query` with fields `attr[i]`,
+  `sort` or `type_id` (missing or unknown type). A malformed `attr`/`sort` is a 400 from
+  the request validator. SQL: the filters reach `ListAssets`/`CountAssets` as three
+  parallel arrays (attribute, `<data type>_<op>`, value) checked with `NOT EXISTS`.
 
 ## API (`/api/v1`) and permissions
 

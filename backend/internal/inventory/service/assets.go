@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 
 	"storeit/internal/inventory/domain"
 	"storeit/internal/platform/auth"
+	"storeit/internal/platform/errs"
 )
 
 // AssetInput là mọi trường người dùng gửi khi tạo hoặc sửa (PUT thay toàn bộ).
@@ -37,7 +39,32 @@ func (s *Service) ListAssets(ctx context.Context, f domain.AssetFilter) ([]domai
 	}
 	// lọc theo một loại thì các dòng cùng bộ thuộc tính: kèm giá trị để hiện dạng bảng
 	f.IncludeValues = f.TypeID != nil
+	if _, _, byAttr := f.Sort.Attribute(); byAttr || len(f.Attrs) > 0 {
+		if err := s.resolveAttrQuery(ctx, &f); err != nil {
+			return nil, 0, err
+		}
+	}
 	return s.assets.List(ctx, f)
+}
+
+// resolveAttrQuery kiểm Attrs và sort theo thuộc tính của loại f.TypeID, điền
+// AttrFilters/AttrOrder. Key thuộc tính chỉ có nghĩa trong một loại nên cần type_id.
+func (s *Service) resolveAttrQuery(ctx context.Context, f *domain.AssetFilter) error {
+	typeErr := func(detail string) error {
+		return domain.ErrInvalidAttributeQuery.With(errs.WithFields(errs.FieldError{Field: "type_id", Detail: detail}))
+	}
+	if f.TypeID == nil {
+		return typeErr("is required to filter or sort by attribute")
+	}
+	t, err := s.types.Get(ctx, *f.TypeID)
+	if errors.Is(err, domain.ErrTypeNotFound) {
+		return typeErr("unknown asset type")
+	}
+	if err != nil {
+		return err
+	}
+	f.AttrFilters, f.AttrOrder, err = domain.ResolveAttrQuery(t, f.Attrs, f.Sort)
+	return err
 }
 
 func (s *Service) GetAsset(ctx context.Context, id uuid.UUID) (AssetView, error) {

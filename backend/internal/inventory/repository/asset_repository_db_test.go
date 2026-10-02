@@ -291,3 +291,96 @@ func TestAssets_ListWithValues(t *testing.T) {
 		}
 	}
 }
+
+func TestAssets_ListByAttribute(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	typ := laptop(t, r)
+	serial, ram, warranty, dock, osAttr :=
+		attr(t, typ, "serial"), attr(t, typ, "ram_gb"), attr(t, typ, "warranty_end"), attr(t, typ, "has_dock"), attr(t, typ, "os")
+	windows, macos := osAttr.Options[0].ID, osAttr.Options[1].ID
+	day := func(s string) *time.Time { d, _ := time.Parse(time.DateOnly, s); return &d }
+	prefix := "AQ-" + uniq() + "-"
+	create := func(name string, vals ...domain.Value) {
+		t.Helper()
+		if _, err := r.assets.Create(ctx, prefix+name, domain.AssetFields{
+			Name: name, TypeID: typ.ID, StatusID: domain.AvailableStatusID, Values: vals,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	create("A",
+		domain.Value{AttributeID: serial.ID, DataType: domain.TypeText, Text: ptr("SN-Alpha")},
+		domain.Value{AttributeID: ram.ID, DataType: domain.TypeNumber, Number: ptr("8")},
+		domain.Value{AttributeID: warranty.ID, DataType: domain.TypeDate, Date: day("2027-01-01")},
+		domain.Value{AttributeID: dock.ID, DataType: domain.TypeBoolean, Bool: ptr(true)},
+		domain.Value{AttributeID: osAttr.ID, DataType: domain.TypeSelect, OptionID: &windows})
+	create("B",
+		domain.Value{AttributeID: serial.ID, DataType: domain.TypeText, Text: ptr("sn-beta")},
+		domain.Value{AttributeID: ram.ID, DataType: domain.TypeNumber, Number: ptr("16")},
+		domain.Value{AttributeID: warranty.ID, DataType: domain.TypeDate, Date: day("2028-01-01")},
+		domain.Value{AttributeID: dock.ID, DataType: domain.TypeBoolean, Bool: ptr(false)},
+		domain.Value{AttributeID: osAttr.ID, DataType: domain.TypeSelect, OptionID: &macos})
+	create("C",
+		domain.Value{AttributeID: serial.ID, DataType: domain.TypeText, Text: ptr("X-100%")},
+		domain.Value{AttributeID: ram.ID, DataType: domain.TypeNumber, Number: ptr("32")})
+	create("D", domain.Value{AttributeID: serial.ID, DataType: domain.TypeText, Text: ptr("100x")})
+
+	// list trả tên tài sản theo thứ tự; tổng phải khớp số dòng
+	list := func(sort domain.AssetSort, conds ...string) string {
+		t.Helper()
+		filters, order, err := domain.ResolveAttrQuery(typ, conds, sort)
+		if err != nil {
+			t.Fatal(err)
+		}
+		items, total, err := r.assets.List(context.Background(), domain.AssetFilter{
+			TypeID: &typ.ID, Sort: sort, AttrFilters: filters, AttrOrder: order, Limit: 50,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var names []string
+		for _, it := range items {
+			names = append(names, it.Name)
+		}
+		if int(total) != len(names) {
+			t.Errorf("%v: total %d, rows %d", conds, total, len(names))
+		}
+		return strings.Join(names, ",")
+	}
+
+	for _, c := range []struct {
+		sort  domain.AssetSort
+		conds []string
+		want  string
+	}{
+		{"", []string{"ram_gb:gte:16"}, "B,C"},
+		{"", []string{"ram_gb:gte:8", "ram_gb:lt:32"}, "A,B"},
+		{"", []string{"ram_gb:eq:16.0"}, "B"},
+		{"", []string{"serial:contains:sn-"}, "A,B"},
+		{"", []string{"serial:contains:100%"}, "C"}, // % là chữ, không khớp "100x"
+		{"", []string{"serial:eq:SN-ALPHA"}, "A"},
+		{"", []string{"warranty_end:lt:2028-01-01"}, "A"},
+		{"", []string{"warranty_end:gte:2027-01-01"}, "A,B"},
+		{"", []string{"has_dock:eq:false"}, "B"},
+		{"", []string{"os:eq:" + macos.String()}, "B"},
+		{"", []string{"os:in:" + windows.String() + "," + macos.String()}, "A,B"},
+		{"", []string{"ram_gb:gt:100"}, ""},
+
+		// Không có giá trị luôn ở cuối, hai chiều; hoà thì theo tag
+		{"attributes.ram_gb", nil, "A,B,C,D"},
+		{"-attributes.ram_gb", nil, "C,B,A,D"},
+		{"attributes.serial", nil, "D,A,B,C"},
+		{"-attributes.serial", nil, "C,B,A,D"},
+		{"attributes.warranty_end", nil, "A,B,C,D"},
+		{"-attributes.warranty_end", nil, "B,A,C,D"},
+		{"attributes.has_dock", nil, "B,A,C,D"},
+		{"attributes.os", nil, "A,B,C,D"}, // theo thứ tự option: Windows rồi macOS
+		{"-attributes.os", nil, "B,A,C,D"},
+		{"-attributes.ram_gb", []string{"ram_gb:lte:16"}, "B,A"},
+	} {
+		if got := list(c.sort, c.conds...); got != c.want {
+			t.Errorf("sort %q %v = %q, want %q", c.sort, c.conds, got, c.want)
+		}
+	}
+}

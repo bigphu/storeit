@@ -63,6 +63,9 @@ SELECT a.*, t.name AS type_name, s.name AS status_name, s.kind AS status_kind
 FROM inventory.assets a
 JOIN inventory.asset_types t ON t.id = a.asset_type_id
 JOIN inventory.asset_statuses s ON s.id = a.status_id
+-- giá trị của thuộc tính để sắp (sort_attr NULL thì không khớp dòng nào)
+LEFT JOIN inventory.asset_attribute_values sv ON sv.asset_id = a.id AND sv.attribute_id = sqlc.narg('sort_attr')::uuid
+LEFT JOIN inventory.asset_attribute_options so ON so.id = sv.value_option_id
 WHERE (sqlc.narg('q')::text IS NULL
        OR a.tag ILIKE '%' || sqlc.narg('q')::text || '%'
        OR a.name ILIKE '%' || sqlc.narg('q')::text || '%')
@@ -72,6 +75,29 @@ WHERE (sqlc.narg('q')::text IS NULL
   AND (sqlc.narg('location_id')::uuid IS NULL OR a.location_id = sqlc.narg('location_id')::uuid)
   AND (sqlc.narg('holder_member_id')::uuid IS NULL OR a.holder_member_id = sqlc.narg('holder_member_id')::uuid)
   AND (@include_retired::boolean OR a.retired_at IS NULL)
+  AND NOT EXISTS (
+    -- mọi điều kiện i (f_attrs[i], f_ops[i], f_vals[i]) phải có giá trị khớp; giá trị đã kiểm
+    -- ở Go nên ép kiểu trong nhánh CASE không lỗi
+    SELECT 1 FROM generate_subscripts(@f_ops::text[], 1) AS f(i)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM inventory.asset_attribute_values v
+      WHERE v.asset_id = a.id AND v.attribute_id = (@f_attrs::uuid[])[f.i] AND CASE (@f_ops::text[])[f.i]
+        WHEN 'text_eq' THEN lower(v.value_text) = lower((@f_vals::text[])[f.i])
+        WHEN 'text_contains' THEN v.value_text ILIKE '%' || (@f_vals::text[])[f.i] || '%'
+        WHEN 'number_eq' THEN v.value_number = (@f_vals::text[])[f.i]::numeric
+        WHEN 'number_gt' THEN v.value_number > (@f_vals::text[])[f.i]::numeric
+        WHEN 'number_gte' THEN v.value_number >= (@f_vals::text[])[f.i]::numeric
+        WHEN 'number_lt' THEN v.value_number < (@f_vals::text[])[f.i]::numeric
+        WHEN 'number_lte' THEN v.value_number <= (@f_vals::text[])[f.i]::numeric
+        WHEN 'date_eq' THEN v.value_date = (@f_vals::text[])[f.i]::date
+        WHEN 'date_gt' THEN v.value_date > (@f_vals::text[])[f.i]::date
+        WHEN 'date_gte' THEN v.value_date >= (@f_vals::text[])[f.i]::date
+        WHEN 'date_lt' THEN v.value_date < (@f_vals::text[])[f.i]::date
+        WHEN 'date_lte' THEN v.value_date <= (@f_vals::text[])[f.i]::date
+        WHEN 'boolean_eq' THEN v.value_bool = (@f_vals::text[])[f.i]::boolean
+        WHEN 'select_eq' THEN v.value_option_id = (@f_vals::text[])[f.i]::uuid
+        WHEN 'select_in' THEN v.value_option_id = ANY(string_to_array((@f_vals::text[])[f.i], ',')::uuid[])
+      END))
 ORDER BY
   CASE WHEN @sort::text = 'tag' THEN a.tag END ASC,
   CASE WHEN @sort::text = '-tag' THEN a.tag END DESC,
@@ -81,6 +107,17 @@ ORDER BY
   CASE WHEN @sort::text = '-purchase_date' THEN a.purchase_date END DESC NULLS LAST,
   CASE WHEN @sort::text = 'updated_at' THEN a.updated_at END ASC,
   CASE WHEN @sort::text = '-updated_at' THEN a.updated_at END DESC,
+  -- theo thuộc tính: không có giá trị luôn ở cuối
+  CASE WHEN @sort::text = 'attr_text' THEN lower(sv.value_text) END ASC NULLS LAST,
+  CASE WHEN @sort::text = '-attr_text' THEN lower(sv.value_text) END DESC NULLS LAST,
+  CASE WHEN @sort::text = 'attr_number' THEN sv.value_number END ASC NULLS LAST,
+  CASE WHEN @sort::text = '-attr_number' THEN sv.value_number END DESC NULLS LAST,
+  CASE WHEN @sort::text = 'attr_date' THEN sv.value_date END ASC NULLS LAST,
+  CASE WHEN @sort::text = '-attr_date' THEN sv.value_date END DESC NULLS LAST,
+  CASE WHEN @sort::text = 'attr_boolean' THEN sv.value_bool END ASC NULLS LAST,
+  CASE WHEN @sort::text = '-attr_boolean' THEN sv.value_bool END DESC NULLS LAST,
+  CASE WHEN @sort::text = 'attr_select' THEN so.position END ASC NULLS LAST,
+  CASE WHEN @sort::text = '-attr_select' THEN so.position END DESC NULLS LAST,
   a.tag
 LIMIT @lim OFFSET @off;
 
@@ -96,4 +133,27 @@ WHERE (sqlc.narg('q')::text IS NULL
   AND (sqlc.narg('status_kind')::text IS NULL OR s.kind = sqlc.narg('status_kind')::text)
   AND (sqlc.narg('location_id')::uuid IS NULL OR a.location_id = sqlc.narg('location_id')::uuid)
   AND (sqlc.narg('holder_member_id')::uuid IS NULL OR a.holder_member_id = sqlc.narg('holder_member_id')::uuid)
-  AND (@include_retired::boolean OR a.retired_at IS NULL);
+  AND (@include_retired::boolean OR a.retired_at IS NULL)
+  AND NOT EXISTS (
+    -- mọi điều kiện i (f_attrs[i], f_ops[i], f_vals[i]) phải có giá trị khớp; giá trị đã kiểm
+    -- ở Go nên ép kiểu trong nhánh CASE không lỗi
+    SELECT 1 FROM generate_subscripts(@f_ops::text[], 1) AS f(i)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM inventory.asset_attribute_values v
+      WHERE v.asset_id = a.id AND v.attribute_id = (@f_attrs::uuid[])[f.i] AND CASE (@f_ops::text[])[f.i]
+        WHEN 'text_eq' THEN lower(v.value_text) = lower((@f_vals::text[])[f.i])
+        WHEN 'text_contains' THEN v.value_text ILIKE '%' || (@f_vals::text[])[f.i] || '%'
+        WHEN 'number_eq' THEN v.value_number = (@f_vals::text[])[f.i]::numeric
+        WHEN 'number_gt' THEN v.value_number > (@f_vals::text[])[f.i]::numeric
+        WHEN 'number_gte' THEN v.value_number >= (@f_vals::text[])[f.i]::numeric
+        WHEN 'number_lt' THEN v.value_number < (@f_vals::text[])[f.i]::numeric
+        WHEN 'number_lte' THEN v.value_number <= (@f_vals::text[])[f.i]::numeric
+        WHEN 'date_eq' THEN v.value_date = (@f_vals::text[])[f.i]::date
+        WHEN 'date_gt' THEN v.value_date > (@f_vals::text[])[f.i]::date
+        WHEN 'date_gte' THEN v.value_date >= (@f_vals::text[])[f.i]::date
+        WHEN 'date_lt' THEN v.value_date < (@f_vals::text[])[f.i]::date
+        WHEN 'date_lte' THEN v.value_date <= (@f_vals::text[])[f.i]::date
+        WHEN 'boolean_eq' THEN v.value_bool = (@f_vals::text[])[f.i]::boolean
+        WHEN 'select_eq' THEN v.value_option_id = (@f_vals::text[])[f.i]::uuid
+        WHEN 'select_in' THEN v.value_option_id = ANY(string_to_array((@f_vals::text[])[f.i], ',')::uuid[])
+      END));

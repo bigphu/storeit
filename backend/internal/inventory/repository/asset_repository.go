@@ -70,20 +70,30 @@ func (r *AssetRepository) List(ctx context.Context, f domain.AssetFilter) ([]dom
 	if f.StatusKind != nil {
 		kind = ptr(string(*f.StatusKind))
 	}
-	sort := f.Sort
-	if sort == "" {
-		sort = domain.SortTag
+	sort := string(f.Sort)
+	var sortAttr *uuid.UUID
+	switch {
+	case f.AttrOrder != nil:
+		// khoá sắp theo kiểu dữ liệu: "attr_number", "-attr_date"...
+		sort, sortAttr = "attr_"+string(f.AttrOrder.DataType), &f.AttrOrder.AttributeID
+		if f.AttrOrder.Desc {
+			sort = "-" + sort
+		}
+	case sort == "":
+		sort = string(domain.SortTag)
 	}
+	fAttrs, fOps, fVals := attrFilterArgs(f.AttrFilters)
 	rows, err := r.q.ListAssets(ctx, db.ListAssetsParams{
 		Q: q, TypeID: f.TypeID, StatusID: f.StatusID, StatusKind: kind, LocationID: f.LocationID,
-		HolderMemberID: f.HolderMemberID, IncludeRetired: f.IncludeRetired, Sort: string(sort), Lim: f.Limit, Off: f.Offset,
+		HolderMemberID: f.HolderMemberID, IncludeRetired: f.IncludeRetired, FAttrs: fAttrs, FOps: fOps, FVals: fVals,
+		SortAttr: sortAttr, Sort: sort, Lim: f.Limit, Off: f.Offset,
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("inventory: list assets: %w", err)
 	}
 	total, err := r.q.CountAssets(ctx, db.CountAssetsParams{
 		Q: q, TypeID: f.TypeID, StatusID: f.StatusID, StatusKind: kind, LocationID: f.LocationID,
-		HolderMemberID: f.HolderMemberID, IncludeRetired: f.IncludeRetired,
+		HolderMemberID: f.HolderMemberID, IncludeRetired: f.IncludeRetired, FAttrs: fAttrs, FOps: fOps, FVals: fVals,
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("inventory: count assets: %w", err)
@@ -106,6 +116,22 @@ func (r *AssetRepository) List(ctx context.Context, f domain.AssetFilter) ([]dom
 		}
 	}
 	return out, total, nil
+}
+
+// attrFilterArgs đổi điều kiện thành ba mảng song song cho ListAssets/CountAssets;
+// toán tử SQL là "<kiểu>_<op>" ("number_gte", "select_in")
+func attrFilterArgs(filters []domain.AttrFilter) (attrs []uuid.UUID, ops, vals []string) {
+	attrs, ops, vals = []uuid.UUID{}, []string{}, []string{}
+	for _, f := range filters {
+		val := f.Value
+		if f.Op == domain.OpContains {
+			val = likeEscaper.Replace(val)
+		}
+		attrs = append(attrs, f.AttributeID)
+		ops = append(ops, string(f.DataType)+"_"+string(f.Op))
+		vals = append(vals, val)
+	}
+	return attrs, ops, vals
 }
 
 // attachValues nạp giá trị thuộc tính của mọi dòng trong một truy vấn

@@ -38,6 +38,7 @@ type Querier interface {
 	ListAssetTypes(ctx context.Context, includeArchived bool) ([]InventoryAssetType, error)
 	// value_number đọc dạng text (giữ đúng số thập phân, không qua float); "" là không có số
 	ListAssetValues(ctx context.Context, assetID uuid.UUID) ([]ListAssetValuesRow, error)
+	// giá trị của thuộc tính để sắp (sort_attr NULL thì không khớp dòng nào)
 	ListAssets(ctx context.Context, arg ListAssetsParams) ([]ListAssetsRow, error)
 	// Mọi thuộc tính của loại, kể cả đã gỡ, theo thứ tự hiển thị
 	ListAttributes(ctx context.Context, assetTypeID uuid.UUID) ([]InventoryAssetTypeAttribute, error)

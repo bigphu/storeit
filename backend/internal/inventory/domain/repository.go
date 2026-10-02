@@ -87,7 +87,7 @@ type AssetFields struct {
 	Values            []Value
 }
 
-// AssetSort: tên cột, tiền tố "-" là giảm dần
+// AssetSort: tên cột hoặc "attributes.<key>" (cần lọc theo loại), tiền tố "-" là giảm dần
 type AssetSort string
 
 const (
@@ -111,6 +111,12 @@ type AssetFilter struct {
 	IncludeRetired bool
 	Sort           AssetSort
 	Limit, Offset  int32
+	// Attrs: điều kiện "<key>:<op>:<value>" trên thuộc tính tuỳ chỉnh (AND), cần TypeID
+	Attrs []string
+	// Service điền từ Attrs và Sort "attributes.<key>" (ResolveAttrQuery);
+	// repository chỉ đọc hai trường này
+	AttrFilters []AttrFilter
+	AttrOrder   *AttrOrder
 	// IncludeValues: nạp giá trị thuộc tính cho các dòng của trang (một truy vấn
 	// thêm). Service bật khi lọc theo một loại: các dòng cùng cột, dựng được bảng.
 	IncludeValues bool

@@ -7,6 +7,9 @@ var (
 	// Một lỗi cho mọi giá trị thuộc tính sai, mỗi key một FieldError (ValidateValues)
 	ErrInvalidAttributeValues = errs.Unprocessable("/errors/invalid-attribute-values", "Invalid attribute values")
 
+	// Lọc/sắp theo thuộc tính sai (ResolveAttrQuery): field "attr[i]", "sort" hoặc "type_id"
+	ErrInvalidAttributeQuery = errs.Unprocessable("/errors/invalid-attribute-query", "Invalid attribute filter or sort")
+
 	ErrInvalidTag = errs.Unprocessable("/errors/invalid-tag", "Invalid asset tag",
 		errs.WithFields(errs.FieldError{Field: "tag", Detail: "must be 1-64 characters: A-Z, 0-9, '.', '_' or '-', starting with a letter or digit"}))
 	ErrInvalidTypeCode = errs.Unprocessable("/errors/invalid-type-code", "Invalid asset type code",

@@ -293,11 +293,28 @@ paths:
         - name: include_retired
           in: query
           schema: { type: boolean }
+        - name: attr
+          in: query
+          description: |
+            Lọc theo thuộc tính tuỳ chỉnh, cần `type_id`; lặp lại để kết hợp (AND).
+            Dạng `<key>:<op>:<value>`. Toán tử theo kiểu: text `eq` (không phân biệt
+            hoa thường), `contains`; number và date `eq`, `gt`, `gte`, `lt`, `lte`;
+            boolean `eq` (`true`/`false`); select `eq` (id option), `in` (id ngăn
+            bằng dấu phẩy). Ví dụ `attr=ram_gb:gte:16&attr=os:eq:<option id>`.
+          schema:
+            type: array
+            maxItems: 10
+            items:
+              type: string
+              pattern: '^[a-z][a-z0-9_]{0,31}:(eq|gt|gte|lt|lte|contains|in):.+$'
         - name: sort
           in: query
+          description: |
+            `tag`, `name`, `purchase_date`, `updated_at` hoặc `attributes.<key>` (cần
+            `type_id`; tài sản không có giá trị ở cuối); tiền tố `-` là giảm dần.
           schema:
             type: string
-            enum: [tag, -tag, name, -name, purchase_date, -purchase_date, updated_at, -updated_at]
+            pattern: '^-?(tag|name|purchase_date|updated_at|attributes\.[a-z][a-z0-9_]{0,31})$'
         - $ref: '../../../api/common.yaml#/components/parameters/Page'
         - $ref: '../../../api/common.yaml#/components/parameters/PageSize'
       responses:

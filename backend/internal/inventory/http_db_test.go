@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -320,5 +321,76 @@ func TestListByTypeIncludesAttributes(t *testing.T) {
 	p = decode[page](t, a.do("GET", "/api/v1/assets?q="+tag, tok, nil), 200)
 	if p.Total != 1 || p.Items[0].Attributes != nil {
 		t.Errorf("untyped list carries attributes: %+v", p.Items)
+	}
+}
+
+func TestListFilterAndSortByAttribute(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	code := "FS" + strings.ToUpper(uuid.NewString()[:6])
+	typ := decode[typeDetail](t, a.do("POST", "/api/v1/asset-types", tok, map[string]any{
+		"code": code, "name": "Monitor " + code,
+		"attributes": []map[string]any{
+			{"key": "size_in", "label": "Size", "data_type": "number", "unit": "inch"},
+			{"key": "panel", "label": "Panel", "data_type": "select", "options": []string{"IPS", "VA"}},
+		},
+	}), 201)
+	ips, va := typ.Attributes[1].Options[0].ID, typ.Attributes[1].Options[1].ID
+	prefix := "FS-" + strings.ToUpper(uuid.NewString()[:8]) + "-"
+	for name, attrs := range map[string]map[string]any{
+		"24": {"size_in": 24, "panel": va}, "27": {"size_in": 27, "panel": ips},
+		"32": {"size_in": 32, "panel": ips}, "NONE": {},
+	} {
+		decode[assetDetail](t, a.do("POST", "/api/v1/assets", tok, map[string]any{
+			"tag": prefix + name, "name": name, "asset_type_id": typ.ID, "attributes": attrs,
+		}), 201)
+	}
+	list := func(q url.Values, want int) *httptest.ResponseRecorder {
+		t.Helper()
+		rec := a.do("GET", "/api/v1/assets?"+q.Encode(), tok, nil)
+		if rec.Code != want {
+			t.Fatalf("GET ?%s = %d %s", q.Encode(), rec.Code, rec.Body)
+		}
+		return rec
+	}
+	names := func(rec *httptest.ResponseRecorder) string {
+		p := decode[struct {
+			Items []struct{ Name string }
+			Total int64
+		}](t, rec, 200)
+		var out []string
+		for _, it := range p.Items {
+			out = append(out, it.Name)
+		}
+		return strings.Join(out, ",")
+	}
+
+	got := names(list(url.Values{"type_id": {typ.ID}, "attr": {"size_in:gte:25", "panel:eq:" + ips},
+		"sort": {"-attributes.size_in"}}, 200))
+	if got != "32,27" {
+		t.Errorf("filtered and sorted = %q", got)
+	}
+	if got := names(list(url.Values{"type_id": {typ.ID}, "sort": {"attributes.size_in"}}, 200)); got != "24,27,32,NONE" {
+		t.Errorf("sorted = %q", got)
+	}
+
+	// Lỗi: thiếu type_id, key lạ, toán tử sai kiểu
+	for q, field := range map[string]string{
+		"attr=size_in:gte:25":                                  "type_id",
+		"type_id=" + typ.ID + "&sort=attributes.nope":          "sort",
+		"type_id=" + typ.ID + "&attr=panel:gt:" + ips:          "attr[0]",
+		"type_id=" + typ.ID + "&attr=size_in:eq:1&attr=x:eq:1": "attr[1]",
+	} {
+		rec := a.do("GET", "/api/v1/assets?"+q, tok, nil)
+		typ, fields := problem(t, rec)
+		if rec.Code != 422 || typ != "/errors/invalid-attribute-query" || len(fields) != 1 || !strings.HasPrefix(fields[0], field+":") {
+			t.Errorf("?%s = %d %s %v", q, rec.Code, typ, fields)
+		}
+	}
+	// Sai cú pháp bị chặn ở bước kiểm request
+	for _, q := range []string{"sort=bogus", "attr=no-colons", "attr=Size:eq:1"} {
+		if rec := a.do("GET", "/api/v1/assets?"+q, tok, nil); rec.Code/100 != 4 {
+			t.Errorf("?%s = %d", q, rec.Code)
+		}
 	}
 }

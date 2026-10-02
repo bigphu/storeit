@@ -19,7 +19,7 @@ func (h *Handler) ListAssets(ctx context.Context, req api.ListAssetsRequestObjec
 	}
 	f := domain.AssetFilter{
 		Query: deref(p.Q), TypeID: p.TypeId, StatusID: p.StatusId, LocationID: p.LocationId,
-		HolderMemberID: p.HolderMemberId, IncludeRetired: deref(p.IncludeRetired),
+		HolderMemberID: p.HolderMemberId, IncludeRetired: deref(p.IncludeRetired), Attrs: deref(p.Attr),
 		Sort: domain.AssetSort(deref(p.Sort)), Limit: int32(size), Offset: int32((page - 1) * size),
 	}
 	if p.StatusKind != nil {

@@ -260,8 +260,9 @@ func (f *fakeStatuses) archive(id uuid.UUID) {
 }
 
 type fakeAssets struct {
-	mu     sync.Mutex
-	assets map[uuid.UUID]domain.Asset
+	mu         sync.Mutex
+	assets     map[uuid.UUID]domain.Asset
+	lastFilter domain.AssetFilter // bộ lọc List nhận gần nhất
 }
 
 func newFakeAssets() *fakeAssets { return &fakeAssets{assets: map[uuid.UUID]domain.Asset{}} }
@@ -295,7 +296,10 @@ func (f *fakeAssets) Get(_ context.Context, id uuid.UUID) (domain.Asset, error) 
 	return a, nil
 }
 
-func (f *fakeAssets) List(context.Context, domain.AssetFilter) ([]domain.AssetListItem, int64, error) {
+func (f *fakeAssets) List(_ context.Context, filter domain.AssetFilter) ([]domain.AssetListItem, int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lastFilter = filter
 	return nil, 0, nil
 }
 

@@ -305,3 +305,58 @@ func TestGetAssetView(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+func TestListAssets_AttributeQuery(t *testing.T) {
+	e := newEnv()
+	typ := e.laptop(t)
+	reader := as(domain.PermAssetRead)
+	fieldsOf := func(err error) string {
+		t.Helper()
+		if !errors.Is(err, domain.ErrInvalidAttributeQuery) {
+			t.Fatalf("err = %v, want ErrInvalidAttributeQuery", err)
+		}
+		var pe *errs.Error
+		errors.As(err, &pe)
+		var out []string
+		for _, f := range pe.Fields() {
+			out = append(out, f.Field)
+		}
+		return strings.Join(out, ",")
+	}
+
+	// Lọc/sắp theo thuộc tính cần type_id; loại lạ cũng là lỗi của type_id
+	_, _, err := e.svc.ListAssets(reader, domain.AssetFilter{Attrs: []string{"ram_gb:gte:8"}})
+	if got := fieldsOf(err); got != "type_id" {
+		t.Errorf("no type_id: fields %s", got)
+	}
+	_, _, err = e.svc.ListAssets(reader, domain.AssetFilter{Sort: "attributes.ram_gb"})
+	if got := fieldsOf(err); got != "type_id" {
+		t.Errorf("sort without type_id: fields %s", got)
+	}
+	unknown := uuid.New()
+	_, _, err = e.svc.ListAssets(reader, domain.AssetFilter{TypeID: &unknown, Attrs: []string{"ram_gb:gte:8"}})
+	if got := fieldsOf(err); got != "type_id" {
+		t.Errorf("unknown type: fields %s", got)
+	}
+	_, _, err = e.svc.ListAssets(reader, domain.AssetFilter{TypeID: &typ.ID, Attrs: []string{"ram_gb:gte:x"}, Sort: "attributes.nope"})
+	if got := fieldsOf(err); got != "attr[0],sort" {
+		t.Errorf("bad query: fields %s", got)
+	}
+
+	// Hợp lệ: repository nhận điều kiện đã kiểm
+	if _, _, err := e.svc.ListAssets(reader, domain.AssetFilter{
+		TypeID: &typ.ID, Attrs: []string{"ram_gb:gte:8"}, Sort: "-attributes.ram_gb",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	f := e.assets.lastFilter
+	if len(f.AttrFilters) != 1 || f.AttrFilters[0].Op != domain.OpGte || f.AttrFilters[0].Value != "8" ||
+		f.AttrOrder == nil || !f.AttrOrder.Desc || f.AttrOrder.DataType != domain.TypeNumber || !f.IncludeValues {
+		t.Errorf("filter passed to repository = %+v", f)
+	}
+
+	// Không có điều kiện thuộc tính thì không cần type_id, không tra loại
+	if _, _, err := e.svc.ListAssets(reader, domain.AssetFilter{Sort: "name"}); err != nil {
+		t.Errorf("plain list: %v", err)
+	}
+}

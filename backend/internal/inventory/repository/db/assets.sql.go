@@ -26,6 +26,29 @@ WHERE ($1::text IS NULL
   AND ($5::uuid IS NULL OR a.location_id = $5::uuid)
   AND ($6::uuid IS NULL OR a.holder_member_id = $6::uuid)
   AND ($7::boolean OR a.retired_at IS NULL)
+  AND NOT EXISTS (
+    -- mọi điều kiện i (f_attrs[i], f_ops[i], f_vals[i]) phải có giá trị khớp; giá trị đã kiểm
+    -- ở Go nên ép kiểu trong nhánh CASE không lỗi
+    SELECT 1 FROM generate_subscripts($8::text[], 1) AS f(i)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM inventory.asset_attribute_values v
+      WHERE v.asset_id = a.id AND v.attribute_id = ($9::uuid[])[f.i] AND CASE ($8::text[])[f.i]
+        WHEN 'text_eq' THEN lower(v.value_text) = lower(($10::text[])[f.i])
+        WHEN 'text_contains' THEN v.value_text ILIKE '%' || ($10::text[])[f.i] || '%'
+        WHEN 'number_eq' THEN v.value_number = ($10::text[])[f.i]::numeric
+        WHEN 'number_gt' THEN v.value_number > ($10::text[])[f.i]::numeric
+        WHEN 'number_gte' THEN v.value_number >= ($10::text[])[f.i]::numeric
+        WHEN 'number_lt' THEN v.value_number < ($10::text[])[f.i]::numeric
+        WHEN 'number_lte' THEN v.value_number <= ($10::text[])[f.i]::numeric
+        WHEN 'date_eq' THEN v.value_date = ($10::text[])[f.i]::date
+        WHEN 'date_gt' THEN v.value_date > ($10::text[])[f.i]::date
+        WHEN 'date_gte' THEN v.value_date >= ($10::text[])[f.i]::date
+        WHEN 'date_lt' THEN v.value_date < ($10::text[])[f.i]::date
+        WHEN 'date_lte' THEN v.value_date <= ($10::text[])[f.i]::date
+        WHEN 'boolean_eq' THEN v.value_bool = ($10::text[])[f.i]::boolean
+        WHEN 'select_eq' THEN v.value_option_id = ($10::text[])[f.i]::uuid
+        WHEN 'select_in' THEN v.value_option_id = ANY(string_to_array(($10::text[])[f.i], ',')::uuid[])
+      END))
 `
 
 type CountAssetsParams struct {
@@ -36,6 +59,9 @@ type CountAssetsParams struct {
 	LocationID     *uuid.UUID
 	HolderMemberID *uuid.UUID
 	IncludeRetired bool
+	FOps           []string
+	FAttrs         []uuid.UUID
+	FVals          []string
 }
 
 func (q *Queries) CountAssets(ctx context.Context, arg CountAssetsParams) (int64, error) {
@@ -47,6 +73,9 @@ func (q *Queries) CountAssets(ctx context.Context, arg CountAssetsParams) (int64
 		arg.LocationID,
 		arg.HolderMemberID,
 		arg.IncludeRetired,
+		arg.FOps,
+		arg.FAttrs,
+		arg.FVals,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -253,29 +282,66 @@ SELECT a.id, a.tag, a.name, a.description, a.asset_type_id, a.status_id, a.locat
 FROM inventory.assets a
 JOIN inventory.asset_types t ON t.id = a.asset_type_id
 JOIN inventory.asset_statuses s ON s.id = a.status_id
-WHERE ($1::text IS NULL
-       OR a.tag ILIKE '%' || $1::text || '%'
-       OR a.name ILIKE '%' || $1::text || '%')
-  AND ($2::uuid IS NULL OR a.asset_type_id = $2::uuid)
-  AND ($3::uuid IS NULL OR a.status_id = $3::uuid)
-  AND ($4::text IS NULL OR s.kind = $4::text)
-  AND ($5::uuid IS NULL OR a.location_id = $5::uuid)
-  AND ($6::uuid IS NULL OR a.holder_member_id = $6::uuid)
-  AND ($7::boolean OR a.retired_at IS NULL)
+LEFT JOIN inventory.asset_attribute_values sv ON sv.asset_id = a.id AND sv.attribute_id = $1::uuid
+LEFT JOIN inventory.asset_attribute_options so ON so.id = sv.value_option_id
+WHERE ($2::text IS NULL
+       OR a.tag ILIKE '%' || $2::text || '%'
+       OR a.name ILIKE '%' || $2::text || '%')
+  AND ($3::uuid IS NULL OR a.asset_type_id = $3::uuid)
+  AND ($4::uuid IS NULL OR a.status_id = $4::uuid)
+  AND ($5::text IS NULL OR s.kind = $5::text)
+  AND ($6::uuid IS NULL OR a.location_id = $6::uuid)
+  AND ($7::uuid IS NULL OR a.holder_member_id = $7::uuid)
+  AND ($8::boolean OR a.retired_at IS NULL)
+  AND NOT EXISTS (
+    -- mọi điều kiện i (f_attrs[i], f_ops[i], f_vals[i]) phải có giá trị khớp; giá trị đã kiểm
+    -- ở Go nên ép kiểu trong nhánh CASE không lỗi
+    SELECT 1 FROM generate_subscripts($9::text[], 1) AS f(i)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM inventory.asset_attribute_values v
+      WHERE v.asset_id = a.id AND v.attribute_id = ($10::uuid[])[f.i] AND CASE ($9::text[])[f.i]
+        WHEN 'text_eq' THEN lower(v.value_text) = lower(($11::text[])[f.i])
+        WHEN 'text_contains' THEN v.value_text ILIKE '%' || ($11::text[])[f.i] || '%'
+        WHEN 'number_eq' THEN v.value_number = ($11::text[])[f.i]::numeric
+        WHEN 'number_gt' THEN v.value_number > ($11::text[])[f.i]::numeric
+        WHEN 'number_gte' THEN v.value_number >= ($11::text[])[f.i]::numeric
+        WHEN 'number_lt' THEN v.value_number < ($11::text[])[f.i]::numeric
+        WHEN 'number_lte' THEN v.value_number <= ($11::text[])[f.i]::numeric
+        WHEN 'date_eq' THEN v.value_date = ($11::text[])[f.i]::date
+        WHEN 'date_gt' THEN v.value_date > ($11::text[])[f.i]::date
+        WHEN 'date_gte' THEN v.value_date >= ($11::text[])[f.i]::date
+        WHEN 'date_lt' THEN v.value_date < ($11::text[])[f.i]::date
+        WHEN 'date_lte' THEN v.value_date <= ($11::text[])[f.i]::date
+        WHEN 'boolean_eq' THEN v.value_bool = ($11::text[])[f.i]::boolean
+        WHEN 'select_eq' THEN v.value_option_id = ($11::text[])[f.i]::uuid
+        WHEN 'select_in' THEN v.value_option_id = ANY(string_to_array(($11::text[])[f.i], ',')::uuid[])
+      END))
 ORDER BY
-  CASE WHEN $8::text = 'tag' THEN a.tag END ASC,
-  CASE WHEN $8::text = '-tag' THEN a.tag END DESC,
-  CASE WHEN $8::text = 'name' THEN lower(a.name) END ASC,
-  CASE WHEN $8::text = '-name' THEN lower(a.name) END DESC,
-  CASE WHEN $8::text = 'purchase_date' THEN a.purchase_date END ASC NULLS LAST,
-  CASE WHEN $8::text = '-purchase_date' THEN a.purchase_date END DESC NULLS LAST,
-  CASE WHEN $8::text = 'updated_at' THEN a.updated_at END ASC,
-  CASE WHEN $8::text = '-updated_at' THEN a.updated_at END DESC,
+  CASE WHEN $12::text = 'tag' THEN a.tag END ASC,
+  CASE WHEN $12::text = '-tag' THEN a.tag END DESC,
+  CASE WHEN $12::text = 'name' THEN lower(a.name) END ASC,
+  CASE WHEN $12::text = '-name' THEN lower(a.name) END DESC,
+  CASE WHEN $12::text = 'purchase_date' THEN a.purchase_date END ASC NULLS LAST,
+  CASE WHEN $12::text = '-purchase_date' THEN a.purchase_date END DESC NULLS LAST,
+  CASE WHEN $12::text = 'updated_at' THEN a.updated_at END ASC,
+  CASE WHEN $12::text = '-updated_at' THEN a.updated_at END DESC,
+  -- theo thuộc tính: không có giá trị luôn ở cuối
+  CASE WHEN $12::text = 'attr_text' THEN lower(sv.value_text) END ASC NULLS LAST,
+  CASE WHEN $12::text = '-attr_text' THEN lower(sv.value_text) END DESC NULLS LAST,
+  CASE WHEN $12::text = 'attr_number' THEN sv.value_number END ASC NULLS LAST,
+  CASE WHEN $12::text = '-attr_number' THEN sv.value_number END DESC NULLS LAST,
+  CASE WHEN $12::text = 'attr_date' THEN sv.value_date END ASC NULLS LAST,
+  CASE WHEN $12::text = '-attr_date' THEN sv.value_date END DESC NULLS LAST,
+  CASE WHEN $12::text = 'attr_boolean' THEN sv.value_bool END ASC NULLS LAST,
+  CASE WHEN $12::text = '-attr_boolean' THEN sv.value_bool END DESC NULLS LAST,
+  CASE WHEN $12::text = 'attr_select' THEN so.position END ASC NULLS LAST,
+  CASE WHEN $12::text = '-attr_select' THEN so.position END DESC NULLS LAST,
   a.tag
-LIMIT $10 OFFSET $9
+LIMIT $14 OFFSET $13
 `
 
 type ListAssetsParams struct {
+	SortAttr       *uuid.UUID
 	Q              *string
 	TypeID         *uuid.UUID
 	StatusID       *uuid.UUID
@@ -283,6 +349,9 @@ type ListAssetsParams struct {
 	LocationID     *uuid.UUID
 	HolderMemberID *uuid.UUID
 	IncludeRetired bool
+	FOps           []string
+	FAttrs         []uuid.UUID
+	FVals          []string
 	Sort           string
 	Off            int32
 	Lim            int32
@@ -308,8 +377,10 @@ type ListAssetsRow struct {
 	StatusKind     string
 }
 
+// giá trị của thuộc tính để sắp (sort_attr NULL thì không khớp dòng nào)
 func (q *Queries) ListAssets(ctx context.Context, arg ListAssetsParams) ([]ListAssetsRow, error) {
 	rows, err := q.db.Query(ctx, listAssets,
+		arg.SortAttr,
 		arg.Q,
 		arg.TypeID,
 		arg.StatusID,
@@ -317,6 +388,9 @@ func (q *Queries) ListAssets(ctx context.Context, arg ListAssetsParams) ([]ListA
 		arg.LocationID,
 		arg.HolderMemberID,
 		arg.IncludeRetired,
+		arg.FOps,
+		arg.FAttrs,
+		arg.FVals,
 		arg.Sort,
 		arg.Off,
 		arg.Lim,
