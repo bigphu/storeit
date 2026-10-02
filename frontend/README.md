@@ -47,5 +47,10 @@ refresh cookie work without CORS. Set `API_URL` to proxy elsewhere.
   `holder_member_id` even though it doesn't show them.
 - Asset list state (filters, attribute filters, sort, page) lives in the URL using the API
   parameter names (`features/assets/listQuery.ts`).
+- **Stay on PrimeVue 4.x, `@primeuix/themes` 2.x and `primeicons` 7.x (MIT).** From
+  PrimeVue 5 / primeicons 8 (July 2026) PrimeTek ships them under a commercial "PrimeUI"
+  license that needs a license key (a free Community key exists for eligible users);
+  without one the app shows "Invalid PrimeUI license". The `^` ranges in `package.json`
+  keep `npm update` on the MIT majors.
 - `openapi-typescript` declares a TypeScript 5 peer; `package.json` overrides it to the
   project's TypeScript 6 (it only generates types).

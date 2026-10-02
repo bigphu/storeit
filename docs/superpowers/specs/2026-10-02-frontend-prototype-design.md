@@ -11,8 +11,9 @@ the base to build on. Unstyled beyond PrimeVue's Aura theme; the user restyles l
 
 ## Stack
 
-Vite, Vue 3, TypeScript 6, Vue Router 5, Pinia 4, TanStack Vue Query 5, PrimeVue 5 (Aura
-preset from `@primeuix/themes`), `openapi-typescript` + `openapi-fetch`, Vitest.
+Vite, Vue 3, TypeScript 6, Vue Router 5, Pinia 4, TanStack Vue Query 5, PrimeVue 4.5 (Aura
+preset from `@primeuix/themes` 2, `primeicons` 7; all MIT. PrimeVue 5 and primeicons 8
+moved to a commercial license that needs a key, so the project stays on the 4.x line), `openapi-typescript` + `openapi-fetch`, Vitest.
 `openapi-typescript` declares a TypeScript 5 peer; `package.json` overrides it to the
 project's TypeScript (it only generates types).
 

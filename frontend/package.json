@@ -13,12 +13,12 @@
     "gen:api": "openapi-typescript ../backend/internal/identity/handler/openapi.yaml -o src/lib/api/identity.d.ts && openapi-typescript ../backend/internal/inventory/handler/openapi.yaml -o src/lib/api/inventory.d.ts"
   },
   "dependencies": {
-    "@primeuix/themes": "^3.0.1",
+    "@primeuix/themes": "^2.0.3",
     "@tanstack/vue-query": "^5.104.1",
     "openapi-fetch": "^0.17.0",
     "pinia": "^4.0.3",
-    "primeicons": "^8.0.2",
-    "primevue": "^5.0.2",
+    "primeicons": "^7.0.0",
+    "primevue": "^4.5.5",
     "vue": "^3.5.42",
     "vue-router": "^5.3.1"
   },
