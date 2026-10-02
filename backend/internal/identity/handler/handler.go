@@ -61,7 +61,12 @@ func (h *Handler) Mount(r chi.Router, tokens *jwt.Provider) error {
 		"POST /api/v1/auth/login", "POST /api/v1/auth/refresh", "POST /api/v1/auth/logout",
 		"POST /api/v1/auth/password/forgot", "POST /api/v1/auth/password/set")
 
-	mws := []api.MiddlewareFunc{web.ValidateRequests(spec, baseURL)}
+	mws := []api.MiddlewareFunc{
+		web.ValidateRequests(spec, baseURL),
+		// Response có access token (RFC 6749 §5.1)
+		middleware.ForOperations(web.MustOperations(spec, baseURL,
+			"POST /api/v1/auth/login", "POST /api/v1/auth/refresh"), middleware.NoStore),
+	}
 	for _, l := range authLimits {
 		mws = append(mws, middleware.ForOperations(web.MustOperations(spec, baseURL, l.op),
 			middleware.RateLimit(l.every, l.burst)))

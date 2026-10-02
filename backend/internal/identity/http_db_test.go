@@ -195,6 +195,10 @@ func TestLogin(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &s); err != nil || s.AccessToken == "" || s.TokenType != "Bearer" || s.Account.Email != email {
 		t.Errorf("session = %+v, %v", s, err)
 	}
+	// Response chứa access token: không proxy hay trình duyệt nào được cache
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-store" {
+		t.Errorf("login Cache-Control = %q, want no-store", cc)
+	}
 	c := refreshCookie(t, rec)
 	if !c.HttpOnly || c.SameSite != http.SameSiteStrictMode || c.Path != "/api/v1/auth" || c.Value == "" {
 		t.Errorf("cookie = %+v", c)
@@ -238,6 +242,9 @@ func TestRefreshAndLogout(t *testing.T) {
 	rec := a.do(call{method: "POST", path: "/api/v1/auth/refresh", cookie: cookie})
 	if rec.Code != 200 {
 		t.Fatalf("refresh: %d %s", rec.Code, rec.Body)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-store" {
+		t.Errorf("refresh Cache-Control = %q, want no-store", cc)
 	}
 	next := refreshCookie(t, rec)
 	if next.Value == cookie.Value {
