@@ -249,6 +249,7 @@ values.
 | 409 | `/errors/asset-retired` | editing a retired asset |
 | 409 | `/errors/attribute-in-use` | changing an attribute's data type or unit while values exist |
 | 409 | `/errors/system-type`, `/errors/system-status` | archiving a system type or status, or changing a system status's kind |
+| 409 | `/errors/status-is-default` | archiving the default status of a kind (make another one default first) |
 | 404 | not found | asset, type, attribute, option, status |
 
 ### Events (outbox, same transaction, actor recorded)
