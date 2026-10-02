@@ -321,7 +321,7 @@ paths:
         - $ref: '../../../api/common.yaml#/components/parameters/PageSize'
       responses:
         "200":
-          description: Page of assets (without custom attribute values)
+          description: Page of assets; with type_id each item also carries its attribute values
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AssetList' }
