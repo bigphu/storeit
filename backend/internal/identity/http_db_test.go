@@ -436,3 +436,16 @@ func TestAuthRateLimits(t *testing.T) {
 		t.Errorf("refresh: %d, want 401 (not rate limited)", rec.Code)
 	}
 }
+
+// Trang quá lớn không được thành 500 (tràn int32 thành OFFSET âm)
+func TestListAccountsPageBounds(t *testing.T) {
+	a := newApp(t)
+	admin, _ := a.login(a.seed(domain.AdministratorRoleID))
+	if rec := a.do(call{method: "GET", path: "/api/v1/accounts?page=50000000&page_size=200", token: admin}); rec.Code != 400 {
+		t.Errorf("page beyond the maximum: %d %s, want 400", rec.Code, rec.Body)
+	}
+	rec := a.do(call{method: "GET", path: "/api/v1/accounts?page=100000&page_size=200", token: admin})
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"items":[]`) {
+		t.Errorf("last allowed page: %d %s, want 200 with no items", rec.Code, rec.Body)
+	}
+}
