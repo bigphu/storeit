@@ -35,6 +35,7 @@ import (
 	"storeit/internal/platform/jwt"
 	"storeit/internal/platform/logger"
 	"storeit/internal/platform/mail"
+	"storeit/internal/platform/web"
 )
 
 type Deps struct {
@@ -125,6 +126,15 @@ func (m *Module) Bootstrap(ctx context.Context) error {
 // LoadActor là jobs.ActorLoader cho events.RegisterWorker và job của module khác
 func (m *Module) LoadActor(ctx context.Context, id uuid.UUID) (auth.Actor, error) {
 	return m.svc.LoadActor(ctx, id)
+}
+
+// APIDoc là spec của identity cho trang tài liệu API (web.MountDocs)
+func (m *Module) APIDoc() (web.APIDoc, error) {
+	spec, err := handler.Spec()
+	if err != nil {
+		return web.APIDoc{}, fmt.Errorf("identity: load openapi spec: %w", err)
+	}
+	return web.APIDoc{Name: "identity", Spec: spec}, nil
 }
 
 // AccountReader cho module khác (qua contract)

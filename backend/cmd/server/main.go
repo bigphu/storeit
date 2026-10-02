@@ -82,5 +82,16 @@ func run() error {
 	if err := identityMod.Mount(srv.Router()); err != nil {
 		return err
 	}
+	// Swagger UI ở /api/docs, chỉ khi dev (HTTP_API_DOCS=true): trang không cần đăng nhập
+	if cfg.HTTP.APIDocs {
+		doc, err := identityMod.APIDoc()
+		if err != nil {
+			return err
+		}
+		if err := web.MountDocs(srv.Router(), doc); err != nil {
+			return err
+		}
+		log.Info("API docs enabled", slog.String("path", "/api/docs"))
+	}
 	return srv.Run(ctx)
 }

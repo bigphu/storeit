@@ -32,6 +32,7 @@ m.Mount(srv.Router())                              // cmd/server: /api/v1 routes
 // cmd/worker: Deps{..., Jobs: enq, Mail: sender} with sender from mail.New(cfg.Mail, log)
 events.RegisterWorker(workers, pool, registry, m.LoadActor)
 err = m.RegisterWorkers(workers)                   // with identity.PeriodicJobs()
+doc, err := m.APIDoc()                             // cmd/server, HTTP_API_DOCS: web.MountDocs(r, doc)
 ```
 
 `Deps.Jobs` is required. `Deps.Tokens` is needed only by `Mount` (the worker passes

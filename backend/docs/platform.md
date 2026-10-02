@@ -37,7 +37,7 @@ the default" (configs built by hand in tests); negative values are rejected.
 | Block | Env vars (default) |
 |---|---|
 | `logger.Config` | `LOG_LEVEL` (info), `LOG_FORMAT` (json \| pretty) |
-| `server.Config` | `HTTP_ADDR` (:8080), `HTTP_READ_HEADER_TIMEOUT` (10s), `HTTP_READ_TIMEOUT` (30s), `HTTP_IDLE_TIMEOUT` (60s), `HTTP_SHUTDOWN_TIMEOUT` (15s), `HTTP_MAX_BODY_BYTES` (1048576), `HTTP_TRUSTED_PROXIES` (empty; CIDRs, comma-separated) |
+| `server.Config` | `HTTP_ADDR` (:8080), `HTTP_READ_HEADER_TIMEOUT` (10s), `HTTP_READ_TIMEOUT` (30s), `HTTP_IDLE_TIMEOUT` (60s), `HTTP_SHUTDOWN_TIMEOUT` (15s), `HTTP_MAX_BODY_BYTES` (1048576), `HTTP_TRUSTED_PROXIES` (empty; CIDRs, comma-separated), `HTTP_API_DOCS` (false; Swagger UI at `/api/docs`, dev only) |
 | `database.Config` | `DB_URL` (empty: pgx reads `PG*`), `DB_MAX_CONNS` (25), `DB_MIN_CONNS` (0), `DB_MAX_CONN_LIFETIME` (1h), `DB_MAX_CONN_LIFETIME_JITTER` (5m), `DB_MAX_CONN_IDLE_TIME` (30m), `DB_HEALTH_CHECK_PERIOD` (1m), `DB_CONNECT_TIMEOUT` (5s). Also `PGPASSWORD_FILE` (Docker secret) |
 | `jwt.Config` | `JWT_KEYS_FILE` (required; file of `kid:base64`, comma or newline separated, >= 32-byte secrets), `JWT_ACTIVE_KID` (required), `JWT_ISSUER` (required), `JWT_AUDIENCE` (storeit-api), `JWT_ACCESS_TOKEN_TTL` (15m) |
 | `storage.Config` | `STORAGE_DIR` (./tmp/storage) |
@@ -142,6 +142,13 @@ param names exactly as in the spec (`/things/{thingID}`). Wrap lists in
   (JSON + `validate:` tags, size limited by `BodyLimit`), `web.Validate(v)`,
   `web.JSON`, `web.NoContent`, `web.Text`.
 - `NotFoundHandler()`, `MethodNotAllowedHandler()` (sets `Allow`), installed by `server.New`.
+- `MountDocs(r, web.APIDoc{Name, Spec}...)`: Swagger UI at `GET /api/docs` and each spec
+  as JSON at `GET /api/docs/<name>.json` (names: lowercase, digits, dashes). Each module
+  exposes `APIDoc()` built from its embedded `api.GetSwagger()` (refs to `common.yaml`
+  already resolved). `cmd/server` mounts it only when `HTTP_API_DOCS=true` (dev compose):
+  the page is public and loads Swagger UI from jsDelivr. Same origin as the API, so "Try
+  it out" works: call `/auth/login`, paste `access_token` into Authorize. A new module adds
+  its `APIDoc()` to the `MountDocs` call.
 - Error vars: `ErrMalformedJSON` 400, `ErrInvalidRequest` 400, `ErrValidation` 422,
   `ErrRequestTooLarge` 413, `ErrUnsupportedMediaType` 415, `ErrRouteNotFound` 404,
   `ErrMethodNotAllowed` 405.

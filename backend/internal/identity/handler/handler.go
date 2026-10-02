@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
 
 	"storeit/internal/identity/handler/api"
@@ -78,4 +79,10 @@ func (h *Handler) Mount(r chi.Router, tokens *jwt.Provider) error {
 		ErrorHandlerFunc: web.RequestError,
 	})
 	return nil
+}
+
+// Spec là spec OpenAPI của identity (bản nhúng, ref sang api/common.yaml đã
+// resolve), cho trang tài liệu API
+func Spec() (*openapi3.T, error) {
+	return api.GetSwagger()
 }

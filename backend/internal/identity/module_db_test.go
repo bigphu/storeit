@@ -3,10 +3,13 @@ package identity_test
 import (
 	"context"
 	"encoding/base64"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/riverqueue/river"
 
@@ -18,6 +21,7 @@ import (
 	"storeit/internal/platform/jobs"
 	"storeit/internal/platform/jwt"
 	"storeit/internal/platform/mail"
+	"storeit/internal/platform/web"
 )
 
 func newModule(t *testing.T, cfg identity.Config) *identity.Module {
@@ -93,5 +97,30 @@ func TestModule_RequiresJobsAndMail(t *testing.T) {
 	}
 	if _, err := identity.New(identity.Deps{Pool: dbtest.Pool(t), Outbox: &events.Outbox{}}); err == nil {
 		t.Error("New without Jobs = nil error")
+	}
+}
+
+// Spec cho trang tài liệu: đủ route mới, ref sang api/common.yaml đã resolve
+func TestModule_APIDoc(t *testing.T) {
+	doc, err := newModule(t, identity.Config{}).APIDoc()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.Name != "identity" || doc.Spec == nil {
+		t.Fatalf("doc = %q, %v", doc.Name, doc.Spec)
+	}
+	for _, p := range []string{"/auth/login", "/auth/password/forgot", "/accounts/{accountID}/invitation"} {
+		if doc.Spec.Paths.Find(p) == nil {
+			t.Errorf("spec has no path %s", p)
+		}
+	}
+	r := chi.NewRouter()
+	if err := web.MountDocs(r, doc); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/docs/identity.json", nil))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"bearerAuth"`) || !strings.Contains(rec.Body.String(), `"Problem"`) {
+		t.Errorf("identity.json: %d, want the spec with bearerAuth and the shared Problem schema", rec.Code)
 	}
 }

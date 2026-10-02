@@ -37,6 +37,10 @@ type Config struct {
 	// bằng dấu phẩy, vd "172.18.0.0/16" (mạng Docker mà reverse proxy đi vào).
 	// Rỗng thì luôn lấy địa chỉ kết nối: header do client tự viết được.
 	TrustedProxies Prefixes `env:"HTTP_TRUSTED_PROXIES"`
+
+	// Trang tài liệu API (Swagger UI) ở /api/docs. Trang công khai, không cần
+	// đăng nhập: chỉ bật khi dev
+	APIDocs bool `env:"HTTP_API_DOCS"`
 }
 
 // Prefixes là danh sách CIDR cách nhau bằng dấu phẩy; khoảng trắng quanh mỗi
