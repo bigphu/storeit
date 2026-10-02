@@ -80,6 +80,14 @@ username `resend`) with the API key in `deploy/app/secrets/smtp_password.txt`
 
 - Every refresh failure is the same 401 (`/errors/invalid-refresh-token`) and clears the cookie.
 - Refresh reloads permissions: role and permission changes reach users within one access-token TTL.
+- A disabled account's access token stays valid until it expires (≤ 15 min). Refresh fails at
+  once, and `PUT /auth/password` refuses a disabled account.
+- Login and refresh responses carry `Cache-Control: no-store`.
+- Frontend: run at most one refresh at a time, shared across tabs (a lock or
+  `BroadcastChannel`). Two tabs refreshing the same cookie both succeed thanks to the
+  grace window, but if the responses reach the browser out of order it keeps the older,
+  already-used token, and the next refresh more than 30 s later is treated as reuse and
+  ends the session.
 - Disabling an account (reason `admin`) and completing a password reset (`password_reset`)
   revoke all its sessions. Changing your own password (`PUT /auth/password`) keeps the
   current session and revokes the rest (`password_change`).
@@ -135,7 +143,10 @@ username `resend`) with the API key in `deploy/app/secrets/smtp_password.txt`
 `POST /accounts` takes no password. Errors for links: 422 `/errors/invalid-password-token`
 (field `token`) for every unusable link, 409 `/errors/not-invited` when resending to an
 account that has a password, 409 `/errors/account-inactive` for a disabled account.
-`GET /accounts` defaults to page 1, size 50 (applied in the handler).
+`GET /accounts` defaults to page 1, size 50 (applied in the handler); `page` ≤ 100000.
+`q` matches name or email as a literal substring (`%`, `_` and `\` are not wildcards).
+`PATCH /accounts/{id}` with both `member_id` and `clear_member_id` is 422
+`/errors/member-conflict`. Names (accounts, roles) may not contain control characters.
 
 ## RBAC
 
@@ -147,10 +158,19 @@ account that has a password, 409 `/errors/account-inactive` for a disabled accou
 | `identity.role.manage` | ✓ | | | |
 
 - Seeded in `migrations/00002_identity.sql` with fixed IDs (`domain.AdministratorRoleID`, …).
-  New modules add their permission codes to `identity.permissions` and their grants in their own migration.
+  New modules add their permission codes to `identity.permissions` and their grants in their
+  own migration, **including a grant to Administrator**: nobody can hand out a permission
+  they don't hold (next point), so a code Administrator lacks can never be assigned.
+- No granting beyond your own permissions (403 `/errors/exceeds-own-permissions`): roles
+  added to or removed from an account, permissions added to or removed from a role, and
+  the permissions of an account you disable or enable must all be ones you hold. Without
+  it `identity.account.manage` alone could assign Administrator.
 - System roles cannot be renamed or deleted (409); their permissions can change.
 - Lock-out guards (409 `/errors/lockout`): you cannot disable yourself, drop your own
-  Administrator role, or remove `identity.role.manage` from Administrator.
+  Administrator role, or remove `identity.role.manage` from Administrator, and nobody can
+  disable or demote the last active Administrator. Operations that could remove an admin
+  lock the Administrator role row first, so two admins acting on each other at once
+  cannot both pass.
 - A role still assigned to an account cannot be deleted (409).
 
 ## Events (`contract/events.go`)

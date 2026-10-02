@@ -44,9 +44,14 @@ the default" (configs built by hand in tests); negative values are rejected.
 | `jobs.Config` | `JOBS_DEFAULT_MAX_WORKERS` (10), `JOBS_EVENTS_MAX_WORKERS` (10). Worker only |
 | `mail.Config` | `MAIL_TRANSPORT` (required: smtp \| resend \| log), `MAIL_FROM` (required, `Name <addr>`), `MAIL_REPLY_TO`, `MAIL_SMTP_HOST`, `MAIL_SMTP_PORT` (587), `MAIL_SMTP_USERNAME`, `MAIL_SMTP_PASSWORD_FILE`, `MAIL_SMTP_TLS` (starttls \| tls \| none), `MAIL_RESEND_API_KEY_FILE`. Worker only |
 
-Compose files set `HTTP_ADDR`, `LOG_*`, `JWT_*` and `PG*`. In production behind the
-reverse proxy, set `HTTP_TRUSTED_PROXIES` to the Docker network CIDR, otherwise the
-access log records the gateway IP.
+Compose files set `HTTP_ADDR`, `LOG_*`, `JWT_*` and `PG*`. `compose.prod.yml` pins the
+compose network to `APP_NET_SUBNET` (172.30.0.0/24) and trusts it as
+`HTTP_TRUSTED_PROXIES`: the reverse proxy on the host reaches the app through that
+network's gateway and must send `X-Forwarded-For`. Without it every request carries the
+gateway IP: per-IP rate limits become one shared bucket and logs show the wrong client.
+
+Paging (`web/apicommon`): `page` 1..100000, `page_size` 1..200, so `(page-1)*page_size`
+always fits an `int32` OFFSET.
 
 ## HTTP request pipeline
 
@@ -248,6 +253,9 @@ doesn't stack), `ReadTimeout(d)` (d <= 0 removes the deadline),
 (accepts `X-Request-Id` matching `[A-Za-z0-9._-]{1,64}`, else a UUID; echoed in the
 response), `RequestLogger(log)` (one line: method, path, client_ip, route, status,
 bytes, dur, aborted), `Recoverer()`, `NoSniff`.
+
+`NoStore`: sets `Cache-Control: no-store` (attach with `ForOperations` to responses
+carrying secrets, e.g. tokens).
 
 `RateLimit(every, burst)`: per client IP (`ClientIPFrom`, falling back to the
 `RemoteAddr` host) token bucket holding `burst` requests, refilling one per `every`.
