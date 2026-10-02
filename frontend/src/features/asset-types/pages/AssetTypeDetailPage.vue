@@ -1,0 +1,211 @@
+<script setup lang="ts">
+import Button from 'primevue/button'
+import Checkbox from 'primevue/checkbox'
+import Column from 'primevue/column'
+import DataTable from 'primevue/datatable'
+import InputText from 'primevue/inputtext'
+import Message from 'primevue/message'
+import Tag from 'primevue/tag'
+import Textarea from 'primevue/textarea'
+import { useConfirm } from 'primevue/useconfirm'
+import { computed, ref, watch } from 'vue'
+import type { Attribute } from '@/lib/api/types'
+import { Perm } from '@/lib/auth/permissions'
+import { useSession } from '@/lib/auth/session'
+import { isApiError } from '@/lib/errors'
+import { useFormErrors } from '@/lib/forms'
+import { notify } from '@/lib/notify'
+import {
+  useArchiveAssetType,
+  useAssetType,
+  useRemoveAttribute,
+  useRestoreAssetType,
+  useUpdateAssetType,
+} from '../api'
+import AttributeDialog from '../components/AttributeDialog.vue'
+import OptionsDialog from '../components/OptionsDialog.vue'
+
+const props = defineProps<{ id: string }>()
+
+const session = useSession()
+const confirm = useConfirm()
+const canManage = computed(() => session.can(Perm.TypeManage))
+
+const { data: type, refetch } = useAssetType(() => props.id)
+
+const showRemoved = ref(false)
+const attributes = computed(() =>
+  [...(type.value?.attributes ?? [])]
+    .filter((a) => showRemoved.value || !a.removed)
+    .sort((a, b) => a.position - b.position),
+)
+const nextPosition = computed(() => Math.max(0, ...(type.value?.attributes ?? []).map((a) => a.position)) + 1)
+
+// Sửa tên, mô tả (version: 409 khi người khác vừa sửa)
+const name = ref('')
+const description = ref('')
+watch(
+  type,
+  (t) => {
+    if (!t) return
+    name.value = t.name
+    description.value = t.description
+  },
+  { immediate: true },
+)
+const errors = useFormErrors()
+const update = useUpdateAssetType()
+async function saveDetails() {
+  if (!type.value) return
+  errors.clear()
+  try {
+    await update.mutateAsync({ id: props.id, name: name.value, description: description.value, version: type.value.version })
+    notify.success('Asset type saved.')
+  } catch (err) {
+    if (isApiError(err) && err.status === 409) {
+      notify.info('Someone else changed this type. Reloaded the latest version.')
+      await refetch()
+    } else {
+      errors.set(err)
+    }
+  }
+}
+
+const archive = useArchiveAssetType()
+const restore = useRestoreAssetType()
+function toggleArchived() {
+  const t = type.value
+  if (!t) return
+  if (t.archived_at) {
+    restore
+      .mutateAsync(t.id)
+      .then(() => notify.success('Asset type restored.'))
+      .catch(() => {})
+    return
+  }
+  confirm.require({
+    message: `Archive ${t.name}? It can't be chosen for new assets; existing assets keep it.`,
+    header: 'Confirm',
+    acceptLabel: 'Archive',
+    rejectLabel: 'Cancel',
+    accept: () =>
+      archive
+        .mutateAsync(t.id)
+        .then(() => notify.success('Asset type archived.'))
+        .catch(() => {}),
+  })
+}
+
+// Dialog thêm/sửa thuộc tính và dialog option
+const attrOpen = ref(false)
+const attrEditing = ref<Attribute | null>(null)
+function openAttribute(a: Attribute | null) {
+  attrEditing.value = a
+  attrOpen.value = true
+}
+const optionsOpen = ref(false)
+const optionsAttrId = ref<string | null>(null)
+const optionsAttr = computed(() => type.value?.attributes.find((a) => a.id === optionsAttrId.value) ?? null)
+function openOptions(a: Attribute) {
+  optionsAttrId.value = a.id
+  optionsOpen.value = true
+}
+
+const removeAttr = useRemoveAttribute()
+function askRemove(a: Attribute) {
+  confirm.require({
+    message: `Remove the attribute ${a.label}? Existing values are kept but hidden.`,
+    header: 'Confirm',
+    acceptLabel: 'Remove',
+    rejectLabel: 'Cancel',
+    accept: () =>
+      removeAttr
+        .mutateAsync({ typeId: props.id, attrId: a.id })
+        .then(() => notify.success('Attribute removed.'))
+        .catch(() => {}),
+  })
+}
+</script>
+
+<template>
+  <section v-if="type">
+    <div class="page-header">
+      <h1>{{ type.name }} <small>({{ type.code }})</small></h1>
+      <div class="actions">
+        <Tag v-if="type.is_system" value="built-in" severity="secondary" />
+        <Tag v-if="type.archived_at" value="archived" severity="secondary" />
+        <RouterLink :to="{ path: '/assets', query: { type_id: type.id } }">View assets</RouterLink>
+      </div>
+    </div>
+
+    <form class="form" @submit.prevent="saveDetails">
+      <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
+      <div class="field">
+        <label for="type-name">Name</label>
+        <InputText id="type-name" v-model="name" :disabled="!canManage" />
+        <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
+      </div>
+      <div class="field">
+        <label for="type-desc">Description</label>
+        <Textarea id="type-desc" v-model="description" rows="3" :disabled="!canManage" />
+      </div>
+      <div v-if="canManage" class="actions">
+        <Button type="submit" label="Save" :loading="update.isPending.value" />
+        <Button
+          v-if="!type.is_system"
+          :label="type.archived_at ? 'Restore' : 'Archive'"
+          severity="secondary"
+          text
+          @click="toggleArchived"
+        />
+      </div>
+    </form>
+
+    <section>
+      <div class="page-header">
+        <h2>Attributes</h2>
+        <Button v-if="canManage" label="Add attribute" icon="pi pi-plus" size="small" @click="openAttribute(null)" />
+      </div>
+      <div class="toolbar">
+        <Checkbox v-model="showRemoved" input-id="show-removed" binary />
+        <label for="show-removed">Show removed</label>
+      </div>
+      <DataTable :value="attributes" data-key="id">
+        <Column field="label" header="Label" />
+        <Column header="Key">
+          <template #body="{ data: a }: { data: Attribute }"><code>{{ a.key }}</code></template>
+        </Column>
+        <Column field="data_type" header="Type" />
+        <Column header="Unit">
+          <template #body="{ data: a }: { data: Attribute }">{{ a.unit ?? '' }}</template>
+        </Column>
+        <Column header="Required">
+          <template #body="{ data: a }: { data: Attribute }">{{ a.is_required ? 'Yes' : '' }}</template>
+        </Column>
+        <Column field="position" header="Position" />
+        <Column header="">
+          <template #body="{ data: a }: { data: Attribute }">
+            <Tag v-if="a.removed" value="removed" severity="secondary" />
+            <div v-else class="actions">
+              <Button
+                v-if="a.data_type === 'select'"
+                :label="`Options (${a.options.filter((o) => !o.removed).length})`"
+                size="small"
+                text
+                @click="openOptions(a)"
+              />
+              <template v-if="canManage">
+                <Button label="Edit" size="small" text @click="openAttribute(a)" />
+                <Button label="Remove" size="small" text severity="danger" @click="askRemove(a)" />
+              </template>
+            </div>
+          </template>
+        </Column>
+        <template #empty>No attributes yet.</template>
+      </DataTable>
+    </section>
+
+    <AttributeDialog v-model:visible="attrOpen" :type-id="type.id" :attribute="attrEditing" :next-position="nextPosition" />
+    <OptionsDialog v-model:visible="optionsOpen" :type-id="type.id" :attribute="optionsAttr" :can-manage="canManage" />
+  </section>
+</template>
