@@ -10,7 +10,9 @@ tmp_dir = "tmp/app"
   exclude_regex = ["_test\\.go$"]
   poll = true
   poll_interval = 500
-  delay = 300
+  # Gộp các thay đổi dồn dập (sqlc/oapi-codegen ghi nhiều file một lúc) thành một lần build;
+  # 300ms từng làm Air chạy chồng hai tiến trình, một cái mồ côi giữ cổng 8080
+  delay = 1500
   send_interrupt = true
   kill_delay = "3s"
   stop_on_error = true
