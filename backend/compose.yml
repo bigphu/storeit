@@ -17,6 +17,13 @@ x-go-env: &go-env
   JWT_KEYS_FILE: /run/secrets/jwt_keys
   JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-v1}
   JWT_ISSUER: ${JWT_ISSUER:-storeit}
+  # Dev chạy http: trình duyệt bỏ cookie Secure trên http, kể cả localhost
+  IDENTITY_COOKIE_SECURE: "false"
+  # Frontend: link trong thư mời / đặt lại mật khẩu trỏ về đây
+  IDENTITY_APP_URL: ${APP_URL:-http://localhost:3000}
+  # Administrator đầu tiên, tạo khi DB chưa có account nào (đặt trong .env)
+  ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
   # Dev đọc log dùng pretty; production để mặc định (json, info)
   LOG_FORMAT: pretty
 
@@ -48,6 +55,8 @@ services:
     environment:
       <<: *go-env
       HTTP_ADDR: ":8080"
+      # Swagger UI: http://localhost:8080/api/docs
+      HTTP_API_DOCS: "true"
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:8080"
     depends_on:
@@ -55,13 +64,36 @@ services:
     restart: unless-stopped
 
   # worker: giống app, nhưng Air build ./cmd/worker (air.worker.toml riêng)
-  # worker:
-  #   <<: *go-dev
-  #   command: ["air", "-c", "air.worker.toml"]
-  #   environment: *go-env
-  #   depends_on:
-  #     migrate: { condition: service_completed_successfully }
-  #   restart: unless-stopped
+  worker:
+    <<: *go-dev
+    command: ["air", "-c", "air.worker.toml"]
+    environment:
+      <<: *go-env
+      # Mặc định thư đi vào Mailpit (http://localhost:8025). Gửi thật qua Resend
+      # SMTP: đặt các biến MAIL_* trong .env (xem .env.example)
+      MAIL_TRANSPORT: smtp
+      MAIL_FROM: "${MAIL_FROM:-StoreIt <no-reply@storeit.dev>}"
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
+      MAIL_SMTP_HOST: ${MAIL_SMTP_HOST:-mailpit}
+      MAIL_SMTP_PORT: ${MAIL_SMTP_PORT:-1025}
+      MAIL_SMTP_TLS: ${MAIL_SMTP_TLS:-none}
+      MAIL_SMTP_USERNAME: ${MAIL_SMTP_USERNAME:-}
+      # Rỗng: không đọc file nào (Mailpit không cần mật khẩu)
+      MAIL_SMTP_PASSWORD_FILE: ${MAIL_SMTP_PASSWORD_FILE:-}
+    secrets: [pg_app_pw, jwt_keys, smtp_password]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      mailpit: { condition: service_started }
+    restart: unless-stopped
+
+  # Hộp thư giả cho dev: nhận mọi thư qua SMTP, xem bằng trình duyệt
+  mailpit:
+    image: axllent/mailpit:v1.31
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
+      # SMTP cho make run-worker chạy trên host
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025"
+    restart: unless-stopped
 
   postgres:
     image: postgres:18-alpine
@@ -155,6 +187,9 @@ secrets:
     file: ./deploy/pgadmin/secrets/pgadmin_pw.txt
   jwt_keys:
     file: ./deploy/app/secrets/jwt_keys.txt
+  # API key của Resend (make init tạo file rỗng)
+  smtp_password:
+    file: ./deploy/app/secrets/smtp_password.txt
 
 volumes:
   pgdata:

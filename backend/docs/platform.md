@@ -22,6 +22,7 @@ exact signatures. Keep this file in sync when a platform API changes.
 | `events` | Transactional outbox, subscriber registry, delivery worker (River) |
 | `jobs` | Background jobs on River: `Enqueuer`, client constructors, actor propagation |
 | `storage` | File storage (`Store` interface, `Local` implementation) |
+| `mail` | Send email: `smtp`, `resend` or `log` transport, permanent-error classification for jobs |
 | `web/apicommon` | Generated types from `api/common.yaml` (`Problem`, `FieldError`, `ID`, `Paged`) |
 
 ## Configuration
@@ -36,15 +37,21 @@ the default" (configs built by hand in tests); negative values are rejected.
 | Block | Env vars (default) |
 |---|---|
 | `logger.Config` | `LOG_LEVEL` (info), `LOG_FORMAT` (json \| pretty) |
-| `server.Config` | `HTTP_ADDR` (:8080), `HTTP_READ_HEADER_TIMEOUT` (10s), `HTTP_READ_TIMEOUT` (30s), `HTTP_IDLE_TIMEOUT` (60s), `HTTP_SHUTDOWN_TIMEOUT` (15s), `HTTP_MAX_BODY_BYTES` (1048576), `HTTP_TRUSTED_PROXIES` (empty; CIDRs, comma-separated) |
+| `server.Config` | `HTTP_ADDR` (:8080), `HTTP_READ_HEADER_TIMEOUT` (10s), `HTTP_READ_TIMEOUT` (30s), `HTTP_IDLE_TIMEOUT` (60s), `HTTP_SHUTDOWN_TIMEOUT` (15s), `HTTP_MAX_BODY_BYTES` (1048576), `HTTP_TRUSTED_PROXIES` (empty; CIDRs, comma-separated), `HTTP_API_DOCS` (false; Swagger UI at `/api/docs`, dev only) |
 | `database.Config` | `DB_URL` (empty: pgx reads `PG*`), `DB_MAX_CONNS` (25), `DB_MIN_CONNS` (0), `DB_MAX_CONN_LIFETIME` (1h), `DB_MAX_CONN_LIFETIME_JITTER` (5m), `DB_MAX_CONN_IDLE_TIME` (30m), `DB_HEALTH_CHECK_PERIOD` (1m), `DB_CONNECT_TIMEOUT` (5s). Also `PGPASSWORD_FILE` (Docker secret) |
 | `jwt.Config` | `JWT_KEYS_FILE` (required; file of `kid:base64`, comma or newline separated, >= 32-byte secrets), `JWT_ACTIVE_KID` (required), `JWT_ISSUER` (required), `JWT_AUDIENCE` (storeit-api), `JWT_ACCESS_TOKEN_TTL` (15m) |
 | `storage.Config` | `STORAGE_DIR` (./tmp/storage) |
 | `jobs.Config` | `JOBS_DEFAULT_MAX_WORKERS` (10), `JOBS_EVENTS_MAX_WORKERS` (10). Worker only |
+| `mail.Config` | `MAIL_TRANSPORT` (required: smtp \| resend \| log), `MAIL_FROM` (required, `Name <addr>`), `MAIL_REPLY_TO`, `MAIL_SMTP_HOST`, `MAIL_SMTP_PORT` (587), `MAIL_SMTP_USERNAME`, `MAIL_SMTP_PASSWORD_FILE`, `MAIL_SMTP_TLS` (starttls \| tls \| none), `MAIL_RESEND_API_KEY_FILE`. Worker only |
 
-Compose files set `HTTP_ADDR`, `LOG_*`, `JWT_*` and `PG*`. In production behind the
-reverse proxy, set `HTTP_TRUSTED_PROXIES` to the Docker network CIDR, otherwise the
-access log records the gateway IP.
+Compose files set `HTTP_ADDR`, `LOG_*`, `JWT_*` and `PG*`. `compose.prod.yml` pins the
+compose network to `APP_NET_SUBNET` (172.30.0.0/24) and trusts it as
+`HTTP_TRUSTED_PROXIES`: the reverse proxy on the host reaches the app through that
+network's gateway and must send `X-Forwarded-For`. Without it every request carries the
+gateway IP: per-IP rate limits become one shared bucket and logs show the wrong client.
+
+Paging (`web/apicommon`): `page` 1..100000, `page_size` 1..200, so `(page-1)*page_size`
+always fits an `int32` OFFSET.
 
 ## HTTP request pipeline
 
@@ -140,6 +147,13 @@ param names exactly as in the spec (`/things/{thingID}`). Wrap lists in
   (JSON + `validate:` tags, size limited by `BodyLimit`), `web.Validate(v)`,
   `web.JSON`, `web.NoContent`, `web.Text`.
 - `NotFoundHandler()`, `MethodNotAllowedHandler()` (sets `Allow`), installed by `server.New`.
+- `MountDocs(r, web.APIDoc{Name, Spec}...)`: Swagger UI at `GET /api/docs` and each spec
+  as JSON at `GET /api/docs/<name>.json` (names: lowercase, digits, dashes). Each module
+  exposes `APIDoc()` built from its embedded `api.GetSwagger()` (refs to `common.yaml`
+  already resolved). `cmd/server` mounts it only when `HTTP_API_DOCS=true` (dev compose):
+  the page is public and loads Swagger UI from jsDelivr. Same origin as the API, so "Try
+  it out" works: call `/auth/login`, paste `access_token` into Authorize. A new module adds
+  its `APIDoc()` to the `MountDocs` call.
 - Error vars: `ErrMalformedJSON` 400, `ErrInvalidRequest` 400, `ErrValidation` 422,
   `ErrRequestTooLarge` 413, `ErrUnsupportedMediaType` 415, `ErrRouteNotFound` 404,
   `ErrMethodNotAllowed` 405.
@@ -240,6 +254,36 @@ doesn't stack), `ReadTimeout(d)` (d <= 0 removes the deadline),
 response), `RequestLogger(log)` (one line: method, path, client_ip, route, status,
 bytes, dur, aborted), `Recoverer()`, `NoSniff`.
 
+`NoStore`: sets `Cache-Control: no-store` (attach with `ForOperations` to responses
+carrying secrets, e.g. tokens).
+
+`RateLimit(every, burst)`: per client IP (`ClientIPFrom`, falling back to the
+`RemoteAddr` host) token bucket holding `burst` requests, refilling one per `every`.
+Over the limit it answers 429 problem+json `/errors/rate-limited` with `Retry-After`
+(seconds, rounded up); rejected requests do not use up tokens. Each call has its own
+counters, so attach one per operation with `ForOperations`. Counters live in process
+memory (idle clients are dropped once their bucket is full again): with several replicas
+each one counts separately.
+
+### mail
+
+- `sender, err := mail.New(cfg.Mail, log)` (worker only; no network until `Send`).
+  `sender.Send(ctx, mail.Message{To: mail.Address{Name, Email}, Subject, Text, HTML, IdempotencyKey})`.
+  From and Reply-To come from config.
+- Send from a River job, never inside a request. Set `IdempotencyKey` (e.g.
+  `identity/invite/<token id>`): Resend drops a repeat with the same key for 24h, so a
+  job retried after a successful send does not mail twice. SMTP and log ignore it.
+- `mail.IsPermanent(err)`: Resend 4xx except 408/429, SMTP 5xx, invalid addresses.
+  Return `river.JobCancel(err)` for these; everything else (network, 5xx from Resend,
+  SMTP 4xx) retries.
+- Resend errors are `*mail.StatusError{Status, Reason}`. `Reason` holds only the
+  `name`/`message` fields, truncated, with the API key redacted; transport errors
+  never carry the URL.
+- `log` prints the message (including the text body, so any link) at WARN. Dev and
+  tests only. `smtp` with `MAIL_SMTP_TLS=none` is for Mailpit only.
+- SMTP sends open one connection each, with a 30s timeout (go-mail passes ctx only
+  to dial).
+
 ### storage
 
 `store, _ := storage.NewLocal(cfg.Storage)`; `Put(ctx, key, r)` (atomic temp + rename,
@@ -253,7 +297,8 @@ invalid keys give `ErrInvalidKey`. All access goes through `os.Root`.
   Postgres container per test binary, goose and River migrations applied, shared
   between tests (use fresh IDs and table names, don't assume an empty DB).
 - Without Docker these tests **skip** locally. With several packages starting
-  containers at once the health check can also skip them. Run
-  `CI=true go test ./...` to make skips fail, and keep Docker Desktop running.
+  containers at once the health check can skip them, or testcontainers can fail to
+  create its Docker provider on Windows. Run `CI=true go test -p 1 ./...` (skips fail,
+  one package at a time) and keep Docker Desktop running.
 - `internal/platform/events/db` is sqlc output; fake its `DBTX` interface to unit-test
   worker logic without Postgres (see `events/worker_test.go`).

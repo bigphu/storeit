@@ -1,0 +1,9 @@
+Hello {{.Name}},
+
+We received a request to reset the password of your StoreIt account. Choose a new password here:
+
+{{.Link}}
+
+This link works once and expires in {{.ExpiresIn}}. Setting a new password signs you out on every device.
+
+If you didn't ask for this, you can ignore this email. Your password stays the same.

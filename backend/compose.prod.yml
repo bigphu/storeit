@@ -30,6 +30,12 @@ x-go-env: &go-env
   JWT_KEYS_FILE: /run/secrets/jwt_keys
   JWT_ACTIVE_KID: ${JWT_ACTIVE_KID:-v1}
   JWT_ISSUER: ${JWT_ISSUER:-storeit}
+  # Frontend: link trong thư mời / đặt lại mật khẩu trỏ về đây
+  IDENTITY_APP_URL: ${APP_URL:?set APP_URL, ví dụ https://storeit.example.com}
+  # Administrator đầu tiên, chỉ dùng khi DB chưa có account nào. Đăng nhập
+  # được rồi thì xoá hai biến này khỏi .env
+  ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
 
 # Cùng 1 image cho server / worker / migrate, chỉ khác entrypoint
 x-go-prod: &go-prod
@@ -62,6 +68,11 @@ services:
     environment:
       <<: *go-env
       HTTP_ADDR: ":8080"
+      # Reverse proxy trên host đi vào qua gateway của mạng compose (hoặc là một
+      # container trong mạng đó): chỉ tin X-Forwarded-For từ dải này. Thiếu nó
+      # thì mọi request mang IP gateway, rate limit đăng nhập dùng chung cho
+      # cả công ty và phiên ghi sai IP. Proxy phải đặt X-Forwarded-For.
+      HTTP_TRUSTED_PROXIES: ${HTTP_TRUSTED_PROXIES:-${APP_NET_SUBNET:-172.30.0.0/24}}
     # Chỉ nghe 127.0.0.1: đặt reverse proxy (Caddy/nginx) phía trước để lo HTTPS
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:8080"
@@ -69,17 +80,28 @@ services:
       migrate: { condition: service_completed_successfully }
     restart: unless-stopped
 
-  # Tạm tắt bằng profile: cmd/worker chưa có code, chạy sẽ thoát ngay => restart liên tục.
-  # Bỏ `profiles` khi worker đã được viết.
+  # Giao event, gửi thư và chạy job định kỳ (dọn phiên đăng nhập đã chết)
   worker:
     <<: *go-prod
     entrypoint: ["/app/worker"]
+    environment:
+      <<: *go-env
+      # Gửi thư qua SMTP của Resend: username là "resend", mật khẩu là API key.
+      # MAIL_FROM phải thuộc domain đã xác thực ở Resend
+      MAIL_TRANSPORT: smtp
+      MAIL_FROM: ${MAIL_FROM:?set MAIL_FROM, ví dụ StoreIt <no-reply@storeit.example.com>}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
+      MAIL_SMTP_HOST: ${MAIL_SMTP_HOST:-smtp.resend.com}
+      MAIL_SMTP_PORT: ${MAIL_SMTP_PORT:-465}
+      MAIL_SMTP_TLS: ${MAIL_SMTP_TLS:-tls}
+      MAIL_SMTP_USERNAME: ${MAIL_SMTP_USERNAME:-resend}
+      MAIL_SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+    secrets: [pg_app_pw, jwt_keys, smtp_password]
     depends_on:
       migrate: { condition: service_completed_successfully }
     # Cho job đang chạy thời gian kết thúc khi deploy/restart
     stop_grace_period: 30s
     restart: unless-stopped
-    profiles: ["worker"]
 
   # Postgres trên cùng server. Dùng DB managed thì xoá service này (+ volume pgdata),
   # đổi PGHOST ở x-go-env và bỏ depends_on postgres của migrate.
@@ -143,6 +165,18 @@ secrets:
     file: ./deploy/postgres/secrets/pg_app_pw.txt
   jwt_keys:
     file: ./deploy/app/secrets/jwt_keys.txt
+  # API key của Resend (quyền "Sending access"), một dòng. make init / init.sh
+  # tạo file rỗng; dán key vào trước khi chạy worker
+  smtp_password:
+    file: ./deploy/app/secrets/smtp_password.txt
+
+# Dải mạng cố định để HTTP_TRUSTED_PROXIES biết trước địa chỉ gateway. Trùng dải
+# với mạng khác trên server thì đổi APP_NET_SUBNET trong .env
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${APP_NET_SUBNET:-172.30.0.0/24}
 
 volumes:
   pgdata:

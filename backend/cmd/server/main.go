@@ -1,52 +1,97 @@
-// Tạm thời chỉ chạy thử package logger, sẽ thay bằng API server (M0):
+// cmd/server chạy HTTP API.
 //
-//	go run ./cmd/server
-//	LOG_FORMAT=pretty LOG_LEVEL=debug go run ./cmd/server
+//	go run ./cmd/server   // hoặc make run-api; cần .env.local và Postgres đã migrate
 package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
-	"runtime/debug"
-	"time"
+	"os/signal"
+	"syscall"
 
+	"storeit/internal/identity"
 	"storeit/internal/platform/config"
+	"storeit/internal/platform/database"
+	"storeit/internal/platform/events"
+	"storeit/internal/platform/jobs"
+	"storeit/internal/platform/jwt"
 	"storeit/internal/platform/logger"
+	"storeit/internal/platform/server"
+	"storeit/internal/platform/web"
 )
 
 func main() {
-	var cfg serverConfig
-	if err := config.Load(&cfg); err != nil {
+	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-
-	slog.SetDefault(logger.New(os.Stdout, cfg.Log))
-
-	// Đừng đặt key trùng time/level/msg/source: JSON bị lặp key, pretty thì mất attr
-	slog.Info("server starting", "addr", ":8080", "log_format", cfg.Log.Format, "log_level", cfg.Log.Level)
-	slog.Debug("chỉ hiện khi LOG_LEVEL=debug")
-
-	// Giả lập middleware: gắn request ID và actor ID vào ctx
-	ctx := logger.With(context.Background(), slog.String("request_id", "req-8f3a"))
-	ctx = logger.With(ctx, slog.String("actor_id", "acc-42"))
-	checkOutAsset(ctx, "asset-17")
-
-	// Group gom attr dưới một tiền tố
-	slog.WarnContext(ctx, "slow query",
-		slog.Group("db", "table", "inventory.assets", "dur", 730*time.Millisecond))
-
-	// Chuỗi nhiều dòng (stack trace) được pretty in thành khối riêng
-	slog.ErrorContext(ctx, "panic recovered",
-		"err", errors.New("index out of range"),
-		"stack", string(debug.Stack()))
 }
 
-// checkOutAsset đóng vai service: chỉ nhận ctx, không nhận logger, mà log vẫn
-// có request_id và actor_id
-func checkOutAsset(ctx context.Context, assetID string) {
-	slog.InfoContext(ctx, "asset checked out", "asset_id", assetID, "to_member", "mem-5")
+func run() error {
+	var cfg serverConfig
+	if err := config.Load(&cfg); err != nil {
+		return err
+	}
+	log := logger.New(os.Stdout, cfg.Log)
+	slog.SetDefault(log)
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	pool, err := database.Open(ctx, cfg.DB)
+	if err != nil {
+		return err
+	}
+	defer database.Close(pool)
+
+	tokens, err := jwt.New(cfg.JWT)
+	if err != nil {
+		return err
+	}
+	insertClient, err := jobs.NewInsertClient(pool, log)
+	if err != nil {
+		return err
+	}
+	// API và worker dựng cùng registry: Append cần biết enqueue job nào.
+	// Module có subscriber sẽ đăng ký vào đây (activity, M2).
+	registry := events.NewRegistry()
+	outbox := events.NewOutbox(registry, insertClient)
+
+	// API không gửi thư: chỉ xếp job gửi thư trong cùng transaction, worker gửi
+	identityMod, err := identity.New(identity.Deps{
+		Pool: pool, Tokens: tokens, Outbox: outbox, Jobs: jobs.NewRiver(insertClient), Config: cfg.Identity,
+	})
+	if err != nil {
+		return err
+	}
+	if err := identityMod.Bootstrap(ctx); err != nil {
+		return err
+	}
+
+	srv := server.New(cfg.HTTP, log)
+	srv.Router().Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		if err := pool.Ping(r.Context()); err != nil {
+			_ = web.Text(w, http.StatusServiceUnavailable, "database unavailable")
+			return
+		}
+		_ = web.Text(w, http.StatusOK, "ok")
+	})
+	if err := identityMod.Mount(srv.Router()); err != nil {
+		return err
+	}
+	// Swagger UI ở /api/docs, chỉ khi dev (HTTP_API_DOCS=true): trang không cần đăng nhập
+	if cfg.HTTP.APIDocs {
+		doc, err := identityMod.APIDoc()
+		if err != nil {
+			return err
+		}
+		if err := web.MountDocs(srv.Router(), doc); err != nil {
+			return err
+		}
+		log.Info("API docs enabled", slog.String("path", "/api/docs"))
+	}
+	return srv.Run(ctx)
 }

@@ -263,3 +263,20 @@ func TestServer_MethodNotAllowedSetsAllow(t *testing.T) {
 		}
 	}
 }
+
+// Trang tài liệu API mặc định tắt; dev compose bật bằng HTTP_API_DOCS
+func TestConfig_APIDocsFromEnv(t *testing.T) {
+	for val, want := range map[string]bool{"": false, "true": true, "false": false} {
+		var cfg struct{ HTTP Config }
+		vars := map[string]string{}
+		if val != "" {
+			vars["HTTP_API_DOCS"] = val
+		}
+		if err := env.ParseWithOptions(&cfg, env.Options{Environment: vars}); err != nil {
+			t.Fatal(err)
+		}
+		if cfg.HTTP.APIDocs != want {
+			t.Errorf("HTTP_API_DOCS=%q: APIDocs = %v, want %v", val, cfg.HTTP.APIDocs, want)
+		}
+	}
+}
