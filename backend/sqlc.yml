@@ -94,10 +94,10 @@ sql:
   #       out: "internal/directory/repository/db"
 
   # M4
-  # - engine: "postgresql"
-  #   schema: "migrations"
-  #   queries: "internal/inventory/repository/queries"
-  #   gen:
-  #     go:
-  #       <<: *go_defaults
-  #       out: "internal/inventory/repository/db"
+  - engine: "postgresql"
+    schema: "migrations"
+    queries: "internal/inventory/repository/queries"
+    gen:
+      go:
+        <<: *go_defaults
+        out: "internal/inventory/repository/db"

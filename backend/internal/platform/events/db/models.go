@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type IdentityAccount struct {
@@ -75,6 +76,84 @@ type IdentityRole struct {
 type IdentityRolePermission struct {
 	RoleID     uuid.UUID
 	Permission string
+}
+
+type InventoryAsset struct {
+	ID             uuid.UUID
+	Tag            string
+	Name           string
+	Description    string
+	AssetTypeID    uuid.UUID
+	StatusID       uuid.UUID
+	LocationID     *uuid.UUID
+	HolderMemberID *uuid.UUID
+	PurchaseDate   pgtype.Date
+	RetiredAt      *time.Time
+	RetiredReason  *string
+	Version        int32
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type InventoryAssetAttributeOption struct {
+	ID          uuid.UUID
+	AttributeID uuid.UUID
+	DataType    string
+	Label       string
+	Position    int32
+	RemovedAt   *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type InventoryAssetAttributeValue struct {
+	AssetID       uuid.UUID
+	AttributeID   uuid.UUID
+	AssetTypeID   uuid.UUID
+	DataType      string
+	ValueText     *string
+	ValueNumber   pgtype.Numeric
+	ValueDate     pgtype.Date
+	ValueBool     *bool
+	ValueOptionID *uuid.UUID
+}
+
+type InventoryAssetStatus struct {
+	ID         uuid.UUID
+	Name       string
+	Kind       string
+	IsDefault  bool
+	IsSystem   bool
+	Position   int32
+	ArchivedAt *time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type InventoryAssetType struct {
+	ID          uuid.UUID
+	Code        string
+	Name        string
+	Description string
+	IsSystem    bool
+	ArchivedAt  *time.Time
+	Version     int32
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type InventoryAssetTypeAttribute struct {
+	ID          uuid.UUID
+	AssetTypeID uuid.UUID
+	Key         string
+	Label       string
+	DataType    string
+	Unit        *string
+	IsRequired  bool
+	Position    int32
+	RemovedAt   *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type PlatformEvent struct {

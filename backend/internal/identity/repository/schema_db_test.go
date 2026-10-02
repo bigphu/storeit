@@ -37,7 +37,7 @@ func TestSchema_SeedRoles(t *testing.T) {
 		rows, err := pool.Query(ctx, `
 			SELECT rp.permission FROM identity.role_permissions rp
 			JOIN identity.roles r ON r.id = rp.role_id
-			WHERE r.name = $1 ORDER BY rp.permission`, role)
+			WHERE r.name = $1 AND rp.permission LIKE 'identity.%' ORDER BY rp.permission`, role)
 		if err != nil {
 			t.Fatal(err)
 		}
