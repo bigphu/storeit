@@ -68,6 +68,11 @@ services:
     environment:
       <<: *go-env
       HTTP_ADDR: ":8080"
+      # Reverse proxy trên host đi vào qua gateway của mạng compose (hoặc là một
+      # container trong mạng đó): chỉ tin X-Forwarded-For từ dải này. Thiếu nó
+      # thì mọi request mang IP gateway, rate limit đăng nhập dùng chung cho
+      # cả công ty và phiên ghi sai IP. Proxy phải đặt X-Forwarded-For.
+      HTTP_TRUSTED_PROXIES: ${HTTP_TRUSTED_PROXIES:-${APP_NET_SUBNET:-172.30.0.0/24}}
     # Chỉ nghe 127.0.0.1: đặt reverse proxy (Caddy/nginx) phía trước để lo HTTPS
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:8080"
@@ -164,6 +169,14 @@ secrets:
   # tạo file rỗng; dán key vào trước khi chạy worker
   smtp_password:
     file: ./deploy/app/secrets/smtp_password.txt
+
+# Dải mạng cố định để HTTP_TRUSTED_PROXIES biết trước địa chỉ gateway. Trùng dải
+# với mạng khác trên server thì đổi APP_NET_SUBNET trong .env
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${APP_NET_SUBNET:-172.30.0.0/24}
 
 volumes:
   pgdata:
