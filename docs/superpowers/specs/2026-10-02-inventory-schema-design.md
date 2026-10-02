@@ -1,8 +1,8 @@
 # Inventory module: schema design
 
-Date: 2026-10-02. Status: **in design**. Sections 1–3 approved by the user; section 4 (API
-and permissions) not yet presented or approved. Do not implement until the whole spec is
-approved and a plan exists.
+Date: 2026-10-02. Status: all four sections approved in conversation; waiting for the
+user's review of this written spec, then an implementation plan. Do not implement before
+both.
 
 Module: `backend/internal/inventory` (placeholders marked `TODO(M4)`), Postgres schema
 `inventory`. Builds on `docs/platform.md` and the identity module (`docs/identity.md`).
@@ -129,6 +129,10 @@ assets
 
 Statuses:
 
+- Archived statuses and archived types cannot be chosen for a new asset or a changed
+  value; assets already using them keep them and remain editable.
+- Making a status the default of its kind moves the flag from the previous default (one
+  transaction).
 - Behaviour depends on `kind`, never on the name (borrowing will require `available`;
   retiring uses the default `retired` status).
 - Managers can add statuses ("Lost", "Being repaired") with one of the four kinds.
@@ -144,7 +148,8 @@ Assets:
 - A `retired`-kind status cannot be chosen by a normal edit; only retire/restore set it.
 - Changing an asset's type is allowed: old values are dropped and the new type's required
   attributes must be supplied, in one transaction (the form warns first).
-- `PATCH` requires the `version` read (409 when stale), as in identity.
+- Updates are a full `PUT` that must carry the `version` read (409 when stale), as in
+  identity; see section 4.
 - No hard deletes. No `created_by`/`updated_by` columns: the actor lives in events
   (`asset_created`, `asset_updated` with field and attribute changes, `asset_retired`,
   `asset_restored`); the activity module turns them into history (US-16).
@@ -167,7 +172,104 @@ purchase date, updated date; shared paging parameters (`page` <= 100000, `page_s
 
 ## 4. API and permissions
 
-Not yet designed with the user. To cover: permission codes and role grants (seeded in the
-inventory migration, including grants to Administrator, since nobody can grant a
-permission they do not hold), endpoints for asset types/attributes/options/statuses/assets,
-the JSON shape of custom values, error types, and events.
+### Permissions
+
+Seeded in the inventory migration together with the role grants. Administrator receives
+every inventory permission (nobody can grant a permission they do not hold).
+
+| Code | Allows | Granted to |
+|---|---|---|
+| `inventory.asset.read` | View assets, asset types and statuses | Administrator, Authorized Manager, Inventory Officer, Employee |
+| `inventory.asset.manage` | Create, update, retire, restore assets | Administrator, Inventory Officer |
+| `inventory.type.manage` | Asset types, attributes, options | Administrator, Authorized Manager |
+| `inventory.status.manage` | Statuses | Administrator, Authorized Manager |
+
+### Endpoints (`/api/v1`)
+
+| Endpoint | Needs |
+|---|---|
+| `GET /asset-types` (`?include_archived`) | asset.read |
+| `GET /asset-types/{typeID}` (with attributes and their options) | asset.read |
+| `POST /asset-types` (may include initial attributes and options, US17-AC4) | type.manage |
+| `PATCH /asset-types/{typeID}` (name, description, `version`) | type.manage |
+| `POST /asset-types/{typeID}/archive`, `POST /asset-types/{typeID}/restore` | type.manage |
+| `POST /asset-types/{typeID}/attributes` | type.manage |
+| `PATCH /asset-types/{typeID}/attributes/{attributeID}` (label, unit, data_type, is_required, position) | type.manage |
+| `DELETE /asset-types/{typeID}/attributes/{attributeID}` (soft remove) | type.manage |
+| `POST /asset-types/{typeID}/attributes/{attributeID}/options` | type.manage |
+| `PATCH /asset-types/{typeID}/attributes/{attributeID}/options/{optionID}` (label, position) | type.manage |
+| `DELETE /asset-types/{typeID}/attributes/{attributeID}/options/{optionID}` (soft remove) | type.manage |
+| `GET /asset-statuses` (`?include_archived`) | asset.read |
+| `POST /asset-statuses`, `PATCH /asset-statuses/{statusID}` (name, position, is_default), `POST /asset-statuses/{statusID}/archive` | status.manage |
+| `GET /assets` (`q`, `type_id`, `status_id`, `status_kind`, `location_id`, `holder_member_id`, `include_retired`, `sort`, `page`, `page_size`) | asset.read |
+| `GET /assets/{assetID}` | asset.read |
+| `POST /assets` | asset.manage |
+| `PUT /assets/{assetID}` (whole asset plus `version`) | asset.manage |
+| `POST /assets/{assetID}/retire` (`reason`, `version`), `POST /assets/{assetID}/restore` (`version`) | asset.manage |
+
+- `sort`: `tag`, `name`, `purchase_date`, `updated_at`, prefix `-` for descending; default
+  `tag`.
+- `PATCH` endpoints change only the fields sent. An attribute's `unit` is cleared by
+  sending `"unit": ""` (stored as NULL); there is no null-versus-absent distinction to
+  rely on.
+- `POST /assets` without `status_id` uses the default `available` status.
+- Asset updates are a full `PUT`: the edit form sends everything, so there is no
+  absent-versus-null ambiguity for `location_id`, `holder_member_id`, `purchase_date`
+  (identity needed a `clear_member_id` flag for that with PATCH).
+
+### Custom values in JSON
+
+Request (`POST`, `PUT`): an object keyed by attribute key; an optional attribute left out
+has no value; on `PUT` the object replaces all values.
+
+```json
+"attributes": {
+  "ram_gb": 16,
+  "os": "0193a6c2-…",            // select: option id
+  "warranty_end": "2027-06-30",  // date: YYYY-MM-DD
+  "has_dock": true,
+  "notes_hw": "Spare battery in drawer"
+}
+```
+
+Response (`GET /assets/{assetID}`): a list in display order with labels and units:
+`[{key, label, data_type, unit, value, option_label, option_removed}]`. Values of removed
+attributes are not returned (they stay in the database for history and export).
+`GET /assets` items carry the common fields plus type and status names, without custom
+values.
+
+### Errors
+
+| Status | Type | When |
+|---|---|---|
+| 422 | `/errors/invalid-attribute-values` | one field entry per bad key: `attributes.<key>` "is required", "must be a number" (etc.), "is not an option of this attribute", "unknown attribute" |
+| 422 | (own types) | archived type or status for a new asset or changed value; a `retired`-kind status chosen by a normal edit; invalid tag/code/key format |
+| 409 | taken | tag, type code, type name, attribute key, attribute label, option label, status name |
+| 409 | `/errors/asset-changed`, `/errors/asset-type-changed` | stale `version` |
+| 409 | `/errors/asset-retired` | editing a retired asset |
+| 409 | `/errors/attribute-in-use` | changing an attribute's data type or unit while values exist |
+| 409 | `/errors/system-type`, `/errors/system-status` | archiving a system type or status, or changing a system status's kind |
+| 404 | not found | asset, type, attribute, option, status |
+
+### Events (outbox, same transaction, actor recorded)
+
+- `inventory.asset_created`, `inventory.asset_updated` (field changes, attribute changes,
+  type change), `inventory.asset_retired`, `inventory.asset_restored`
+- `inventory.asset_type_created`, `inventory.asset_type_updated` (including attribute and
+  option changes), `inventory.asset_type_archived`, `inventory.asset_type_restored`
+- `inventory.status_created`, `inventory.status_updated`, `inventory.status_archived`
+
+Payloads carry ids, names and before/after values, never more than the API shows. The
+activity module turns asset events into history (US-16).
+
+## Testing
+
+- Repository tests on Postgres: every database guarantee in section 1 (wrong-typed value,
+  value for another type's attribute, option of another attribute, data type change with
+  values, tag uniqueness across retired assets), retire/restore, type change dropping
+  values, search filters and sorting.
+- Service tests with fakes: required attributes, removed attributes/options, archived
+  type/status rules, retired-kind status rule, permission checks.
+- HTTP tests: each endpoint's status codes and problem types, attribute JSON round trip.
+- End to end: create a type with number (unit), select and required text attributes,
+  create an asset, read it back, change type, retire, list with filters.
