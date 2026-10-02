@@ -242,6 +242,14 @@ doesn't stack), `ReadTimeout(d)` (d <= 0 removes the deadline),
 response), `RequestLogger(log)` (one line: method, path, client_ip, route, status,
 bytes, dur, aborted), `Recoverer()`, `NoSniff`.
 
+`RateLimit(every, burst)`: per client IP (`ClientIPFrom`, falling back to the
+`RemoteAddr` host) token bucket holding `burst` requests, refilling one per `every`.
+Over the limit it answers 429 problem+json `/errors/rate-limited` with `Retry-After`
+(seconds, rounded up); rejected requests do not use up tokens. Each call has its own
+counters, so attach one per operation with `ForOperations`. Counters live in process
+memory (idle clients are dropped once their bucket is full again): with several replicas
+each one counts separately.
+
 ### mail
 
 - `sender, err := mail.New(cfg.Mail, log)` (worker only; no network until `Send`).
