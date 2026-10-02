@@ -76,18 +76,18 @@ func toAPIAsset(v service.AssetView) api.AssetDetail {
 		Status:     api.StatusSummary{Id: v.Status.ID, Name: v.Status.Name, Kind: api.StatusKind(v.Status.Kind)},
 		LocationId: v.LocationID, HolderMemberId: v.HolderMemberID, PurchaseDate: toAPIDate(v.PurchaseDate),
 		RetiredAt: v.RetiredAt, RetiredReason: reason, Version: v.Version, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt,
-		Attributes: attributeValues(v),
+		Attributes: attributeValues(v.Type, v.Values),
 	}
 }
 
 // attributeValues: mọi thuộc tính đang hoạt động của loại, theo thứ tự hiển
 // thị, kèm giá trị (null khi trống). Giá trị của thuộc tính đã gỡ không trả.
-func attributeValues(v service.AssetView) []api.AttributeValue {
-	byAttr := make(map[openapi_types.UUID]domain.Value, len(v.Values))
-	for _, val := range v.Values {
+func attributeValues(t domain.AssetType, values []domain.Value) []api.AttributeValue {
+	byAttr := make(map[openapi_types.UUID]domain.Value, len(values))
+	for _, val := range values {
 		byAttr[val.AttributeID] = val
 	}
-	active := v.Type.ActiveAttributes()
+	active := t.ActiveAttributes()
 	out := make([]api.AttributeValue, 0, len(active))
 	for _, a := range active {
 		av := api.AttributeValue{Key: a.Key, Label: a.Label, DataType: api.DataType(a.DataType)}

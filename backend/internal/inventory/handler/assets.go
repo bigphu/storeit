@@ -34,6 +34,18 @@ func (h *Handler) ListAssets(ctx context.Context, req api.ListAssetsRequestObjec
 	for i, a := range items {
 		out.Items[i] = toAPIListItem(a)
 	}
+	// lọc theo loại: kèm cột thuộc tính. Không có dòng thì không tra loại, để
+	// type_id lạ vẫn trả danh sách rỗng như các bộ lọc khác.
+	if p.TypeId != nil && len(items) > 0 {
+		t, err := h.svc.GetAssetType(ctx, *p.TypeId)
+		if err != nil {
+			return nil, err
+		}
+		for i, a := range items {
+			attrs := attributeValues(t, a.Values)
+			out.Items[i].Attributes = &attrs
+		}
+	}
 	return out, nil
 }
 

@@ -245,3 +245,49 @@ func TestAssets_ListFiltersSortSearch(t *testing.T) {
 	}
 	_ = a2
 }
+
+// Danh sách theo một loại: mỗi dòng kèm giá trị thuộc tính khi được yêu cầu
+func TestAssets_ListWithValues(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	typ := laptop(t, r)
+	a, err := r.assets.Create(ctx, "LV-"+uniq(), domain.AssetFields{
+		Name: "With values", TypeID: typ.ID, StatusID: domain.AvailableStatusID, Values: fullValues(t, typ),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := r.assets.Create(ctx, "LV-"+uniq(), domain.AssetFields{
+		Name: "Only serial", TypeID: typ.ID, StatusID: domain.AvailableStatusID, Values: fullValues(t, typ)[:1],
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	items, _, err := r.assets.List(context.Background(), domain.AssetFilter{TypeID: &typ.ID, IncludeValues: true, Limit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[uuid.UUID]int{}
+	for _, it := range items {
+		got[it.ID] = len(it.Values)
+	}
+	if got[a.ID] != 5 || got[b.ID] != 1 {
+		t.Errorf("values per asset = %v, want 5 and 1", got)
+	}
+	for _, it := range items {
+		if it.ID == a.ID {
+			if v := valueOf(it.Asset, attr(t, typ, "ram_gb").ID); v == nil || *v.Number != "15.6" {
+				t.Errorf("ram_gb in list = %+v", v)
+			}
+		}
+	}
+
+	// Không yêu cầu thì không tải giá trị
+	items, _, _ = r.assets.List(context.Background(), domain.AssetFilter{TypeID: &typ.ID, Limit: 50})
+	for _, it := range items {
+		if it.Values != nil {
+			t.Errorf("values loaded without IncludeValues: %+v", it.Values)
+		}
+	}
+}

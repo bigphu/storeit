@@ -43,6 +43,8 @@ type Querier interface {
 	ListAttributes(ctx context.Context, assetTypeID uuid.UUID) ([]InventoryAssetTypeAttribute, error)
 	ListOptionsForType(ctx context.Context, assetTypeID uuid.UUID) ([]InventoryAssetAttributeOption, error)
 	ListStatuses(ctx context.Context, includeArchived bool) ([]InventoryAssetStatus, error)
+	// Giá trị của nhiều tài sản một lần (các dòng của một trang danh sách)
+	ListValuesForAssets(ctx context.Context, assetIds []uuid.UUID) ([]ListValuesForAssetsRow, error)
 	RemoveAttribute(ctx context.Context, arg RemoveAttributeParams) (int64, error)
 	RemoveOption(ctx context.Context, arg RemoveOptionParams) (int64, error)
 	RestoreAsset(ctx context.Context, arg RestoreAssetParams) (InventoryAsset, error)

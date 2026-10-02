@@ -81,8 +81,10 @@ status.manage; Inventory Officer read + asset.manage; Employee read.
 Custom values in requests: `"attributes": {"ram_gb": 16, "os": "<option id>",
 "warranty_end": "2027-06-30", "has_dock": true}`. In `GET /assets/{id}`: every active
 attribute in display order with `value` (null when empty), `unit`, and for select
-`option_label`/`option_removed`. `GET /assets` items carry type and status names, no
-custom values.
+`option_label`/`option_removed`. `GET /assets` items carry type and status names; with
+`type_id` each item also has `attributes` in the same shape (values for the whole page
+loaded in one extra query), so a client can render a per-type table. Without `type_id`
+the field is absent.
 
 ## Events (`contract/events.go`)
 

@@ -111,9 +111,12 @@ type AssetFilter struct {
 	IncludeRetired bool
 	Sort           AssetSort
 	Limit, Offset  int32
+	// IncludeValues: nạp giá trị thuộc tính cho các dòng của trang (một truy vấn
+	// thêm). Service bật khi lọc theo một loại: các dòng cùng cột, dựng được bảng.
+	IncludeValues bool
 }
 
-// AssetListItem là một dòng của danh sách (không kèm giá trị thuộc tính)
+// AssetListItem là một dòng của danh sách; Asset.Values chỉ có khi IncludeValues
 type AssetListItem struct {
 	Asset
 	TypeName   string

@@ -35,6 +35,8 @@ func (s *Service) ListAssets(ctx context.Context, f domain.AssetFilter) ([]domai
 	if _, err := auth.Require(ctx, domain.PermAssetRead); err != nil {
 		return nil, 0, err
 	}
+	// lọc theo một loại thì các dòng cùng bộ thuộc tính: kèm giá trị để hiện dạng bảng
+	f.IncludeValues = f.TypeID != nil
 	return s.assets.List(ctx, f)
 }
 

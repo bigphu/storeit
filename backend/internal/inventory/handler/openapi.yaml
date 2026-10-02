@@ -276,6 +276,7 @@ paths:
           schema: { type: string, maxLength: 200 }
         - name: type_id
           in: query
+          description: Lọc theo loại; khi có, mỗi dòng kèm `attributes` (các cột của loại).
           schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
         - name: status_id
           in: query
@@ -598,6 +599,10 @@ components:
         retired_at: { type: string, format: date-time }
         version: { type: integer, format: int32 }
         updated_at: { type: string, format: date-time }
+        attributes:
+          description: Chỉ có khi lọc theo `type_id`; như trong chi tiết tài sản.
+          type: array
+          items: { $ref: '#/components/schemas/AttributeValue' }
 
     AssetList:
       allOf:

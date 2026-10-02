@@ -357,6 +357,54 @@ func (q *Queries) ListAssets(ctx context.Context, arg ListAssetsParams) ([]ListA
 	return items, nil
 }
 
+const listValuesForAssets = `-- name: ListValuesForAssets :many
+SELECT asset_id, attribute_id, data_type, value_text, coalesce(value_number::text, '')::text AS value_number,
+       value_date, value_bool, value_option_id
+FROM inventory.asset_attribute_values
+WHERE asset_id = ANY($1::uuid[])
+`
+
+type ListValuesForAssetsRow struct {
+	AssetID       uuid.UUID
+	AttributeID   uuid.UUID
+	DataType      string
+	ValueText     *string
+	ValueNumber   string
+	ValueDate     pgtype.Date
+	ValueBool     *bool
+	ValueOptionID *uuid.UUID
+}
+
+// Giá trị của nhiều tài sản một lần (các dòng của một trang danh sách)
+func (q *Queries) ListValuesForAssets(ctx context.Context, assetIds []uuid.UUID) ([]ListValuesForAssetsRow, error) {
+	rows, err := q.db.Query(ctx, listValuesForAssets, assetIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListValuesForAssetsRow{}
+	for rows.Next() {
+		var i ListValuesForAssetsRow
+		if err := rows.Scan(
+			&i.AssetID,
+			&i.AttributeID,
+			&i.DataType,
+			&i.ValueText,
+			&i.ValueNumber,
+			&i.ValueDate,
+			&i.ValueBool,
+			&i.ValueOptionID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const restoreAsset = `-- name: RestoreAsset :one
 UPDATE inventory.assets
 SET retired_at = NULL, retired_reason = NULL, status_id = $1,

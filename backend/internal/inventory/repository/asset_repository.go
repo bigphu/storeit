@@ -100,7 +100,34 @@ func (r *AssetRepository) List(ctx context.Context, f domain.AssetFilter) ([]dom
 			TypeName: row.TypeName, StatusName: row.StatusName, StatusKind: domain.StatusKind(row.StatusKind),
 		}
 	}
+	if f.IncludeValues && len(out) > 0 {
+		if err := r.attachValues(ctx, out); err != nil {
+			return nil, 0, err
+		}
+	}
 	return out, total, nil
+}
+
+// attachValues nạp giá trị thuộc tính của mọi dòng trong một truy vấn
+func (r *AssetRepository) attachValues(ctx context.Context, items []domain.AssetListItem) error {
+	ids := make([]uuid.UUID, len(items))
+	at := make(map[uuid.UUID]int, len(items))
+	for i, it := range items {
+		ids[i] = it.ID
+		at[it.ID] = i
+	}
+	rows, err := r.q.ListValuesForAssets(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("inventory: list values: %w", err)
+	}
+	for _, v := range rows {
+		i := at[v.AssetID]
+		items[i].Values = append(items[i].Values, toValue(db.ListAssetValuesRow{
+			AttributeID: v.AttributeID, DataType: v.DataType, ValueText: v.ValueText, ValueNumber: v.ValueNumber,
+			ValueDate: v.ValueDate, ValueBool: v.ValueBool, ValueOptionID: v.ValueOptionID,
+		}))
+	}
+	return nil
 }
 
 func (r *AssetRepository) Replace(ctx context.Context, id uuid.UUID, f domain.AssetFields, version int32) (domain.Asset, error) {

@@ -273,3 +273,52 @@ func TestPermissionsOverHTTP(t *testing.T) {
 		t.Errorf("types = %+v", ty)
 	}
 }
+
+// Danh sách lọc theo loại kèm thuộc tính từng dòng (bảng theo loại); không lọc thì không kèm
+func TestListByTypeIncludesAttributes(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	code := "LT" + strings.ToUpper(uuid.NewString()[:6])
+	typ := decode[typeDetail](t, a.do("POST", "/api/v1/asset-types", tok, map[string]any{
+		"code": code, "name": "Monitor " + code,
+		"attributes": []map[string]any{
+			{"key": "size_in", "label": "Size", "data_type": "number", "unit": "inch"},
+			{"key": "panel", "label": "Panel", "data_type": "select", "options": []string{"IPS", "VA"}},
+			{"key": "note", "label": "Note", "data_type": "text"},
+		},
+	}), 201)
+	ips := typ.Attributes[1].Options[0].ID
+	tag := "M-" + strings.ToUpper(uuid.NewString()[:8])
+	decode[assetDetail](t, a.do("POST", "/api/v1/assets", tok, map[string]any{
+		"tag": tag, "name": "Dell U2723", "asset_type_id": typ.ID,
+		"attributes": map[string]any{"size_in": 27, "panel": ips},
+	}), 201)
+
+	type row struct {
+		Tag        string
+		Attributes *[]struct {
+			Key, Unit   string
+			Value       any
+			OptionLabel string `json:"option_label"`
+		}
+	}
+	type page struct {
+		Items []row
+		Total int64
+	}
+	p := decode[page](t, a.do("GET", "/api/v1/assets?type_id="+typ.ID, tok, nil), 200)
+	if p.Total != 1 || p.Items[0].Attributes == nil {
+		t.Fatalf("typed list = %+v", p)
+	}
+	attrs := *p.Items[0].Attributes
+	if len(attrs) != 3 || attrs[0].Key != "size_in" || attrs[0].Value != 27.0 || attrs[0].Unit != "inch" ||
+		attrs[1].OptionLabel != "IPS" || attrs[2].Value != nil {
+		t.Errorf("row attributes = %+v", attrs)
+	}
+
+	// Không có type_id: dòng không kèm attributes
+	p = decode[page](t, a.do("GET", "/api/v1/assets?q="+tag, tok, nil), 200)
+	if p.Total != 1 || p.Items[0].Attributes != nil {
+		t.Errorf("untyped list carries attributes: %+v", p.Items)
+	}
+}

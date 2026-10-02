@@ -41,6 +41,13 @@ SELECT attribute_id, data_type, value_text, coalesce(value_number::text, '')::te
 FROM inventory.asset_attribute_values
 WHERE asset_id = @asset_id;
 
+-- Giá trị của nhiều tài sản một lần (các dòng của một trang danh sách)
+-- name: ListValuesForAssets :many
+SELECT asset_id, attribute_id, data_type, value_text, coalesce(value_number::text, '')::text AS value_number,
+       value_date, value_bool, value_option_id
+FROM inventory.asset_attribute_values
+WHERE asset_id = ANY(@asset_ids::uuid[]);
+
 -- name: DeleteAssetValues :exec
 DELETE FROM inventory.asset_attribute_values WHERE asset_id = @asset_id;
 
