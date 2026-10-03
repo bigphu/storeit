@@ -102,8 +102,11 @@ services:
       API_URL: http://app:8080
       # Bind mount từ Windows/macOS không phát sự kiện file vào container: dùng polling
       VITE_USE_POLLING: "true"
-      # HMR websocket: trình duyệt nối về port trên host
-      VITE_HMR_CLIENT_PORT: ${WEB_PORT:-3000}
+      # HMR websocket: port trình duyệt nối về (mặc định port publish; 443 khi đi qua
+      # reverse proxy/tunnel HTTPS)
+      VITE_HMR_CLIENT_PORT: ${VITE_HMR_CLIENT_PORT:-${WEB_PORT:-3000}}
+      # Tên miền khác localhost/IP được mở dev server (Vite chặn host lạ)
+      VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS:-}
     ports:
       - "127.0.0.1:${WEB_PORT:-3000}:3000"
     volumes:

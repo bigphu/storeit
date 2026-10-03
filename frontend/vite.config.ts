@@ -23,6 +23,8 @@ export default defineConfig({
     // polling; HMR nối về port publish trên host
     watch: process.env.VITE_USE_POLLING === 'true' ? { usePolling: true, interval: 300 } : undefined,
     hmr: process.env.VITE_HMR_CLIENT_PORT ? { clientPort: Number(process.env.VITE_HMR_CLIENT_PORT) } : undefined,
+    // Tên miền ngoài localhost/IP (vd mở qua reverse proxy, tunnel), ngăn bằng dấu phẩy
+    allowedHosts: process.env.VITE_ALLOWED_HOSTS?.split(',').map((h) => h.trim()).filter(Boolean),
   },
   test: {
     environment: 'node',
