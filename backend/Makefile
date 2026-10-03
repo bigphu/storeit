@@ -14,105 +14,32 @@ $(warning Không tìm thấy sh.exe của Git for Windows, recipe sẽ chạy b�
 endif
 endif
 
-# APP_DB_NAME, APP_DB_USER, PGADMIN_PORT... lấy từ .env nếu có
--include .env
-
-APP_DB_NAME  ?= storeit
-APP_DB_USER  ?= app_user
-PGADMIN_PORT ?= 5050
-
-PG_SUPERUSER := $(strip $(file < deploy/postgres/secrets/pg_user.txt))
+# Lệnh Go của backend. Stack Docker, database, init: Makefile ở thư mục gốc
 
 # Env cho Go chạy trên host (run-api, test...): chỉ export biến do .env.local thêm vào
 VARS_BEFORE_LOCAL := $(.VARIABLES)
 -include .env.local
 LOCAL_ENV_KEYS := $(filter-out $(VARS_BEFORE_LOCAL) VARS_BEFORE_LOCAL,$(.VARIABLES))
+# Đường dẫn file trong .env.local tính từ backend/; go test chạy mỗi package trong thư
+# mục của nó, nên đổi sang đường dẫn tuyệt đối trước khi export
+PATH_KEYS := $(filter %_FILE PGSSLROOTCERT,$(LOCAL_ENV_KEYS))
+$(foreach k,$(PATH_KEYS),$(if $($(k)),$(eval $(k) := $(abspath $($(k))))))
 export $(LOCAL_ENV_KEYS)
-
-COMPOSE := docker compose
-PSQL    := $(COMPOSE) exec postgres psql
 
 # Version của tool chạy bằng Docker, CI cũng dùng
 SQLC_VERSION     := 1.31.1
 GOLANGCI_VERSION := v2.14.0
 
 .DEFAULT_GOAL := help
-.PHONY: help init dev \
-        up down restart build logs logs-app logs-db ps shell \
-        psql psql-admin db-reset pgadmin \
-        migrate migrate-new \
+.PHONY: help migrate migrate-new \
         sqlc sqlc-vet sqlc-compile generate generate-check \
         run-api run-worker bin test fmt fmt-check vet lint tidy check
 
 help:
-	@echo Prerequisite: init
-	@echo Dev         : dev = up + logs
-	@echo Docker      : up down restart build logs logs-app logs-db ps shell
-	@echo DB          : psql psql-admin pgadmin db-reset CONFIRM=yes
 	@echo Migrations  : migrate migrate-new name=...
 	@echo Codegen     : generate generate-check sqlc sqlc-vet sqlc-compile
 	@echo Go          : run-api run-worker bin test fmt fmt-check vet lint tidy check
-
-# --- Prerequisite ---
-# Chạy một lần sau khi clone: tạo secrets, cert và file env
-init:
-	sh deploy/scripts/init.sh
-	@test -f .env       || cp .env.example .env
-	@test -f .env.local || cp .env.local.example .env.local
-
-# --- Dev ---
-# Bật cả stack rồi xem log. Ctrl-C chỉ thoát xem log, stack vẫn chạy
-dev: up logs
-
-# --- Docker ---
-up:
-	$(COMPOSE) up -d
-
-down:
-	$(COMPOSE) down
-
-restart:
-	$(COMPOSE) restart app
-
-# Build lại image dev khi đổi Dockerfile hoặc go.mod
-build:
-	$(COMPOSE) build app
-
-logs:
-	$(COMPOSE) logs -f
-
-logs-app:
-	$(COMPOSE) logs -f app
-
-logs-db:
-	$(COMPOSE) logs -f postgres
-
-ps:
-	$(COMPOSE) ps
-
-shell:
-	$(COMPOSE) exec app sh
-
-# --- Database ---
-# Vào qua unix socket trong container nên không cần mật khẩu
-psql:
-	$(PSQL) -U $(APP_DB_USER) -d $(APP_DB_NAME)
-
-psql-admin:
-	$(PSQL) -U $(PG_SUPERUSER) -d postgres
-
-pgadmin:
-	$(COMPOSE) up -d pgadmin
-	@echo pgAdmin: http://127.0.0.1:$(PGADMIN_PORT)
-
-# XOÁ dữ liệu Postgres và pgAdmin (giữ cache Go), initdb chạy lại từ đầu
-db-reset:
-ifneq ($(CONFIRM),yes)
-	$(error db-reset will erase all data. To run: make db-reset CONFIRM=yes)
-endif
-	$(COMPOSE) down
-	docker volume rm -f storeit_pgdata storeit_pgadmin
-	$(COMPOSE) up -d
+	@echo Docker, DB  : make -C .. help
 
 # --- Migrations ---
 # Chạy trên host với .env.local. Trong Docker thì `make up` tự chạy migrate

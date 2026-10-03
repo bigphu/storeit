@@ -1,3 +1,6 @@
+# Dev stack của cả monorepo: make init (một lần), rồi make up / make dev.
+#   web (Vite, :3000) ──/api──► app (Go, :8080) ──► postgres
+#   worker ──► postgres, mailpit (SMTP)
 name: storeit
 
 x-timezone: &timezone
@@ -20,7 +23,7 @@ x-go-env: &go-env
   # Dev chạy http: trình duyệt bỏ cookie Secure trên http, kể cả localhost
   IDENTITY_COOKIE_SECURE: "false"
   # Frontend: link trong thư mời / đặt lại mật khẩu trỏ về đây
-  IDENTITY_APP_URL: ${APP_URL:-http://localhost:3000}
+  IDENTITY_APP_URL: ${APP_URL:-http://localhost:${WEB_PORT:-3000}}
   # Administrator đầu tiên, tạo khi DB chưa có account nào (đặt trong .env)
   ADMIN_EMAIL: ${ADMIN_EMAIL:-}
   ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
@@ -30,12 +33,12 @@ x-go-env: &go-env
 # Build, secrets, volumes chung (image dev, source mount)
 x-go-dev: &go-dev
   build:
-    context: .
+    context: ./backend
     target: dev
   init: true
   secrets: [pg_app_pw, jwt_keys]
   volumes:
-    - .:/src
+    - ./backend:/src
     - gomod:/go/pkg/mod
     - gobuild:/root/.cache/go-build
     - ./deploy/postgres/certs/rootCA.pem:/certs/rootCA.pem:ro
@@ -84,6 +87,31 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
       mailpit: { condition: service_started }
+    restart: unless-stopped
+
+  # Frontend: Vite (hot reload) với source mount từ ./frontend, chuyển /api sang app.
+  # node_modules nằm trong volume riêng: bản cài trên Windows (binary native) không
+  # chạy được trong Linux; dev.sh cài lại khi package-lock.json đổi
+  web:
+    build:
+      context: ./frontend
+      target: dev
+    init: true
+    environment:
+      <<: *timezone
+      API_URL: http://app:8080
+      # Bind mount từ Windows/macOS không phát sự kiện file vào container: dùng polling
+      VITE_USE_POLLING: "true"
+      # HMR websocket: trình duyệt nối về port trên host
+      VITE_HMR_CLIENT_PORT: ${WEB_PORT:-3000}
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
+    volumes:
+      - ./frontend:/app
+      - web_node_modules:/app/node_modules
+      - npm_cache:/root/.npm
+    depends_on:
+      app: { condition: service_started }
     restart: unless-stopped
 
   # Hộp thư giả cho dev: nhận mọi thư qua SMTP, xem bằng trình duyệt
@@ -196,3 +224,5 @@ volumes:
   pgadmin:
   gomod:
   gobuild:
+  web_node_modules:
+  npm_cache:

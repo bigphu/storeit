@@ -1,7 +1,10 @@
 # Production trên 1 server: image đã build sẵn (target prod), không mount source, không Air.
-#   cp .env.prod.example .env && sửa STOREIT_IMAGE
+#   cp .env.prod.example .env && sửa STOREIT_IMAGE, STOREIT_WEB_IMAGE
 #   sh deploy/scripts/init.sh                 # secrets + cert MỚI cho server (không copy từ dev)
 #   docker compose -f compose.prod.yml up -d
+#
+#   reverse proxy (HTTPS) ──► web (nginx :8080) ──┬── /      → SPA
+#                                                 └── /api/* → app (Go :8080) ──► postgres
 #
 # Tên project khác dev => volume riêng (storeit-prod_pgdata), không đụng dữ liệu dev.
 name: storeit-prod
@@ -73,11 +76,27 @@ services:
       # thì mọi request mang IP gateway, rate limit đăng nhập dùng chung cho
       # cả công ty và phiên ghi sai IP. Proxy phải đặt X-Forwarded-For.
       HTTP_TRUSTED_PROXIES: ${HTTP_TRUSTED_PROXIES:-${APP_NET_SUBNET:-172.30.0.0/24}}
-    # Chỉ nghe 127.0.0.1: đặt reverse proxy (Caddy/nginx) phía trước để lo HTTPS
-    ports:
-      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    # Không publish port: chỉ web (nginx) trong mạng compose gọi vào
     depends_on:
       migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  # nginx: phục vụ SPA và chuyển /api sang app (một origin cho cookie refresh).
+  # Chỉ nghe 127.0.0.1: reverse proxy (Caddy/nginx) trên host lo HTTPS và phải đặt
+  # X-Forwarded-For; web nối thêm IP của nó, app tin cả dải mạng compose
+  web:
+    image: ${STOREIT_WEB_IMAGE:?set STOREIT_WEB_IMAGE, ví dụ registry.example.com/storeit-web:1.4.0}
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+    depends_on:
+      app: { condition: service_started }
     restart: unless-stopped
 
   # Giao event, gửi thư và chạy job định kỳ (dọn phiên đăng nhập đã chết)

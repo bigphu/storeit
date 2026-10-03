@@ -1,13 +1,18 @@
 # storeit
 
-Asset management app: `backend/` (Go modular monolith: chi, oapi-codegen strict
-server, pgx, River, sqlc, goose) and `frontend/`.
+Asset management app, monorepo: `backend/` (Go modular monolith: chi, oapi-codegen strict
+server, pgx, River, sqlc, goose) and `frontend/` (Vue). The repo root owns the Docker
+stack: `compose.yml` (dev: postgres, migrate, app, worker, web, mailpit, pgadmin),
+`compose.prod.yml`, `deploy/` (secrets, certs, initdb, `init.sh`), `.env`, and a
+`Makefile` (`init`, `up`, `down`, `logs`, `psql`, `db-reset`, `generate`, `check`,
+`images`). See `README.md`.
 
 ## Backend
 
-- Commands (run in `backend/`): `make test`, `make check` (sqlc-compile, fmt, vet, lint,
-  test), `make generate` (sqlc + oapi-codegen; never hand-edit `*.gen.go`,
-  `events/db`). `CI=true go test -p 1 ./...` runs everything with Docker-backed tests unable to skip
+- Commands (run in `backend/`, Go only): `make test`, `make check` (sqlc-compile, fmt, vet,
+  lint, test), `make generate` (sqlc + oapi-codegen; never hand-edit `*.gen.go`,
+  `events/db`). `backend/.env.local` is the env for Go on the host (paths point to
+  `../deploy/`). `CI=true go test -p 1 ./...` runs everything with Docker-backed tests unable to skip
   (`-p 1`: starting several test containers at once can fail on Windows).
 - **Platform packages** (`backend/internal/platform/*`: config, logger, server,
   middleware, web, errs, auth, jwt, database, events, jobs, storage, mail): read
@@ -36,7 +41,9 @@ server, pgx, River, sqlc, goose) and `frontend/`.
 ## Frontend
 
 - `frontend/`: Vue 3 + TypeScript + PrimeVue + Vue Query, reference in `frontend/README.md`.
-  Commands (run in `frontend/`): `npm run dev` (:3000, proxies `/api` to :8080),
+  Runs as the `web` service in `compose.yml`; `Dockerfile` has `dev` and `prod` (nginx:
+  SPA + `/api` proxy) targets. Commands (run in `frontend/`): `npm run dev` (:3000,
+  proxies `/api` to :8080; stop the `web` container first),
   `npm run check` (vue-tsc, Vitest, build), `npm run gen:api` after changing a backend
   OpenAPI spec (commit the generated `src/lib/api/*.d.ts`; never hand-edit them).
 - Comments in Vietnamese like the backend; UI text in English.

@@ -6,15 +6,32 @@ Aura theme plus minimal layout CSS (`src/app/base.css`); restyle freely.
 
 ## Run
 
+The usual way is the whole stack from the repo root: `make up` starts the `web` container
+(Vite with hot reload, http://localhost:3000) next to the backend. Its `node_modules` lives
+in a Docker volume and is reinstalled when `package-lock.json` changes
+(`docker/dev.sh`). Run `npm install` on the host as well for your editor and `npm run
+check`.
+
+Vite on the host instead (stop the `web` container first, both use port 3000):
+
 ```sh
 npm install
 npm run dev        # http://localhost:3000, /api proxied to http://localhost:8080
 ```
 
-The backend runs from `../backend` (`docker compose up`). Port 3000 matters: emailed
-invitation and reset links point to `IDENTITY_APP_URL` (default `http://localhost:3000`),
-and serving the app from the same origin as `/api` is what lets the `SameSite=Strict`
-refresh cookie work without CORS. Set `API_URL` to proxy elsewhere.
+Port 3000 matters: emailed invitation and reset links point to `IDENTITY_APP_URL`
+(default `http://localhost:${WEB_PORT}`), and serving the app from the same origin as
+`/api` is what lets the `SameSite=Strict` refresh cookie work without CORS. Set `API_URL`
+to proxy elsewhere.
+
+## Docker
+
+`Dockerfile` targets: `dev` (Vite, used by `compose.yml`) and `prod` (built SPA on
+unprivileged nginx, port 8080, `docker/nginx.conf`). In production nginx serves the SPA
+and proxies `/api/` and `/healthz` to the `app` container, so the browser sees one origin;
+TLS is the job of the reverse proxy in front. The build puts bundles under `/static/`
+(`build.assetsDir`), because `/assets/...` are SPA routes that must fall back to
+`index.html`.
 
 ## Scripts
 
@@ -23,6 +40,7 @@ refresh cookie work without CORS. Set `API_URL` to proxy elsewhere.
 | `npm run gen:api` | Regenerate `src/lib/api/{identity,inventory}.d.ts` from the backend OpenAPI specs. Run after changing a spec; commit the output. |
 | `npm run check` | Type-check (`vue-tsc`), unit tests (Vitest), production build |
 | `npm test` | Unit tests only |
+| `docker build --target prod .` | Production image (the root `make images` builds it with the backend image) |
 
 ## Layout
 

@@ -25,22 +25,16 @@ go.work.sum
 /vendor/
 
 # --- Environment & secrets ---
+# .env.local: env cho Go chạy trên host. Env và secret của stack ở thư mục gốc
 .env
 .env.*
-!.env.example
 !.env.local.example
-!.env.prod.example
 *.pem
 *.key
 *.crt
 *.p12
 /secrets/
 /certs/
-/deploy/postgres/secrets/
-/deploy/postgres/certs/
-/deploy/postgres/logs/
-/deploy/pgadmin/secrets/
-/deploy/app/secrets/
 
 # --- Local data & logs ---
 *.log
@@ -71,6 +65,3 @@ __debug_bin*
 .DS_Store
 Thumbs.db
 desktop.ini
-
-# --- Docker local overrides ---
-docker-compose.override.yml
