@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -358,5 +359,76 @@ func TestListAssets_AttributeQuery(t *testing.T) {
 	// Không có điều kiện thuộc tính thì không cần type_id, không tra loại
 	if _, _, err := e.svc.ListAssets(reader, domain.AssetFilter{Sort: "name"}); err != nil {
 		t.Errorf("plain list: %v", err)
+	}
+}
+
+// Thao tác hàng loạt: mỗi tài sản thành công hay thất bại riêng
+func TestBulkActions(t *testing.T) {
+	e := newEnv()
+	typ := e.laptop(t)
+	mk := func(tag string) AssetView {
+		t.Helper()
+		v, err := e.svc.CreateAsset(manager, tag, AssetInput{Name: tag, TypeID: typ.ID, Attributes: map[string]any{"serial": "SN-" + tag}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	a, b, c := mk("B-1"), mk("B-2"), mk("B-3")
+	gone := uuid.New()
+
+	// đổi status: b gửi version cũ, gone không tồn tại; a và c đổi được
+	repair := e.statuses.byKind(t, domain.KindUnavailable)
+	res, err := e.svc.SetAssetsStatus(manager, []BulkItem{
+		{ID: a.ID, Version: a.Version}, {ID: b.ID, Version: b.Version - 1}, {ID: gone, Version: 1}, {ID: c.ID, Version: c.Version},
+	}, repair.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(res.Succeeded, []uuid.UUID{a.ID, c.ID}) || len(res.Failed) != 2 ||
+		!errors.Is(res.Failed[0].Err, domain.ErrAssetChanged) || res.Failed[0].ID != b.ID ||
+		!errors.Is(res.Failed[1].Err, domain.ErrAssetNotFound) {
+		t.Errorf("status result = %+v", res)
+	}
+	if got, _ := e.svc.GetAsset(manager, a.ID); got.Status.ID != repair.ID {
+		t.Errorf("a status = %s", got.Status.Name)
+	}
+
+	// status đã có sẵn: coi như thành công, không ghi (version giữ nguyên)
+	cur, _ := e.svc.GetAsset(manager, c.ID)
+	res, _ = e.svc.SetAssetsStatus(manager, []BulkItem{{ID: c.ID, Version: cur.Version}}, repair.ID)
+	if after, _ := e.svc.GetAsset(manager, c.ID); len(res.Succeeded) != 1 || after.Version != cur.Version {
+		t.Errorf("same status rewrote the asset: %+v, version %d -> %d", res, cur.Version, after.Version)
+	}
+
+	// retire: a thành công; b vẫn version cũ
+	cur, _ = e.svc.GetAsset(manager, a.ID)
+	res, err = e.svc.RetireAssets(manager, []BulkItem{{ID: a.ID, Version: cur.Version}, {ID: b.ID, Version: b.Version - 1}}, " disposal batch ")
+	if err != nil || !slices.Equal(res.Succeeded, []uuid.UUID{a.ID}) || len(res.Failed) != 1 {
+		t.Fatalf("retire = %+v, %v", res, err)
+	}
+	if got, _ := e.svc.GetAsset(manager, a.ID); got.RetiredReason != "disposal batch" {
+		t.Errorf("reason = %q", got.RetiredReason)
+	}
+	// tài sản đã retire không đổi status được
+	cur, _ = e.svc.GetAsset(manager, a.ID)
+	res, _ = e.svc.SetAssetsStatus(manager, []BulkItem{{ID: a.ID, Version: cur.Version}}, repair.ID)
+	if len(res.Failed) != 1 || !errors.Is(res.Failed[0].Err, domain.ErrAssetRetired) {
+		t.Errorf("retired asset status change = %+v", res)
+	}
+
+	// Lỗi của cả yêu cầu: không có tài sản, quá nhiều, status retired, thiếu quyền
+	if _, err := e.svc.RetireAssets(manager, nil, ""); !errors.Is(err, domain.ErrInvalidBulk) {
+		t.Errorf("empty: %v", err)
+	}
+	if _, err := e.svc.RetireAssets(manager, make([]BulkItem, 201), ""); !errors.Is(err, domain.ErrInvalidBulk) {
+		t.Errorf("too many: %v", err)
+	}
+	retired := e.statuses.byKind(t, domain.KindRetired)
+	if _, err := e.svc.SetAssetsStatus(manager, []BulkItem{{ID: b.ID, Version: b.Version}}, retired.ID); !errors.Is(err, domain.ErrRetiredStatus) {
+		t.Errorf("retired-kind status: %v", err)
+	}
+	if _, err := e.svc.RetireAssets(as(domain.PermAssetRead), []BulkItem{{ID: b.ID, Version: b.Version}}, ""); status(err) != 403 {
+		t.Errorf("without manage: %v", err)
 	}
 }

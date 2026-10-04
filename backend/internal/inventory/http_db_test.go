@@ -432,3 +432,64 @@ func TestListTypesWithCounts(t *testing.T) {
 		t.Errorf("asset_count without with_counts = %d, want absent", *n)
 	}
 }
+
+func TestBulkActionsOverHTTP(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	mk := func() assetDetail {
+		return decode[assetDetail](t, a.do("POST", "/api/v1/assets", tok, map[string]any{
+			"tag": "BK-" + strings.ToUpper(uuid.NewString()[:8]), "name": "Bulk", "asset_type_id": domain.GeneralTypeID.String(),
+		}), 201)
+	}
+	x, y := mk(), mk()
+	type result struct {
+		Succeeded []string
+		Failed    []struct {
+			ID      string
+			Problem struct{ Type string }
+		}
+	}
+
+	// y gửi version cũ: x đổi được, y báo asset-changed; cả lô vẫn 200
+	r := decode[result](t, a.do("POST", "/api/v1/assets/bulk-status", tok, map[string]any{
+		"status_id": domain.RepairStatusID.String(),
+		"items":     []map[string]any{{"id": x.ID, "version": x.Version}, {"id": y.ID, "version": y.Version - 1}},
+	}), 200)
+	if len(r.Succeeded) != 1 || r.Succeeded[0] != x.ID || len(r.Failed) != 1 || r.Failed[0].ID != y.ID ||
+		r.Failed[0].Problem.Type != "/errors/asset-changed" {
+		t.Fatalf("bulk status = %+v", r)
+	}
+	if got := decode[assetDetail](t, a.do("GET", "/api/v1/assets/"+x.ID, tok, nil), 200); got.Status.ID != domain.RepairStatusID.String() {
+		t.Errorf("x status = %+v", got.Status)
+	}
+
+	r = decode[result](t, a.do("POST", "/api/v1/assets/bulk-retire", tok, map[string]any{
+		"reason": "Disposal batch",
+		"items":  []map[string]any{{"id": y.ID, "version": y.Version}},
+	}), 200)
+	if len(r.Succeeded) != 1 || len(r.Failed) != 0 {
+		t.Fatalf("bulk retire = %+v", r)
+	}
+	if got := decode[assetDetail](t, a.do("GET", "/api/v1/assets/"+y.ID, tok, nil), 200); got.RetiredAt == nil {
+		t.Error("y not retired")
+	}
+
+	// lỗi của cả yêu cầu
+	if rec := a.do("POST", "/api/v1/assets/bulk-retire", tok, map[string]any{"items": []any{}}); rec.Code != 422 {
+		t.Errorf("empty items: %d %s", rec.Code, rec.Body)
+	}
+	if rec := a.do("POST", "/api/v1/assets/bulk-status", tok, map[string]any{
+		"status_id": domain.RetiredStatusID.String(), "items": []map[string]any{{"id": x.ID, "version": 1}},
+	}); rec.Code != 422 {
+		t.Errorf("retired-kind status: %d %s", rec.Code, rec.Body)
+	}
+	if rec := a.do("POST", "/api/v1/assets/bulk-retire", a.token(domain.PermAssetRead), map[string]any{
+		"items": []map[string]any{{"id": x.ID, "version": 1}},
+	}); rec.Code != 403 {
+		t.Errorf("without manage: %d", rec.Code)
+	}
+	// đường dẫn tài sản đơn vẫn chạy bên cạnh
+	if rec := a.do("GET", "/api/v1/assets/"+x.ID, tok, nil); rec.Code != 200 {
+		t.Errorf("single asset route: %d", rec.Code)
+	}
+}

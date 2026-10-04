@@ -3,9 +3,13 @@ package handler
 import (
 	"context"
 
+	openapi_types "github.com/oapi-codegen/runtime/types"
+
 	"storeit/internal/inventory/domain"
 	"storeit/internal/inventory/handler/api"
 	"storeit/internal/inventory/service"
+	"storeit/internal/platform/errs"
+	"storeit/internal/platform/web/apicommon"
 )
 
 func (h *Handler) ListAssets(ctx context.Context, req api.ListAssetsRequestObject) (api.ListAssetsResponseObject, error) {
@@ -97,4 +101,53 @@ func (h *Handler) RestoreAsset(ctx context.Context, req api.RestoreAssetRequestO
 		return nil, err
 	}
 	return api.RestoreAsset200JSONResponse(toAPIAsset(v)), nil
+}
+
+func (h *Handler) RetireAssets(ctx context.Context, req api.RetireAssetsRequestObject) (api.RetireAssetsResponseObject, error) {
+	res, err := h.svc.RetireAssets(ctx, bulkItems(req.Body.Items), deref(req.Body.Reason))
+	if err != nil {
+		return nil, err
+	}
+	return api.RetireAssets200JSONResponse(toBulkResult(res)), nil
+}
+
+func (h *Handler) SetAssetsStatus(ctx context.Context, req api.SetAssetsStatusRequestObject) (api.SetAssetsStatusResponseObject, error) {
+	res, err := h.svc.SetAssetsStatus(ctx, bulkItems(req.Body.Items), req.Body.StatusId)
+	if err != nil {
+		return nil, err
+	}
+	return api.SetAssetsStatus200JSONResponse(toBulkResult(res)), nil
+}
+
+func bulkItems(in []api.BulkItem) []service.BulkItem {
+	out := make([]service.BulkItem, len(in))
+	for i, it := range in {
+		out[i] = service.BulkItem{ID: it.Id, Version: it.Version}
+	}
+	return out
+}
+
+// toBulkResult: lỗi của từng tài sản viết như problem của thao tác đơn
+func toBulkResult(r service.BulkResult) api.BulkResult {
+	out := api.BulkResult{Succeeded: make([]openapi_types.UUID, len(r.Succeeded)), Failed: make([]api.BulkFailure, len(r.Failed))}
+	copy(out.Succeeded, r.Succeeded)
+	for i, f := range r.Failed {
+		out.Failed[i] = api.BulkFailure{Id: f.ID, Problem: toProblem(errs.NewFrom(f.Err))}
+	}
+	return out
+}
+
+func toProblem(e *errs.Error) apicommon.Problem {
+	p := apicommon.Problem{Type: e.Type(), Title: e.Title(), Status: e.Status()}
+	if d := e.Detail(); d != "" {
+		p.Detail = &d
+	}
+	if fs := e.Fields(); len(fs) > 0 {
+		list := make([]apicommon.FieldError, len(fs))
+		for i, f := range fs {
+			list[i] = apicommon.FieldError{Field: f.Field, Detail: f.Detail}
+		}
+		p.Errors = &list
+	}
+	return p
 }

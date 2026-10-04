@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/google/uuid"
@@ -250,6 +251,16 @@ func (f *fakeStatuses) Archive(_ context.Context, id uuid.UUID) (domain.Status, 
 }
 
 // archive đánh dấu archived trực tiếp (để test luật "đã archive")
+// byKind: status mặc định của kind (cho test)
+func (f *fakeStatuses) byKind(t *testing.T, k domain.StatusKind) domain.Status {
+	t.Helper()
+	s, err := f.Default(context.Background(), k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
 func (f *fakeStatuses) archive(id uuid.UUID) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -318,7 +329,10 @@ func (f *fakeAssets) List(_ context.Context, filter domain.AssetFilter) ([]domai
 func (f *fakeAssets) Replace(_ context.Context, id uuid.UUID, in domain.AssetFields, version int32) (domain.Asset, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	a := f.assets[id]
+	a, ok := f.assets[id]
+	if !ok {
+		return domain.Asset{}, domain.ErrAssetNotFound
+	}
 	if a.Retired() {
 		return domain.Asset{}, domain.ErrAssetRetired
 	}
@@ -334,7 +348,15 @@ func (f *fakeAssets) Replace(_ context.Context, id uuid.UUID, in domain.AssetFie
 func (f *fakeAssets) Retire(_ context.Context, id uuid.UUID, reason string, status uuid.UUID, version int32) (domain.Asset, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	a := f.assets[id]
+	a, ok := f.assets[id]
+	switch {
+	case !ok:
+		return domain.Asset{}, domain.ErrAssetNotFound
+	case a.Retired():
+		return domain.Asset{}, domain.ErrAssetRetired
+	case a.Version != version:
+		return domain.Asset{}, domain.ErrAssetChanged
+	}
 	now := time.Now()
 	a.RetiredAt, a.RetiredReason, a.StatusID = &now, reason, status
 	a.Version++

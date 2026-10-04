@@ -190,6 +190,41 @@ type AttributeValue struct {
 // AttributeValues Attribute key -> value (string, number, boolean; select = option id; date = YYYY-MM-DD)
 type AttributeValues map[string]interface{}
 
+// BulkFailure defines model for BulkFailure.
+type BulkFailure struct {
+	Id      externalRef0.ID      `json:"id"`
+	Problem externalRef0.Problem `json:"problem"`
+}
+
+// BulkItem defines model for BulkItem.
+type BulkItem struct {
+	Id externalRef0.ID `json:"id"`
+
+	// Version The version you last read; a newer one fails that asset with asset-changed
+	Version int32 `json:"version"`
+}
+
+// BulkItems defines model for BulkItems.
+type BulkItems = []BulkItem
+
+// BulkResult defines model for BulkResult.
+type BulkResult struct {
+	Failed    []BulkFailure     `json:"failed"`
+	Succeeded []externalRef0.ID `json:"succeeded"`
+}
+
+// BulkRetireRequest defines model for BulkRetireRequest.
+type BulkRetireRequest struct {
+	Items  BulkItems `json:"items"`
+	Reason *string   `json:"reason,omitempty"`
+}
+
+// BulkStatusRequest defines model for BulkStatusRequest.
+type BulkStatusRequest struct {
+	Items    BulkItems       `json:"items"`
+	StatusId externalRef0.ID `json:"status_id"`
+}
+
 // CreateAssetRequest defines model for CreateAssetRequest.
 type CreateAssetRequest struct {
 	AssetTypeId externalRef0.ID `json:"asset_type_id"`
@@ -424,6 +459,12 @@ type UpdateOptionJSONRequestBody = UpdateOptionRequest
 // CreateAssetJSONRequestBody defines body for CreateAsset for application/json ContentType.
 type CreateAssetJSONRequestBody = CreateAssetRequest
 
+// RetireAssetsJSONRequestBody defines body for RetireAssets for application/json ContentType.
+type RetireAssetsJSONRequestBody = BulkRetireRequest
+
+// SetAssetsStatusJSONRequestBody defines body for SetAssetsStatus for application/json ContentType.
+type SetAssetsStatusJSONRequestBody = BulkStatusRequest
+
 // UpdateAssetJSONRequestBody defines body for UpdateAsset for application/json ContentType.
 type UpdateAssetJSONRequestBody = UpdateAssetRequest
 
@@ -489,6 +530,12 @@ type ServerInterface interface {
 	// CreateAsset Create an asset (inventory.asset.manage)
 	// (POST /assets)
 	CreateAsset(w http.ResponseWriter, r *http.Request)
+	// RetireAssets Retire several assets; each succeeds or fails on its own (inventory.asset.manage)
+	// (POST /assets/bulk-retire)
+	RetireAssets(w http.ResponseWriter, r *http.Request)
+	// SetAssetsStatus Change the status of several assets; each succeeds or fails on its own (inventory.asset.manage)
+	// (POST /assets/bulk-status)
+	SetAssetsStatus(w http.ResponseWriter, r *http.Request)
 	// GetAsset Get an asset with its custom attributes (inventory.asset.read)
 	// (GET /assets/{assetID})
 	GetAsset(w http.ResponseWriter, r *http.Request, assetID AssetID)
@@ -612,6 +659,18 @@ func (_ Unimplemented) ListAssets(w http.ResponseWriter, r *http.Request, params
 // CreateAsset Create an asset (inventory.asset.manage)
 // (POST /assets)
 func (_ Unimplemented) CreateAsset(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RetireAssets Retire several assets; each succeeds or fails on its own (inventory.asset.manage)
+// (POST /assets/bulk-retire)
+func (_ Unimplemented) RetireAssets(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetAssetsStatus Change the status of several assets; each succeeds or fails on its own (inventory.asset.manage)
+// (POST /assets/bulk-status)
+func (_ Unimplemented) SetAssetsStatus(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1307,6 +1366,34 @@ func (siw *ServerInterfaceWrapper) CreateAsset(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// RetireAssets operation middleware
+func (siw *ServerInterfaceWrapper) RetireAssets(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RetireAssets(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetAssetsStatus operation middleware
+func (siw *ServerInterfaceWrapper) SetAssetsStatus(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAssetsStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetAsset operation middleware
 func (siw *ServerInterfaceWrapper) GetAsset(w http.ResponseWriter, r *http.Request) {
 
@@ -1583,6 +1670,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/assets/{assetID}", wrapper.UpdateAsset)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/assets/bulk-retire", wrapper.RetireAssets)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/assets/bulk-status", wrapper.SetAssetsStatus)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/assets/{assetID}/retire", wrapper.RetireAsset)
@@ -2303,6 +2396,84 @@ func (response CreateAssetdefaultApplicationProblemPlusJSONResponse) VisitCreate
 	return err
 }
 
+type RetireAssetsRequestObject struct {
+	Body *RetireAssetsJSONRequestBody
+}
+
+type RetireAssetsResponseObject interface {
+	VisitRetireAssetsResponse(w http.ResponseWriter) error
+}
+
+type RetireAssets200JSONResponse BulkResult
+
+func (response RetireAssets200JSONResponse) VisitRetireAssetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetireAssetsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response RetireAssetsdefaultApplicationProblemPlusJSONResponse) VisitRetireAssetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAssetsStatusRequestObject struct {
+	Body *SetAssetsStatusJSONRequestBody
+}
+
+type SetAssetsStatusResponseObject interface {
+	VisitSetAssetsStatusResponse(w http.ResponseWriter) error
+}
+
+type SetAssetsStatus200JSONResponse BulkResult
+
+func (response SetAssetsStatus200JSONResponse) VisitSetAssetsStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAssetsStatusdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response SetAssetsStatusdefaultApplicationProblemPlusJSONResponse) VisitSetAssetsStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetAssetRequestObject struct {
 	AssetID AssetID `json:"assetID"`
 }
@@ -2518,6 +2689,12 @@ type StrictServerInterface interface {
 	// CreateAsset Create an asset (inventory.asset.manage)
 	// (POST /assets)
 	CreateAsset(ctx context.Context, request CreateAssetRequestObject) (CreateAssetResponseObject, error)
+	// RetireAssets Retire several assets; each succeeds or fails on its own (inventory.asset.manage)
+	// (POST /assets/bulk-retire)
+	RetireAssets(ctx context.Context, request RetireAssetsRequestObject) (RetireAssetsResponseObject, error)
+	// SetAssetsStatus Change the status of several assets; each succeeds or fails on its own (inventory.asset.manage)
+	// (POST /assets/bulk-status)
+	SetAssetsStatus(ctx context.Context, request SetAssetsStatusRequestObject) (SetAssetsStatusResponseObject, error)
 	// GetAsset Get an asset with its custom attributes (inventory.asset.read)
 	// (GET /assets/{assetID})
 	GetAsset(ctx context.Context, request GetAssetRequestObject) (GetAssetResponseObject, error)
@@ -3103,6 +3280,68 @@ func (sh *strictHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// RetireAssets operation middleware
+func (sh *strictHandler) RetireAssets(w http.ResponseWriter, r *http.Request) {
+	var request RetireAssetsRequestObject
+
+	var body RetireAssetsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RetireAssets(ctx, request.(RetireAssetsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RetireAssets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RetireAssetsResponseObject); ok {
+		if err := validResponse.VisitRetireAssetsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetAssetsStatus operation middleware
+func (sh *strictHandler) SetAssetsStatus(w http.ResponseWriter, r *http.Request) {
+	var request SetAssetsStatusRequestObject
+
+	var body SetAssetsStatusJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetAssetsStatus(ctx, request.(SetAssetsStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetAssetsStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetAssetsStatusResponseObject); ok {
+		if err := validResponse.VisitSetAssetsStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetAsset operation middleware
 func (sh *strictHandler) GetAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
 	var request GetAssetRequestObject
@@ -3233,72 +3472,77 @@ func (sh *strictHandler) RetireAsset(w http.ResponseWriter, r *http.Request, ass
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

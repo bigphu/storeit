@@ -10,6 +10,9 @@ var (
 	// Lọc/sắp theo thuộc tính sai (ResolveAttrQuery): field "attr[i]", "sort" hoặc "type_id"
 	ErrInvalidAttributeQuery = errs.Unprocessable("/errors/invalid-attribute-query", "Invalid attribute filter or sort")
 
+	ErrInvalidBulk = errs.Unprocessable("/errors/invalid-bulk", "Invalid selection",
+		errs.WithFields(errs.FieldError{Field: "items", Detail: "choose between 1 and 200 assets"}))
+
 	ErrInvalidTag = errs.Unprocessable("/errors/invalid-tag", "Invalid asset tag",
 		errs.WithFields(errs.FieldError{Field: "tag", Detail: "must be 1-64 characters: A-Z, 0-9, '.', '_' or '-', starting with a letter or digit"}))
 	ErrInvalidTypeCode = errs.Unprocessable("/errors/invalid-type-code", "Invalid asset type code",

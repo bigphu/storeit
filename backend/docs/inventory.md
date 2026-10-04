@@ -84,7 +84,7 @@ Seeded IDs are in `domain/permissions.go` (`GeneralTypeID`, `AvailableStatusID`,
 | Endpoints | Needs |
 |---|---|
 | `GET /asset-types` (`with_counts=true` adds `asset_count`, assets not retired), `GET /asset-types/{typeID}`, `GET /asset-statuses`, `GET /assets`, `GET /assets/{assetID}` | `inventory.asset.read` |
-| `POST /assets`, `PUT /assets/{assetID}`, `POST …/retire`, `POST …/restore` | `inventory.asset.manage` |
+| `POST /assets`, `PUT /assets/{assetID}`, `POST …/retire`, `POST …/restore`, `POST /assets/bulk-retire`, `POST /assets/bulk-status` | `inventory.asset.manage` |
 | `POST /asset-types`, `PATCH /asset-types/{typeID}`, `POST …/archive`, `POST …/restore`, attributes (`POST`, `PATCH`, `DELETE`), options (`POST`, `PATCH`, `DELETE`) | `inventory.type.manage` |
 | `POST /asset-statuses`, `PATCH /asset-statuses/{statusID}`, `POST …/archive` | `inventory.status.manage` |
 
@@ -98,6 +98,18 @@ attribute in display order with `value` (null when empty), `unit`, and for selec
 `type_id` each item also has `attributes` in the same shape (values for the whole page
 loaded in one extra query), so a client can render a per-type table. Without `type_id`
 the field is absent.
+
+## Bulk actions
+
+`POST /assets/bulk-retire` (`items`, optional `reason`) and `POST /assets/bulk-status`
+(`items`, `status_id`) take 1–200 `{id, version}` items (duplicates processed once). Each
+asset goes through the single-asset rules and its own transaction, with one event per
+asset, and succeeds or fails on its own: the response is always 200 with `succeeded` ids
+and `failed` entries carrying the problem a single call would return (`asset-changed`,
+`asset-retired`, `asset-not-found`). Request-level errors are 422 (`invalid-bulk`,
+`retired-status`, `status-archived`). An unexpected error (database) stops the batch with
+a 500; assets already done stay done. Setting the status an asset already has writes
+nothing. Code: `service/bulk.go`.
 
 ## Events (`contract/events.go`)
 
