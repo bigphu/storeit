@@ -13,6 +13,39 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countActiveAssetsByType = `-- name: CountActiveAssetsByType :many
+SELECT asset_type_id, count(*)::bigint AS n
+FROM inventory.assets
+WHERE retired_at IS NULL
+GROUP BY asset_type_id
+`
+
+type CountActiveAssetsByTypeRow struct {
+	AssetTypeID uuid.UUID
+	N           int64
+}
+
+// Số tài sản chưa retire của mỗi loại (sidebar, bộ chọn loại)
+func (q *Queries) CountActiveAssetsByType(ctx context.Context) ([]CountActiveAssetsByTypeRow, error) {
+	rows, err := q.db.Query(ctx, countActiveAssetsByType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountActiveAssetsByTypeRow{}
+	for rows.Next() {
+		var i CountActiveAssetsByTypeRow
+		if err := rows.Scan(&i.AssetTypeID, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countAssets = `-- name: CountAssets :one
 SELECT count(*)
 FROM inventory.assets a

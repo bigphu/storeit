@@ -16,6 +16,14 @@ func (s *Service) ListAssetTypes(ctx context.Context, includeArchived bool) ([]d
 	return s.types.List(ctx, includeArchived)
 }
 
+// AssetCountsByType: số tài sản chưa retire của mỗi loại
+func (s *Service) AssetCountsByType(ctx context.Context) (map[uuid.UUID]int64, error) {
+	if _, err := auth.Require(ctx, domain.PermAssetRead); err != nil {
+		return nil, err
+	}
+	return s.assets.CountByType(ctx)
+}
+
 func (s *Service) GetAssetType(ctx context.Context, id uuid.UUID) (domain.AssetType, error) {
 	if _, err := auth.Require(ctx, domain.PermAssetRead); err != nil {
 		return domain.AssetType{}, err

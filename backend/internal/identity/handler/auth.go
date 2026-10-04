@@ -81,13 +81,23 @@ func (h *Handler) GetMe(ctx context.Context, _ api.GetMeRequestObject) (api.GetM
 	if err != nil {
 		return nil, err
 	}
+	return api.GetMe200JSONResponse(toAPIMe(me)), nil
+}
+
+func (h *Handler) UpdateMe(ctx context.Context, req api.UpdateMeRequestObject) (api.UpdateMeResponseObject, error) {
+	me, err := h.svc.UpdateMe(ctx, req.Body.Name, req.Body.Version)
+	if err != nil {
+		return nil, err
+	}
+	return api.UpdateMe200JSONResponse(toAPIMe(me)), nil
+}
+
+func toAPIMe(me service.Me) api.Me {
 	perms := me.Permissions
 	if perms == nil {
 		perms = []string{}
 	}
-	return api.GetMe200JSONResponse{
-		Account: toAPIAccount(me.Account), Roles: toSummaries(me.Roles), Permissions: perms,
-	}, nil
+	return api.Me{Account: toAPIAccount(me.Account), Roles: toSummaries(me.Roles), Permissions: perms}
 }
 
 // problem đổi *errs.Error sang kiểu Problem sinh từ common.yaml, cho các

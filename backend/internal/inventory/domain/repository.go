@@ -140,6 +140,8 @@ type AssetRepository interface {
 	// Get: kèm giá trị thuộc tính; ErrAssetNotFound
 	Get(ctx context.Context, id uuid.UUID) (Asset, error)
 	List(ctx context.Context, f AssetFilter) ([]AssetListItem, int64, error)
+	// CountByType: số tài sản chưa retire của mỗi loại; loại không có tài sản thì không có trong map
+	CountByType(ctx context.Context) (map[uuid.UUID]int64, error)
 	// Replace thay toàn bộ trường và giá trị: ErrAssetRetired, ErrAssetChanged;
 	// đổi loại thì xoá giá trị cũ trước; event asset_updated
 	Replace(ctx context.Context, id uuid.UUID, f AssetFields, version int32) (Asset, error)

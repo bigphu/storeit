@@ -16,6 +16,16 @@ func (h *Handler) ListAssetTypes(ctx context.Context, req api.ListAssetTypesRequ
 	for i, t := range types {
 		out.Items[i] = toAPIType(t)
 	}
+	if deref(req.Params.WithCounts) {
+		counts, err := h.svc.AssetCountsByType(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for i, t := range types {
+			n := counts[t.ID]
+			out.Items[i].AssetCount = &n
+		}
+	}
 	return out, nil
 }
 

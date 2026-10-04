@@ -124,6 +124,21 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Me' }
         default: { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateMe
+      summary: Change your own display name (any signed-in account)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateMeRequest' }
+      responses:
+        "200":
+          description: Your account after the change
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        default: { $ref: '#/components/responses/Problem' }
 
   /accounts:
     get:
@@ -412,6 +427,16 @@ components:
         token_type: { type: string, enum: [Bearer] }
         expires_at: { type: string, format: date-time }
         account: { $ref: '#/components/schemas/Account' }
+
+    UpdateMeRequest:
+      type: object
+      required: [name, version]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        version:
+          type: integer
+          format: int32
+          description: The version you last read; a newer one returns 409
 
     ChangePasswordRequest:
       type: object

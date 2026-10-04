@@ -133,13 +133,15 @@ username `resend`) with the API key in `deploy/app/secrets/smtp_password.txt`
 | Endpoint | Permission |
 |---|---|
 | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/password/forgot` (202), `POST /auth/password/set` (204) | public |
-| `PUT /auth/password`, `GET /me` | signed in |
+| `PUT /auth/password`, `GET /me`, `PATCH /me` | signed in |
 | `GET /accounts`, `GET /accounts/{accountID}` | `identity.account.read` |
 | `POST /accounts`, `PATCH /accounts/{accountID}`, `POST …/disable`, `POST …/enable`, `POST …/invitation` (202), `POST …/password-reset` (202), `PUT …/roles` | `identity.account.manage` |
 | `GET /roles`, `GET /roles/{roleID}`, `GET /permissions` | `identity.role.read` |
 | `POST /roles`, `PATCH /roles/{roleID}`, `PUT /roles/{roleID}/permissions`, `DELETE /roles/{roleID}` | `identity.role.manage` |
 
 `PATCH /accounts/{id}` takes `version` (409 when stale) and `clear_member_id` to unlink a member.
+`PATCH /me` lets any signed-in account change its own display name (`name`, `version`; 409 when
+stale, 403 `/errors/account-disabled` once disabled); email, roles and member stay admin-only.
 `POST /accounts` takes no password. Errors for links: 422 `/errors/invalid-password-token`
 (field `token`) for every unusable link, 409 `/errors/not-invited` when resending to an
 account that has a password, 409 `/errors/account-inactive` for a disabled account.

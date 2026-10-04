@@ -399,3 +399,36 @@ func TestListFilterAndSortByAttribute(t *testing.T) {
 		}
 	}
 }
+
+func TestListTypesWithCounts(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	code := "CN" + strings.ToUpper(uuid.NewString()[:6])
+	typ := decode[typeDetail](t, a.do("POST", "/api/v1/asset-types", tok, map[string]any{"code": code, "name": "Counted " + code}), 201)
+	for i := 0; i < 2; i++ {
+		decode[assetDetail](t, a.do("POST", "/api/v1/assets", tok, map[string]any{
+			"tag": "CN-" + strings.ToUpper(uuid.NewString()[:8]), "name": "x", "asset_type_id": typ.ID,
+		}), 201)
+	}
+	type list struct {
+		Items []struct {
+			ID         string
+			AssetCount *int64 `json:"asset_count"`
+		}
+	}
+	find := func(l list) *int64 {
+		for _, it := range l.Items {
+			if it.ID == typ.ID {
+				return it.AssetCount
+			}
+		}
+		t.Fatalf("type %s not listed", typ.ID)
+		return nil
+	}
+	if n := find(decode[list](t, a.do("GET", "/api/v1/asset-types?with_counts=true", tok, nil), 200)); n == nil || *n != 2 {
+		t.Errorf("asset_count = %v, want 2", n)
+	}
+	if n := find(decode[list](t, a.do("GET", "/api/v1/asset-types", tok, nil), 200)); n != nil {
+		t.Errorf("asset_count without with_counts = %d, want absent", *n)
+	}
+}

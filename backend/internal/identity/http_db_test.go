@@ -456,3 +456,35 @@ func TestListAccountsPageBounds(t *testing.T) {
 		t.Errorf("last allowed page: %d %s, want 200 with no items", rec.Code, rec.Body)
 	}
 }
+
+func TestUpdateMeOverHTTP(t *testing.T) {
+	a := newApp(t)
+	id := a.seed(domain.EmployeeRoleID)
+	token, _ := a.login(id)
+
+	rec := a.do(call{method: "GET", path: "/api/v1/me", token: token})
+	var me struct {
+		Account struct {
+			Name    string `json:"name"`
+			Version int32  `json:"version"`
+		} `json:"account"`
+	}
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &me) != nil {
+		t.Fatalf("me: %d %s", rec.Code, rec.Body)
+	}
+
+	rec = a.do(call{method: "PATCH", path: "/api/v1/me", token: token, body: map[string]any{"name": "Renamed Self", "version": me.Account.Version}})
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &me) != nil || me.Account.Name != "Renamed Self" {
+		t.Fatalf("patch me: %d %s", rec.Code, rec.Body)
+	}
+	rec = a.do(call{method: "PATCH", path: "/api/v1/me", token: token, body: map[string]any{"name": "Again", "version": me.Account.Version - 1}})
+	if rec.Code != 409 {
+		t.Errorf("stale version: %d %s", rec.Code, rec.Body)
+	}
+	if rec := a.do(call{method: "PATCH", path: "/api/v1/me", body: map[string]any{"name": "X", "version": 1}}); rec.Code != 401 {
+		t.Errorf("without token: %d", rec.Code)
+	}
+	if rec := a.do(call{method: "PATCH", path: "/api/v1/me", token: token, body: map[string]any{"version": me.Account.Version}}); rec.Code != 422 {
+		t.Errorf("missing name: %d %s", rec.Code, rec.Body)
+	}
+}

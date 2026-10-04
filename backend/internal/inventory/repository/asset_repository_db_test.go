@@ -438,3 +438,35 @@ func TestAssets_SortByTypeAndStatus(t *testing.T) {
 		}
 	}
 }
+
+func TestAssets_CountByType(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	a, b := laptop(t, r), laptop(t, r)
+	mk := func(typ domain.AssetType, vals []domain.Value) domain.Asset {
+		t.Helper()
+		x, err := r.assets.Create(ctx, "CT-"+uniq(), domain.AssetFields{Name: "x", TypeID: typ.ID, StatusID: domain.AvailableStatusID, Values: vals})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return x
+	}
+	mk(a, fullValues(t, a)[:1])
+	mk(a, fullValues(t, a)[:1])
+	gone := mk(b, fullValues(t, b)[:1])
+	if _, err := r.assets.Retire(ctx, gone.ID, "lost", domain.RetiredStatusID, gone.Version); err != nil {
+		t.Fatal(err)
+	}
+
+	counts, err := r.assets.CountByType(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// tài sản đã retire không tính; loại không còn tài sản nào không có trong map
+	if counts[a.ID] != 2 || counts[b.ID] != 0 {
+		t.Errorf("counts = %v, want %s:2 and none for %s", counts, a.ID, b.ID)
+	}
+	if _, ok := counts[b.ID]; ok {
+		t.Errorf("type with only retired assets is in the map")
+	}
+}

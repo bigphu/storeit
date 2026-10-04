@@ -15,6 +15,8 @@ type Querier interface {
 	AttributeHasValues(ctx context.Context, attributeID uuid.UUID) (bool, error)
 	// Chuyển cờ mặc định: bỏ cờ của kind trước, rồi đặt cho status mới (cùng tx)
 	ClearDefaultStatus(ctx context.Context, kind string) error
+	// Số tài sản chưa retire của mỗi loại (sidebar, bộ chọn loại)
+	CountActiveAssetsByType(ctx context.Context) ([]CountActiveAssetsByTypeRow, error)
 	CountAssets(ctx context.Context, arg CountAssetsParams) (int64, error)
 	CreateAsset(ctx context.Context, arg CreateAssetParams) (InventoryAsset, error)
 	CreateAssetType(ctx context.Context, arg CreateAssetTypeParams) (InventoryAssetType, error)

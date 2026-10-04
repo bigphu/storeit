@@ -83,7 +83,7 @@ Seeded IDs are in `domain/permissions.go` (`GeneralTypeID`, `AvailableStatusID`,
 
 | Endpoints | Needs |
 |---|---|
-| `GET /asset-types`, `GET /asset-types/{typeID}`, `GET /asset-statuses`, `GET /assets`, `GET /assets/{assetID}` | `inventory.asset.read` |
+| `GET /asset-types` (`with_counts=true` adds `asset_count`, assets not retired), `GET /asset-types/{typeID}`, `GET /asset-statuses`, `GET /assets`, `GET /assets/{assetID}` | `inventory.asset.read` |
 | `POST /assets`, `PUT /assets/{assetID}`, `POST …/retire`, `POST …/restore` | `inventory.asset.manage` |
 | `POST /asset-types`, `PATCH /asset-types/{typeID}`, `POST …/archive`, `POST …/restore`, attributes (`POST`, `PATCH`, `DELETE`), options (`POST`, `PATCH`, `DELETE`) | `inventory.type.manage` |
 | `POST /asset-statuses`, `PATCH /asset-statuses/{statusID}`, `POST …/archive` | `inventory.status.manage` |

@@ -296,6 +296,18 @@ func (f *fakeAssets) Get(_ context.Context, id uuid.UUID) (domain.Asset, error) 
 	return a, nil
 }
 
+func (f *fakeAssets) CountByType(context.Context) (map[uuid.UUID]int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[uuid.UUID]int64{}
+	for _, a := range f.assets {
+		if a.RetiredAt == nil {
+			out[a.TypeID]++
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeAssets) List(_ context.Context, filter domain.AssetFilter) ([]domain.AssetListItem, int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

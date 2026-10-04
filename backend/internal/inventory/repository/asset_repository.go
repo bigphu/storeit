@@ -134,6 +134,18 @@ func attrFilterArgs(filters []domain.AttrFilter) (attrs []uuid.UUID, ops, vals [
 	return attrs, ops, vals
 }
 
+func (r *AssetRepository) CountByType(ctx context.Context) (map[uuid.UUID]int64, error) {
+	rows, err := r.q.CountActiveAssetsByType(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("inventory: count assets by type: %w", err)
+	}
+	out := make(map[uuid.UUID]int64, len(rows))
+	for _, row := range rows {
+		out[row.AssetTypeID] = row.N
+	}
+	return out, nil
+}
+
 // attachValues nạp giá trị thuộc tính của mọi dòng trong một truy vấn
 func (r *AssetRepository) attachValues(ctx context.Context, items []domain.AssetListItem) error {
 	ids := make([]uuid.UUID, len(items))

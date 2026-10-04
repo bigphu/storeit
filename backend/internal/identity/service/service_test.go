@@ -414,3 +414,30 @@ func TestBootstrap_ConcurrentStart(t *testing.T) {
 		t.Errorf("second replica bootstrap = %v, %v, want no-op", created, err)
 	}
 }
+
+func TestUpdateMe(t *testing.T) {
+	e := newEnv(t)
+	a := e.seed(t, "lan@storeit.test", true, domain.EmployeeRoleID)
+	ctx := as(a.ID) // không cần identity.account.manage: chỉ sửa chính mình
+
+	me, err := e.svc.UpdateMe(ctx, "  Lan Tran ", a.Version)
+	if err != nil || me.Account.Name != "Lan Tran" || me.Account.ID != a.ID {
+		t.Fatalf("update me = %+v, %v", me.Account, err)
+	}
+	if _, err := e.svc.UpdateMe(ctx, "Lan T", a.Version); !errors.Is(err, domain.ErrAccountChanged) {
+		t.Errorf("stale version: %v, want ErrAccountChanged", err)
+	}
+	for _, bad := range []string{"", "   ", "Lan\nBcc: x@y"} {
+		if _, err := e.svc.UpdateMe(ctx, bad, me.Account.Version); !errors.Is(err, domain.ErrInvalidName) {
+			t.Errorf("name %q: %v, want ErrInvalidName", bad, err)
+		}
+	}
+	if _, err := e.svc.UpdateMe(context.Background(), "X", 1); status(err) != 401 {
+		t.Errorf("without actor: %v", err)
+	}
+
+	off := e.seed(t, "off@storeit.test", false)
+	if _, err := e.svc.UpdateMe(as(off.ID), "Off", off.Version); !errors.Is(err, domain.ErrAccountDisabled) {
+		t.Errorf("disabled account renames itself: %v, want ErrAccountDisabled", err)
+	}
+}

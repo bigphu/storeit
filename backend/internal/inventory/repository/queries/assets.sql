@@ -127,6 +127,13 @@ ORDER BY
   a.tag
 LIMIT @lim OFFSET @off;
 
+-- Số tài sản chưa retire của mỗi loại (sidebar, bộ chọn loại)
+-- name: CountActiveAssetsByType :many
+SELECT asset_type_id, count(*)::bigint AS n
+FROM inventory.assets
+WHERE retired_at IS NULL
+GROUP BY asset_type_id;
+
 -- name: CountAssets :one
 SELECT count(*)
 FROM inventory.assets a

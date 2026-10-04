@@ -18,6 +18,10 @@ paths:
       summary: List asset types (inventory.asset.read)
       parameters:
         - $ref: '#/components/parameters/IncludeArchived'
+        - name: with_counts
+          in: query
+          description: Add `asset_count` (assets not retired) to each type.
+          schema: { type: boolean }
       responses:
         "200":
           description: Asset types without attributes
@@ -477,6 +481,10 @@ components:
         version: { type: integer, format: int32 }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        asset_count:
+          type: integer
+          format: int64
+          description: Assets of this type that are not retired; only with `with_counts=true`
 
     AssetTypeDetail:
       allOf:
