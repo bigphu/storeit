@@ -75,6 +75,9 @@ TLS is the job of the reverse proxy in front. The build puts bundles under `/sta
   density, default rows per page, tables with their own size, recent types) are per
   account on the device (`lib/preferences.ts`). The theme toggles `app-dark` on `<html>`,
   PrimeVue's `darkModeSelector`; compact density overrides the DataTable padding tokens.
+- Single-key shortcuts of a page go through `usePageKeys` (`lib/pageKeys.ts`): it listens
+  only while the page is shown, so cached pages in background tabs don't react. `?` shows
+  every shortcut.
 - Build UI from PrimeVue v4 components (Breadcrumb, DataTable paginator, ContextMenu,
   Dialog, ConfirmDialog…) before writing custom markup.
 - Tabs inside the app (`app/tabs/`): every place opened with Ctrl/⌘-click or middle-click

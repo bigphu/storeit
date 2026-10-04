@@ -2,13 +2,14 @@
 import { useQueryClient } from '@tanstack/vue-query'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTabId, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { formatDate, formatDateTime } from '@/lib/dates'
+import { usePageKeys } from '@/lib/pageKeys'
 import { kindSeverity } from '@/features/statuses/api'
 import { fetchAssetPage, useAsset } from '../api'
 import RetireDialog from '../components/RetireDialog.vue'
@@ -67,17 +68,12 @@ async function step(dir: 1 | -1) {
   await router.replace(`/assets/${next}`)
 }
 
-// Phím tắt: J/K bước qua danh sách, E sửa
-function onKey(e: KeyboardEvent) {
-  const t = e.target as HTMLElement | null
-  if (e.ctrlKey || e.metaKey || e.altKey || (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) || t?.isContentEditable) return
-  if (document.querySelector('.p-dialog-mask')) return
+// Phím tắt (chỉ khi trang đang hiện): J/K bước qua danh sách, E sửa
+usePageKeys((e) => {
   if (e.key === 'j') step(1)
   else if (e.key === 'k') step(-1)
   else if (e.key === 'e' && canManage.value && asset.value && !retired.value) actions.edit(asset.value)
-}
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+})
 </script>
 
 <template>

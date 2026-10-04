@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { setNewTabHandler } from '@/lib/navigation'
+import { isTyping } from '@/lib/pageKeys'
 import NoAccessPage from '../pages/NoAccessPage.vue'
 import { useTabs } from '../tabs/useTabs'
 import AccountMenu from './AccountMenu.vue'
@@ -48,9 +50,24 @@ function onLinkOpen(e: MouseEvent) {
   tabs.open(a.pathname + a.search + a.hash, { background: true })
 }
 
-// Phím: Ctrl K bộ chọn loại; Alt 1–9 sang tab thứ n
+// Phím: Ctrl K bộ chọn loại; Alt 1–9 sang tab thứ n; ? bảng phím tắt
 const switcherOpen = ref(false)
+const helpOpen = ref(false)
+const SHORTCUTS: [string, string][] = [
+  ['Ctrl K', 'Go to an asset type (keeps the section you are in)'],
+  ['/', 'Search the asset list'],
+  ['N', 'New asset of the type you are viewing'],
+  ['J / K', 'Next / previous asset, on an asset page'],
+  ['E', 'Edit the open asset'],
+  ['Alt 1–9', 'Go to tab 1–9'],
+  ['Ctrl-click, middle-click', 'Open a link in a new tab'],
+  ['Esc', 'Close a dialog or menu'],
+]
 function onKey(e: KeyboardEvent) {
+  if (e.key === '?' && !isTyping(e) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    helpOpen.value = !helpOpen.value
+    return
+  }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && session.can(Perm.AssetRead)) {
     e.preventDefault()
     switcherOpen.value = !switcherOpen.value
@@ -94,6 +111,7 @@ onBeforeUnmount(() => {
         <span>Go to asset type…</span>
         <kbd>Ctrl K</kbd>
       </Button>
+      <Button icon="pi pi-question-circle" text rounded aria-label="Keyboard shortcuts (?)" title="Keyboard shortcuts (?)" @click="helpOpen = true" />
       <span class="spacer" />
       <AccountMenu />
     </header>
@@ -111,10 +129,27 @@ onBeforeUnmount(() => {
       </main>
     </div>
     <TypeSwitcher v-model:visible="switcherOpen" />
+    <Dialog v-model:visible="helpOpen" modal header="Keyboard shortcuts" :style="{ width: 'min(92vw, 30rem)' }">
+      <dl class="shortcuts">
+        <template v-for="[k, what] in SHORTCUTS" :key="k">
+          <dt><kbd>{{ k }}</kbd></dt>
+          <dd>{{ what }}</dd>
+        </template>
+      </dl>
+    </Dialog>
   </div>
 </template>
 
 <style scoped>
+.shortcuts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.5rem 1rem;
+  margin: 0;
+}
+.shortcuts dd {
+  margin: 0;
+}
 .shell {
   display: grid;
   grid-template-columns: 15rem minmax(0, 1fr);

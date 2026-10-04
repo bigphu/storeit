@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
+import Chip from 'primevue/chip'
 import Column from 'primevue/column'
 import ContextMenu from 'primevue/contextmenu'
 import DataTable, {
@@ -20,12 +21,14 @@ import type { AssetListItem } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { formatDate, formatDateTime } from '@/lib/dates'
+import { usePageKeys } from '@/lib/pageKeys'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
-import { useAssetType } from '@/features/asset-types/api'
+import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
 import { kindSeverity, statusKinds, useStatuses } from '@/features/statuses/api'
 import { useAssetList } from '../api'
-import AttributeFilters from '../components/AttributeFilters.vue'
+import AttributeFilterPopover from '../components/AttributeFilterPopover.vue'
 import RetireDialog from '../components/RetireDialog.vue'
+import { attrFilterLabel, type FilterChip, filterChips, removeChip } from '../filterChips'
 import { useListContext } from '../listContext'
 import {
   type AssetListState,
@@ -97,9 +100,42 @@ watch(
   },
 )
 
-function applyFilters(filters: AttrFilterRow[]) {
-  update({ filters, page: 1 })
+// Bộ lọc đang áp dụng thành chip; ✕ bỏ từng cái, "Clear all" bỏ hết
+const chips = computed(() => filterChips(state.value, attributes.value, statuses.value ?? []))
+const chipKey = (c: FilterChip) => `${c.kind}:${c.label}`
+function clearAll() {
+  update({ q: '', statusId: undefined, statusKind: undefined, includeRetired: false, filters: [], page: 1 })
 }
+const filterPop = ref<InstanceType<typeof AttributeFilterPopover>>()
+function addFilter(f: AttrFilterRow) {
+  update({ filters: [...state.value.filters, f], page: 1 })
+}
+
+// "48 of 312 assets": tổng của phạm vi (chưa retire) lấy từ số đếm theo loại
+const { data: typeCounts } = useAssetTypes(false, true)
+const countText = computed(() => {
+  const total = data.value?.total
+  if (total === undefined) return ''
+  const counts = typeCounts.value ?? []
+  const scope = props.typeId
+    ? counts.find((t) => t.id === props.typeId)?.asset_count
+    : counts.reduce((n, t) => n + (t.asset_count ?? 0), 0)
+  const noun = total === 1 ? 'asset' : 'assets'
+  return chips.value.length && !state.value.includeRetired && scope !== undefined
+    ? `${total} of ${scope} ${noun}`
+    : `${total} ${noun}`
+})
+
+// Phím: / tìm kiếm, N tạo tài sản (của loại đang xem)
+const newPath = computed(() => (props.typeId ? `/types/${props.typeId}/assets/new` : '/assets/new'))
+usePageKeys((e) => {
+  if (e.key === '/') {
+    e.preventDefault()
+    document.getElementById('asset-search')?.focus()
+  } else if (e.key === 'n' && canManage.value) {
+    router.push(newPath.value)
+  }
+})
 
 const tableSort = computed(() => toTableSort(state.value.sort))
 
@@ -151,23 +187,19 @@ function onRowContextMenu(e: DataTableRowContextMenuEvent) {
 }
 
 // Tiêu đề tab: tên loại và bộ lọc thuộc tính đầu tiên ("Laptop · RAM ≥ 16 GB +1")
-const OP_SYMBOL: Record<string, string> = { eq: 'is', contains: 'contains', gt: '>', gte: '≥', lt: '<', lte: '≤', in: 'in' }
 useTabTitle(() => {
   if (!props.typeId) return state.value.statusKind ? `All assets · ${state.value.statusKind.replace('_', ' ')}` : 'All assets'
   const name = selectedType.value?.name
   if (!name) return undefined
   const [f, ...more] = state.value.filters
-  const a = f && attributes.value.find((x) => x.key === f.key)
-  if (!f || !a) return name
-  const value = a.data_type === 'select' ? f.value.split(',').map((id) => a.options.find((o) => o.id === id)?.label ?? id).join(', ') : f.value
-  return `${name} · ${a.label} ${OP_SYMBOL[f.op] ?? f.op} ${value}${a.unit ? ' ' + a.unit : ''}${more.length ? ` +${more.length}` : ''}`
+  if (!f) return name
+  return `${name} · ${attrFilterLabel(f, attributes.value)}${more.length ? ` +${more.length}` : ''}`
 })
 
 function cell(row: AssetListItem, key: string) {
   return formatValue(row.attributes?.find((a) => a.key === key))
 }
 
-const showFilters = ref(state.value.filters.length > 0)
 </script>
 
 <template>
@@ -177,14 +209,14 @@ const showFilters = ref(state.value.filters.length > 0)
       <Button
         v-if="canManage"
         as="router-link"
-        :to="typeId ? `/types/${typeId}/assets/new` : '/assets/new'"
+        :to="newPath"
         :label="selectedType ? `New ${selectedType.name.toLowerCase()}` : 'New asset'"
         icon="pi pi-plus"
       />
     </div>
 
     <div class="toolbar">
-      <InputText v-model="search" placeholder="Search tag or name" />
+      <InputText id="asset-search" v-model="search" placeholder="Search tag or name  ( / )" aria-label="Search tag or name" />
       <Select
         :model-value="state.statusId ?? null"
         :options="statuses ?? []"
@@ -208,22 +240,32 @@ const showFilters = ref(state.value.filters.length > 0)
         @update:model-value="(v: boolean) => update({ includeRetired: v, page: 1 })"
       />
       <label for="include-retired">Include retired</label>
-      <Button
-        v-if="state.typeId"
-        :label="`Filters${state.filters.length ? ` (${state.filters.length})` : ''}`"
-        icon="pi pi-filter"
-        severity="secondary"
-        text
-        @click="showFilters = !showFilters"
-      />
     </div>
 
-    <AttributeFilters
-      v-if="state.typeId && showFilters"
-      :attributes="attributes"
-      :filters="state.filters"
-      @apply="applyFilters"
-    />
+    <div class="chips">
+      <Chip
+        v-for="c in chips"
+        :key="chipKey(c)"
+        :label="c.label"
+        removable
+        :class="{ 'chip-attr': c.kind === 'attr' }"
+        @remove="update(removeChip(state, c))"
+      />
+      <Button
+        v-if="typeId"
+        label="Filter"
+        icon="pi pi-plus"
+        size="small"
+        text
+        :disabled="state.filters.length >= 10 || !attributes.length"
+        :title="attributes.length ? 'Filter by an attribute of this type' : 'This type has no attributes yet'"
+        @click="(e: MouseEvent) => filterPop?.toggle(e)"
+      />
+      <span v-else class="hint">Open a type to filter by its attributes.</span>
+      <Button v-if="chips.length" label="Clear all" size="small" text severity="secondary" @click="clearAll" />
+      <span class="count">{{ countText }}</span>
+    </div>
+    <AttributeFilterPopover ref="filterPop" :attributes="attributes" @add="addFilter" />
 
     <ContextMenu ref="menu" :model="menuItems" @hide="menuRow = null" />
     <DataTable
@@ -293,6 +335,28 @@ const showFilters = ref(state.value.filters.length > 0)
 </template>
 
 <style scoped>
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+  min-height: 2rem;
+}
+.chip-attr {
+  background: var(--p-highlight-background);
+  color: var(--p-highlight-color);
+}
+.hint {
+  color: var(--p-text-muted-color);
+  font-size: 0.875rem;
+}
+.count {
+  margin-left: auto;
+  color: var(--p-text-muted-color);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
 :deep(.clickable-row) {
   cursor: pointer;
 }
