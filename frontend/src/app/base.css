@@ -14,6 +14,9 @@
   /* thẻ nổi của mục đang chọn (tab, lựa chọn, mục sidebar); nền khớp theme.ts */
   --app-raised: var(--p-surface-0);
   --app-raised-shadow: 0 1px 2px rgb(0 0 0 / 0.1), 0 0 0 1px var(--app-line);
+  /* vạch chỉ báo của mục đang chọn */
+  --app-bar-left: inset 3px 0 0 var(--app-accent);
+  --app-bar-bottom: inset 0 -2px 0 var(--app-accent);
 }
 :root.app-dark {
   --app-ground: var(--p-surface-950);
@@ -172,13 +175,22 @@ section + section {
   font-size: 0.85rem;
 }
 
-/* Trạng thái "đang chọn" kiểu thẻ nổi (màu nền thẻ ở theme.ts): viền mảnh và bóng nhẹ */
+/* Trạng thái "đang chọn" = thẻ nổi (màu nền thẻ ở theme.ts) + vạch chỉ báo màu nhấn:
+   bên trái cho danh sách dọc, dưới đáy cho tab; nút trang tròn chỉ có thẻ */
 .p-select-option-selected,
 .p-multiselect-option-selected,
-.p-listbox-option-selected,
-.p-paginator-page-selected,
+.p-listbox-option-selected {
+  box-shadow: var(--app-bar-left), var(--app-raised-shadow);
+}
 .p-tab-active {
+  box-shadow: var(--app-bar-bottom), var(--app-raised-shadow);
+}
+.p-paginator-page-selected {
   box-shadow: var(--app-raised-shadow);
+}
+/* Dòng đang chọn của bảng: giữ nền highlight, thêm vạch trái để khác với dòng đang rê chuột */
+.p-datatable-tbody > tr.p-datatable-row-selected > td:first-child {
+  box-shadow: var(--app-bar-left);
 }
 .p-select-option-selected,
 .p-listbox-option-selected {

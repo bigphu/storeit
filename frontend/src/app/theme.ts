@@ -6,9 +6,13 @@ import Aura from '@primeuix/themes/aura'
 // Viền mảnh và bóng của thẻ nằm ở base.css (--app-raised-shadow); màu nền thẻ khớp --app-raised.
 // SelectButton của Aura vốn đã theo kiểu này nên không đổi.
 const raised = { light: '{surface.0}', dark: '{surface.700}' }
+// Rê chuột lên dòng (bảng, lựa chọn, mục menu): sắc màu chính rất nhạt thay cho xám,
+// để khác với rãnh xám và thẻ nổi của mục đang chọn
+const hover = 'color-mix(in srgb, {primary.color} 8%, transparent)'
 
 const selectedOption = (bg: string) => ({
   option: {
+    focusBackground: hover,
     selectedBackground: bg,
     selectedFocusBackground: bg,
     selectedColor: '{text.color}',
@@ -19,11 +23,14 @@ const selectedOption = (bg: string) => ({
 export const StoreItPreset = definePreset(Aura, {
   semantic: {
     colorScheme: {
-      light: { list: selectedOption(raised.light) },
-      dark: { list: selectedOption(raised.dark) },
+      light: { list: selectedOption(raised.light), navigation: { item: { focusBackground: hover } } },
+      dark: { list: selectedOption(raised.dark), navigation: { item: { focusBackground: hover } } },
     },
   },
   components: {
+    datatable: {
+      row: { hoverBackground: hover, hoverColor: '{text.color}' },
+    },
     // Tabs kiểu "segmented": rãnh xám (base.css), tab đang chọn là thẻ nổi; bỏ gạch chân
     tabs: {
       tablist: { borderWidth: '0', background: 'transparent' },

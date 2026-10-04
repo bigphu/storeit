@@ -178,7 +178,7 @@ function commitRename() {
   background: var(--app-raised);
   color: var(--p-text-color);
   font-weight: 600;
-  box-shadow: var(--app-raised-shadow);
+  box-shadow: var(--app-bar-bottom), var(--app-raised-shadow);
 }
 .tab-icon {
   font-size: 0.75rem;
