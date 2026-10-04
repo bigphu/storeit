@@ -13,6 +13,8 @@ import { useConfirm } from 'primevue/useconfirm'
 import { computed, ref, watch } from 'vue'
 import { useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
+import DetailHeader from '@/components/DetailHeader.vue'
+import IconAction from '@/components/IconAction.vue'
 import type { Attribute } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
@@ -29,6 +31,7 @@ import {
   useUpdateAssetType,
   useUpdateAttribute,
 } from '../api'
+import { codeMark } from '../code'
 import AttributeDialog from '../components/AttributeDialog.vue'
 import OptionsDialog from '../components/OptionsDialog.vue'
 import { useListContext } from '@/features/assets/listContext'
@@ -200,13 +203,16 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
 <template>
   <section v-if="type">
     <AppBreadcrumb :items="crumbs" />
-    <div class="page-header">
-      <h1>{{ type.name }} settings <small>({{ type.code }})</small></h1>
-      <div class="actions">
-        <Tag v-if="type.is_system" value="built-in" severity="secondary" />
-        <Tag v-if="type.archived_at" value="archived" severity="secondary" />
-      </div>
-    </div>
+    <DetailHeader :title="type.name">
+      <template #media>
+        <span class="type-mark">{{ codeMark(type.code) }}</span>
+      </template>
+      <template #tags>
+        <Tag v-if="type.is_system" value="Built-in" icon="pi pi-lock" severity="secondary" />
+        <Tag v-if="type.archived_at" value="Archived" icon="pi pi-inbox" severity="secondary" />
+      </template>
+      <div><code>{{ type.code }}</code> · Type settings</div>
+    </DetailHeader>
 
     <!-- Cài đặt chia khối như demo: Chung, Thuộc tính, Lưu trữ -->
     <Panel header="General" class="block">
@@ -278,14 +284,10 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
           <template #body="{ data: a }: { data: Attribute }">
             <div v-if="a.data_type === 'select'" class="opts-cell">
               <span class="opts">{{ activeOptions(a) || 'No options yet' }}</span>
-              <Button
-                v-tooltip.top="canManage ? 'Edit options' : 'View options'"
+              <IconAction
                 :icon="canManage ? 'pi pi-pencil' : 'pi pi-eye'"
-                size="small"
-                text
-                rounded
+                :label="canManage ? 'Edit options' : 'View options'"
                 class="opts-btn"
-                :aria-label="canManage ? 'Edit options' : 'View options'"
                 @click="openOptions(a)"
               />
             </div>
@@ -295,25 +297,8 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
           <template #body="{ data: a }: { data: Attribute }">
             <Tag v-if="a.removed" value="removed" severity="secondary" />
             <div v-else-if="canManage" class="row-actions">
-              <Button
-                v-tooltip.top="'Edit'"
-                icon="pi pi-pencil"
-                size="small"
-                text
-                rounded
-                aria-label="Edit"
-                @click="openAttribute(a)"
-              />
-              <Button
-                v-tooltip.top="'Remove'"
-                icon="pi pi-trash"
-                size="small"
-                text
-                rounded
-                severity="danger"
-                aria-label="Remove"
-                @click="askRemove(a)"
-              />
+              <IconAction icon="pi pi-pencil" label="Edit" @click="openAttribute(a)" />
+              <IconAction icon="pi pi-trash" label="Remove" danger @click="askRemove(a)" />
             </div>
           </template>
         </Column>
@@ -339,6 +324,17 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
 </template>
 
 <style scoped>
+.type-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 10px;
+  background: var(--app-soft);
+  font: 700 0.9rem var(--app-mono);
+  color: var(--p-text-color);
+}
 .block + .block {
   margin-top: 1rem;
 }

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import Avatar from 'primevue/avatar'
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import Chip from 'primevue/chip'
@@ -19,6 +18,10 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb from '@/components/AppBreadcrumb.vue'
+import DetailHeader from '@/components/DetailHeader.vue'
+import IconAction from '@/components/IconAction.vue'
+import PersonCell from '@/components/PersonCell.vue'
+import SaveBar from '@/components/SaveBar.vue'
 import { useAccounts, useAssignRoles } from '@/features/accounts/api'
 import { statusSeverity } from '@/features/accounts/status'
 import type { AccountListItem } from '@/lib/api/types'
@@ -26,7 +29,6 @@ import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { useFormErrors } from '@/lib/forms'
 import { notify } from '@/lib/notify'
-import { initials } from '@/lib/people'
 import { onRowClick } from '@/lib/tableRows'
 import { openLocation } from '@/lib/navigation'
 import { useUrlState } from '@/lib/urlState'
@@ -179,22 +181,21 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
   <section v-if="role">
     <AppBreadcrumb :items="crumbs" />
 
-    <header class="head-card">
-      <span class="mark"><i class="pi pi-shield" /></span>
-      <div class="who">
-        <div class="line">
-          <h1>{{ role.name }}</h1>
-          <Tag v-if="role.is_system" value="Built-in" icon="pi pi-lock" severity="secondary" />
-          <Tag v-else value="Custom" severity="secondary" />
-        </div>
-        <div class="muted">{{ role.description || 'No description.' }}</div>
-        <div class="meta">{{ role.permissions.length }} of {{ ALL_PERMS.length }} permissions · {{ peopleLabel(people) }}</div>
-      </div>
-      <div v-if="canManage" class="actions">
+    <DetailHeader :title="role.name">
+      <template #media>
+        <span class="mark"><i class="pi pi-shield" /></span>
+      </template>
+      <template #tags>
+        <Tag v-if="role.is_system" value="Built-in" icon="pi pi-lock" severity="secondary" />
+        <Tag v-else value="Custom" severity="secondary" />
+      </template>
+      <div>{{ role.description || 'No description.' }}</div>
+      <div class="meta">{{ role.permissions.length }} of {{ ALL_PERMS.length }} permissions · {{ peopleLabel(people) }}</div>
+      <template v-if="canManage" #actions>
         <Button label="Edit details" icon="pi pi-pencil" severity="secondary" outlined @click="openEdit" />
         <Button v-if="!role.is_system" label="Delete" icon="pi pi-trash" severity="danger" outlined @click="askDelete" />
-      </div>
-    </header>
+      </template>
+    </DetailHeader>
 
     <Tabs :value="state.tab" class="section-tabs" @update:value="(v) => update({ tab: v as Section })">
       <TabList>
@@ -247,14 +248,15 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
         </Column>
       </DataTable>
       <p class="hint after">Hover a box for the exact permission. Ticking Manage also ticks View. You can only change permissions you hold.</p>
-      <div v-if="changed.length" class="savebar" role="region" aria-label="Unsaved permissions">
-        <span class="dot" />
-        <span class="grow">
-          {{ changed.length }} permission{{ changed.length === 1 ? '' : 's' }} changed · affects {{ peopleLabel(people) }} within 15 minutes
-        </span>
-        <Button label="Discard" text size="small" class="on-dark" @click="draft = null" />
-        <Button label="Save permissions" size="small" :loading="setPerms.isPending.value" :disabled="lockout" @click="savePermissions" />
-      </div>
+      <SaveBar
+        v-if="changed.length"
+        :message="`${changed.length} permission${changed.length === 1 ? '' : 's'} changed · affects ${peopleLabel(people)} within 15 minutes`"
+        save-label="Save permissions"
+        :saving="setPerms.isPending.value"
+        :blocked="lockout"
+        @save="savePermissions"
+        @discard="draft = null"
+      />
     </template>
 
     <template v-else-if="canSeePeople">
@@ -272,13 +274,7 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
       >
         <Column header="Person">
           <template #body="{ data: a }: { data: AccountListItem }">
-            <div class="person">
-              <Avatar :label="initials(a.name)" shape="circle" :class="['avatar', { off: a.status === 'disabled' }]" />
-              <div>
-                <RouterLink :to="`/accounts/${a.id}`" class="name">{{ a.name }}</RouterLink>
-                <div class="muted small">{{ a.email }}</div>
-              </div>
-            </div>
+            <PersonCell :name="a.name" :email="a.email" :to="`/accounts/${a.id}`" :muted="a.status === 'disabled'" :you="isSelf(a)" />
           </template>
         </Column>
         <Column header="Status">
@@ -297,18 +293,14 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
         <Column v-if="canAssign" header="" header-style="width: 4rem">
           <template #body="{ data: a }: { data: AccountListItem }">
             <div class="row-actions">
-              <span v-tooltip.top="isSelf(a) && role!.id === ADMINISTRATOR_ROLE_ID ? 'You can’t remove your own Administrator role' : 'Remove from role'">
-                <Button
-                  icon="pi pi-times"
-                  size="small"
-                  text
-                  rounded
-                  severity="danger"
-                  aria-label="Remove from role"
-                  :disabled="isSelf(a) && role!.id === ADMINISTRATOR_ROLE_ID"
-                  @click="askRemove(a)"
-                />
-              </span>
+              <IconAction
+                icon="pi pi-times"
+                label="Remove from role"
+                danger
+                :disabled="isSelf(a) && role!.id === ADMINISTRATOR_ROLE_ID"
+                reason="You can’t remove your own Administrator role"
+                @click="askRemove(a)"
+              />
             </div>
           </template>
         </Column>
@@ -369,17 +361,6 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
 </template>
 
 <style scoped>
-.head-card {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem 1.1rem;
-  margin-bottom: 1rem;
-  border: 1px solid var(--app-line);
-  border-radius: 12px;
-  background: var(--p-content-background);
-}
 .mark {
   flex: none;
   display: grid;
@@ -390,19 +371,6 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
   background: var(--app-soft);
   color: var(--app-accent);
   font-size: 1.2rem;
-}
-.who {
-  flex: 1;
-  min-width: 12rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-.line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
 }
 .muted,
 .meta,
@@ -452,27 +420,6 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
 .end {
   margin-left: auto;
 }
-.person {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-}
-.avatar {
-  flex: none;
-  background: var(--p-highlight-background);
-  color: var(--p-highlight-color);
-  font-weight: 700;
-  font-size: 0.8rem;
-}
-.avatar.off {
-  background: var(--app-soft);
-  color: var(--p-text-muted-color);
-}
-.name {
-  font-weight: 600;
-  color: var(--p-text-color);
-  text-decoration: none;
-}
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -481,33 +428,5 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
 .chips :deep(.p-chip) {
   padding: 0.1rem 0.6rem;
   font-size: 0.8rem;
-}
-.savebar {
-  position: sticky;
-  bottom: 0.75rem;
-  margin-top: 1rem;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.6rem 0.75rem 0.6rem 1rem;
-  border-radius: 10px;
-  /* màu đảo theo theme: nổi trên nền sáng lẫn tối */
-  background: var(--p-text-color);
-  color: var(--p-content-background);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
-}
-.savebar .grow {
-  flex: 1;
-  min-width: 8rem;
-}
-.savebar .dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  background: var(--app-accent);
-}
-.savebar .on-dark {
-  color: var(--p-content-background);
 }
 </style>

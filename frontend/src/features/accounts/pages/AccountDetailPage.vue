@@ -13,6 +13,8 @@ import Tag from 'primevue/tag'
 import { computed, ref, watch } from 'vue'
 import { useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb from '@/components/AppBreadcrumb.vue'
+import DetailHeader from '@/components/DetailHeader.vue'
+import SaveBar from '@/components/SaveBar.vue'
 import { useRoles } from '@/features/roles/api'
 import { ADMINISTRATOR_ROLE_ID, effective } from '@/features/roles/catalog'
 import type { Role } from '@/lib/api/types'
@@ -109,29 +111,28 @@ const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: 
   <section v-if="account">
     <AppBreadcrumb :items="crumbs" />
 
-    <header class="head-card">
-      <Avatar :label="initials(account.name)" shape="circle" size="xlarge" :class="['avatar', { muted: account.status === 'disabled' }]" />
-      <div class="who">
-        <div class="line">
-          <h1>{{ account.name }}</h1>
-          <Tag :value="label(account.status)" :severity="statusSeverity(account.status)" />
-          <Tag v-if="self" value="You" severity="secondary" />
-        </div>
-        <div class="email">{{ account.email }}</div>
-        <div class="chips">
-          <Chip v-for="r in account.roles" :key="r.id" :label="r.name" icon="pi pi-shield" />
-          <span v-if="!account.roles.length" class="muted">No roles</span>
-        </div>
+    <DetailHeader :title="account.name">
+      <template #media>
+        <Avatar :label="initials(account.name)" shape="circle" size="xlarge" :class="['avatar', { muted: account.status === 'disabled' }]" />
+      </template>
+      <template #tags>
+        <Tag :value="label(account.status)" :severity="statusSeverity(account.status)" />
+        <Tag v-if="self" value="You" severity="secondary" />
+      </template>
+      <div>{{ account.email }}</div>
+      <div class="chips">
+        <Chip v-for="r in account.roles" :key="r.id" :label="r.name" icon="pi pi-shield" />
+        <span v-if="!account.roles.length">No roles</span>
       </div>
-      <div v-if="canManage" class="actions">
+      <template v-if="canManage" #actions>
         <Button v-if="account.status === 'invited'" label="Resend invitation" icon="pi pi-envelope" severity="secondary" outlined @click="actions.resendInvitation(account)" />
         <Button v-if="account.status === 'active'" label="Send reset link" icon="pi pi-key" severity="secondary" outlined @click="actions.sendReset(account)" />
         <Button v-if="account.status === 'disabled'" label="Enable" icon="pi pi-check-circle" @click="actions.enable(account)" />
         <span v-else v-tooltip.top="self ? 'You can’t disable yourself' : undefined">
           <Button label="Disable" icon="pi pi-ban" severity="danger" outlined :disabled="self" @click="actions.disable(account)" />
         </span>
-      </div>
-    </header>
+      </template>
+    </DetailHeader>
 
     <Tabs :value="state.tab" class="section-tabs" @update:value="(v) => update({ tab: v as Section })">
       <TabList>
@@ -235,28 +236,20 @@ const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: 
         </div>
         <p v-if="!groups.length" class="muted">No permissions. They can sign in but see nothing.</p>
       </Panel>
-      <div v-if="dirty" class="savebar" role="region" aria-label="Unsaved roles">
-        <span class="dot" />
-        <span class="grow">Roles changed for {{ account.name }}</span>
-        <Button label="Discard" text size="small" class="on-dark" @click="draft = null" />
-        <Button label="Save roles" size="small" :loading="assign.isPending.value" :disabled="lockout" @click="saveRoles" />
-      </div>
+      <SaveBar
+        v-if="dirty"
+        :message="`Roles changed for ${account.name}`"
+        save-label="Save roles"
+        :saving="assign.isPending.value"
+        :blocked="lockout"
+        @save="saveRoles"
+        @discard="draft = null"
+      />
     </div>
   </section>
 </template>
 
 <style scoped>
-.head-card {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem 1.1rem;
-  margin-bottom: 1rem;
-  border: 1px solid var(--app-line);
-  border-radius: 12px;
-  background: var(--p-content-background);
-}
 .avatar {
   flex: none;
   background: var(--p-highlight-background);
@@ -267,20 +260,6 @@ const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: 
   background: var(--app-soft);
   color: var(--p-text-muted-color);
 }
-.who {
-  flex: 1;
-  min-width: 12rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-.line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-}
-.email,
 .muted {
   color: var(--p-text-muted-color);
 }
@@ -397,33 +376,5 @@ const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: 
 }
 .perm-list li.removed i {
   color: var(--p-red-500);
-}
-.savebar {
-  grid-column: 1 / -1;
-  position: sticky;
-  bottom: 0.75rem;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.6rem 0.75rem 0.6rem 1rem;
-  border-radius: 10px;
-  /* màu đảo theo theme: nổi trên nền sáng lẫn tối */
-  background: var(--p-text-color);
-  color: var(--p-content-background);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
-}
-.savebar .grow {
-  flex: 1;
-  min-width: 8rem;
-}
-.savebar .dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  background: var(--app-accent);
-}
-.savebar .on-dark {
-  color: var(--p-content-background);
 }
 </style>

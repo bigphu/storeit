@@ -1,23 +1,24 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
-import Card from 'primevue/card'
 import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Select from 'primevue/select'
-import SelectButton from 'primevue/selectbutton'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import AddCard from '@/components/AddCard.vue'
+import CardGrid from '@/components/CardGrid.vue'
+import EntityCard from '@/components/EntityCard.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
 import type { Role } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { useFormErrors } from '@/lib/forms'
-import { openLocation, wantsNewTab } from '@/lib/navigation'
-import { isRowControl } from '@/lib/tableRows'
 import { useUrlState } from '@/lib/urlState'
 import { useCreateRole, useRoles } from '../api'
 import { ALL_PERMS, label, moduleOf } from '../catalog'
@@ -33,7 +34,8 @@ const { state, update } = useUrlState(
   (q) => ({ layout: (q.layout === 'compare' ? 'compare' : 'cards') as Layout }),
   (s) => ({ layout: s.layout === 'compare' ? s.layout : undefined }),
 )
-const layoutOptions = [
+const layout = computed({ get: () => state.value.layout, set: (v: Layout) => update({ layout: v }) })
+const layoutOptions: SegmentOption<Layout>[] = [
   { label: 'Cards', value: 'cards', icon: 'pi pi-th-large' },
   { label: 'Compare', value: 'compare', icon: 'pi pi-table' },
 ]
@@ -41,15 +43,6 @@ const layoutOptions = [
 const people = (r: Role) => r.member_count ?? 0
 const peopleLabel = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`
 
-function openRole(r: Role, e?: MouseEvent) {
-  openLocation(router, `/roles/${r.id}`, e)
-}
-function onCardClick(r: Role, e: MouseEvent) {
-  if (!isRowControl(e.target)) openRole(r, e)
-}
-function onCardAux(r: Role, e: MouseEvent) {
-  if (wantsNewTab(e)) openRole(r, e)
-}
 
 // Bảng so sánh: mỗi dòng một quyền, nhóm theo module; mỗi cột một role
 const matrix = computed(() => ALL_PERMS.map((code) => ({ code, label: label(code), module: moduleOf(code) })))
@@ -87,65 +80,31 @@ async function submit() {
 
 <template>
   <section>
-    <div class="page-header">
-      <div>
-        <h1>Roles</h1>
-        <p class="sub">A role is a set of permissions. People get everything their roles allow.</p>
-      </div>
+    <PageHeader title="Roles" subtitle="A role is a set of permissions. People get everything their roles allow.">
       <Button v-if="canManage" label="New role" icon="pi pi-plus" @click="openCreate" />
-    </div>
+    </PageHeader>
     <div class="toolbar">
-      <SelectButton
-        :model-value="state.layout"
-        :options="layoutOptions"
-        option-value="value"
-        :allow-empty="false"
-        aria-label="Layout"
-        @update:model-value="(v: Layout) => update({ layout: v })"
-      >
-        <template #option="{ option }">
-          <i :class="option.icon" />
-          <span>{{ option.label }}</span>
-        </template>
-      </SelectButton>
+      <SegmentedFilter v-model="layout" :options="layoutOptions" label="Layout" />
     </div>
 
-    <div v-if="state.layout === 'cards'" class="role-grid">
-      <Card
-        v-for="r in roles ?? []"
-        :key="r.id"
-        class="role-card"
-        tabindex="0"
-        role="link"
-        :aria-label="r.name"
-        @click="(e: MouseEvent) => onCardClick(r, e)"
-        @auxclick="(e: MouseEvent) => onCardAux(r, e)"
-        @mousedown.middle.prevent
-        @keydown.enter.self="openRole(r)"
-      >
-        <template #content>
-          <div class="card-body">
-            <div class="top">
-              <h3>{{ r.name }}</h3>
-              <i v-if="r.is_system" v-tooltip.top="'Built-in role'" class="pi pi-lock lock" aria-label="Built-in" />
-              <Tag v-else value="Custom" severity="secondary" />
-            </div>
-            <p class="desc">{{ r.description || 'No description.' }}</p>
-            <div>
-              <div class="meter" :aria-label="`${r.permissions.length} of ${ALL_PERMS.length} permissions`">
-                <span v-for="p in ALL_PERMS" :key="p" :class="{ on: r.permissions.includes(p) }" :title="label(p)" />
-              </div>
-              <div class="meta">{{ r.permissions.length }} of {{ ALL_PERMS.length }} permissions</div>
-            </div>
-            <div class="meta people"><i class="pi pi-users" /> {{ peopleLabel(people(r)) }}</div>
+    <CardGrid v-if="state.layout === 'cards'">
+      <EntityCard v-for="r in roles ?? []" :key="r.id" :to="`/roles/${r.id}`" :label="r.name">
+        <div class="top">
+          <h3>{{ r.name }}</h3>
+          <i v-if="r.is_system" v-tooltip.top="'Built-in role'" class="pi pi-lock lock" aria-label="Built-in" />
+          <Tag v-else value="Custom" severity="secondary" />
+        </div>
+        <p class="desc">{{ r.description || 'No description.' }}</p>
+        <div>
+          <div class="meter" :aria-label="`${r.permissions.length} of ${ALL_PERMS.length} permissions`">
+            <span v-for="p in ALL_PERMS" :key="p" :class="{ on: r.permissions.includes(p) }" :title="label(p)" />
           </div>
-        </template>
-      </Card>
-      <button v-if="canManage" type="button" class="new-card" @click="openCreate">
-        <i class="pi pi-plus" />
-        <span>New role</span>
-      </button>
-    </div>
+          <div class="meta">{{ r.permissions.length }} of {{ ALL_PERMS.length }} permissions</div>
+        </div>
+        <div class="meta people"><i class="pi pi-users" /> {{ peopleLabel(people(r)) }}</div>
+      </EntityCard>
+      <AddCard v-if="canManage" label="New role" @click="openCreate" />
+    </CardGrid>
 
     <DataTable
       v-else
@@ -207,33 +166,6 @@ async function submit() {
 </template>
 
 <style scoped>
-.sub {
-  margin: 0.2rem 0 0;
-  color: var(--p-text-muted-color);
-}
-.role-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
-  gap: 0.9rem;
-}
-.role-card {
-  cursor: pointer;
-  border: 1px solid var(--app-line);
-  box-shadow: none;
-  transition: box-shadow 0.15s ease;
-}
-.role-card:hover,
-.role-card:focus-visible {
-  box-shadow: 0 0 0 1px var(--app-accent);
-}
-.role-card :deep(.p-card-body) {
-  padding: 0.95rem;
-}
-.card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-}
 .top {
   display: flex;
   align-items: center;
@@ -279,24 +211,6 @@ async function submit() {
 .people i {
   font-size: 0.8rem;
   margin-right: 0.2rem;
-}
-.new-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  min-height: 11rem;
-  border: 1px dashed var(--app-line);
-  border-radius: 12px;
-  background: transparent;
-  color: var(--p-text-muted-color);
-  font: inherit;
-  cursor: pointer;
-}
-.new-card:hover {
-  background: var(--app-soft);
-  color: var(--p-text-color);
 }
 .matrix :deep(.role-col) {
   text-align: center;

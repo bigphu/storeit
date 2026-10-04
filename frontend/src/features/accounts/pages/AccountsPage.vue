@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import Avatar from 'primevue/avatar'
 import Button from 'primevue/button'
 import Chip from 'primevue/chip'
 import Column from 'primevue/column'
@@ -9,18 +8,21 @@ import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
-import SelectButton from 'primevue/selectbutton'
 import Tag from 'primevue/tag'
 import type { MenuItem } from 'primevue/menuitem'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import IconAction from '@/components/IconAction.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import PersonCell from '@/components/PersonCell.vue'
+import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
 import { useRoles } from '@/features/roles/api'
 import type { AccountListItem } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { formatDay } from '@/lib/dates'
 import { openLocation } from '@/lib/navigation'
-import { initials, inviteNote } from '@/lib/people'
+import { inviteNote } from '@/lib/people'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
 import { onRowClick, useRowMenu } from '@/lib/tableRows'
 import { queryInt, queryString, useUrlState } from '@/lib/urlState'
@@ -74,7 +76,8 @@ watch(search, (q) => {
 })
 
 // Nút lọc trạng thái có số đếm (cùng tìm kiếm và role)
-const statusOptions = computed(() => {
+const status = computed({ get: () => state.value.status, set: (v: Filter) => update({ status: v, page: 1 }) })
+const statusOptions = computed<SegmentOption<Filter>[]>(() => {
   const c = data.value?.status_counts
   const n = (s: AccountStatus) => c?.[s] ?? 0
   return [
@@ -124,26 +127,11 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
 
 <template>
   <section>
-    <div class="page-header">
-      <div>
-        <h1>Accounts</h1>
-        <p class="sub">People who can sign in to StoreIt and the roles they hold.</p>
-      </div>
+    <PageHeader title="Accounts" subtitle="People who can sign in to StoreIt and the roles they hold.">
       <Button v-if="canManage" label="Invite account" icon="pi pi-envelope" @click="creating = true" />
-    </div>
+    </PageHeader>
     <div class="toolbar">
-      <SelectButton
-        :model-value="state.status"
-        :options="statusOptions"
-        option-value="value"
-        :allow-empty="false"
-        aria-label="Status"
-        @update:model-value="(v: Filter) => update({ status: v, page: 1 })"
-      >
-        <template #option="{ option }">
-          {{ option.label }} <span v-if="option.count !== undefined" class="seg-count">{{ option.count }}</span>
-        </template>
-      </SelectButton>
+      <SegmentedFilter v-model="status" :options="statusOptions" label="Status" />
       <IconField>
         <InputIcon class="pi pi-search" />
         <InputText v-model="search" placeholder="Search name or email" aria-label="Search accounts" />
@@ -178,14 +166,13 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
     >
       <Column header="Person">
         <template #body="{ data: a }: { data: AccountListItem }">
-          <div class="person">
-            <Avatar :label="initials(a.name)" shape="circle" :class="['avatar', { muted: a.status === 'disabled' }]" />
-            <div class="who">
-              <RouterLink :to="`/accounts/${a.id}`" class="name">{{ a.name }}</RouterLink>
-              <Tag v-if="actions.isSelf(a)" value="You" severity="secondary" class="you" />
-              <div class="email">{{ a.email }}</div>
-            </div>
-          </div>
+          <PersonCell
+            :name="a.name"
+            :email="a.email"
+            :to="`/accounts/${a.id}`"
+            :muted="a.status === 'disabled'"
+            :you="actions.isSelf(a)"
+          />
         </template>
       </Column>
       <Column header="Roles">
@@ -213,48 +200,18 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
       <Column v-if="canManage" header="" header-style="width: 6rem">
         <template #body="{ data: a }: { data: AccountListItem }">
           <div class="row-actions">
-            <Button
-              v-if="a.status === 'invited'"
-              v-tooltip.top="'Resend invitation'"
-              icon="pi pi-envelope"
-              size="small"
-              text
-              rounded
-              aria-label="Resend invitation"
-              @click="actions.resendInvitation(a)"
+            <IconAction v-if="a.status === 'invited'" icon="pi pi-envelope" label="Resend invitation" @click="actions.resendInvitation(a)" />
+            <IconAction v-if="a.status === 'active'" icon="pi pi-key" label="Send reset link" @click="actions.sendReset(a)" />
+            <IconAction v-if="a.status === 'disabled'" icon="pi pi-check-circle" label="Enable" @click="actions.enable(a)" />
+            <IconAction
+              v-else
+              icon="pi pi-ban"
+              label="Disable"
+              danger
+              :disabled="actions.isSelf(a)"
+              reason="You can’t disable yourself"
+              @click="actions.disable(a)"
             />
-            <Button
-              v-if="a.status === 'active'"
-              v-tooltip.top="'Send reset link'"
-              icon="pi pi-key"
-              size="small"
-              text
-              rounded
-              aria-label="Send reset link"
-              @click="actions.sendReset(a)"
-            />
-            <Button
-              v-if="a.status === 'disabled'"
-              v-tooltip.top="'Enable'"
-              icon="pi pi-check-circle"
-              size="small"
-              text
-              rounded
-              aria-label="Enable"
-              @click="actions.enable(a)"
-            />
-            <span v-else v-tooltip.top="actions.isSelf(a) ? 'You can’t disable yourself' : 'Disable'">
-              <Button
-                icon="pi pi-ban"
-                size="small"
-                text
-                rounded
-                severity="danger"
-                aria-label="Disable"
-                :disabled="actions.isSelf(a)"
-                @click="actions.disable(a)"
-              />
-            </span>
           </div>
         </template>
       </Column>
@@ -265,49 +222,6 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
 </template>
 
 <style scoped>
-.sub {
-  margin: 0.2rem 0 0;
-  color: var(--p-text-muted-color);
-}
-.seg-count {
-  font: 0.75rem var(--app-mono);
-  color: var(--p-text-muted-color);
-}
-.person {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  min-width: 0;
-}
-.avatar {
-  flex: none;
-  background: var(--p-highlight-background);
-  color: var(--p-highlight-color);
-  font-weight: 700;
-  font-size: 0.8rem;
-}
-.avatar.muted {
-  background: var(--app-soft);
-  color: var(--p-text-muted-color);
-}
-.who {
-  min-width: 0;
-}
-.name {
-  font-weight: 600;
-  color: var(--p-text-color);
-  text-decoration: none;
-}
-.you {
-  margin-left: 0.4rem;
-  font-size: 0.7rem;
-}
-.email {
-  font-size: 0.82rem;
-  color: var(--p-text-muted-color);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .chips {
   display: flex;
   flex-wrap: wrap;

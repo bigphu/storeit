@@ -7,6 +7,7 @@ import InputText from 'primevue/inputtext'
 import { useConfirm } from 'primevue/useconfirm'
 import { reactive, ref, watch } from 'vue'
 import type { Attribute, Option } from '@/lib/api/types'
+import IconAction from '@/components/IconAction.vue'
 import { notify } from '@/lib/notify'
 import { useAddOption, useRemoveOption, useReorderOptions, useUpdateOption } from '../api'
 
@@ -86,26 +87,8 @@ function askRemove(o: Option) {
       </Column>
       <Column v-if="canManage" header="" body-class="actions-cell">
         <template #body="{ data: o }: { data: Option }">
-          <Button
-            v-tooltip.top="'Save'"
-            icon="pi pi-check"
-            size="small"
-            text
-            rounded
-            aria-label="Save"
-            :disabled="labels[o.id] === o.label"
-            @click="save(o)"
-          />
-          <Button
-            v-tooltip.top="'Remove'"
-            icon="pi pi-trash"
-            size="small"
-            text
-            rounded
-            severity="danger"
-            aria-label="Remove"
-            @click="askRemove(o)"
-          />
+          <IconAction icon="pi pi-check" label="Save" :disabled="labels[o.id] === o.label" reason="No changes to save" @click="save(o)" />
+          <IconAction icon="pi pi-trash" label="Remove" danger @click="askRemove(o)" />
         </template>
       </Column>
       <template #empty>No options yet.</template>

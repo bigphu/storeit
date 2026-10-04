@@ -10,6 +10,7 @@ import { useRouter } from 'vue-router'
 import { useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
 import { useTabs } from '@/app/tabs/useTabs'
 import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
+import PageHeader from '@/components/PageHeader.vue'
 import { fromDateString, toDateString } from '@/lib/dates'
 import { isApiError } from '@/lib/errors'
 import { useFormErrors } from '@/lib/forms'
@@ -185,10 +186,9 @@ const crumbs = computed<Crumb[]>(() => {
 <template>
   <section>
     <AppBreadcrumb :items="crumbs" />
-    <div class="page-header">
-      <h1>{{ isEdit ? `Edit ${asset?.tag ?? ''}` : selectedType ? `New ${selectedType.name.toLowerCase()}` : 'New asset' }}</h1>
+    <PageHeader :title="isEdit ? `Edit ${asset?.tag ?? ''}` : selectedType ? `New ${selectedType.name.toLowerCase()}` : 'New asset'">
       <span v-if="isDirty" class="dirty-note"><i class="pi pi-circle-fill" /> Unsaved changes, kept if you switch tabs</span>
-    </div>
+    </PageHeader>
     <form v-if="!isEdit || asset" class="form" @submit.prevent="submit">
       <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
 

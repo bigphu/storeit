@@ -51,6 +51,25 @@ TLS is the job of the reverse proxy in front. The build puts bundles under `/sta
 | `src/lib/auth` | Token handling (`tokens.ts`: bearer, one shared refresh, retry once), session store (`session.ts`: `/me`, sign in/out, `can(perm)`), permission codes |
 | `src/lib` | `errors.ts` (`ApiError`, `unwrap`, `describeError`), `forms.ts` (field errors), `query.ts` (Vue Query client, default error toasts), `urlState.ts`, `dates.ts`, `notify.ts` |
 | `src/features/<feature>` | `api.ts` (Vue Query hooks), `pages/`, `components/` |
+| `src/components` | Shared building blocks over PrimeVue (below) |
+
+## Shared components
+
+Build pages from these instead of restyling PrimeVue per page, so the same thing looks and
+behaves the same everywhere.
+
+| Component | Use it for |
+|---|---|
+| `PageHeader` | List page title, one-line subtitle, primary action (default slot) |
+| `DetailHeader` | Detail page header card: `#media`, title + `#tags`, details (default slot), `#actions` |
+| `CardGrid`, `EntityCard`, `AddCard` | Card grids (asset types, roles). `EntityCard` opens `to` on click/Enter, Ctrl/middle-click opens a new tab, emits `menu` on right-click; `AddCard` is the dashed "New …" tile and stretches to the row height |
+| `SegmentedFilter` | One-of-few switches (status filters with `count`, Cards/Table with `icon-only`) |
+| `IconAction` | Every icon-only action: tooltip and `aria-label` from `label`, `danger`, `to` for real links, `disabled` + `reason` shows why in the tooltip |
+| `PersonCell` | Avatar + name + email in tables (`muted` for disabled, `you`) |
+| `SaveBar` | Sticky unsaved-changes bar with Discard/Save; `blocked` when a rule (lock-out) forbids saving |
+| `AppBreadcrumb` | Breadcrumb with the per-tab back button |
+
+Selection styling lives in `app/theme.ts` (token preset over Aura) and `app/base.css`.
 
 ## Rules worth knowing
 

@@ -9,6 +9,8 @@ import Message from 'primevue/message'
 import Tag from 'primevue/tag'
 import { useConfirm } from 'primevue/useconfirm'
 import { computed, nextTick, ref } from 'vue'
+import IconAction from '@/components/IconAction.vue'
+import PageHeader from '@/components/PageHeader.vue'
 import type { Status, StatusKind } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
@@ -145,12 +147,7 @@ function doRestore(s: Status) {
 
 <template>
   <section>
-    <div class="page-header">
-      <div>
-        <h1>Statuses</h1>
-        <p class="sub">Every asset has one status. Its kind decides how the asset behaves.</p>
-      </div>
-    </div>
+    <PageHeader title="Statuses" subtitle="Every asset has one status. Its kind decides how the asset behaves." />
     <div class="toolbar">
       <Checkbox v-model="showArchived" input-id="show-archived" binary />
       <label for="show-archived">Show archived</label>
@@ -212,28 +209,15 @@ function doRestore(s: Status) {
           <Column v-if="canManage" header-style="width: 5.5rem" body-style="width: 5.5rem">
             <template #body="{ data: s }: { data: Status }">
               <div class="row-actions">
-                <Button
-                  v-tooltip.top="'Edit'"
-                  icon="pi pi-pencil"
-                  size="small"
-                  text
-                  rounded
-                  aria-label="Edit"
-                  @click="openEdit(s)"
+                <IconAction icon="pi pi-pencil" label="Edit" @click="openEdit(s)" />
+                <IconAction
+                  icon="pi pi-inbox"
+                  label="Archive"
+                  danger
+                  :disabled="!!archiveBlock(s)"
+                  :reason="archiveBlock(s)"
+                  @click="askArchive(s)"
                 />
-                <!-- nút tắt không nhận rê chuột nên tooltip nằm ở span bọc ngoài -->
-                <span v-tooltip.top="archiveBlock(s) ?? 'Archive'">
-                  <Button
-                    icon="pi pi-inbox"
-                    size="small"
-                    text
-                    rounded
-                    severity="danger"
-                    aria-label="Archive"
-                    :disabled="!!archiveBlock(s)"
-                    @click="askArchive(s)"
-                  />
-                </span>
               </div>
             </template>
           </Column>
@@ -294,10 +278,6 @@ function doRestore(s: Status) {
 </template>
 
 <style scoped>
-.sub {
-  margin: 0.2rem 0 0;
-  color: var(--p-text-muted-color);
-}
 .hint {
   color: var(--p-text-muted-color);
   font-size: 0.85rem;
