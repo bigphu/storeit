@@ -136,14 +136,14 @@ function commitRename() {
 </template>
 
 <style scoped>
-/* Thanh tab kiểu demo: dải nền phụ, tab như tab trình duyệt, tab đang mở nền trang và
-   vạch hổ phách phía trên */
+/* Thanh tab kiểu trình duyệt / VS Code: tab đang mở mang nền của trang và nối liền với
+   trang bên dưới, vạch 2px màu chữ phía trên; tab khác là chữ mờ, ngăn bằng vạch mảnh */
 .tabbar {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 0.25rem;
   min-width: 0;
-  padding: 0.3rem 0.5rem;
+  padding: 0.35rem 0.5rem 0;
   background: var(--app-soft);
   border-bottom: 1px solid var(--app-line);
 }
@@ -161,34 +161,48 @@ function commitRename() {
   display: none;
 }
 .app-tab {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.4rem;
   max-width: 15rem;
   padding: 0.45rem 0.35rem 0.45rem 0.7rem;
-  margin-right: 2px;
-  border: 0;
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 7px 7px 0 0;
   background: transparent;
   color: var(--p-text-muted-color);
   font-weight: 500;
 }
 .app-tab:hover {
   background: color-mix(in srgb, var(--p-content-background) 55%, transparent);
+  color: var(--p-text-color);
 }
-/* tab đang mở: thẻ nổi trên rãnh xám của thanh tab */
+/* vạch ngăn giữa hai tab không mở */
+.app-tab:not(.p-tab-active) + .app-tab:not(.p-tab-active)::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 28%;
+  bottom: 28%;
+  width: 1px;
+  background: var(--app-line);
+}
 .app-tab.p-tab-active {
-  background: var(--app-raised);
+  background: var(--p-content-background);
+  border-color: var(--app-line);
   color: var(--p-text-color);
   font-weight: 600;
-  box-shadow: var(--app-bar-bottom), var(--app-raised-shadow);
+  box-shadow: inset 0 2px 0 var(--p-text-color);
+  /* đè lên viền dưới của thanh để nối liền với trang */
+  margin-bottom: -1px;
+  padding-bottom: calc(0.45rem + 1px);
 }
 .tab-icon {
   font-size: 0.75rem;
   opacity: 0.7;
 }
 .app-tab.pinned .tab-icon {
-  color: var(--app-accent);
   opacity: 1;
 }
 .tab-label {

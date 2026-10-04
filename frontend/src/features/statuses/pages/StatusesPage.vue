@@ -391,9 +391,8 @@ function doRestore(s: Status) {
   gap: 0.25rem;
   padding: 0.05rem 0.5rem;
   border-radius: 999px;
-  background: var(--app-raised);
-  box-shadow: var(--app-raised-shadow);
-  color: var(--app-accent);
+  background: var(--app-soft);
+  color: var(--p-text-color);
   font-size: 0.75rem;
   font-weight: 600;
   white-space: nowrap;

@@ -11,17 +11,17 @@
   --app-line: var(--p-content-border-color);
   --app-accent: var(--p-primary-color);
   --app-link: var(--p-primary-color);
-  /* thẻ nổi của mục đang chọn (tab, lựa chọn, mục sidebar); nền khớp theme.ts */
-  --app-raised: var(--p-surface-0);
-  --app-raised-shadow: 0 1px 2px rgb(0 0 0 / 0.1), 0 0 0 1px var(--app-line);
-  /* vạch chỉ báo của mục đang chọn */
+  /* mục "đang ở đây" (sidebar, thẻ đang chọn) và rê chuột: xám trung tính, không màu nhấn */
+  --app-selected: var(--p-surface-200);
+  --app-hover: var(--p-surface-100);
+  /* vạch trái của dòng bảng đang chọn (checkbox) */
   --app-bar-left: inset 3px 0 0 var(--app-accent);
-  --app-bar-bottom: inset 0 -2px 0 var(--app-accent);
 }
 :root.app-dark {
   --app-ground: var(--p-surface-950);
   --app-soft: var(--p-surface-800);
-  --app-raised: var(--p-surface-700);
+  --app-selected: var(--p-surface-700);
+  --app-hover: var(--p-surface-800);
 }
 
 /* Mật độ "compact" (Preferences): bảng dùng khoảng cách của size="small" */
@@ -200,35 +200,23 @@ section + section {
   font-size: 0.85rem;
 }
 
-/* Trạng thái "đang chọn" = thẻ nổi (màu nền thẻ ở theme.ts) + vạch chỉ báo màu nhấn:
-   bên trái cho danh sách dọc, dưới đáy cho tab; nút trang tròn chỉ có thẻ */
-.p-select-option-selected,
-.p-multiselect-option-selected,
-.p-listbox-option-selected {
-  box-shadow: var(--app-bar-left), var(--app-raised-shadow);
+/* Lựa chọn đã chọn trong danh sách thả xuống: không tô nền (theme.ts), có dấu tick ở
+   bên phải. MultiSelect đã có checkbox nên không cần. */
+.p-select-option-selected::after,
+.p-listbox-option-selected::after {
+  content: '\e909'; /* pi-check */
+  font-family: 'primeicons';
+  font-size: 0.8rem;
+  margin-left: auto;
+  padding-left: 0.75rem;
+  color: var(--p-text-color);
 }
-.p-tab-active {
-  box-shadow: var(--app-bar-bottom), var(--app-raised-shadow);
-}
-.p-paginator-page-selected {
-  box-shadow: var(--app-raised-shadow);
+/* PrimeVue không tô nền khi rê lên lựa chọn đã chọn: dùng cùng màu xám như lựa chọn khác */
+.p-select-option-selected:not(.p-disabled):hover,
+.p-listbox-option-selected:not(.p-disabled):hover {
+  background: var(--app-hover);
 }
 /* Dòng đang chọn của bảng: giữ nền highlight, thêm vạch trái để khác với dòng đang rê chuột */
 .p-datatable-tbody > tr.p-datatable-row-selected > td:first-child {
   box-shadow: var(--app-bar-left);
-}
-.p-select-option-selected,
-.p-listbox-option-selected {
-  font-weight: 600;
-}
-/* Tabs trong trang: rãnh xám ôm vừa các tab (thanh tab của ứng dụng có kiểu riêng) */
-.p-tabs:not(.app-tabbar) .p-tablist-tab-list {
-  display: inline-flex;
-  gap: 2px;
-  padding: 3px;
-  border-radius: 9px;
-  background: var(--app-soft);
-}
-.p-tabs:not(.app-tabbar) .p-tab {
-  border-radius: 7px;
 }

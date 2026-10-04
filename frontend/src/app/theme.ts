@@ -1,58 +1,52 @@
 import { definePreset } from '@primeuix/themes'
 import Aura from '@primeuix/themes/aura'
 
-// Giữ nguyên màu của Aura; chỉ đổi trạng thái "đang chọn" (tab, lựa chọn trong danh sách,
-// trang hiện tại) thành "thẻ nổi": nền sáng hơn nền xung quanh, chữ màu thường.
-// Viền mảnh và bóng của thẻ nằm ở base.css (--app-raised-shadow); màu nền thẻ khớp --app-raised.
-// SelectButton của Aura vốn đã theo kiểu này nên không đổi.
-const raised = { light: '{surface.0}', dark: '{surface.700}' }
-// Rê chuột lên dòng (bảng, lựa chọn, mục menu): sắc màu chính rất nhạt thay cho xám,
-// để khác với rãnh xám và thẻ nổi của mục đang chọn
-const hover = 'color-mix(in srgb, {primary.color} 8%, transparent)'
+// Giữ màu Aura; trạng thái "đang chọn" dùng màu trung tính thay cho màu chính:
+// xám cho "đang ở đây", dấu tick cho "đã chọn", gạch dưới cho "mục nào". Màu chính chỉ
+// dành cho hành động (nút chính, liên kết, focus, checkbox đã tick).
+// Dấu tick của lựa chọn đã chọn và thanh tab của ứng dụng nằm ở base.css / TabBar.vue.
 
-const selectedOption = (bg: string) => ({
+// Lựa chọn trong danh sách: đã chọn không tô nền (có dấu tick), rê chuột/bàn phím tô xám
+const listOption = (hover: string) => ({
   option: {
     focusBackground: hover,
-    selectedBackground: bg,
-    selectedFocusBackground: bg,
+    focusColor: '{text.color}',
+    selectedBackground: 'transparent',
+    selectedFocusBackground: hover,
     selectedColor: '{text.color}',
     selectedFocusColor: '{text.color}',
   },
 })
+const navHover = (hover: string) => ({ item: { focusBackground: hover, focusColor: '{text.color}' } })
+
+// Rê chuột lên dòng bảng: sắc màu chính rất nhạt (người dùng chọn riêng cho bảng)
+const rowHover = 'color-mix(in srgb, {primary.color} 8%, transparent)'
 
 export const StoreItPreset = definePreset(Aura, {
   semantic: {
     colorScheme: {
-      light: { list: selectedOption(raised.light), navigation: { item: { focusBackground: hover } } },
-      dark: { list: selectedOption(raised.dark), navigation: { item: { focusBackground: hover } } },
+      light: { list: listOption('{surface.100}'), navigation: navHover('{surface.100}') },
+      dark: { list: listOption('{surface.800}'), navigation: navHover('{surface.800}') },
     },
   },
   components: {
     datatable: {
-      row: { hoverBackground: hover, hoverColor: '{text.color}' },
+      row: { hoverBackground: rowHover, hoverColor: '{text.color}' },
     },
-    // Tabs kiểu "segmented": rãnh xám (base.css), tab đang chọn là thẻ nổi; bỏ gạch chân
+    // Tab trong trang: chữ mờ, tab đang mở chữ thường và gạch dưới 2px màu chữ
     tabs: {
-      tablist: { borderWidth: '0', background: 'transparent' },
       tab: {
-        borderWidth: '0',
-        margin: '0',
-        padding: '0.4rem 0.9rem',
-        background: 'transparent',
-        hoverBackground: 'transparent',
         activeColor: '{text.color}',
+        activeBorderColor: '{content.border.color}',
       },
-      activeBar: { height: '0' },
-      colorScheme: {
-        light: { tab: { activeBackground: raised.light } },
-        dark: { tab: { activeBackground: raised.dark } },
-      },
+      activeBar: { height: '2px', bottom: '-1px', background: '{text.color}' },
     },
+    // Trang hiện tại: nền xám, chữ thường
     paginator: {
       navButton: { selectedColor: '{text.color}' },
       colorScheme: {
-        light: { navButton: { selectedBackground: raised.light } },
-        dark: { navButton: { selectedBackground: raised.dark } },
+        light: { navButton: { selectedBackground: '{surface.200}' } },
+        dark: { navButton: { selectedBackground: '{surface.700}' } },
       },
     },
   },

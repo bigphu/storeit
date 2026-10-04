@@ -352,11 +352,10 @@ const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: 
 .role-option:hover {
   background: var(--p-list-option-focus-background);
 }
-/* role đang chọn: thẻ nổi có vạch nhấn, như mục đang chọn ở nơi khác */
+/* role đang chọn: nền xám như mục đang chọn ở nơi khác; checkbox đã tick nói phần còn lại */
 .role-option.on {
+  background: var(--app-selected);
   border-color: transparent;
-  background: var(--app-raised);
-  box-shadow: var(--app-bar-left), var(--app-raised-shadow);
 }
 .role-option.off {
   cursor: default;
