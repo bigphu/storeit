@@ -313,7 +313,7 @@ function cell(row: AssetListItem, key: string) {
       @row-contextmenu="onRowContextMenu"
     >
       <Column v-if="canManage" selection-mode="multiple" header-style="width: 3rem" body-class="select-cell" />
-      <Column header="Tag" sort-field="tag" sortable>
+      <Column header="Tag" sort-field="tag" sortable body-class="tag-cell">
         <template #body="{ data: a }: { data: AssetListItem }">
           <RouterLink :to="`/assets/${a.id}`">{{ a.tag }}</RouterLink>
         </template>

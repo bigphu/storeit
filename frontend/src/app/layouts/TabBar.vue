@@ -116,7 +116,7 @@ function commitRename() {
         </Tab>
       </TabList>
     </Tabs>
-    <Button icon="pi pi-plus" text rounded aria-label="New tab" @click="tabs.open('/assets', { background: false })" />
+    <Button icon="pi pi-plus" text rounded class="new-tab" aria-label="New tab" @click="tabs.open('/assets', { background: false })" />
 
     <ContextMenu ref="menu" :model="menuItems" @hide="menuTab = null" />
     <Dialog v-model:visible="renameOpen" modal header="Rename tab" :style="{ width: '24rem' }">
@@ -133,30 +133,62 @@ function commitRename() {
 </template>
 
 <style scoped>
+/* Thanh tab kiểu demo: dải nền phụ, tab như tab trình duyệt, tab đang mở nền trang và
+   vạch hổ phách phía trên */
 .tabbar {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 0.25rem;
   min-width: 0;
-  border-bottom: 1px solid var(--p-content-border-color);
+  padding: 0.4rem 0.5rem 0;
+  background: var(--app-soft);
+  border-bottom: 1px solid var(--app-line);
 }
 .tabs {
   flex: 1;
   min-width: 0;
+}
+.tabs :deep(.p-tablist),
+.tabs :deep(.p-tablist-content),
+.tabs :deep(.p-tablist-tab-list) {
+  background: transparent;
+  border: 0;
+}
+.tabs :deep(.p-tablist-active-bar) {
+  display: none;
 }
 .app-tab {
   display: flex;
   align-items: center;
   gap: 0.4rem;
   max-width: 15rem;
-  padding-right: 0.25rem;
+  padding: 0.45rem 0.35rem 0.45rem 0.7rem;
+  margin-right: 2px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--p-text-muted-color);
+  font-weight: 500;
+}
+.app-tab:hover {
+  background: color-mix(in srgb, var(--p-content-background) 55%, transparent);
+}
+.app-tab.p-tab-active {
+  background: var(--p-content-background);
+  border-color: var(--app-line);
+  color: var(--p-text-color);
+  font-weight: 600;
+  box-shadow: inset 0 2px 0 var(--app-accent);
+  margin-bottom: -1px;
+  padding-bottom: calc(0.45rem + 1px);
 }
 .tab-icon {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   opacity: 0.7;
 }
 .app-tab.pinned .tab-icon {
-  color: var(--p-primary-color);
+  color: var(--app-accent);
   opacity: 1;
 }
 .tab-label {
@@ -165,15 +197,18 @@ function commitRename() {
   white-space: nowrap;
 }
 .tab-close {
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.4rem;
+  height: 1.4rem;
 }
 .dirty-dot {
-  width: 0.5rem;
-  height: 0.5rem;
+  width: 0.45rem;
+  height: 0.45rem;
   border-radius: 50%;
-  background: var(--p-primary-color);
+  background: var(--app-accent);
   flex: none;
+}
+.new-tab {
+  margin-bottom: 0.2rem;
 }
 .app-tab.flash {
   animation: tab-flash 0.9s ease;

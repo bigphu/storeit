@@ -77,6 +77,18 @@ const items = computed<MenuItem[]>(() => [
 <style scoped>
 .account-btn {
   gap: 0.5rem;
+  padding: 0.2rem 0.75rem 0.2rem 0.2rem;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  color: var(--p-text-color);
+}
+.account-btn :deep(.p-avatar) {
+  width: 1.8rem;
+  height: 1.8rem;
+  background: var(--p-highlight-background);
+  color: var(--p-highlight-color);
+  font-weight: 600;
+  font-size: 0.75rem;
 }
 .who {
   display: flex;

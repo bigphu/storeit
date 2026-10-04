@@ -126,9 +126,10 @@ const model = computed(() => (nav.scopeTypeId.value ? scoped.value : workspace.v
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  border-right: 1px solid var(--p-content-border-color);
+  gap: 0.25rem;
+  padding: 0.75rem 0.6rem;
+  background: var(--p-content-background);
+  border-right: 1px solid var(--app-line);
   overflow-y: auto;
 }
 .nav-menu {
@@ -136,39 +137,77 @@ const model = computed(() => (nav.scopeTypeId.value ? scoped.value : workspace.v
   background: transparent;
   width: 100%;
   min-width: 0;
+  padding: 0;
+}
+/* nhãn nhóm (Configuration, Administration) kiểu demo */
+.nav-menu :deep(.p-menu-submenu-label) {
+  font: 500 0.66rem var(--app-mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--p-text-muted-color);
+  padding: 1rem 0.6rem 0.3rem;
+  background: transparent;
+}
+.nav-menu :deep(.p-menu-item-content) {
+  border-radius: 7px;
 }
 .back {
-  padding: 0.25rem 0.5rem;
+  padding: 0.25rem 0.6rem 0.6rem;
+  text-decoration: none;
+  font-size: 0.9rem;
 }
 .switcher {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0.125rem;
+  gap: 0.1rem;
   text-align: left;
+  margin-bottom: 0.5rem;
+  background: var(--app-ground);
+  border-color: var(--app-line);
+  border-radius: 9px;
+  color: var(--p-text-color);
 }
 .switcher-label {
-  font-size: 0.75rem;
+  font: 500 0.66rem var(--app-mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
   color: var(--p-text-muted-color);
 }
 .switcher-value {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-weight: 600;
+  font: 600 1rem var(--app-display);
+}
+.switcher-value i {
+  font-size: 0.75rem;
+  color: var(--p-text-muted-color);
 }
 .nav-link {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   width: 100%;
+  border-radius: 7px;
+  color: var(--p-text-color);
+  text-decoration: none;
 }
+/* loại dưới "All assets": thụt vào, có đường dẫn bên trái */
 .nav-link.is-sub {
-  padding-left: 2.25rem;
+  margin-left: 1.4rem;
+  width: calc(100% - 1.4rem);
+  border-left: 1px solid var(--app-line);
+  border-radius: 0 7px 7px 0;
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
 }
+/* mục đang mở: nền hổ phách nhạt, vạch hổ phách bên trái */
 .nav-link.is-active {
   font-weight: 600;
-  color: var(--p-primary-color);
+  background: var(--p-highlight-background);
+  color: var(--p-highlight-color);
+  box-shadow: inset 3px 0 0 var(--app-accent);
 }
 .nav-link.is-later {
   color: var(--p-text-muted-color);
@@ -180,9 +219,13 @@ const model = computed(() => (nav.scopeTypeId.value ? scoped.value : workspace.v
 }
 .nav-count {
   margin-left: auto;
+  font: 0.75rem var(--app-mono);
   color: var(--p-text-muted-color);
-  font-size: 0.85em;
   font-variant-numeric: tabular-nums;
+}
+.nav-link.is-later .nav-count {
+  font-family: var(--app-body);
+  font-style: italic;
 }
 .toggle {
   width: 1.5rem;

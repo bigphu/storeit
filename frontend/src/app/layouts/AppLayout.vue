@@ -152,7 +152,7 @@ onBeforeUnmount(() => {
 }
 .shell {
   display: grid;
-  grid-template-columns: 15rem minmax(0, 1fr);
+  grid-template-columns: 15.5rem minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   height: 100vh;
 }
@@ -160,22 +160,26 @@ onBeforeUnmount(() => {
   grid-column: 1 / -1;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   padding: 0.5rem 1rem;
-  border-bottom: 1px solid var(--p-content-border-color);
+  background: var(--p-content-background);
+  border-bottom: 1px solid var(--app-line);
 }
 .brand {
-  font-weight: 700;
-  font-size: 1.1rem;
+  font: 800 1.1rem var(--app-display);
+  letter-spacing: -0.01em;
   color: inherit;
   text-decoration: none;
 }
+/* ô "Go to asset type…" trông như ô tìm kiếm */
 .go-type {
-  gap: 1.5rem;
-}
-.go-type kbd {
-  font-size: 0.75rem;
-  opacity: 0.7;
+  gap: 2rem;
+  justify-content: space-between;
+  min-width: 15rem;
+  background: var(--app-ground);
+  border-color: var(--app-line);
+  color: var(--p-text-muted-color);
+  font-weight: 400;
 }
 .spacer {
   flex: 1;
@@ -188,9 +192,10 @@ onBeforeUnmount(() => {
 }
 .content {
   flex: 1;
-  padding: 1rem;
+  padding: 1.1rem 1.4rem 2.5rem;
   min-width: 0;
   overflow: auto;
+  background: var(--p-content-background);
 }
 @media (max-width: 760px) {
   .shell {
@@ -198,6 +203,9 @@ onBeforeUnmount(() => {
     grid-template-rows: auto auto minmax(0, 1fr);
     height: auto;
     min-height: 100vh;
+  }
+  .go-type {
+    min-width: 0;
   }
   .go-type span {
     display: none;

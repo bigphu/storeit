@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router'
 import { routes } from './routes'
 
 const router = createRouter({ history: createMemoryHistory(), routes })
@@ -27,6 +27,17 @@ describe('routes', () => {
   })
 })
 
+// stubbed: cùng bảng route, component thay bằng component rỗng
+const Stub = { render: () => null }
+function stubbed(list: RouteRecordRaw[]): RouteRecordRaw[] {
+  return list.map((r) => {
+    const out = { ...r } as RouteRecordRaw & { component?: unknown; children?: RouteRecordRaw[] }
+    if ('component' in r && r.component) out.component = Stub
+    if (r.children) out.children = stubbed(r.children)
+    return out as RouteRecordRaw
+  })
+}
+
 describe('type and account routes', () => {
   it('scopes asset lists, forms and settings by type', () => {
     expect(router.resolve('/types/L/assets').name).toBe('type-assets')
@@ -37,7 +48,8 @@ describe('type and account routes', () => {
   })
 
   it('redirects old links', async () => {
-    const r = createRouter({ history: createMemoryHistory(), routes })
+    // điều hướng thật nhưng không tải trang (chỉ kiểm tra redirect, nhanh và ổn định)
+    const r = createRouter({ history: createMemoryHistory(), routes: stubbed(routes) })
     await r.push('/asset-types/X')
     expect(r.currentRoute.value.fullPath).toBe('/types/X/settings')
     await r.push('/asset-types')
