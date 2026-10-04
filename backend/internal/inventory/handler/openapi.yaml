@@ -20,7 +20,9 @@ paths:
         - $ref: '#/components/parameters/IncludeArchived'
         - name: with_counts
           in: query
-          description: Add `asset_count` (assets not retired) to each type.
+          description: >
+            Add `asset_count` and `kind_counts` (assets not retired), `attribute_count` and
+            `attribute_labels` (active attributes in display order) to each type.
           schema: { type: boolean }
       responses:
         "200":
@@ -246,6 +248,10 @@ paths:
       summary: List asset statuses (inventory.asset.read)
       parameters:
         - $ref: '#/components/parameters/IncludeArchived'
+        - name: with_counts
+          in: query
+          description: Add `asset_count` (assets with this status, retired ones included) to each status.
+          schema: { type: boolean }
       responses:
         "200":
           description: Statuses
@@ -273,6 +279,29 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Status' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /asset-statuses/order:
+    put:
+      operationId: reorderStatuses
+      summary: Put every active status in a new order, in one change (inventory.status.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrderRequest' }
+      responses:
+        "200":
+          description: Active statuses in the new order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Status' }
         default: { $ref: '#/components/responses/Problem' }
 
   /asset-statuses/{statusID}:
@@ -303,6 +332,20 @@ paths:
       responses:
         "200":
           description: Archived
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Status' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /asset-statuses/{statusID}/restore:
+    parameters:
+      - $ref: '#/components/parameters/StatusID'
+    post:
+      operationId: restoreStatus
+      summary: Offer an archived status again (inventory.status.manage)
+      responses:
+        "200":
+          description: Restored
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Status' }
@@ -559,6 +602,24 @@ components:
           type: integer
           format: int64
           description: Assets of this type that are not retired; only with `with_counts=true`
+        kind_counts: { $ref: '#/components/schemas/KindCounts' }
+        attribute_count:
+          type: integer
+          format: int32
+          description: Active attributes; only with `with_counts=true`
+        attribute_labels:
+          type: array
+          description: Labels of the active attributes in display order; only with `with_counts=true`
+          items: { type: string }
+
+    KindCounts:
+      type: object
+      description: Assets not retired by the kind of their status; only with `with_counts=true`
+      required: [available, in_use, unavailable]
+      properties:
+        available: { type: integer, format: int64 }
+        in_use: { type: integer, format: int64 }
+        unavailable: { type: integer, format: int64 }
 
     AssetTypeDetail:
       allOf:
@@ -674,6 +735,10 @@ components:
         is_system: { type: boolean }
         position: { type: integer, format: int32 }
         archived_at: { type: string, format: date-time }
+        asset_count:
+          type: integer
+          format: int64
+          description: Assets with this status, retired ones included; only with `with_counts=true`
 
     CreateStatusRequest:
       type: object

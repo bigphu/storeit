@@ -16,12 +16,30 @@ func (s *Service) ListAssetTypes(ctx context.Context, includeArchived bool) ([]d
 	return s.types.List(ctx, includeArchived)
 }
 
-// AssetCountsByType: số tài sản chưa retire của mỗi loại
-func (s *Service) AssetCountsByType(ctx context.Context) (map[uuid.UUID]int64, error) {
+// TypeSummaries: số tài sản chưa retire (tổng, theo kind) và nhãn thuộc tính đang dùng
+// của mỗi loại; loại không có cả hai thì không có trong map
+func (s *Service) TypeSummaries(ctx context.Context) (map[uuid.UUID]domain.TypeSummary, error) {
 	if _, err := auth.Require(ctx, domain.PermAssetRead); err != nil {
 		return nil, err
 	}
-	return s.assets.CountByType(ctx)
+	counts, err := s.assets.CountByType(ctx)
+	if err != nil {
+		return nil, err
+	}
+	labels, err := s.types.AttributeLabels(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[uuid.UUID]domain.TypeSummary, len(counts)+len(labels))
+	for id, c := range counts {
+		out[id] = domain.TypeSummary{Counts: c}
+	}
+	for id, l := range labels {
+		sum := out[id]
+		sum.AttributeLabels = l
+		out[id] = sum
+	}
+	return out, nil
 }
 
 func (s *Service) GetAssetType(ctx context.Context, id uuid.UUID) (domain.AssetType, error) {

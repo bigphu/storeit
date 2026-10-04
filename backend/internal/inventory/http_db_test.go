@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -404,32 +405,104 @@ func TestListTypesWithCounts(t *testing.T) {
 	a := newApp(t)
 	tok := a.token(allPerms...)
 	code := "CN" + strings.ToUpper(uuid.NewString()[:6])
-	typ := decode[typeDetail](t, a.do("POST", "/api/v1/asset-types", tok, map[string]any{"code": code, "name": "Counted " + code}), 201)
-	for i := 0; i < 2; i++ {
-		decode[assetDetail](t, a.do("POST", "/api/v1/assets", tok, map[string]any{
-			"tag": "CN-" + strings.ToUpper(uuid.NewString()[:8]), "name": "x", "asset_type_id": typ.ID,
-		}), 201)
-	}
-	type list struct {
-		Items []struct {
-			ID         string
-			AssetCount *int64 `json:"asset_count"`
+	typ := decode[typeDetail](t, a.do("POST", "/api/v1/asset-types", tok, map[string]any{
+		"code": code, "name": "Counted " + code,
+		"attributes": []map[string]any{
+			{"key": "b", "label": "Second", "data_type": "text", "position": 2},
+			{"key": "a", "label": "First", "data_type": "text", "position": 1},
+		},
+	}), 201)
+	for _, status := range []string{"", domain.InUseStatusID.String()} {
+		body := map[string]any{"tag": "CN-" + strings.ToUpper(uuid.NewString()[:8]), "name": "x", "asset_type_id": typ.ID}
+		if status != "" {
+			body["status_id"] = status
 		}
+		decode[assetDetail](t, a.do("POST", "/api/v1/assets", tok, body), 201)
 	}
-	find := func(l list) *int64 {
+	type item struct {
+		ID         string
+		AssetCount *int64 `json:"asset_count"`
+		KindCounts *struct {
+			Available   int64 `json:"available"`
+			InUse       int64 `json:"in_use"`
+			Unavailable int64 `json:"unavailable"`
+		} `json:"kind_counts"`
+		AttributeCount  *int32   `json:"attribute_count"`
+		AttributeLabels []string `json:"attribute_labels"`
+	}
+	type list struct{ Items []item }
+	find := func(l list) item {
 		for _, it := range l.Items {
 			if it.ID == typ.ID {
-				return it.AssetCount
+				return it
 			}
 		}
 		t.Fatalf("type %s not listed", typ.ID)
-		return nil
+		return item{}
 	}
-	if n := find(decode[list](t, a.do("GET", "/api/v1/asset-types?with_counts=true", tok, nil), 200)); n == nil || *n != 2 {
-		t.Errorf("asset_count = %v, want 2", n)
+	got := find(decode[list](t, a.do("GET", "/api/v1/asset-types?with_counts=true", tok, nil), 200))
+	if got.AssetCount == nil || *got.AssetCount != 2 {
+		t.Errorf("asset_count = %v, want 2", got.AssetCount)
 	}
-	if n := find(decode[list](t, a.do("GET", "/api/v1/asset-types", tok, nil), 200)); n != nil {
-		t.Errorf("asset_count without with_counts = %d, want absent", *n)
+	if k := got.KindCounts; k == nil || k.Available != 1 || k.InUse != 1 || k.Unavailable != 0 {
+		t.Errorf("kind_counts = %+v, want 1 available, 1 in use", k)
+	}
+	if got.AttributeCount == nil || *got.AttributeCount != 2 || !slices.Equal(got.AttributeLabels, []string{"First", "Second"}) {
+		t.Errorf("attributes = %v %v, want 2 [First Second]", got.AttributeCount, got.AttributeLabels)
+	}
+	if got := find(decode[list](t, a.do("GET", "/api/v1/asset-types", tok, nil), 200)); got.AssetCount != nil || got.KindCounts != nil || got.AttributeLabels != nil {
+		t.Errorf("summary without with_counts = %+v, want absent", got)
+	}
+}
+
+func TestStatusesOverHTTP(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	type status struct {
+		ID         string
+		Position   int32
+		ArchivedAt *string `json:"archived_at"`
+		AssetCount *int64  `json:"asset_count"`
+	}
+	type list struct{ Items []status }
+	s := decode[status](t, a.do("POST", "/api/v1/asset-statuses", tok, map[string]any{"name": "Spare " + uuid.NewString()[:8], "kind": "available"}), 201)
+	typ := decode[typeDetail](t, a.do("POST", "/api/v1/asset-types", tok, map[string]any{"code": "ST" + strings.ToUpper(uuid.NewString()[:6]), "name": "Status " + uuid.NewString()[:8]}), 201)
+	decode[assetDetail](t, a.do("POST", "/api/v1/assets", tok, map[string]any{
+		"tag": "ST-" + strings.ToUpper(uuid.NewString()[:8]), "name": "x", "asset_type_id": typ.ID, "status_id": s.ID,
+	}), 201)
+
+	counted := decode[list](t, a.do("GET", "/api/v1/asset-statuses?with_counts=true", tok, nil), 200)
+	var ids []string
+	for _, x := range counted.Items {
+		ids = append(ids, x.ID)
+		if x.ID == s.ID && (x.AssetCount == nil || *x.AssetCount != 1) {
+			t.Errorf("asset_count = %v, want 1", x.AssetCount)
+		}
+	}
+	slices.Reverse(ids)
+	got := decode[list](t, a.do("PUT", "/api/v1/asset-statuses/order", tok, map[string]any{"ids": ids}), 200)
+	if len(got.Items) != len(ids) || got.Items[0].ID != ids[0] || got.Items[0].Position != 1 {
+		t.Errorf("reordered = %+v", got.Items)
+	}
+	rec := a.do("PUT", "/api/v1/asset-statuses/order", tok, map[string]any{"ids": ids[1:]})
+	if typ, _ := problem(t, rec); rec.Code != 422 || typ != "/errors/invalid-order" {
+		t.Errorf("missing status: %d %s", rec.Code, typ)
+	}
+	if rec := a.do("PUT", "/api/v1/asset-statuses/order", a.token(domain.PermAssetRead), map[string]any{"ids": ids}); rec.Code != 403 {
+		t.Errorf("without status.manage: %d", rec.Code)
+	}
+	// route theo id vẫn chạy bên cạnh /order
+	if rec := a.do("PATCH", "/api/v1/asset-statuses/"+s.ID, tok, map[string]any{"name": "Renamed " + uuid.NewString()[:8]}); rec.Code != 200 {
+		t.Errorf("patch status: %d %s", rec.Code, rec.Body)
+	}
+
+	decode[status](t, a.do("POST", "/api/v1/asset-statuses/"+s.ID+"/archive", tok, nil), 200)
+	back := decode[status](t, a.do("POST", "/api/v1/asset-statuses/"+s.ID+"/restore", tok, nil), 200)
+	if back.ArchivedAt != nil {
+		t.Errorf("restored status still archived: %+v", back)
+	}
+	if rec := a.do("POST", "/api/v1/asset-statuses/"+s.ID+"/restore", a.token(domain.PermAssetRead), nil); rec.Code != 403 {
+		t.Errorf("restore without status.manage: %d", rec.Code)
 	}
 }
 

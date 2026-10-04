@@ -40,6 +40,12 @@ SELECT * FROM inventory.asset_type_attributes
 WHERE asset_type_id = @asset_type_id
 ORDER BY position, lower(label), id;
 
+-- Nhãn thuộc tính đang dùng của mọi loại, theo thứ tự hiển thị (thẻ ở trang loại)
+-- name: ListActiveAttributeLabels :many
+SELECT asset_type_id, label FROM inventory.asset_type_attributes
+WHERE removed_at IS NULL
+ORDER BY asset_type_id, position, lower(label), id;
+
 -- name: GetAttributeForUpdate :one
 SELECT * FROM inventory.asset_type_attributes
 WHERE id = @id AND asset_type_id = @asset_type_id

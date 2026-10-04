@@ -261,3 +261,25 @@ func TestTypes_Reorder(t *testing.T) {
 		t.Errorf("options of a text attribute: %v", err)
 	}
 }
+
+func TestTypes_AttributeLabels(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	typ := laptop(t, r)
+	active := typ.ActiveAttributes()
+	if err := r.types.RemoveAttribute(ctx, typ.ID, active[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	labels, err := r.types.AttributeLabels(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// đã gỡ thì không có; còn lại theo thứ tự hiển thị
+	var want []string
+	for _, a := range active[1:] {
+		want = append(want, a.Label)
+	}
+	if !slices.Equal(labels[typ.ID], want) {
+		t.Errorf("labels = %v, want %v", labels[typ.ID], want)
+	}
+}

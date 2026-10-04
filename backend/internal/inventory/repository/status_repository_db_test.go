@@ -3,7 +3,10 @@ package repository_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
+
+	"github.com/google/uuid"
 
 	"storeit/internal/inventory/contract"
 	"storeit/internal/inventory/domain"
@@ -60,5 +63,99 @@ func TestStatuses_CreateDefaultArchive(t *testing.T) {
 	}
 	if renamed, err := r.statuses.Update(ctx, domain.RepairStatusID, domain.StatusChange{Name: ptr("Repair " + uniq()), Position: ptr(int32(7))}); err != nil || renamed.Position != 7 {
 		t.Errorf("rename system status: %+v, %v", renamed, err)
+	}
+}
+
+func TestStatuses_ReorderAndRestore(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	s, err := r.statuses.Create(ctx, domain.NewStatus{Name: "Spare " + uniq(), Kind: domain.KindAvailable})
+	if err != nil {
+		t.Fatal(err)
+	}
+	active := func() []uuid.UUID {
+		list, err := r.statuses.List(context.Background(), false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []uuid.UUID
+		for _, x := range list {
+			out = append(out, x.ID)
+		}
+		return out
+	}
+	reversed := active()
+	slices.Reverse(reversed)
+	events := countEvents(t, r, contract.EventStatusUpdated, s.ID)
+
+	got, err := r.statuses.Reorder(ctx, reversed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, x := range got {
+		if x.ID != reversed[i] || x.Position != int32(i+1) {
+			t.Errorf("item %d = %s at %d, want %s at %d", i, x.ID, x.Position, reversed[i], i+1)
+		}
+	}
+	if !slices.Equal(active(), reversed) {
+		t.Errorf("list order = %v, want %v", active(), reversed)
+	}
+	if n := countEvents(t, r, contract.EventStatusUpdated, s.ID); n != events+1 {
+		t.Errorf("status_updated events = %d, want %d", n, events+1)
+	}
+	for name, bad := range map[string][]uuid.UUID{
+		"missing one": reversed[1:],
+		"duplicate":   append(slices.Clone(reversed[1:]), reversed[1]),
+		"unknown":     append(slices.Clone(reversed[1:]), uuid.New()),
+	} {
+		if _, err := r.statuses.Reorder(ctx, bad); !errors.Is(err, domain.ErrInvalidOrder) {
+			t.Errorf("%s: %v, want ErrInvalidOrder", name, err)
+		}
+	}
+
+	// archive rồi restore: quay lại danh sách, có event; restore lần nữa không ghi gì
+	if _, err := r.statuses.Archive(ctx, s.ID); err != nil {
+		t.Fatal(err)
+	}
+	back, err := r.statuses.Restore(ctx, s.ID)
+	if err != nil || back.Archived() {
+		t.Fatalf("restore = %+v, %v", back, err)
+	}
+	if !slices.Contains(active(), s.ID) {
+		t.Error("restored status not listed")
+	}
+	if n := countEvents(t, r, contract.EventStatusRestored, s.ID); n != 1 {
+		t.Errorf("status_restored events = %d, want 1", n)
+	}
+	if _, err := r.statuses.Restore(ctx, s.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n := countEvents(t, r, contract.EventStatusRestored, s.ID); n != 1 {
+		t.Errorf("restoring an active status wrote an event")
+	}
+	if _, err := r.statuses.Restore(ctx, uuid.New()); !errors.Is(err, domain.ErrStatusNotFound) {
+		t.Errorf("unknown status: %v", err)
+	}
+}
+
+func TestAssets_CountByStatus(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	typ := laptop(t, r)
+	s, err := r.statuses.Create(ctx, domain.NewStatus{Name: "Counted " + uniq(), Kind: domain.KindInUse})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := r.assets.Create(ctx, "CS-"+uniq(), domain.AssetFields{Name: "x", TypeID: typ.ID, StatusID: s.ID, Values: fullValues(t, typ)[:1]}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	counts, err := r.assets.CountByStatus(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if counts[s.ID] != 2 {
+		t.Errorf("count = %d, want 2", counts[s.ID])
 	}
 }

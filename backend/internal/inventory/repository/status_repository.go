@@ -144,6 +144,66 @@ func (r *StatusRepository) Archive(ctx context.Context, id uuid.UUID) (domain.St
 	return out, err
 }
 
+func (r *StatusRepository) Restore(ctx context.Context, id uuid.UUID) (domain.Status, error) {
+	var out domain.Status
+	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
+		q := r.q.WithTx(tx)
+		cur, err := statusOrNotFound(q.GetStatusForUpdate(ctx, id))
+		if err != nil {
+			return err
+		}
+		if !cur.Archived() {
+			out = cur
+			return nil
+		}
+		row, err := q.RestoreStatus(ctx, id)
+		if err != nil {
+			return fmt.Errorf("inventory: restore status: %w", err)
+		}
+		out = toStatus(row)
+		return appendEvent(ctx, tx, r.outbox, contract.EventStatusRestored, contract.AggregateStatus, id,
+			contract.StatusRestored{StatusID: id})
+	})
+	return out, err
+}
+
+func (r *StatusRepository) Reorder(ctx context.Context, ids []uuid.UUID) ([]domain.Status, error) {
+	var out []domain.Status
+	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
+		q := r.q.WithTx(tx)
+		// khoá mọi status đang dùng: sửa hay archive cùng lúc phải đợi
+		rows, err := q.ListActiveStatusesForUpdate(ctx)
+		if err != nil {
+			return fmt.Errorf("inventory: list statuses: %w", err)
+		}
+		cur := make(map[uuid.UUID]db.InventoryAssetStatus, len(rows))
+		for _, row := range rows {
+			cur[row.ID] = row
+		}
+		if !sameIDs(ids, cur) {
+			return domain.ErrInvalidOrder
+		}
+		out = make([]domain.Status, len(ids))
+		for i, id := range ids {
+			row, pos := cur[id], int32(i+1)
+			row.Position = pos
+			out[i] = toStatus(row)
+			if cur[id].Position == pos {
+				continue
+			}
+			if err := q.SetStatusPosition(ctx, db.SetStatusPositionParams{ID: id, Position: pos}); err != nil {
+				return fmt.Errorf("inventory: set status position: %w", err)
+			}
+			if err := appendEvent(ctx, tx, r.outbox, contract.EventStatusUpdated, contract.AggregateStatus, id,
+				contract.StatusUpdated{StatusID: id, Changes: []contract.FieldChange{change("position", cur[id].Position, pos)}}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return out, err
+}
+
 func statusOrNotFound(row db.InventoryAssetStatus, err error) (domain.Status, error) {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Status{}, domain.ErrStatusNotFound

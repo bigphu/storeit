@@ -244,6 +244,38 @@ func (q *Queries) GetOptionForUpdate(ctx context.Context, arg GetOptionForUpdate
 	return i, err
 }
 
+const listActiveAttributeLabels = `-- name: ListActiveAttributeLabels :many
+SELECT asset_type_id, label FROM inventory.asset_type_attributes
+WHERE removed_at IS NULL
+ORDER BY asset_type_id, position, lower(label), id
+`
+
+type ListActiveAttributeLabelsRow struct {
+	AssetTypeID uuid.UUID
+	Label       string
+}
+
+// Nhãn thuộc tính đang dùng của mọi loại, theo thứ tự hiển thị (thẻ ở trang loại)
+func (q *Queries) ListActiveAttributeLabels(ctx context.Context) ([]ListActiveAttributeLabelsRow, error) {
+	rows, err := q.db.Query(ctx, listActiveAttributeLabels)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListActiveAttributeLabelsRow{}
+	for rows.Next() {
+		var i ListActiveAttributeLabelsRow
+		if err := rows.Scan(&i.AssetTypeID, &i.Label); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAssetTypes = `-- name: ListAssetTypes :many
 SELECT id, code, name, description, is_system, archived_at, version, created_at, updated_at FROM inventory.asset_types
 WHERE $1::boolean OR archived_at IS NULL

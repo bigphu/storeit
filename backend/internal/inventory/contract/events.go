@@ -18,6 +18,7 @@ const (
 	EventStatusCreated  = "inventory.status_created"
 	EventStatusUpdated  = "inventory.status_updated"
 	EventStatusArchived = "inventory.status_archived"
+	EventStatusRestored = "inventory.status_restored"
 )
 
 // Loại aggregate trong platform.events
@@ -90,5 +91,9 @@ type StatusUpdated struct {
 }
 
 type StatusArchived struct {
+	StatusID uuid.UUID `json:"status_id"`
+}
+
+type StatusRestored struct {
 	StatusID uuid.UUID `json:"status_id"`
 }

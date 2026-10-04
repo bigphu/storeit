@@ -181,6 +181,20 @@ func (f *fakeTypes) UpdateOption(_ context.Context, _, _, optID uuid.UUID, label
 
 func (f *fakeTypes) RemoveOption(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error { return nil }
 
+func (f *fakeTypes) AttributeLabels(context.Context) (map[uuid.UUID][]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[uuid.UUID][]string{}
+	for id, t := range f.types {
+		for _, a := range t.Attributes {
+			if a.RemovedAt == nil {
+				out[id] = append(out[id], a.Label)
+			}
+		}
+	}
+	return out, nil
+}
+
 type fakeStatuses struct {
 	mu       sync.Mutex
 	statuses map[uuid.UUID]domain.Status
@@ -258,6 +272,27 @@ func (f *fakeStatuses) Archive(_ context.Context, id uuid.UUID) (domain.Status, 
 	return s, nil
 }
 
+func (f *fakeStatuses) Restore(_ context.Context, id uuid.UUID) (domain.Status, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	s := f.statuses[id]
+	s.ArchivedAt = nil
+	f.statuses[id] = s
+	return s, nil
+}
+
+func (f *fakeStatuses) Reorder(_ context.Context, ids []uuid.UUID) ([]domain.Status, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]domain.Status, len(ids))
+	for i, id := range ids {
+		s := f.statuses[id]
+		s.Position = int32(i + 1)
+		f.statuses[id], out[i] = s, s
+	}
+	return out, nil
+}
+
 // archive đánh dấu archived trực tiếp (để test luật "đã archive")
 // byKind: status mặc định của kind (cho test)
 func (f *fakeStatuses) byKind(t *testing.T, k domain.StatusKind) domain.Status {
@@ -315,14 +350,27 @@ func (f *fakeAssets) Get(_ context.Context, id uuid.UUID) (domain.Asset, error) 
 	return a, nil
 }
 
-func (f *fakeAssets) CountByType(context.Context) (map[uuid.UUID]int64, error) {
+// CountByType: fake không biết kind của status nên chỉ đếm tổng
+func (f *fakeAssets) CountByType(context.Context) (map[uuid.UUID]domain.TypeCounts, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[uuid.UUID]domain.TypeCounts{}
+	for _, a := range f.assets {
+		if a.RetiredAt == nil {
+			c := out[a.TypeID]
+			c.Total++
+			out[a.TypeID] = c
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeAssets) CountByStatus(context.Context) (map[uuid.UUID]int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := map[uuid.UUID]int64{}
 	for _, a := range f.assets {
-		if a.RetiredAt == nil {
-			out[a.TypeID]++
-		}
+		out[a.StatusID]++
 	}
 	return out, nil
 }

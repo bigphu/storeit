@@ -143,6 +143,44 @@ func (q *Queries) GetStatusForUpdate(ctx context.Context, id uuid.UUID) (Invento
 	return i, err
 }
 
+const listActiveStatusesForUpdate = `-- name: ListActiveStatusesForUpdate :many
+SELECT id, name, kind, is_default, is_system, position, archived_at, created_at, updated_at FROM inventory.asset_statuses
+WHERE archived_at IS NULL
+ORDER BY position, lower(name), id
+FOR NO KEY UPDATE
+`
+
+// Khoá mọi status đang dùng khi đổi thứ tự
+func (q *Queries) ListActiveStatusesForUpdate(ctx context.Context) ([]InventoryAssetStatus, error) {
+	rows, err := q.db.Query(ctx, listActiveStatusesForUpdate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InventoryAssetStatus{}
+	for rows.Next() {
+		var i InventoryAssetStatus
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Kind,
+			&i.IsDefault,
+			&i.IsSystem,
+			&i.Position,
+			&i.ArchivedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStatuses = `-- name: ListStatuses :many
 SELECT id, name, kind, is_default, is_system, position, archived_at, created_at, updated_at FROM inventory.asset_statuses
 WHERE $1::boolean OR archived_at IS NULL
@@ -179,6 +217,29 @@ func (q *Queries) ListStatuses(ctx context.Context, includeArchived bool) ([]Inv
 	return items, nil
 }
 
+const restoreStatus = `-- name: RestoreStatus :one
+UPDATE inventory.asset_statuses SET archived_at = NULL, updated_at = now()
+WHERE id = $1
+RETURNING id, name, kind, is_default, is_system, position, archived_at, created_at, updated_at
+`
+
+func (q *Queries) RestoreStatus(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error) {
+	row := q.db.QueryRow(ctx, restoreStatus, id)
+	var i InventoryAssetStatus
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Kind,
+		&i.IsDefault,
+		&i.IsSystem,
+		&i.Position,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const setDefaultStatus = `-- name: SetDefaultStatus :one
 UPDATE inventory.asset_statuses SET is_default = true, updated_at = now()
 WHERE id = $1
@@ -200,6 +261,21 @@ func (q *Queries) SetDefaultStatus(ctx context.Context, id uuid.UUID) (Inventory
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const setStatusPosition = `-- name: SetStatusPosition :exec
+UPDATE inventory.asset_statuses SET position = $1, updated_at = now()
+WHERE id = $2
+`
+
+type SetStatusPositionParams struct {
+	Position int32
+	ID       uuid.UUID
+}
+
+func (q *Queries) SetStatusPosition(ctx context.Context, arg SetStatusPositionParams) error {
+	_, err := q.db.Exec(ctx, setStatusPosition, arg.Position, arg.ID)
+	return err
 }
 
 const updateStatus = `-- name: UpdateStatus :one

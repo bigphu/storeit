@@ -323,6 +323,18 @@ func (r *TypeRepository) ReorderOptions(ctx context.Context, typeID, attrID uuid
 }
 
 // sameIDs: ids gồm đúng các khoá của cur, mỗi khoá một lần
+func (r *TypeRepository) AttributeLabels(ctx context.Context) (map[uuid.UUID][]string, error) {
+	rows, err := r.q.ListActiveAttributeLabels(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("inventory: list attribute labels: %w", err)
+	}
+	out := make(map[uuid.UUID][]string)
+	for _, row := range rows {
+		out[row.AssetTypeID] = append(out[row.AssetTypeID], row.Label)
+	}
+	return out, nil
+}
+
 func sameIDs[T any](ids []uuid.UUID, cur map[uuid.UUID]T) bool {
 	if len(ids) != len(cur) {
 		return false

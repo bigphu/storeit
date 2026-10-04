@@ -17,13 +17,24 @@ func (h *Handler) ListAssetTypes(ctx context.Context, req api.ListAssetTypesRequ
 		out.Items[i] = toAPIType(t)
 	}
 	if deref(req.Params.WithCounts) {
-		counts, err := h.svc.AssetCountsByType(ctx)
+		sums, err := h.svc.TypeSummaries(ctx)
 		if err != nil {
 			return nil, err
 		}
 		for i, t := range types {
-			n := counts[t.ID]
-			out.Items[i].AssetCount = &n
+			sum := sums[t.ID]
+			total, nAttrs, labels := sum.Counts.Total, int32(len(sum.AttributeLabels)), sum.AttributeLabels
+			if labels == nil {
+				labels = []string{}
+			}
+			out.Items[i].AssetCount = &total
+			out.Items[i].KindCounts = &api.KindCounts{
+				Available:   sum.Counts.ByKind[domain.KindAvailable],
+				InUse:       sum.Counts.ByKind[domain.KindInUse],
+				Unavailable: sum.Counts.ByKind[domain.KindUnavailable],
+			}
+			out.Items[i].AttributeCount = &nAttrs
+			out.Items[i].AttributeLabels = &labels
 		}
 	}
 	return out, nil

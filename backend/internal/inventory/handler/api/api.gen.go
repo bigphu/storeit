@@ -129,15 +129,24 @@ type AssetType struct {
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
 
 	// AssetCount Assets of this type that are not retired; only with `with_counts=true`
-	AssetCount  *int64          `json:"asset_count,omitempty"`
-	Code        string          `json:"code"`
-	CreatedAt   time.Time       `json:"created_at"`
-	Description string          `json:"description"`
-	Id          externalRef0.ID `json:"id"`
-	IsSystem    bool            `json:"is_system"`
-	Name        string          `json:"name"`
-	UpdatedAt   time.Time       `json:"updated_at"`
-	Version     int32           `json:"version"`
+	AssetCount *int64 `json:"asset_count,omitempty"`
+
+	// AttributeCount Active attributes; only with `with_counts=true`
+	AttributeCount *int32 `json:"attribute_count,omitempty"`
+
+	// AttributeLabels Labels of the active attributes in display order; only with `with_counts=true`
+	AttributeLabels *[]string       `json:"attribute_labels,omitempty"`
+	Code            string          `json:"code"`
+	CreatedAt       time.Time       `json:"created_at"`
+	Description     string          `json:"description"`
+	Id              externalRef0.ID `json:"id"`
+	IsSystem        bool            `json:"is_system"`
+
+	// KindCounts Assets not retired by the kind of their status; only with `with_counts=true`
+	KindCounts *KindCounts `json:"kind_counts,omitempty"`
+	Name       string      `json:"name"`
+	UpdatedAt  time.Time   `json:"updated_at"`
+	Version    int32       `json:"version"`
 }
 
 // AssetTypeDetail defines model for AssetTypeDetail.
@@ -147,6 +156,12 @@ type AssetTypeDetail struct {
 	// AssetCount Assets of this type that are not retired; only with `with_counts=true`
 	AssetCount *int64 `json:"asset_count,omitempty"`
 
+	// AttributeCount Active attributes; only with `with_counts=true`
+	AttributeCount *int32 `json:"attribute_count,omitempty"`
+
+	// AttributeLabels Labels of the active attributes in display order; only with `with_counts=true`
+	AttributeLabels *[]string `json:"attribute_labels,omitempty"`
+
 	// Attributes All attributes in display order, including removed ones (removed = true)
 	Attributes  []Attribute     `json:"attributes"`
 	Code        string          `json:"code"`
@@ -154,9 +169,12 @@ type AssetTypeDetail struct {
 	Description string          `json:"description"`
 	Id          externalRef0.ID `json:"id"`
 	IsSystem    bool            `json:"is_system"`
-	Name        string          `json:"name"`
-	UpdatedAt   time.Time       `json:"updated_at"`
-	Version     int32           `json:"version"`
+
+	// KindCounts Assets not retired by the kind of their status; only with `with_counts=true`
+	KindCounts *KindCounts `json:"kind_counts,omitempty"`
+	Name       string      `json:"name"`
+	UpdatedAt  time.Time   `json:"updated_at"`
+	Version    int32       `json:"version"`
 }
 
 // Attribute defines model for Attribute.
@@ -258,6 +276,13 @@ type CreateStatusRequest struct {
 // DataType defines model for DataType.
 type DataType string
 
+// KindCounts Assets not retired by the kind of their status; only with `with_counts=true`
+type KindCounts struct {
+	Available   int64 `json:"available"`
+	InUse       int64 `json:"in_use"`
+	Unavailable int64 `json:"unavailable"`
+}
+
 // NewAttribute defines model for NewAttribute.
 type NewAttribute struct {
 	DataType   DataType  `json:"data_type"`
@@ -297,7 +322,10 @@ type RetireAssetRequest struct {
 
 // Status defines model for Status.
 type Status struct {
-	ArchivedAt *time.Time      `json:"archived_at,omitempty"`
+	ArchivedAt *time.Time `json:"archived_at,omitempty"`
+
+	// AssetCount Assets with this status, retired ones included; only with `with_counts=true`
+	AssetCount *int64          `json:"asset_count,omitempty"`
 	Id         externalRef0.ID `json:"id"`
 	IsDefault  bool            `json:"is_default"`
 	IsSystem   bool            `json:"is_system"`
@@ -399,13 +427,16 @@ type Problem = externalRef0.Problem
 // ListStatusesParams defines parameters for ListStatuses.
 type ListStatusesParams struct {
 	IncludeArchived *IncludeArchived `form:"include_archived,omitempty" json:"include_archived,omitempty"`
+
+	// WithCounts Add `asset_count` (assets with this status, retired ones included) to each status.
+	WithCounts *bool `form:"with_counts,omitempty" json:"with_counts,omitempty"`
 }
 
 // ListAssetTypesParams defines parameters for ListAssetTypes.
 type ListAssetTypesParams struct {
 	IncludeArchived *IncludeArchived `form:"include_archived,omitempty" json:"include_archived,omitempty"`
 
-	// WithCounts Add `asset_count` (assets not retired) to each type.
+	// WithCounts Add `asset_count` and `kind_counts` (assets not retired), `attribute_count` and `attribute_labels` (active attributes in display order) to each type.
 	WithCounts *bool `form:"with_counts,omitempty" json:"with_counts,omitempty"`
 }
 
@@ -440,6 +471,9 @@ type ListAssetsParams struct {
 
 // CreateStatusJSONRequestBody defines body for CreateStatus for application/json ContentType.
 type CreateStatusJSONRequestBody = CreateStatusRequest
+
+// ReorderStatusesJSONRequestBody defines body for ReorderStatuses for application/json ContentType.
+type ReorderStatusesJSONRequestBody = OrderRequest
 
 // UpdateStatusJSONRequestBody defines body for UpdateStatus for application/json ContentType.
 type UpdateStatusJSONRequestBody = UpdateStatusRequest
@@ -494,12 +528,18 @@ type ServerInterface interface {
 	// CreateStatus Create a status (inventory.status.manage)
 	// (POST /asset-statuses)
 	CreateStatus(w http.ResponseWriter, r *http.Request)
+	// ReorderStatuses Put every active status in a new order, in one change (inventory.status.manage)
+	// (PUT /asset-statuses/order)
+	ReorderStatuses(w http.ResponseWriter, r *http.Request)
 	// UpdateStatus Rename, move or make default of its kind (inventory.status.manage)
 	// (PATCH /asset-statuses/{statusID})
 	UpdateStatus(w http.ResponseWriter, r *http.Request, statusID StatusID)
 	// ArchiveStatus Stop offering a status (inventory.status.manage)
 	// (POST /asset-statuses/{statusID}/archive)
 	ArchiveStatus(w http.ResponseWriter, r *http.Request, statusID StatusID)
+	// RestoreStatus Offer an archived status again (inventory.status.manage)
+	// (POST /asset-statuses/{statusID}/restore)
+	RestoreStatus(w http.ResponseWriter, r *http.Request, statusID StatusID)
 	// ListAssetTypes List asset types (inventory.asset.read)
 	// (GET /asset-types)
 	ListAssetTypes(w http.ResponseWriter, r *http.Request, params ListAssetTypesParams)
@@ -584,6 +624,12 @@ func (_ Unimplemented) CreateStatus(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ReorderStatuses Put every active status in a new order, in one change (inventory.status.manage)
+// (PUT /asset-statuses/order)
+func (_ Unimplemented) ReorderStatuses(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // UpdateStatus Rename, move or make default of its kind (inventory.status.manage)
 // (PATCH /asset-statuses/{statusID})
 func (_ Unimplemented) UpdateStatus(w http.ResponseWriter, r *http.Request, statusID StatusID) {
@@ -593,6 +639,12 @@ func (_ Unimplemented) UpdateStatus(w http.ResponseWriter, r *http.Request, stat
 // ArchiveStatus Stop offering a status (inventory.status.manage)
 // (POST /asset-statuses/{statusID}/archive)
 func (_ Unimplemented) ArchiveStatus(w http.ResponseWriter, r *http.Request, statusID StatusID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RestoreStatus Offer an archived status again (inventory.status.manage)
+// (POST /asset-statuses/{statusID}/restore)
+func (_ Unimplemented) RestoreStatus(w http.ResponseWriter, r *http.Request, statusID StatusID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -759,6 +811,19 @@ func (siw *ServerInterfaceWrapper) ListStatuses(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// ------------- Optional query parameter "with_counts" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "with_counts", r.URL.Query(), &params.WithCounts, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "with_counts"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "with_counts", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListStatuses(w, r, params)
 	}))
@@ -775,6 +840,20 @@ func (siw *ServerInterfaceWrapper) CreateStatus(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReorderStatuses operation middleware
+func (siw *ServerInterfaceWrapper) ReorderStatuses(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReorderStatuses(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -827,6 +906,32 @@ func (siw *ServerInterfaceWrapper) ArchiveStatus(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ArchiveStatus(w, r, statusID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreStatus operation middleware
+func (siw *ServerInterfaceWrapper) RestoreStatus(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "statusID" -------------
+	var statusID StatusID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "statusID", chi.URLParam(r, "statusID"), &statusID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "statusID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreStatus(w, r, statusID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1751,10 +1856,16 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/asset-statuses", wrapper.CreateStatus)
 	})
 	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/asset-statuses/order", wrapper.ReorderStatuses)
+	})
+	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/asset-statuses/{statusID}", wrapper.UpdateStatus)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/asset-statuses/{statusID}/archive", wrapper.ArchiveStatus)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/asset-statuses/{statusID}/restore", wrapper.RestoreStatus)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/assets", wrapper.ListAssets)
@@ -1866,6 +1977,47 @@ func (response CreateStatusdefaultApplicationProblemPlusJSONResponse) VisitCreat
 	return err
 }
 
+type ReorderStatusesRequestObject struct {
+	Body *ReorderStatusesJSONRequestBody
+}
+
+type ReorderStatusesResponseObject interface {
+	VisitReorderStatusesResponse(w http.ResponseWriter) error
+}
+
+type ReorderStatuses200JSONResponse struct {
+	Items []Status `json:"items"`
+}
+
+func (response ReorderStatuses200JSONResponse) VisitReorderStatusesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderStatusesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ReorderStatusesdefaultApplicationProblemPlusJSONResponse) VisitReorderStatusesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type UpdateStatusRequestObject struct {
 	StatusID StatusID `json:"statusID"`
 	Body     *UpdateStatusJSONRequestBody
@@ -1934,6 +2086,45 @@ type ArchiveStatusdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ArchiveStatusdefaultApplicationProblemPlusJSONResponse) VisitArchiveStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreStatusRequestObject struct {
+	StatusID StatusID `json:"statusID"`
+}
+
+type RestoreStatusResponseObject interface {
+	VisitRestoreStatusResponse(w http.ResponseWriter) error
+}
+
+type RestoreStatus200JSONResponse Status
+
+func (response RestoreStatus200JSONResponse) VisitRestoreStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreStatusdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response RestoreStatusdefaultApplicationProblemPlusJSONResponse) VisitRestoreStatusResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -2819,12 +3010,18 @@ type StrictServerInterface interface {
 	// CreateStatus Create a status (inventory.status.manage)
 	// (POST /asset-statuses)
 	CreateStatus(ctx context.Context, request CreateStatusRequestObject) (CreateStatusResponseObject, error)
+	// ReorderStatuses Put every active status in a new order, in one change (inventory.status.manage)
+	// (PUT /asset-statuses/order)
+	ReorderStatuses(ctx context.Context, request ReorderStatusesRequestObject) (ReorderStatusesResponseObject, error)
 	// UpdateStatus Rename, move or make default of its kind (inventory.status.manage)
 	// (PATCH /asset-statuses/{statusID})
 	UpdateStatus(ctx context.Context, request UpdateStatusRequestObject) (UpdateStatusResponseObject, error)
 	// ArchiveStatus Stop offering a status (inventory.status.manage)
 	// (POST /asset-statuses/{statusID}/archive)
 	ArchiveStatus(ctx context.Context, request ArchiveStatusRequestObject) (ArchiveStatusResponseObject, error)
+	// RestoreStatus Offer an archived status again (inventory.status.manage)
+	// (POST /asset-statuses/{statusID}/restore)
+	RestoreStatus(ctx context.Context, request RestoreStatusRequestObject) (RestoreStatusResponseObject, error)
 	// ListAssetTypes List asset types (inventory.asset.read)
 	// (GET /asset-types)
 	ListAssetTypes(ctx context.Context, request ListAssetTypesRequestObject) (ListAssetTypesResponseObject, error)
@@ -2989,6 +3186,37 @@ func (sh *strictHandler) CreateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ReorderStatuses operation middleware
+func (sh *strictHandler) ReorderStatuses(w http.ResponseWriter, r *http.Request) {
+	var request ReorderStatusesRequestObject
+
+	var body ReorderStatusesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReorderStatuses(ctx, request.(ReorderStatusesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReorderStatuses")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReorderStatusesResponseObject); ok {
+		if err := validResponse.VisitReorderStatusesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // UpdateStatus operation middleware
 func (sh *strictHandler) UpdateStatus(w http.ResponseWriter, r *http.Request, statusID StatusID) {
 	var request UpdateStatusRequestObject
@@ -3041,6 +3269,32 @@ func (sh *strictHandler) ArchiveStatus(w http.ResponseWriter, r *http.Request, s
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ArchiveStatusResponseObject); ok {
 		if err := validResponse.VisitArchiveStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RestoreStatus operation middleware
+func (sh *strictHandler) RestoreStatus(w http.ResponseWriter, r *http.Request, statusID StatusID) {
+	var request RestoreStatusRequestObject
+
+	request.StatusID = statusID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestoreStatus(ctx, request.(RestoreStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestoreStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestoreStatusResponseObject); ok {
+		if err := validResponse.VisitRestoreStatusResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -3723,80 +3977,84 @@ func (sh *strictHandler) RetireAsset(w http.ResponseWriter, r *http.Request, ass
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"FwAA//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
