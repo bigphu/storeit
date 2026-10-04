@@ -139,6 +139,8 @@ username `resend`) with the API key in `deploy/app/secrets/smtp_password.txt`
 | `GET /roles`, `GET /roles/{roleID}`, `GET /permissions` | `identity.role.read` |
 | `POST /roles`, `PATCH /roles/{roleID}`, `PUT /roles/{roleID}/permissions`, `DELETE /roles/{roleID}` | `identity.role.manage` |
 
+`GET /roles` and `GET /roles/{id}` include `member_count`: accounts holding the role that are
+not disabled (invited ones count); list them with `GET /accounts?role_id=`.
 `PATCH /accounts/{id}` takes `version` (409 when stale) and `clear_member_id` to unlink a member.
 `PATCH /me` lets any signed-in account change its own display name (`name`, `version`; 409 when
 stale, 403 `/errors/account-disabled` once disabled); email, roles and member stay admin-only.

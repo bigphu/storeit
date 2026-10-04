@@ -42,3 +42,11 @@ SELECT count(*) FROM identity.account_roles WHERE role_id = @role_id;
 
 -- name: ListPermissions :many
 SELECT * FROM identity.permissions ORDER BY code;
+
+-- Số account chưa bị khoá (kể cả đang được mời) giữ mỗi role (trang vai trò)
+-- name: CountActiveMembersByRole :many
+SELECT ar.role_id, count(*)::bigint AS n
+FROM identity.account_roles ar
+JOIN identity.accounts a ON a.id = ar.account_id
+WHERE a.active
+GROUP BY ar.role_id;

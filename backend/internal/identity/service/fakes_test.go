@@ -89,6 +89,10 @@ func (f *fakeRoles) Permissions(context.Context) ([]domain.Permission, error) {
 	return []domain.Permission{{Code: domain.PermAccountRead, Description: "View accounts"}}, nil
 }
 
+func (f *fakeRoles) MemberCounts(context.Context) (map[uuid.UUID]int64, error) {
+	return map[uuid.UUID]int64{}, nil
+}
+
 type passwordCall struct {
 	id   uuid.UUID
 	keep *uuid.UUID

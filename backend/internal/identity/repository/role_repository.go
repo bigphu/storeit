@@ -154,6 +154,18 @@ func (r *RoleRepository) CountAssignments(ctx context.Context, id uuid.UUID) (in
 	return n, nil
 }
 
+func (r *RoleRepository) MemberCounts(ctx context.Context) (map[uuid.UUID]int64, error) {
+	rows, err := r.q.CountActiveMembersByRole(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("identity: count role members: %w", err)
+	}
+	out := make(map[uuid.UUID]int64, len(rows))
+	for _, row := range rows {
+		out[row.RoleID] = row.N
+	}
+	return out, nil
+}
+
 func (r *RoleRepository) Permissions(ctx context.Context) ([]domain.Permission, error) {
 	rows, err := r.q.ListPermissions(ctx)
 	if err != nil {

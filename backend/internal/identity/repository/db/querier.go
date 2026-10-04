@@ -22,6 +22,8 @@ type Querier interface {
 	// trạng thái suy ra như domain.Account.Status
 	CountAccountsByStatus(ctx context.Context, arg CountAccountsByStatusParams) ([]CountAccountsByStatusRow, error)
 	CountActiveAccountsWithRole(ctx context.Context, roleID uuid.UUID) (int64, error)
+	// Số account chưa bị khoá (kể cả đang được mời) giữ mỗi role (trang vai trò)
+	CountActiveMembersByRole(ctx context.Context) ([]CountActiveMembersByRoleRow, error)
 	CountAllAccounts(ctx context.Context) (int64, error)
 	// Phiên còn sống: chưa thu hồi, chưa quá hạn tuyệt đối, ngọn còn hạn
 	CountLiveFamilies(ctx context.Context, accountID uuid.UUID) (int64, error)

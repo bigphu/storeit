@@ -228,8 +228,9 @@ func TestPermissionChecks(t *testing.T) {
 			_, err := e.svc.UpdateRolePermissions(ctx, domain.EmployeeRoleID, nil)
 			return err
 		},
-		"DeleteRole":      func(ctx context.Context) error { return e.svc.DeleteRole(ctx, domain.EmployeeRoleID) },
-		"ListPermissions": func(ctx context.Context) error { _, err := e.svc.ListPermissions(ctx); return err },
+		"DeleteRole":       func(ctx context.Context) error { return e.svc.DeleteRole(ctx, domain.EmployeeRoleID) },
+		"ListPermissions":  func(ctx context.Context) error { _, err := e.svc.ListPermissions(ctx); return err },
+		"RoleMemberCounts": func(ctx context.Context) error { _, err := e.svc.RoleMemberCounts(ctx); return err },
 	}
 	for name, call := range calls {
 		if err := call(context.Background()); status(err) != 401 {

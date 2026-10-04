@@ -11,9 +11,15 @@ func (h *Handler) ListRoles(ctx context.Context, _ api.ListRolesRequestObject) (
 	if err != nil {
 		return nil, err
 	}
+	counts, err := h.svc.RoleMemberCounts(ctx)
+	if err != nil {
+		return nil, err
+	}
 	out := make(api.ListRoles200JSONResponse, len(roles))
 	for i, r := range roles {
 		out[i] = toAPIRole(r)
+		n := counts[r.ID]
+		out[i].MemberCount = &n
 	}
 	return out, nil
 }
@@ -31,7 +37,14 @@ func (h *Handler) GetRole(ctx context.Context, req api.GetRoleRequestObject) (ap
 	if err != nil {
 		return nil, err
 	}
-	return api.GetRole200JSONResponse(toAPIRole(r)), nil
+	counts, err := h.svc.RoleMemberCounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := toAPIRole(r)
+	n := counts[r.ID]
+	out.MemberCount = &n
+	return api.GetRole200JSONResponse(out), nil
 }
 
 func (h *Handler) UpdateRole(ctx context.Context, req api.UpdateRoleRequestObject) (api.UpdateRoleResponseObject, error) {

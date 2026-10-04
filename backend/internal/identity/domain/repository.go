@@ -106,6 +106,8 @@ type RoleRepository interface {
 	// Delete: event role_deleted
 	Delete(ctx context.Context, id uuid.UUID) error
 	CountAssignments(ctx context.Context, id uuid.UUID) (int64, error)
+	// MemberCounts: số account chưa bị khoá giữ mỗi role; role không ai giữ thì không có
+	MemberCounts(ctx context.Context) (map[uuid.UUID]int64, error)
 	Permissions(ctx context.Context) ([]Permission, error)
 }
 

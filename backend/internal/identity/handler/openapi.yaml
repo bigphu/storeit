@@ -628,6 +628,10 @@ components:
         permissions:
           type: array
           items: { type: string }
+        member_count:
+          type: integer
+          format: int64
+          description: Accounts that hold the role and are not disabled; on GET /roles and GET /roles/{roleID}
 
     CreateRoleRequest:
       type: object

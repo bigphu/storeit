@@ -542,3 +542,31 @@ func TestAccountListExtrasAndSignOut(t *testing.T) {
 		t.Errorf("sign out without account.manage: %d", rec.Code)
 	}
 }
+
+func TestRolesHaveMemberCounts(t *testing.T) {
+	a := newApp(t)
+	admin, _ := a.login(a.seed(domain.AdministratorRoleID))
+	var roles []struct {
+		ID          string `json:"id"`
+		MemberCount *int64 `json:"member_count"`
+	}
+	rec := a.do(call{method: "GET", path: "/api/v1/roles", token: admin})
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &roles) != nil {
+		t.Fatalf("roles: %d %s", rec.Code, rec.Body)
+	}
+	for _, r := range roles {
+		if r.MemberCount == nil {
+			t.Errorf("role %s without member_count", r.ID)
+		}
+		if r.ID == domain.AdministratorRoleID.String() && *r.MemberCount < 1 {
+			t.Errorf("Administrator members = %d, want at least the seeded admin", *r.MemberCount)
+		}
+	}
+	var one struct {
+		MemberCount *int64 `json:"member_count"`
+	}
+	rec = a.do(call{method: "GET", path: "/api/v1/roles/" + domain.AdministratorRoleID.String(), token: admin})
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &one) != nil || one.MemberCount == nil || *one.MemberCount < 1 {
+		t.Errorf("role detail: %d %s", rec.Code, rec.Body)
+	}
+}
