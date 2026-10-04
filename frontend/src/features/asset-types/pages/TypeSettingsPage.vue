@@ -2,7 +2,7 @@
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import Column from 'primevue/column'
-import DataTable from 'primevue/datatable'
+import DataTable, { type DataTableRowReorderEvent } from 'primevue/datatable'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Tag from 'primevue/tag'
@@ -21,6 +21,7 @@ import {
   useArchiveAssetType,
   useAssetType,
   useRemoveAttribute,
+  useReorderAttributes,
   useRestoreAssetType,
   useUpdateAssetType,
 } from '../api'
@@ -39,11 +40,21 @@ const canManage = computed(() => session.can(Perm.TypeManage))
 const { data: type, refetch } = useAssetType(() => props.typeId)
 
 const showRemoved = ref(false)
-const attributes = computed(() =>
-  [...(type.value?.attributes ?? [])]
-    .filter((a) => showRemoved.value || !a.removed)
-    .sort((a, b) => a.position - b.position),
+// thứ tự đang hiện: kéo thả đổi ngay, không đợi tải lại
+const attributes = ref<Attribute[]>([])
+watch(
+  [() => type.value?.attributes, showRemoved],
+  ([list, removed]) => {
+    attributes.value = [...(list ?? [])].filter((a) => removed || !a.removed).sort((a, b) => a.position - b.position)
+  },
+  { immediate: true },
 )
+// Kéo thả thứ tự thuộc tính (thứ tự cột trong danh sách và trong form)
+const reorder = useReorderAttributes()
+function onReorder(e: DataTableRowReorderEvent) {
+  attributes.value = e.value as Attribute[]
+  reorder.mutate({ typeId: props.typeId, ids: attributes.value.filter((a) => !a.removed).map((a) => a.id) })
+}
 const nextPosition = computed(() => Math.max(0, ...(type.value?.attributes ?? []).map((a) => a.position)) + 1)
 
 // Sửa tên, mô tả (version: 409 khi người khác vừa sửa)
@@ -187,7 +198,9 @@ const crumbs = computed<Crumb[]>(() =>
         <Checkbox v-model="showRemoved" input-id="show-removed" binary />
         <label for="show-removed">Show removed</label>
       </div>
-      <DataTable :value="attributes" data-key="id">
+      <p v-if="canManage && attributes.length > 1" class="hint">Drag the handle to change the order of columns and form fields.</p>
+      <DataTable :value="attributes" data-key="id" @row-reorder="onReorder">
+        <Column v-if="canManage && !showRemoved" row-reorder header-style="width: 2.5rem" />
         <Column field="label" header="Label" />
         <Column header="Key">
           <template #body="{ data: a }: { data: Attribute }"><code>{{ a.key }}</code></template>
@@ -199,7 +212,6 @@ const crumbs = computed<Crumb[]>(() =>
         <Column header="Required">
           <template #body="{ data: a }: { data: Attribute }">{{ a.is_required ? 'Yes' : '' }}</template>
         </Column>
-        <Column field="position" header="Position" />
         <Column header="">
           <template #body="{ data: a }: { data: Attribute }">
             <Tag v-if="a.removed" value="removed" severity="secondary" />
@@ -226,3 +238,11 @@ const crumbs = computed<Crumb[]>(() =>
     <OptionsDialog v-model:visible="optionsOpen" :type-id="type.id" :attribute="optionsAttr" :can-manage="canManage" />
   </section>
 </template>
+
+<style scoped>
+.hint {
+  margin: 0 0 0.5rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.875rem;
+}
+</style>

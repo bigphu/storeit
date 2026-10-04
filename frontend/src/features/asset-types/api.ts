@@ -147,3 +147,21 @@ export function useRemoveOption() {
     ),
   )
 }
+
+// Kéo thả: gửi mọi id đang hoạt động theo thứ tự mới, một lần
+export function useReorderAttributes() {
+  return useTypeMutation(({ typeId, ids }: { typeId: string; ids: string[] }) =>
+    unwrap(inventoryApi.PUT('/asset-types/{typeID}/attributes/order', { ...typePath(typeId), body: { ids } })),
+  )
+}
+
+export function useReorderOptions() {
+  return useTypeMutation(({ typeId, attrId, ids }: { typeId: string; attrId: string; ids: string[] }) =>
+    unwrap(
+      inventoryApi.PUT('/asset-types/{typeID}/attributes/{attributeID}/options/order', {
+        ...attrPath(typeId, attrId),
+        body: { ids },
+      }),
+    ),
+  )
+}

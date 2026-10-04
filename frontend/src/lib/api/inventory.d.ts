@@ -99,6 +99,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/asset-types/{typeID}/attributes/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put the type's active attributes in a new order, in one change (inventory.type.manage) */
+        put: operations["reorderAttributes"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/asset-types/{typeID}/attributes/{attributeID}/options/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put a select attribute's active options in a new order, in one change (inventory.type.manage) */
+        put: operations["reorderOptions"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/asset-types/{typeID}/attributes/{attributeID}": {
         parameters: {
             query?: never;
@@ -416,6 +450,10 @@ export interface components {
             is_required?: boolean;
             /** Format: int32 */
             position?: number;
+        };
+        OrderRequest: {
+            /** @description Every active attribute (or option) exactly once, in the new order */
+            ids: components["schemas"]["ID"][];
         };
         OptionRequest: {
             label: string;
@@ -800,6 +838,61 @@ export interface operations {
         responses: {
             /** @description Added */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attribute"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    reorderAttributes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                typeID: components["parameters"]["TypeID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderRequest"];
+            };
+        };
+        responses: {
+            /** @description The type with its attributes in the new order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetTypeDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    reorderOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                typeID: components["parameters"]["TypeID"];
+                attributeID: components["parameters"]["AttributeID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderRequest"];
+            };
+        };
+        responses: {
+            /** @description The attribute with its options in the new order */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
