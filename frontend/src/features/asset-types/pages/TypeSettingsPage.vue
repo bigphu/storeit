@@ -15,7 +15,7 @@ import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
 import type { Attribute } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
-import { isApiError } from '@/lib/errors'
+import { describeError, isApiError } from '@/lib/errors'
 import { useFormErrors } from '@/lib/forms'
 import { notify } from '@/lib/notify'
 import {
@@ -25,6 +25,7 @@ import {
   useReorderAttributes,
   useRestoreAssetType,
   useUpdateAssetType,
+  useUpdateAttribute,
 } from '../api'
 import AttributeDialog from '../components/AttributeDialog.vue'
 import OptionsDialog from '../components/OptionsDialog.vue'
@@ -50,6 +51,26 @@ watch(
   },
   { immediate: true },
 )
+// Bật/tắt "Required" ngay trong bảng
+const updateAttr = useUpdateAttribute()
+const toggling = ref<string | null>(null)
+async function setRequired(a: Attribute, required: boolean) {
+  toggling.value = a.id
+  try {
+    await updateAttr.mutateAsync({ typeId: props.typeId, attrId: a.id, is_required: required })
+  } catch (err) {
+    notify.error(describeError(err))
+  } finally {
+    toggling.value = null
+  }
+}
+const activeOptions = (a: Attribute) =>
+  a.options
+    .filter((o) => !o.removed)
+    .sort((x, y) => x.position - y.position)
+    .map((o) => o.label)
+    .join(', ')
+
 // Kéo thả thứ tự thuộc tính (thứ tự cột trong danh sách và trong form)
 const reorder = useReorderAttributes()
 function onReorder(e: DataTableRowReorderEvent) {
@@ -201,34 +222,48 @@ const crumbs = computed<Crumb[]>(() =>
         <label for="show-removed">Show removed</label>
       </div>
       <p v-if="canManage && attributes.length > 1" class="hint">Drag the handle to change the order of columns and form fields.</p>
-      <DataTable :value="attributes" data-key="id" @row-reorder="onReorder">
-        <Column v-if="canManage && !showRemoved" row-reorder header-style="width: 2.5rem" />
-        <Column field="label" header="Label" />
-        <Column header="Key">
+      <!-- Cột trải hết bề ngang; "Required" là checkbox (đổi ngay khi có quyền) -->
+      <DataTable :value="attributes" data-key="id" table-style="width: 100%; table-layout: fixed" @row-reorder="onReorder">
+        <Column v-if="canManage && !showRemoved" row-reorder header-style="width: 2.75rem" />
+        <Column field="label" header="Label" header-style="width: 22%" />
+        <Column header="Key" header-style="width: 16%">
           <template #body="{ data: a }: { data: Attribute }"><code>{{ a.key }}</code></template>
         </Column>
-        <Column field="data_type" header="Type" />
-        <Column header="Unit">
+        <Column field="data_type" header="Type" header-style="width: 10%" />
+        <Column header="Unit" header-style="width: 9%">
           <template #body="{ data: a }: { data: Attribute }">{{ a.unit ?? '' }}</template>
         </Column>
-        <Column header="Required">
-          <template #body="{ data: a }: { data: Attribute }">{{ a.is_required ? 'Yes' : '' }}</template>
-        </Column>
-        <Column header="">
+        <Column header="Required" header-style="width: 9%" body-class="center" header-class="center">
           <template #body="{ data: a }: { data: Attribute }">
-            <Tag v-if="a.removed" value="removed" severity="secondary" />
-            <div v-else class="actions">
+            <Checkbox
+              :model-value="a.is_required"
+              binary
+              :disabled="!canManage || a.removed || toggling === a.id"
+              :aria-label="`${a.label} is required`"
+              @update:model-value="(v: boolean) => setRequired(a, v)"
+            />
+          </template>
+        </Column>
+        <Column header="Options" header-style="width: 18%">
+          <template #body="{ data: a }: { data: Attribute }">
+            <template v-if="a.data_type === 'select'">
+              <span class="opts">{{ activeOptions(a) || 'No options yet' }}</span>
               <Button
-                v-if="a.data_type === 'select'"
-                :label="`Options (${a.options.filter((o) => !o.removed).length})`"
+                :label="canManage ? 'Edit' : 'View'"
                 size="small"
                 text
+                class="opts-btn"
                 @click="openOptions(a)"
               />
-              <template v-if="canManage">
-                <Button label="Edit" size="small" text @click="openAttribute(a)" />
-                <Button label="Remove" size="small" text severity="danger" @click="askRemove(a)" />
-              </template>
+            </template>
+          </template>
+        </Column>
+        <Column header="" header-style="width: 9.5rem" body-class="row-actions-cell">
+          <template #body="{ data: a }: { data: Attribute }">
+            <Tag v-if="a.removed" value="removed" severity="secondary" />
+            <div v-else-if="canManage" class="actions end">
+              <Button label="Edit" size="small" text @click="openAttribute(a)" />
+              <Button label="Remove" size="small" text severity="danger" @click="askRemove(a)" />
             </div>
           </template>
         </Column>
@@ -265,6 +300,25 @@ const crumbs = computed<Crumb[]>(() =>
 .field-row .grow {
   flex: 1;
   min-width: 12rem;
+}
+:deep(.center) {
+  text-align: center;
+}
+:deep(.center .p-datatable-column-header-content) {
+  justify-content: center;
+}
+.opts {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.opts-btn {
+  padding-left: 0;
+}
+.actions.end {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
 }
 .hint.after {
   margin: 0.75rem 0 0;

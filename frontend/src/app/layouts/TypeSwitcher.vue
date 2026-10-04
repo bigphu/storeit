@@ -54,7 +54,6 @@ function pick(e: ListboxChangeEvent) {
     modal
     dismissable-mask
     :show-header="false"
-    position="top"
     :style="{ width: 'min(92vw, 30rem)' }"
     @show="onShow"
   >
