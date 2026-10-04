@@ -480,6 +480,11 @@ export interface components {
             description: string;
             is_system: boolean;
             permissions: string[];
+            /**
+             * Format: int64
+             * @description Accounts that hold the role and are not disabled; on GET /roles and GET /roles/{roleID}
+             */
+            member_count?: number;
         };
         CreateRoleRequest: {
             name: string;
