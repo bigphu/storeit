@@ -174,14 +174,26 @@ function commitRename() {
 .app-tab:hover {
   background: color-mix(in srgb, var(--p-content-background) 55%, transparent);
 }
+/* tab đang mở: khối màu chính đặc, chữ và biểu tượng màu tương phản */
 .app-tab.p-tab-active {
-  background: var(--p-content-background);
-  border-color: var(--app-line);
-  color: var(--p-text-color);
+  background: var(--p-primary-color);
+  border-color: var(--p-primary-color);
+  color: var(--p-primary-contrast-color);
   font-weight: 600;
-  box-shadow: inset 0 2px 0 var(--app-accent);
-  margin-bottom: -1px;
-  padding-bottom: calc(0.45rem + 1px);
+}
+.app-tab.p-tab-active .tab-icon,
+.app-tab.p-tab-active.pinned .tab-icon {
+  color: inherit;
+  opacity: 1;
+}
+.app-tab.p-tab-active .tab-close {
+  color: inherit;
+}
+.app-tab.p-tab-active .tab-close:hover {
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+.app-tab.p-tab-active .dirty-dot {
+  background: currentColor;
 }
 .tab-icon {
   font-size: 0.75rem;
