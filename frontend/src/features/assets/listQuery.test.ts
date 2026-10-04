@@ -6,8 +6,10 @@ import {
   operatorsFor,
   parseAssetQuery,
   serializeAssetQuery,
+  switchType,
   toApiParams,
   toTableSort,
+  typeListQuery,
 } from './listQuery'
 
 const base: AssetListState = { q: '', includeRetired: false, filters: [], page: 1 }
@@ -126,5 +128,51 @@ describe('operatorsFor', () => {
     expect(operatorsFor('date')).toEqual(['eq', 'gt', 'gte', 'lt', 'lte'])
     expect(operatorsFor('boolean')).toEqual(['eq'])
     expect(operatorsFor('select')).toEqual(['eq', 'in'])
+  })
+})
+
+describe('switchType', () => {
+  const laptop: AssetListState = {
+    ...base,
+    q: 'dell',
+    statusKind: 'in_use',
+    typeId: 'L',
+    filters: [{ key: 'ram_gb', op: 'gte', value: '16' }],
+    sort: '-attributes.ram_gb',
+    page: 3,
+  }
+
+  it('remembers the outgoing type and starts the new one clean, keeping shared filters', () => {
+    const { state, views } = switchType(laptop, 'M', {})
+    expect(views).toEqual({ L: { filters: laptop.filters, sort: '-attributes.ram_gb', page: 3 } })
+    expect(state).toEqual({ ...base, q: 'dell', statusKind: 'in_use', typeId: 'M' })
+  })
+
+  it('brings back a type it has seen', () => {
+    const first = switchType(laptop, 'M', {})
+    const monitor = { ...first.state, filters: [{ key: 'size_in', op: 'gte', value: '27' }], page: 2 }
+    const back = switchType(monitor, 'L', first.views)
+    expect(back.state).toEqual({ ...laptop, q: 'dell', statusKind: 'in_use' })
+    expect(back.views.M).toEqual({ filters: monitor.filters, sort: undefined, page: 2 })
+  })
+
+  it('keeps a column sort for a type without memory, drops an attribute sort', () => {
+    expect(switchType({ ...laptop, sort: '-name' }, 'M', {}).state.sort).toBe('-name')
+    expect(switchType(laptop, undefined, {}).state.sort).toBeUndefined()
+  })
+
+  it('treats "all types" as a view of its own', () => {
+    const all: AssetListState = { ...base, sort: 'status', page: 4 }
+    const { views } = switchType(all, 'L', {})
+    expect(views['']).toEqual({ filters: [], sort: 'status', page: 4 })
+    expect(switchType({ ...base, typeId: 'L' }, undefined, views).state).toEqual({ ...base, sort: 'status', page: 4 })
+  })
+})
+
+describe('typeListQuery', () => {
+  it('opens a type with its remembered view', () => {
+    const views = { L: { filters: [{ key: 'ram_gb', op: 'gte', value: '16' }], sort: 'name', page: 2 } }
+    expect(typeListQuery('L', views)).toEqual({ type_id: 'L', attr: ['ram_gb:gte:16'], sort: 'name', page: '2' })
+    expect(typeListQuery('M', views)).toEqual({ type_id: 'M' })
   })
 })

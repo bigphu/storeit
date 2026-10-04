@@ -10,13 +10,14 @@ import type { Account } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { formatDateTime } from '@/lib/dates'
+import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
 import { queryInt, queryString, useUrlState } from '@/lib/urlState'
 import { useAccounts } from '../api'
 import CreateAccountDialog from '../components/CreateAccountDialog.vue'
 import { statusSeverity } from '../status'
 
 const session = useSession()
-const pageSize = 50
+const { size: pageSize, set: setPageSize } = usePageSize('accounts')
 
 type Active = 'all' | 'active' | 'disabled'
 const { state, update } = useUrlState(
@@ -36,7 +37,7 @@ const params = computed(() => ({
   q: state.value.q || undefined,
   active: state.value.active === 'all' ? undefined : state.value.active === 'active',
   page: state.value.page,
-  page_size: pageSize,
+  page_size: pageSize.value,
 }))
 const { data, isFetching } = useAccounts(params)
 
@@ -55,6 +56,12 @@ const activeOptions = [
 ]
 
 function onPage(e: DataTablePageEvent) {
+  // đổi số dòng thì về trang 1
+  if (e.rows !== pageSize.value) {
+    setPageSize(e.rows)
+    update({ page: 1 })
+    return
+  }
   update({ page: e.page + 1 })
 }
 
@@ -82,6 +89,7 @@ const creating = ref(false)
       lazy
       paginator
       :rows="pageSize"
+      :rows-per-page-options="PAGE_SIZES"
       :first="(state.page - 1) * pageSize"
       :total-records="data?.total ?? 0"
       :loading="isFetching"

@@ -97,6 +97,40 @@ export function changeType(s: AssetListState, typeId: string | undefined): Asset
   return { ...s, typeId, filters: [], sort: isAttrSort(s.sort) ? undefined : s.sort, page: 1 }
 }
 
+// Bộ lọc thuộc tính, sắp và trang thuộc về một loại; mỗi loại nhớ của riêng nó
+// (khoá '' là danh sách mọi loại). Tìm kiếm, status, "include retired" dùng chung.
+export interface TypeView {
+  filters: AttrFilterRow[]
+  sort?: string
+  page: number
+}
+export type TypeViews = Record<string, TypeView>
+
+// switchType: lưu view của loại đang rời, mở loại mới với view đã nhớ (nếu có)
+export function switchType(
+  s: AssetListState,
+  typeId: string | undefined,
+  views: TypeViews,
+): { state: AssetListState; views: TypeViews } {
+  const next = { ...views, [s.typeId ?? '']: { filters: s.filters, sort: s.sort, page: s.page } }
+  const saved = next[typeId ?? '']
+  const fresh = changeType(s, typeId)
+  return { state: saved ? { ...fresh, filters: saved.filters, sort: saved.sort, page: saved.page } : fresh, views: next }
+}
+
+// typeListQuery: query mở danh sách của một loại với view đã nhớ (breadcrumb, liên kết loại)
+export function typeListQuery(typeId: string, views: TypeViews): LocationQueryRaw {
+  const v = views[typeId]
+  return serializeAssetQuery({
+    q: '',
+    includeRetired: false,
+    typeId,
+    filters: v?.filters ?? [],
+    sort: v?.sort,
+    page: v?.page ?? 1,
+  })
+}
+
 // fromTableSort: sự kiện sort của DataTable (removable-sort: tăng -> giảm -> bỏ) -> sort của API
 export function fromTableSort(field: string | undefined, order: number | null | undefined): string | undefined {
   if (!field || !order) return undefined

@@ -1,77 +1,100 @@
 <script setup lang="ts">
+import { useQueryClient } from '@tanstack/vue-query'
 import Button from 'primevue/button'
-import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
-import Textarea from 'primevue/textarea'
-import { useConfirm } from 'primevue/useconfirm'
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { formatDate, formatDateTime } from '@/lib/dates'
-import { notify } from '@/lib/notify'
 import { kindSeverity } from '@/features/statuses/api'
-import { useAsset, useRestoreAsset, useRetireAsset } from '../api'
+import { fetchAssetPage, useAsset } from '../api'
+import RetireDialog from '../components/RetireDialog.vue'
+import { position, stepFrom, useListContext } from '../listContext'
+import { serializeAssetQuery, toApiParams, typeListQuery } from '../listQuery'
+import { useAssetActions } from '../useAssetActions'
 import { formatValue } from '../values'
 
 const props = defineProps<{ id: string }>()
 
 const session = useSession()
-const confirm = useConfirm()
+const router = useRouter()
+const qc = useQueryClient()
+const listContext = useListContext()
+const actions = useAssetActions()
 const canManage = computed(() => session.can(Perm.AssetManage))
 
 const { data: asset } = useAsset(() => props.id)
 const retired = computed(() => !!asset.value?.retired_at)
 
-const retireOpen = ref(false)
-const reason = ref('')
-const retire = useRetireAsset()
-function openRetire() {
-  reason.value = ''
-  retireOpen.value = true
-}
-async function submitRetire() {
-  if (!asset.value) return
-  await retire
-    .mutateAsync({ id: props.id, reason: reason.value, version: asset.value.version })
-    .then(() => {
-      retireOpen.value = false
-      notify.success('Asset retired.')
-    })
-    .catch(() => {})
+// Danh sách đã mở trước đó (nếu tài sản này nằm trong nó): quay lại và bước qua kết quả
+const ctx = computed(() => {
+  const c = listContext.ctx
+  return c && c.ids.includes(props.id) ? c : null
+})
+const pos = computed(() => (ctx.value ? position(ctx.value, props.id) : null))
+
+const crumbs = computed<Crumb[]>(() => {
+  const a = asset.value
+  if (!a) return []
+  const c = ctx.value
+  const allTo = c && !c.state.typeId ? { path: '/assets', query: serializeAssetQuery(c.state) } : '/assets'
+  const typeTo =
+    c && c.state.typeId === a.asset_type.id
+      ? { path: '/assets', query: serializeAssetQuery(c.state) }
+      : { path: '/assets', query: typeListQuery(a.asset_type.id, listContext.views) }
+  return [{ label: 'Assets', to: allTo }, { label: a.asset_type.name, to: typeTo }, { label: a.tag }]
+})
+
+// Bước tới/lui: trong trang thì lấy id kề bên; qua trang thì tải trang đó (có cache)
+async function step(dir: 1 | -1) {
+  const c = ctx.value
+  if (!c) return
+  const s = stepFrom(c, props.id, dir)
+  if (!s) return
+  if ('id' in s) {
+    await router.replace(`/assets/${s.id}`)
+    return
+  }
+  const state = { ...c.state, page: s.page }
+  const page = await fetchAssetPage(qc, toApiParams(state, c.pageSize))
+  const ids = page.items.map((a) => a.id)
+  const next = s.pick === 'first' ? ids[0] : ids[ids.length - 1]
+  if (!next) return
+  listContext.ctx = { state, pageSize: c.pageSize, ids, total: page.total }
+  await router.replace(`/assets/${next}`)
 }
 
-const restore = useRestoreAsset()
-function askRestore() {
-  const a = asset.value
-  if (!a) return
-  confirm.require({
-    message: `Restore ${a.tag}? It goes back to the default available status.`,
-    header: 'Confirm',
-    acceptLabel: 'Restore',
-    rejectLabel: 'Cancel',
-    accept: () =>
-      restore
-        .mutateAsync({ id: a.id, version: a.version })
-        .then(() => notify.success('Asset restored.'))
-        .catch(() => {}),
-  })
+// Phím tắt: J/K bước qua danh sách, E sửa
+function onKey(e: KeyboardEvent) {
+  const t = e.target as HTMLElement | null
+  if (e.ctrlKey || e.metaKey || e.altKey || (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) || t?.isContentEditable) return
+  if (document.querySelector('.p-dialog-mask')) return
+  if (e.key === 'j') step(1)
+  else if (e.key === 'k') step(-1)
+  else if (e.key === 'e' && canManage.value && asset.value && !retired.value) actions.edit(asset.value)
 }
+onMounted(() => window.addEventListener('keydown', onKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
   <section v-if="asset">
+    <AppBreadcrumb :items="crumbs" />
     <div class="page-header">
       <h1>{{ asset.tag }} — {{ asset.name }}</h1>
-      <div v-if="canManage" class="actions">
-        <Button v-if="!retired" as="router-link" :to="`/assets/${asset.id}/edit`" label="Edit" icon="pi pi-pencil" />
-        <Button
-          v-if="!retired"
-          label="Retire"
-          severity="danger"
-          text
-          @click="openRetire"
-        />
-        <Button v-else label="Restore" @click="askRestore" />
+      <div class="actions">
+        <span v-if="pos" class="stepper" aria-label="Position in the list">
+          <Button icon="pi pi-angle-left" text rounded aria-label="Previous asset (K)" :disabled="pos.index === 0" @click="step(-1)" />
+          <span>{{ pos.index + 1 }} of {{ pos.total }}</span>
+          <Button icon="pi pi-angle-right" text rounded aria-label="Next asset (J)" :disabled="pos.index + 1 >= pos.total" @click="step(1)" />
+        </span>
+        <template v-if="canManage">
+          <Button v-if="!retired" label="Edit" icon="pi pi-pencil" @click="(e: MouseEvent) => actions.edit(asset!, e)" />
+          <Button v-if="!retired" label="Retire" severity="danger" text @click="actions.askRetire(asset)" />
+          <Button v-else label="Restore" @click="actions.askRestore(asset)" />
+        </template>
       </div>
     </div>
 
@@ -107,24 +130,19 @@ function askRestore() {
       <p v-else>This asset type has no attributes.</p>
     </section>
 
-    <Dialog v-model:visible="retireOpen" modal header="Retire asset" :style="{ width: '30rem' }">
-      <form class="form" @submit.prevent="submitRetire">
-        <p>Retired assets are hidden from the list and can't be edited until restored.</p>
-        <div class="field">
-          <label for="retire-reason">Reason (optional)</label>
-          <Textarea id="retire-reason" v-model="reason" rows="3" />
-        </div>
-        <div class="actions">
-          <Button type="submit" label="Retire" severity="danger" :loading="retire.isPending.value" />
-          <Button label="Cancel" severity="secondary" text @click="retireOpen = false" />
-        </div>
-      </form>
-    </Dialog>
+    <RetireDialog v-model:visible="actions.retireOpen.value" :asset="actions.retireTarget.value" />
   </section>
 </template>
 
 <style scoped>
 .pre {
   white-space: pre-wrap;
+}
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-variant-numeric: tabular-nums;
+  margin-right: 0.5rem;
 }
 </style>

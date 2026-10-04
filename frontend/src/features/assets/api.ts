@@ -1,10 +1,10 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 import { inventoryApi } from '@/lib/api/client'
 import { unwrap } from '@/lib/errors'
 import type { toApiParams } from './listQuery'
 
-type ListParams = ReturnType<typeof toApiParams>
+export type ListParams = ReturnType<typeof toApiParams>
 
 export const assetKeys = {
   all: ['assets'] as const,
@@ -17,6 +17,15 @@ export function useAssetList(params: MaybeRefOrGetter<ListParams>) {
     queryKey: computed(() => assetKeys.list(toValue(params))),
     queryFn: () => unwrap(inventoryApi.GET('/assets', { params: { query: toValue(params) } })),
     placeholderData: keepPreviousData,
+  })
+}
+
+// fetchAssetPage: tải một trang của danh sách (dùng cache nếu có), khi bước qua tài sản
+// sang trang bên cạnh
+export function fetchAssetPage(qc: QueryClient, params: ListParams) {
+  return qc.fetchQuery({
+    queryKey: assetKeys.list(params),
+    queryFn: () => unwrap(inventoryApi.GET('/assets', { params: { query: params } })),
   })
 }
 

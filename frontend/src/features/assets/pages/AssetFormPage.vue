@@ -7,6 +7,7 @@ import Select from 'primevue/select'
 import Textarea from 'primevue/textarea'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
 import { fromDateString, toDateString } from '@/lib/dates'
 import { isApiError } from '@/lib/errors'
 import { useFormErrors } from '@/lib/forms'
@@ -15,12 +16,15 @@ import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
 import { useStatuses } from '@/features/statuses/api'
 import { useAsset, useCreateAsset, useReplaceAsset } from '../api'
 import AttributeInput from '../components/AttributeInput.vue'
+import { useListContext } from '../listContext'
+import { typeListQuery } from '../listQuery'
 import { type FormValues, fromApiValues, toApiValues } from '../values'
 
 // Không có id là tạo mới; có id là sửa (PUT thay toàn bộ)
 const props = defineProps<{ id?: string }>()
 
 const router = useRouter()
+const listContext = useListContext()
 const errors = useFormErrors()
 const isEdit = computed(() => !!props.id)
 const { data: asset, refetch } = useAsset(() => props.id)
@@ -111,7 +115,9 @@ async function submit() {
         ? await replace.mutateAsync({ id: asset.value.id, version: asset.value.version, ...body })
         : await create.mutateAsync({ tag: tag.value, ...body })
     notify.success('Asset saved.')
-    await router.push(`/assets/${saved.id}`)
+    // tài sản mới: mở trang của nó thay cho form; sửa: quay về nơi đã mở form
+    if (isEdit.value) leave(`/assets/${saved.id}`)
+    else await router.replace(`/assets/${saved.id}`)
   } catch (err) {
     if (isApiError(err, '/errors/asset-changed')) {
       notify.info('Someone else changed this asset. Reloaded the latest version; please re-apply your edits.')
@@ -121,10 +127,27 @@ async function submit() {
     }
   }
 }
+
+// leave: quay về trang trước (danh sách hay trang tài sản) để form không ở lại trong
+// lịch sử; mở form trực tiếp (không có trang trước) thì sang trang dự phòng
+function leave(fallback: string) {
+  if (window.history.state?.back) router.back()
+  else router.replace(fallback)
+}
+
+const crumbs = computed<Crumb[]>(() => {
+  const t = (types.value ?? []).find((x) => x.id === (asset.value?.asset_type.id ?? typeId.value))
+  const items: Crumb[] = [{ label: 'Assets', to: '/assets' }]
+  if (t) items.push({ label: t.name, to: { path: '/assets', query: typeListQuery(t.id, listContext.views) } })
+  if (isEdit.value && asset.value) items.push({ label: asset.value.tag, to: `/assets/${asset.value.id}` }, { label: 'Edit' })
+  else if (!isEdit.value) items.push({ label: 'New asset' })
+  return items
+})
 </script>
 
 <template>
   <section>
+    <AppBreadcrumb :items="crumbs" />
     <h1>{{ isEdit ? `Edit ${asset?.tag ?? ''}` : 'New asset' }}</h1>
     <form v-if="!isEdit || asset" class="form" @submit.prevent="submit">
       <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
@@ -194,13 +217,7 @@ async function submit() {
 
       <div class="actions">
         <Button type="submit" label="Save" :loading="busy" :disabled="!typeId" />
-        <Button
-          as="router-link"
-          :to="isEdit ? `/assets/${id}` : '/assets'"
-          label="Cancel"
-          severity="secondary"
-          text
-        />
+        <Button label="Cancel" severity="secondary" text @click="leave(isEdit ? `/assets/${id}` : '/assets')" />
       </div>
     </form>
   </section>

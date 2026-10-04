@@ -65,6 +65,17 @@ TLS is the job of the reverse proxy in front. The build puts bundles under `/sta
   `holder_member_id` even though it doesn't show them.
 - Asset list state (filters, attribute filters, sort, page) lives in the URL using the API
   parameter names (`features/assets/listQuery.ts`).
+- Build UI from PrimeVue v4 components (Breadcrumb, DataTable paginator, ContextMenu,
+  Dialog, ConfirmDialog…) before writing custom markup.
+- Open things through `openLocation` (`lib/navigation.ts`): plain click navigates,
+  Ctrl/⌘/middle click opens a new tab. Later the in-app tabs take over here.
+- Each type's asset list remembers its attribute filters, sort and page (`switchType`,
+  kept per browser tab in `features/assets/listContext.ts`); search, status and
+  “include retired” carry across types. The same store remembers the last list viewed,
+  so the asset page can return to it and step through it (`J`/`K`).
+- Rows per page: every paged table passes `rowsPerPageOptions` and keeps its own size
+  through `usePageSize(tableKey)` (`lib/preferences.ts`, per account in localStorage);
+  tables without a size use the default.
 - **Stay on PrimeVue 4.x, `@primeuix/themes` 2.x and `primeicons` 7.x (MIT).** From
   PrimeVue 5 / primeicons 8 (July 2026) PrimeTek ships them under a commercial "PrimeUI"
   license that needs a license key (a free Community key exists for eligible users);
