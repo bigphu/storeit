@@ -1,12 +1,14 @@
 import { computed } from 'vue'
-import { type LocationQuery, type LocationQueryRaw, useRoute, useRouter } from 'vue-router'
+import { type LocationQuery, type LocationQueryRaw, useRouter } from 'vue-router'
+import { useTabQuery } from '@/app/tabs/tabPage'
 
 // useUrlState: state của danh sách (tìm kiếm, lọc, sắp, trang) nằm trên URL, nên
 // tải lại hay gửi link vẫn giữ nguyên
 export function useUrlState<T>(parse: (q: LocationQuery) => T, serialize: (s: T) => LocationQueryRaw) {
-  const route = useRoute()
   const router = useRouter()
-  const state = computed(() => parse(route.query))
+  // trang được giữ sống khi chuyển tab: chỉ theo URL của tab mình
+  const query = useTabQuery()
+  const state = computed(() => parse(query.value))
 
   function update(patch: Partial<T>) {
     router.replace({ query: serialize({ ...state.value, ...patch }) })
@@ -15,12 +17,4 @@ export function useUrlState<T>(parse: (q: LocationQuery) => T, serialize: (s: T)
   return { state, update }
 }
 
-export function queryString(v: unknown): string | undefined {
-  const s = Array.isArray(v) ? v[0] : v
-  return typeof s === 'string' && s !== '' ? s : undefined
-}
-
-export function queryInt(v: unknown, fallback: number): number {
-  const n = Number(queryString(v))
-  return Number.isInteger(n) && n > 0 ? n : fallback
-}
+export { queryInt, queryString } from './queryParams'

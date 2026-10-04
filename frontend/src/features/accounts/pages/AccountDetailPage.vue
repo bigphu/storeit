@@ -5,6 +5,7 @@ import Message from 'primevue/message'
 import MultiSelect from 'primevue/multiselect'
 import Tag from 'primevue/tag'
 import { useConfirm } from 'primevue/useconfirm'
+import { useTabTitle } from '@/app/tabs/tabPage'
 import { computed, ref, watch } from 'vue'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
@@ -31,6 +32,7 @@ const confirm = useConfirm()
 const canManage = computed(() => session.can(Perm.AccountManage))
 
 const { data: account, refetch } = useAccount(() => props.id)
+useTabTitle(() => account.value?.name)
 const roles = useRoles()
 
 // Sửa tên: gửi version đã đọc; 409 là người khác vừa sửa

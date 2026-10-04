@@ -4,6 +4,7 @@ import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useTabId, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
@@ -22,15 +23,17 @@ const session = useSession()
 const router = useRouter()
 const qc = useQueryClient()
 const listContext = useListContext()
+const tabId = useTabId()
 const actions = useAssetActions()
 const canManage = computed(() => session.can(Perm.AssetManage))
 
 const { data: asset } = useAsset(() => props.id)
 const retired = computed(() => !!asset.value?.retired_at)
+useTabTitle(() => asset.value?.tag)
 
 // Danh sách đã mở trước đó (nếu tài sản này nằm trong nó): quay lại và bước qua kết quả
 const ctx = computed(() => {
-  const c = listContext.ctx
+  const c = listContext.ctxFor(tabId)
   return c && c.ids.includes(props.id) ? c : null
 })
 const pos = computed(() => (ctx.value ? position(ctx.value, props.id) : null))
@@ -60,7 +63,7 @@ async function step(dir: 1 | -1) {
   const ids = page.items.map((a) => a.id)
   const next = s.pick === 'first' ? ids[0] : ids[ids.length - 1]
   if (!next) return
-  listContext.ctx = { state, pageSize: c.pageSize, ids, total: page.total }
+  listContext.setCtx(tabId, { state, pageSize: c.pageSize, ids, total: page.total })
   await router.replace(`/assets/${next}`)
 }
 

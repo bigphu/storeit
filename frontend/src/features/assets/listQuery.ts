@@ -3,7 +3,7 @@
 // include_retired, attr (lặp lại), sort, page.
 import type { LocationQuery, LocationQueryRaw } from 'vue-router'
 import type { DataType, StatusKind } from '@/lib/api/types'
-import { queryInt, queryString } from '@/lib/urlState'
+import { queryInt, queryString } from '@/lib/queryParams'
 
 export interface AttrFilterRow {
   key: string

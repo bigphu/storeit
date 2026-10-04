@@ -77,8 +77,18 @@ TLS is the job of the reverse proxy in front. The build puts bundles under `/sta
   PrimeVue's `darkModeSelector`; compact density overrides the DataTable padding tokens.
 - Build UI from PrimeVue v4 components (Breadcrumb, DataTable paginator, ContextMenu,
   Dialog, ConfirmDialog…) before writing custom markup.
-- Open things through `openLocation` (`lib/navigation.ts`): plain click navigates,
-  Ctrl/⌘/middle click opens a new tab. Later the in-app tabs take over here.
+- Tabs inside the app (`app/tabs/`): every place opened with Ctrl/⌘-click or middle-click
+  (any internal link, or `openLocation(…, e)` from code) becomes a background tab;
+  opening a page that already has a tab focuses it (lists may open more than once).
+  The URL is always the active tab's location (`useTabs().sync`). Pages are kept alive
+  per tab (`KeepAlive` keyed by tab and route), so:
+  - read the URL query through `useTabQuery()` (or `useUrlState`), never `useRoute().query`
+    directly in a page, or a page in a background tab follows another tab's URL;
+  - name the tab with `useTabTitle(() => …)`, mark unsaved forms with `useTabDirty`;
+  - go back within a tab with `useTabs().goBack()`, not `router.back()` (browser history
+    mixes all tabs).
+  Open and pinned tabs are saved per account on the device; the "Reopen my tabs"
+  preference decides whether unpinned tabs come back after signing in. `Alt 1–9` jumps.
 - Each type's asset list remembers its attribute filters, sort and page (`switchType`,
   kept per browser tab in `features/assets/listContext.ts`); search, status and
   “include retired” carry across types. The same store remembers the last list viewed,

@@ -6,6 +6,7 @@ import Message from 'primevue/message'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 import { useConfirm } from 'primevue/useconfirm'
+import { useTabTitle } from '@/app/tabs/tabPage'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Perm } from '@/lib/auth/permissions'
@@ -22,6 +23,7 @@ const confirm = useConfirm()
 const canManage = computed(() => session.can(Perm.RoleManage))
 
 const { data: role } = useRole(() => props.id)
+useTabTitle(() => role.value?.name)
 const { data: permissions } = usePermissions()
 
 const name = ref('')

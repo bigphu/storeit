@@ -9,6 +9,7 @@ import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 import { useConfirm } from 'primevue/useconfirm'
 import { computed, ref, watch } from 'vue'
+import { useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
 import type { Attribute } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
@@ -131,6 +132,7 @@ function askRemove(a: Attribute) {
 }
 
 const listContext = useListContext()
+useTabTitle(() => type.value && `${type.value.name} settings`)
 const crumbs = computed<Crumb[]>(() =>
   type.value
     ? [

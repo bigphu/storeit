@@ -3,6 +3,7 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAsset } from '@/features/assets/api'
+import { useTabs } from './tabs/useTabs'
 import { useListContext } from '@/features/assets/listContext'
 import { type ListLocation, listLocation, switchType } from '@/features/assets/listQuery'
 
@@ -12,6 +13,7 @@ const ASSET_ROUTES = ['asset', 'asset-edit']
 export function useTypeNav() {
   const route = useRoute()
   const listContext = useListContext()
+  const tabs = useTabs()
 
   // trang của một tài sản thuộc phạm vi loại của nó (lấy từ cache của trang)
   const assetId = computed(() => (ASSET_ROUTES.includes(String(route.name)) ? String(route.params.id) : undefined))
@@ -26,7 +28,7 @@ export function useTypeNav() {
   // Đang xem một danh sách thì tìm kiếm, status, "include retired" đi theo sang loại mới
   function listFor(typeId: string | undefined): ListLocation {
     const views = listContext.views
-    const current = LIST_ROUTES.includes(String(route.name)) ? listContext.ctx?.state : undefined
+    const current = LIST_ROUTES.includes(String(route.name)) ? listContext.ctxFor(tabs.activeId)?.state : undefined
     if (current) return listLocation(switchType(current, typeId, views).state)
     const v = views[typeId ?? '']
     return listLocation({ q: '', includeRetired: false, typeId, filters: v?.filters ?? [], sort: v?.sort, page: v?.page ?? 1 })

@@ -3,6 +3,7 @@ import Button from 'primevue/button'
 import Chip from 'primevue/chip'
 import Select from 'primevue/select'
 import SelectButton from 'primevue/selectbutton'
+import ToggleSwitch from 'primevue/toggleswitch'
 import { computed } from 'vue'
 import { PAGE_SIZES, tableLabel, usePreferences, withTableSize } from '@/lib/preferences'
 import { useAssetTypes } from '@/features/asset-types/api'
@@ -67,6 +68,13 @@ function useDefaultEverywhere() {
       <Select v-model="store.prefs.defaultPageSize" input-id="pref-rows" :options="PAGE_SIZES" class="narrow" />
       <small>Used by every table where you haven't picked a size. Each table also has its own rows control under it.</small>
     </div>
+    <div class="toggle-row">
+      <ToggleSwitch v-model="store.prefs.reopenTabs" input-id="pref-reopen" />
+      <label for="pref-reopen">
+        Reopen my tabs when I sign in
+        <small>Off: only pinned tabs come back.</small>
+      </label>
+    </div>
     <div v-if="ownSizes.length" class="field">
       <span>Tables with their own size</span>
       <div class="actions">
@@ -87,5 +95,14 @@ function useDefaultEverywhere() {
 <style scoped>
 .narrow {
   width: 8rem;
+}
+.toggle-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+.toggle-row label {
+  display: flex;
+  flex-direction: column;
 }
 </style>

@@ -19,6 +19,8 @@ export interface Prefs {
   tableSizes: Record<string, number>
   // loại tài sản mở gần đây, mới nhất trước (bộ chọn loại)
   recentTypes: string[]
+  // đăng nhập lại thì mở lại mọi tab; tắt thì chỉ tab ghim
+  reopenTabs: boolean
 }
 
 export const defaultPrefs = (): Prefs => ({
@@ -27,6 +29,7 @@ export const defaultPrefs = (): Prefs => ({
   defaultPageSize: 50,
   tableSizes: {},
   recentTypes: [],
+  reopenTabs: true,
 })
 
 export function pushRecent(list: string[], id: string, max = 5): string[] {

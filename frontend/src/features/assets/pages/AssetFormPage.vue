@@ -5,8 +5,10 @@ import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Select from 'primevue/select'
 import Textarea from 'primevue/textarea'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
+import { useTabs } from '@/app/tabs/useTabs'
 import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
 import { fromDateString, toDateString } from '@/lib/dates'
 import { isApiError } from '@/lib/errors'
@@ -63,6 +65,22 @@ const typeChanged = computed(() => isEdit.value && !!asset.value && typeId.value
 // valuesFor: loại mà values đang dựng theo; null là cần dựng lại
 let valuesFor: string | null = null
 
+// Chưa lưu: so form với lúc vừa nạp xong (chấm trên tab, hỏi lại khi đóng tab)
+const formState = computed(() =>
+  JSON.stringify({
+    tag: tag.value,
+    name: name.value,
+    description: description.value,
+    typeId: typeId.value,
+    statusId: statusId.value,
+    purchase: toDateString(purchaseDate.value),
+    values: values.value,
+  }),
+)
+const clean = ref<string | null>(null)
+const markClean = () => nextTick(() => (clean.value = formState.value))
+useTabDirty(() => clean.value !== null && formState.value !== clean.value)
+
 // Đổ dữ liệu tài sản vào form khi tải xong, và sau khi tải lại (409)
 watch(
   () => asset.value?.version,
@@ -76,6 +94,7 @@ watch(
     statusId.value = a.status.id
     purchaseDate.value = fromDateString(a.purchase_date)
     valuesFor = null
+    clean.value = null
   },
   { immediate: true },
 )
@@ -88,8 +107,23 @@ watch(
     valuesFor = t
     const saved = asset.value && asset.value.asset_type.id === t ? asset.value.attributes : []
     values.value = fromApiValues(attrs, saved)
+    // lần dựng đầu (vừa nạp tài sản, hay loại chọn sẵn của tài sản mới) là mốc "đã lưu"
+    if (clean.value === null) markClean()
   },
   { immediate: true },
+)
+
+// tài sản mới chưa chọn loại: mốc là form trống
+onMounted(() => {
+  if (!isEdit.value && !typeId.value) markClean()
+})
+
+useTabTitle(() =>
+  isEdit.value
+    ? asset.value && `Edit ${asset.value.tag}`
+    : selectedType.value
+      ? `New ${selectedType.value.name.toLowerCase()}`
+      : 'New asset',
 )
 
 const create = useCreateAsset()
@@ -115,6 +149,7 @@ async function submit() {
       isEdit.value && asset.value
         ? await replace.mutateAsync({ id: asset.value.id, version: asset.value.version, ...body })
         : await create.mutateAsync({ tag: tag.value, ...body })
+    clean.value = formState.value
     notify.success('Asset saved.')
     // tài sản mới: mở trang của nó thay cho form; sửa: quay về nơi đã mở form
     if (isEdit.value) leave(`/assets/${saved.id}`)
@@ -129,11 +164,11 @@ async function submit() {
   }
 }
 
-// leave: quay về trang trước (danh sách hay trang tài sản) để form không ở lại trong
-// lịch sử; mở form trực tiếp (không có trang trước) thì sang trang dự phòng
-function leave(fallback: string) {
-  if (window.history.state?.back) router.back()
-  else router.replace(fallback)
+// leave: quay về trang trước trong tab (danh sách hay trang tài sản) để form không ở
+// lại trong lịch sử của tab; tab mở thẳng vào form thì sang trang dự phòng
+const tabs = useTabs()
+async function leave(fallback: string) {
+  if (!(await tabs.goBack())) await router.replace(fallback)
 }
 
 const crumbs = computed<Crumb[]>(() => {

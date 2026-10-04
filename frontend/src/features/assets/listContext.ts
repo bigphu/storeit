@@ -34,14 +34,20 @@ export function stepFrom(ctx: ListContext, id: string, dir: 1 | -1): Step {
   return { page: ctx.state.page + dir, pick: dir > 0 ? 'first' : 'last' }
 }
 
-const CTX_KEY = 'storeit.assets.listContext'
+const CTX_KEY = 'storeit.assets.listContexts'
 const VIEWS_KEY = 'storeit.assets.typeViews'
 
+// Mỗi tab trong app có danh sách "vừa xem" riêng (khoá: id tab); view đã nhớ của
+// từng loại dùng chung mọi tab
 export const useListContext = defineStore('assetListContext', () => {
-  const ctx = ref<ListContext | null>(readJSON<ListContext | null>('session', CTX_KEY, null))
-  // view đã nhớ của từng loại (switchType)
+  const ctxs = ref<Record<string, ListContext>>(readJSON<Record<string, ListContext>>('session', CTX_KEY, {}))
   const views = ref<TypeViews>(readJSON<TypeViews>('session', VIEWS_KEY, {}))
-  watch(ctx, (v) => writeJSON('session', CTX_KEY, v), { deep: true })
+  watch(ctxs, (v) => writeJSON('session', CTX_KEY, v), { deep: true })
   watch(views, (v) => writeJSON('session', VIEWS_KEY, v), { deep: true })
-  return { ctx, views }
+
+  const ctxFor = (tabId: string | null) => (tabId ? (ctxs.value[tabId] ?? null) : null)
+  function setCtx(tabId: string | null, c: ListContext) {
+    if (tabId) ctxs.value = { ...ctxs.value, [tabId]: c }
+  }
+  return { ctxs, ctxFor, setCtx, views }
 })

@@ -1,29 +1,82 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
+import { setNewTabHandler } from '@/lib/navigation'
 import NoAccessPage from '../pages/NoAccessPage.vue'
+import { useTabs } from '../tabs/useTabs'
 import AccountMenu from './AccountMenu.vue'
 import AppSidebar from './AppSidebar.vue'
+import TabBar from './TabBar.vue'
 import TypeSwitcher from './TypeSwitcher.vue'
 
 const session = useSession()
 const route = useRoute()
+const tabs = useTabs()
 
 const allowed = computed(() => !route.meta.perm || session.can(route.meta.perm))
 
-// Bộ chọn loại: nút trên thanh trên, nút ở sidebar, hoặc Ctrl K ở bất cứ đâu
+// Mỗi lần điều hướng: vị trí mới thuộc về tab đang mở
+watch(
+  () => route.fullPath,
+  () => tabs.sync(route.fullPath, route.meta.title, route.meta.icon),
+  { immediate: true },
+)
+
+// Chuyển tab: giữ vị trí cuộn của từng tab (trang được giữ sống bằng KeepAlive)
+const content = ref<HTMLElement>()
+const scrolls = new Map<string, number>()
+async function switchTo(id: string) {
+  if (tabs.activeId) scrolls.set(tabs.activeId, content.value?.scrollTop ?? 0)
+  await tabs.activate(id)
+  await nextTick()
+  if (content.value) content.value.scrollTop = scrolls.get(id) ?? 0
+}
+
+// Ctrl/⌘-click hay bấm giữa vào liên kết trong app: mở tab trong app thay vì tab trình
+// duyệt. Menu chuột phải của trình duyệt vẫn mở được cửa sổ mới.
+function onLinkOpen(e: MouseEvent) {
+  const newTab = e.type === 'auxclick' ? e.button === 1 : e.button === 0 && (e.ctrlKey || e.metaKey)
+  if (!newTab) return
+  const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null
+  if (!a || a.target === '_blank' || a.hasAttribute('download') || a.origin !== window.location.origin) return
+  if (a.pathname.startsWith('/api/')) return
+  e.preventDefault()
+  e.stopPropagation()
+  tabs.open(a.pathname + a.search + a.hash, { background: true })
+}
+
+// Phím: Ctrl K bộ chọn loại; Alt 1–9 sang tab thứ n
 const switcherOpen = ref(false)
 function onKey(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && session.can(Perm.AssetRead)) {
     e.preventDefault()
     switcherOpen.value = !switcherOpen.value
+    return
+  }
+  if (e.altKey && !e.ctrlKey && !e.metaKey && /^Digit[1-9]$/.test(e.code)) {
+    const t = tabs.tabs[Number(e.code.slice(5)) - 1]
+    if (t) {
+      e.preventDefault()
+      switchTo(t.id)
+    }
   }
 }
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+
+onMounted(() => {
+  setNewTabHandler((path) => tabs.open(path, { background: true }))
+  window.addEventListener('keydown', onKey)
+  document.addEventListener('click', onLinkOpen, true)
+  document.addEventListener('auxclick', onLinkOpen, true)
+})
+onBeforeUnmount(() => {
+  setNewTabHandler((path) => window.open(path, '_blank', 'noopener'))
+  window.removeEventListener('keydown', onKey)
+  document.removeEventListener('click', onLinkOpen, true)
+  document.removeEventListener('auxclick', onLinkOpen, true)
+})
 </script>
 
 <template>
@@ -45,10 +98,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <AccountMenu />
     </header>
     <AppSidebar @switch-type="switcherOpen = true" />
-    <main class="content">
-      <RouterView v-if="allowed" />
-      <NoAccessPage v-else />
-    </main>
+    <div class="work">
+      <TabBar @switch="switchTo" />
+      <main ref="content" class="content">
+        <!-- Mỗi tab giữ trang của nó (bộ lọc, cuộn, form đang nhập) khi chuyển tab -->
+        <RouterView v-slot="{ Component, route: r }">
+          <KeepAlive :max="12">
+            <component :is="Component" v-if="allowed" :key="`${tabs.routeTabId}:${r.matched.at(-1)?.path}`" />
+          </KeepAlive>
+          <NoAccessPage v-if="!allowed" />
+        </RouterView>
+      </main>
+    </div>
     <TypeSwitcher v-model:visible="switcherOpen" />
   </div>
 </template>
@@ -84,7 +145,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .spacer {
   flex: 1;
 }
+.work {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
 .content {
+  flex: 1;
   padding: 1rem;
   min-width: 0;
   overflow: auto;

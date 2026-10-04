@@ -14,7 +14,8 @@ import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import type { MenuItem } from 'primevue/menuitem'
 import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
+import { useTabId, useTabQuery, useTabTitle } from '@/app/tabs/tabPage'
 import type { AssetListItem } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
@@ -42,14 +43,16 @@ import { formatValue } from '../values'
 const props = defineProps<{ typeId?: string }>()
 
 const session = useSession()
-const route = useRoute()
+// trang được giữ sống khi chuyển tab: chỉ theo URL của tab mình
+const tabId = useTabId()
+const query = useTabQuery()
 const router = useRouter()
 const canManage = computed(() => session.can(Perm.AssetManage))
 const listContext = useListContext()
 const actions = useAssetActions()
 
 // State nằm trên URL: loại ở path, phần còn lại ở query
-const state = computed<AssetListState>(() => ({ ...parseAssetQuery(route.query), typeId: props.typeId }))
+const state = computed<AssetListState>(() => ({ ...parseAssetQuery(query.value), typeId: props.typeId }))
 function update(patch: Partial<AssetListState>) {
   router.replace(listLocation({ ...state.value, ...patch }))
 }
@@ -74,7 +77,7 @@ const attributes = computed(() =>
 watch(
   [data, state, pageSize],
   ([d, s, size]) => {
-    if (d) listContext.ctx = { state: s, pageSize: size, ids: d.items.map((a) => a.id), total: d.total }
+    if (d) listContext.setCtx(tabId, { state: s, pageSize: size, ids: d.items.map((a) => a.id), total: d.total })
     listContext.views = { ...listContext.views, [s.typeId ?? '']: { filters: s.filters, sort: s.sort, page: s.page } }
   },
   { immediate: true },
@@ -146,6 +149,19 @@ function onRowContextMenu(e: DataTableRowContextMenuEvent) {
   menuRow.value = e.data as AssetListItem
   menu.value?.show(e.originalEvent)
 }
+
+// Tiêu đề tab: tên loại và bộ lọc thuộc tính đầu tiên ("Laptop · RAM ≥ 16 GB +1")
+const OP_SYMBOL: Record<string, string> = { eq: 'is', contains: 'contains', gt: '>', gte: '≥', lt: '<', lte: '≤', in: 'in' }
+useTabTitle(() => {
+  if (!props.typeId) return state.value.statusKind ? `All assets · ${state.value.statusKind.replace('_', ' ')}` : 'All assets'
+  const name = selectedType.value?.name
+  if (!name) return undefined
+  const [f, ...more] = state.value.filters
+  const a = f && attributes.value.find((x) => x.key === f.key)
+  if (!f || !a) return name
+  const value = a.data_type === 'select' ? f.value.split(',').map((id) => a.options.find((o) => o.id === id)?.label ?? id).join(', ') : f.value
+  return `${name} · ${a.label} ${OP_SYMBOL[f.op] ?? f.op} ${value}${a.unit ? ' ' + a.unit : ''}${more.length ? ` +${more.length}` : ''}`
+})
 
 function cell(row: AssetListItem, key: string) {
   return formatValue(row.attributes?.find((a) => a.key === key))
