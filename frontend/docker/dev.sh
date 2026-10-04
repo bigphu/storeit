@@ -9,4 +9,6 @@ if [ "$(cat "$stamp" 2>/dev/null)" != "$want" ]; then
   npm ci --no-audit --no-fund
   echo "$want" > "$stamp"
 fi
-exec npm run dev -- --host 0.0.0.0
+# Cổng ghi cả ở đây: Vite không đọc được vite.config.ts (bind mount lỗi I/O) thì báo
+# lỗi thay vì lặng lẽ chạy cổng 5173, nơi compose không publish
+exec npm run dev -- --host 0.0.0.0 --port 3000 --strictPort
