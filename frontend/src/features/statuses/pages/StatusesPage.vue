@@ -391,7 +391,7 @@ function doRestore(s: Status) {
   gap: 0.25rem;
   padding: 0.05rem 0.5rem;
   border-radius: 999px;
-  background: var(--app-soft);
+  background: var(--app-selected);
   color: var(--p-text-color);
   font-size: 0.75rem;
   font-weight: 600;
@@ -399,6 +399,7 @@ function doRestore(s: Status) {
 }
 .default-pill i {
   font-size: 0.7rem;
+  color: var(--app-accent);
 }
 .make-default {
   font-size: 0.78rem;

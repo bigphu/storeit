@@ -137,7 +137,7 @@ function commitRename() {
 
 <style scoped>
 /* Thanh tab kiểu trình duyệt / VS Code: tab đang mở mang nền của trang và nối liền với
-   trang bên dưới, vạch 2px màu chữ phía trên; tab khác là chữ mờ, ngăn bằng vạch mảnh */
+   trang bên dưới, vạch 2px màu chính phía trên; tab khác là chữ mờ, ngăn bằng vạch mảnh */
 .tabbar {
   display: flex;
   align-items: flex-end;
@@ -193,7 +193,7 @@ function commitRename() {
   border-color: var(--app-line);
   color: var(--p-text-color);
   font-weight: 600;
-  box-shadow: inset 0 2px 0 var(--p-text-color);
+  box-shadow: inset 0 2px 0 var(--app-accent);
   /* đè lên viền dưới của thanh để nối liền với trang */
   margin-bottom: -1px;
   padding-bottom: calc(0.45rem + 1px);
@@ -203,6 +203,7 @@ function commitRename() {
   opacity: 0.7;
 }
 .app-tab.pinned .tab-icon {
+  color: var(--app-accent);
   opacity: 1;
 }
 .tab-label {

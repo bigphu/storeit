@@ -1,9 +1,9 @@
 import { definePreset } from '@primeuix/themes'
 import Aura from '@primeuix/themes/aura'
 
-// Giữ màu Aura; trạng thái "đang chọn" dùng màu trung tính thay cho màu chính:
-// xám cho "đang ở đây", dấu tick cho "đã chọn", gạch dưới cho "mục nào". Màu chính chỉ
-// dành cho hành động (nút chính, liên kết, focus, checkbox đã tick).
+// Giữ màu Aura; trạng thái "đang chọn" có hình dạng quen thuộc, tô màu chính: nền xanh
+// nhạt cho "đang ở đây", dấu tick xanh cho "đã chọn", gạch dưới xanh cho "mục nào".
+// Chữ giữ màu thường; rê chuột lên menu, lựa chọn là xám trung tính.
 // Dấu tick của lựa chọn đã chọn và thanh tab của ứng dụng nằm ở base.css / TabBar.vue.
 
 // Lựa chọn trong danh sách: đã chọn không tô nền (có dấu tick), rê chuột/bàn phím tô xám
@@ -33,20 +33,19 @@ export const StoreItPreset = definePreset(Aura, {
     datatable: {
       row: { hoverBackground: rowHover, hoverColor: '{text.color}' },
     },
-    // Tab trong trang: chữ mờ, tab đang mở chữ thường và gạch dưới 2px màu chữ
+    // Tab trong trang: chữ mờ, tab đang mở chữ thường và gạch dưới 2px màu chính
     tabs: {
       tab: {
         activeColor: '{text.color}',
         activeBorderColor: '{content.border.color}',
       },
-      activeBar: { height: '2px', bottom: '-1px', background: '{text.color}' },
+      activeBar: { height: '2px', bottom: '-1px', background: '{primary.color}' },
     },
-    // Trang hiện tại: nền xám, chữ thường
+    // Trang hiện tại: nền xanh nhạt, chữ thường
     paginator: {
-      navButton: { selectedColor: '{text.color}' },
-      colorScheme: {
-        light: { navButton: { selectedBackground: '{surface.200}' } },
-        dark: { navButton: { selectedBackground: '{surface.700}' } },
+      navButton: {
+        selectedBackground: 'color-mix(in srgb, {primary.color} 14%, transparent)',
+        selectedColor: '{text.color}',
       },
     },
   },

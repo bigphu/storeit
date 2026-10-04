@@ -11,8 +11,9 @@
   --app-line: var(--p-content-border-color);
   --app-accent: var(--p-primary-color);
   --app-link: var(--p-primary-color);
-  /* mục "đang ở đây" (sidebar, thẻ đang chọn) và rê chuột: xám trung tính, không màu nhấn */
-  --app-selected: var(--p-surface-200);
+  /* mục "đang ở đây" (sidebar, thẻ đang chọn): nền xanh nhạt của màu chính, chữ giữ màu
+     thường; rê chuột: xám trung tính */
+  --app-selected: color-mix(in srgb, var(--p-primary-color) 14%, transparent);
   --app-hover: var(--p-surface-100);
   /* vạch trái của dòng bảng đang chọn (checkbox) */
   --app-bar-left: inset 3px 0 0 var(--app-accent);
@@ -20,7 +21,6 @@
 :root.app-dark {
   --app-ground: var(--p-surface-950);
   --app-soft: var(--p-surface-800);
-  --app-selected: var(--p-surface-700);
   --app-hover: var(--p-surface-800);
 }
 
@@ -209,7 +209,7 @@ section + section {
   font-size: 0.8rem;
   margin-left: auto;
   padding-left: 0.75rem;
-  color: var(--p-text-color);
+  color: var(--app-accent);
 }
 /* PrimeVue không tô nền khi rê lên lựa chọn đã chọn: dùng cùng màu xám như lựa chọn khác */
 .p-select-option-selected:not(.p-disabled):hover,
