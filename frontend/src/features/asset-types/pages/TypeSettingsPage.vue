@@ -5,6 +5,7 @@ import Column from 'primevue/column'
 import DataTable, { type DataTableRowReorderEvent } from 'primevue/datatable'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
+import Panel from 'primevue/panel'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 import { useConfirm } from 'primevue/useconfirm'
@@ -166,34 +167,35 @@ const crumbs = computed<Crumb[]>(() =>
       </div>
     </div>
 
-    <form class="form" @submit.prevent="saveDetails">
-      <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
-      <div class="field">
-        <label for="type-name">Name</label>
-        <InputText id="type-name" v-model="name" :disabled="!canManage" />
-        <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
-      </div>
-      <div class="field">
-        <label for="type-desc">Description</label>
-        <Textarea id="type-desc" v-model="description" rows="3" :disabled="!canManage" />
-      </div>
-      <div v-if="canManage" class="actions">
-        <Button type="submit" label="Save" :loading="update.isPending.value" />
-        <Button
-          v-if="!type.is_system"
-          :label="type.archived_at ? 'Restore' : 'Archive'"
-          severity="secondary"
-          text
-          @click="toggleArchived"
-        />
-      </div>
-    </form>
+    <!-- Cài đặt chia khối như demo: Chung, Thuộc tính, Lưu trữ -->
+    <Panel header="General" class="block">
+      <form class="form" @submit.prevent="saveDetails">
+        <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
+        <div class="field-row">
+          <div class="field grow">
+            <label for="type-name">Name</label>
+            <InputText id="type-name" v-model="name" :disabled="!canManage" />
+            <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
+          </div>
+          <div class="field">
+            <label for="type-code">Code</label>
+            <InputText id="type-code" :model-value="type.code" disabled class="mono" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="type-desc">Description</label>
+          <Textarea id="type-desc" v-model="description" rows="2" auto-resize :disabled="!canManage" />
+        </div>
+        <div v-if="canManage" class="actions">
+          <Button type="submit" label="Save" :loading="update.isPending.value" />
+        </div>
+      </form>
+    </Panel>
 
-    <section>
-      <div class="page-header">
-        <h2>Attributes</h2>
+    <Panel header="Attributes" class="block">
+      <template #icons>
         <Button v-if="canManage" label="Add attribute" icon="pi pi-plus" size="small" @click="openAttribute(null)" />
-      </div>
+      </template>
       <div class="toolbar">
         <Checkbox v-model="showRemoved" input-id="show-removed" binary />
         <label for="show-removed">Show removed</label>
@@ -232,7 +234,19 @@ const crumbs = computed<Crumb[]>(() =>
         </Column>
         <template #empty>No attributes yet.</template>
       </DataTable>
-    </section>
+      <p class="hint after">New attributes appear as columns and filters in this type's asset list right away.</p>
+    </Panel>
+
+    <Panel v-if="canManage && !type.is_system" :header="type.archived_at ? 'Restore this type' : 'Archive this type'" class="block">
+      <p class="hint">Archived types can't be chosen for new assets; existing assets keep them.</p>
+      <Button
+        :label="type.archived_at ? 'Restore' : 'Archive'"
+        :icon="type.archived_at ? 'pi pi-replay' : 'pi pi-inbox'"
+        :severity="type.archived_at ? 'secondary' : 'danger'"
+        outlined
+        @click="toggleArchived"
+      />
+    </Panel>
 
     <AttributeDialog v-model:visible="attrOpen" :type-id="type.id" :attribute="attrEditing" :next-position="nextPosition" />
     <OptionsDialog v-model:visible="optionsOpen" :type-id="type.id" :attribute="optionsAttr" :can-manage="canManage" />
@@ -240,6 +254,21 @@ const crumbs = computed<Crumb[]>(() =>
 </template>
 
 <style scoped>
+.block + .block {
+  margin-top: 1rem;
+}
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.field-row .grow {
+  flex: 1;
+  min-width: 12rem;
+}
+.hint.after {
+  margin: 0.75rem 0 0;
+}
 .hint {
   margin: 0 0 0.5rem;
   color: var(--p-text-muted-color);

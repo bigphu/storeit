@@ -220,13 +220,24 @@ function cell(row: AssetListItem, key: string) {
   <section>
     <div class="page-header">
       <h1>{{ typeId ? (selectedType?.name ?? '') : 'All assets' }}</h1>
-      <Button
-        v-if="canManage"
-        as="router-link"
-        :to="newPath"
-        :label="selectedType ? `New ${selectedType.name.toLowerCase()}` : 'New asset'"
-        icon="pi pi-plus"
-      />
+      <div class="actions">
+        <Button
+          v-if="typeId"
+          as="router-link"
+          :to="`/types/${typeId}/settings`"
+          label="Type settings"
+          icon="pi pi-cog"
+          severity="secondary"
+          outlined
+        />
+        <Button
+          v-if="canManage"
+          as="router-link"
+          :to="newPath"
+          :label="selectedType ? `New ${selectedType.name.toLowerCase()}` : 'New asset'"
+          icon="pi pi-plus"
+        />
+      </div>
     </div>
 
     <div class="toolbar">
@@ -296,6 +307,8 @@ function cell(row: AssetListItem, key: string) {
       paginator
       :rows="pageSize"
       :rows-per-page-options="PAGE_SIZES"
+      paginator-template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+      current-page-report-template="Showing {first}–{last} of {totalRecords}"
       :first="(state.page - 1) * pageSize"
       :total-records="data?.total ?? 0"
       :loading="isFetching"

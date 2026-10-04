@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import Avatar from 'primevue/avatar'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Tag from 'primevue/tag'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useSession } from '@/lib/auth/session'
 import { isApiError } from '@/lib/errors'
 import { useFormErrors } from '@/lib/forms'
@@ -20,6 +21,16 @@ watch(
   () => session.me?.account.name,
   (n) => (name.value = n ?? ''),
   { immediate: true },
+)
+
+const initials = computed(() =>
+  (session.me?.account.name ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase(),
 )
 
 async function save() {
@@ -43,6 +54,13 @@ async function save() {
 
 <template>
   <form v-if="session.me" class="form" @submit.prevent="save">
+    <div class="who">
+      <Avatar :label="initials" shape="circle" size="xlarge" />
+      <div>
+        <div class="who-name">{{ session.me.account.name }}</div>
+        <div class="who-email">{{ session.me.account.email }}</div>
+      </div>
+    </div>
     <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
     <div class="field">
       <label for="profile-name">Display name</label>
@@ -72,3 +90,23 @@ async function save() {
     </div>
   </form>
 </template>
+
+<style scoped>
+.who {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+.who :deep(.p-avatar) {
+  background: var(--p-highlight-background);
+  color: var(--p-highlight-color);
+  font-weight: 600;
+}
+.who-name {
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+.who-email {
+  color: var(--p-text-muted-color);
+}
+</style>

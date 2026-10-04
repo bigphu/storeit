@@ -90,6 +90,8 @@ const creating = ref(false)
       paginator
       :rows="pageSize"
       :rows-per-page-options="PAGE_SIZES"
+      paginator-template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+      current-page-report-template="Showing {first}–{last} of {totalRecords}"
       :first="(state.page - 1) * pageSize"
       :total-records="data?.total ?? 0"
       :loading="isFetching"

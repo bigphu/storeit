@@ -79,7 +79,8 @@ const formState = computed(() =>
 )
 const clean = ref<string | null>(null)
 const markClean = () => nextTick(() => (clean.value = formState.value))
-useTabDirty(() => clean.value !== null && formState.value !== clean.value)
+const isDirty = computed(() => clean.value !== null && formState.value !== clean.value)
+useTabDirty(() => isDirty.value)
 
 // Đổ dữ liệu tài sản vào form khi tải xong, và sau khi tải lại (409)
 watch(
@@ -184,7 +185,10 @@ const crumbs = computed<Crumb[]>(() => {
 <template>
   <section>
     <AppBreadcrumb :items="crumbs" />
-    <h1>{{ isEdit ? `Edit ${asset?.tag ?? ''}` : 'New asset' }}</h1>
+    <div class="page-header">
+      <h1>{{ isEdit ? `Edit ${asset?.tag ?? ''}` : selectedType ? `New ${selectedType.name.toLowerCase()}` : 'New asset' }}</h1>
+      <span v-if="isDirty" class="dirty-note"><i class="pi pi-circle-fill" /> Unsaved changes, kept if you switch tabs</span>
+    </div>
     <form v-if="!isEdit || asset" class="form" @submit.prevent="submit">
       <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
 
@@ -254,7 +258,25 @@ const crumbs = computed<Crumb[]>(() => {
       <div class="actions">
         <Button type="submit" label="Save" :loading="busy" :disabled="!typeId" />
         <Button label="Cancel" severity="secondary" text @click="leave(isEdit ? `/assets/${id}` : props.typeId ? `/types/${props.typeId}/assets` : '/assets')" />
+        <small class="hint">Save and Cancel return to where you came from.</small>
       </div>
     </form>
   </section>
 </template>
+
+<style scoped>
+.dirty-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color);
+}
+.dirty-note .pi {
+  font-size: 0.5rem;
+  color: var(--p-primary-color);
+}
+.hint {
+  color: var(--p-text-muted-color);
+}
+</style>
