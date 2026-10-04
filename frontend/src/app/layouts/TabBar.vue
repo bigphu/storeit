@@ -85,7 +85,7 @@ function commitRename() {
 
 <template>
   <div class="tabbar">
-    <Tabs :value="tabs.activeId ?? ''" scrollable class="tabs" @update:value="(id) => emit('switch', String(id))">
+    <Tabs :value="tabs.activeId ?? ''" scrollable class="tabs app-tabbar" @update:value="(id) => emit('switch', String(id))">
       <TabList>
         <Tab
           v-for="t in tabs.tabs"
@@ -137,10 +137,10 @@ function commitRename() {
    vạch hổ phách phía trên */
 .tabbar {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 0.25rem;
   min-width: 0;
-  padding: 0.4rem 0.5rem 0;
+  padding: 0.3rem 0.5rem;
   background: var(--app-soft);
   border-bottom: 1px solid var(--app-line);
 }
@@ -164,9 +164,8 @@ function commitRename() {
   max-width: 15rem;
   padding: 0.45rem 0.35rem 0.45rem 0.7rem;
   margin-right: 2px;
-  border: 1px solid transparent;
-  border-bottom: 0;
-  border-radius: 8px 8px 0 0;
+  border: 0;
+  border-radius: 8px;
   background: transparent;
   color: var(--p-text-muted-color);
   font-weight: 500;
@@ -174,26 +173,12 @@ function commitRename() {
 .app-tab:hover {
   background: color-mix(in srgb, var(--p-content-background) 55%, transparent);
 }
-/* tab đang mở: khối màu chính đặc, chữ và biểu tượng màu tương phản */
+/* tab đang mở: thẻ nổi trên rãnh xám của thanh tab */
 .app-tab.p-tab-active {
-  background: var(--p-primary-color);
-  border-color: var(--p-primary-color);
-  color: var(--p-primary-contrast-color);
+  background: var(--app-raised);
+  color: var(--p-text-color);
   font-weight: 600;
-}
-.app-tab.p-tab-active .tab-icon,
-.app-tab.p-tab-active.pinned .tab-icon {
-  color: inherit;
-  opacity: 1;
-}
-.app-tab.p-tab-active .tab-close {
-  color: inherit;
-}
-.app-tab.p-tab-active .tab-close:hover {
-  background: color-mix(in srgb, currentColor 18%, transparent);
-}
-.app-tab.p-tab-active .dirty-dot {
-  background: currentColor;
+  box-shadow: var(--app-raised-shadow);
 }
 .tab-icon {
   font-size: 0.75rem;
@@ -218,9 +203,6 @@ function commitRename() {
   border-radius: 50%;
   background: var(--app-accent);
   flex: none;
-}
-.new-tab {
-  margin-bottom: 0.2rem;
 }
 .app-tab.flash {
   animation: tab-flash 0.9s ease;
