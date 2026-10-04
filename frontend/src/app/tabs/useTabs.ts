@@ -6,7 +6,7 @@ import { useRouter } from 'vue-router'
 import { useSession } from '@/lib/auth/session'
 import { usePreferences } from '@/lib/preferences'
 import { readJSON, writeJSON } from '@/lib/storage'
-import { closeOthers as closeOthersOf, closeTab, openTab, pushBack, restoreTabs, type Tab, togglePin as togglePinOf } from './tabList'
+import { closeOthers as closeOthersOf, closeTab, initialTabs, openTab, pushBack, type Tab, togglePin as togglePinOf } from './tabList'
 
 const HOME = '/assets'
 let seq = 0
@@ -15,6 +15,8 @@ const newId = () => `t${Date.now().toString(36)}${(++seq).toString(36)}`
 interface Saved {
   tabs: Tab[]
   activeId: string | null
+  // đã ghim "All assets" lần đầu (initialTabs)
+  seeded?: boolean
 }
 
 export const useTabs = defineStore('tabs', () => {
@@ -43,7 +45,7 @@ export const useTabs = defineStore('tabs', () => {
       entered = false
       dirty.clear()
       const saved = key ? readJSON<Partial<Saved>>('local', key, {}) : {}
-      tabs.value = restoreTabs(saved.tabs, prefs.prefs.reopenTabs)
+      tabs.value = key ? initialTabs(saved.tabs, !!saved.seeded, prefs.prefs.reopenTabs, newId) : []
       activeId.value = tabs.value.some((t) => t.id === saved.activeId) ? saved.activeId! : (tabs.value[0]?.id ?? null)
     },
     { immediate: true },
@@ -51,7 +53,7 @@ export const useTabs = defineStore('tabs', () => {
   watch(
     [tabs, activeId],
     () => {
-      if (storageKey.value) writeJSON('local', storageKey.value, { tabs: tabs.value, activeId: activeId.value })
+      if (storageKey.value) writeJSON('local', storageKey.value, { tabs: tabs.value, activeId: activeId.value, seeded: true })
     },
     { deep: true },
   )

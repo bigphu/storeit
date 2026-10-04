@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { closeOthers, closeTab, dedupeKey, openTab, restoreTabs, type Tab, togglePin } from './tabList'
+import { closeOthers, closeTab, dedupeKey, initialTabs, openTab, restoreTabs, type Tab, togglePin } from './tabList'
 
 const t = (id: string, path: string, pinned = false): Tab => ({ id, path, pinned })
 let n = 0
@@ -91,5 +91,26 @@ describe('restoreTabs', () => {
   })
   it('drops broken entries', () => {
     expect(restoreTabs([{ id: 1 } as unknown as Tab, t('a', '/2')], true).map((x) => x.id)).toEqual(['a'])
+  })
+})
+
+describe('initialTabs', () => {
+  const all = { id: 'h', path: '/assets', pinned: true, title: 'All assets', icon: 'pi pi-th-large' }
+
+  it('starts a new user with All assets pinned', () => {
+    expect(initialTabs(undefined, false, true, () => 'h')).toEqual([all])
+  })
+
+  it('pins All assets once for users who already have tabs', () => {
+    expect(initialTabs([t('a', '/2')], false, true, () => 'h')).toEqual([all, t('a', '/2')])
+    // tab /assets có sẵn: ghim chính nó, đưa lên đầu
+    expect(initialTabs([t('a', '/2'), t('b', '/assets')], false, true, () => 'h').map((x) => [x.id, x.pinned])).toEqual([
+      ['b', true],
+      ['a', false],
+    ])
+  })
+
+  it('leaves the tabs alone after that, even if All assets was unpinned or closed', () => {
+    expect(initialTabs([t('a', '/2')], true, true, () => 'h')).toEqual([t('a', '/2')])
   })
 })

@@ -88,3 +88,16 @@ export function restoreTabs(saved: unknown, reopenAll: boolean): Tab[] {
     .map((t) => ({ ...t, pinned: !!t.pinned }))
     .filter((t) => reopenAll || t.pinned)
 }
+
+// initialTabs: tab khi đăng nhập. Một lần duy nhất (seeded chưa đặt): tab "All assets"
+// được ghim (tab /assets có sẵn thì ghim nó, không thì thêm). Sau đó người dùng bỏ ghim
+// hay đóng nó thì giữ như vậy.
+export function initialTabs(saved: unknown, seeded: boolean, reopenAll: boolean, newId: () => string): Tab[] {
+  const tabs = restoreTabs(saved, reopenAll)
+  if (seeded) return tabs
+  const all = tabs.find((t) => t.path === '/assets')
+  const pinnedAll: Tab = all
+    ? { ...all, pinned: true }
+    : { id: newId(), path: '/assets', pinned: true, title: 'All assets', icon: 'pi pi-th-large' }
+  return [pinnedAll, ...tabs.filter((t) => t !== all)]
+}
