@@ -9,6 +9,7 @@ import TabList from 'primevue/tablist'
 import Tabs from 'primevue/tabs'
 import { useConfirm } from 'primevue/useconfirm'
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import type { Tab as TabItem } from '../tabs/tabList'
 import { useTabs } from '../tabs/useTabs'
 
@@ -19,7 +20,9 @@ const emit = defineEmits<{ switch: [id: string] }>()
 const tabs = useTabs()
 const confirm = useConfirm()
 
-const label = (t: TabItem) => t.name || t.title || 'Loading…'
+// tab chưa có tiêu đề (mở nền, lưu từ bản cũ): tiêu đề của route cho đến khi trang tải
+const router = useRouter()
+const label = (t: TabItem) => t.name || t.title || router.resolve(t.path).meta.title || 'Untitled'
 
 // đóng tab còn thay đổi chưa lưu thì hỏi lại
 function close(t: TabItem) {

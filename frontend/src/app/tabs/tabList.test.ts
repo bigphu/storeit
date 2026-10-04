@@ -30,6 +30,12 @@ describe('openTab', () => {
     expect(fg.activeId).toBe(fg.tabs[2].id)
   })
 
+  it('gives a new tab the route title and icon until its page loads', () => {
+    const r = openTab(tabs, 'a', '/accounts/X', { background: true }, newId, { title: 'Account', icon: 'pi pi-user' })
+    const opened = r.tabs.find((x) => x.id === r.opened)
+    expect(opened).toMatchObject({ title: 'Account', icon: 'pi pi-user' })
+  })
+
   it('never inserts among pinned tabs', () => {
     const r = openTab(tabs, 'p', '/assets/C', { background: true }, newId)
     expect(r.tabs[0].id).toBe('p')

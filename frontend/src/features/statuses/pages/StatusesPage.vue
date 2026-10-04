@@ -177,7 +177,7 @@ function doRestore(s: Status) {
           table-style="width: 100%; table-layout: fixed"
           @row-reorder="(e: DataTableRowReorderEvent) => onReorder(k, e)"
         >
-          <Column v-if="canManage" row-reorder header-style="width: 2.5rem" />
+          <Column v-if="canManage" row-reorder header-style="width: 2.5rem" body-style="width: 2.5rem" />
           <Column>
             <template #body="{ data: s }: { data: Status }">
               <div class="name-cell">
@@ -206,10 +206,10 @@ function doRestore(s: Status) {
               </div>
             </template>
           </Column>
-          <Column header-style="width: 3.5rem" body-class="num-cell">
+          <Column header-style="width: 3.5rem" body-style="width: 3.5rem" body-class="num-cell">
             <template #body="{ data: s }: { data: Status }">{{ s.asset_count ?? '' }}</template>
           </Column>
-          <Column v-if="canManage" header-style="width: 5.5rem">
+          <Column v-if="canManage" header-style="width: 5.5rem" body-style="width: 5.5rem">
             <template #body="{ data: s }: { data: Status }">
               <div class="row-actions">
                 <Button
@@ -363,6 +363,7 @@ function doRestore(s: Status) {
   min-width: 0;
 }
 .status-name {
+  min-width: 0;
   border: 0;
   padding: 0;
   background: transparent;
@@ -377,6 +378,12 @@ function doRestore(s: Status) {
 }
 .status-name:disabled {
   cursor: default;
+}
+/* nhãn và nút cạnh tên giữ nguyên cỡ; tên dài thì tên co lại bằng "…" */
+.default-pill,
+.make-default,
+.lock {
+  flex: none;
 }
 .default-pill {
   display: inline-flex;

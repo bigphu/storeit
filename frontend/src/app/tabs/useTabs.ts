@@ -125,7 +125,8 @@ export const useTabs = defineStore('tabs', () => {
 
   // open: tab mới (Ctrl-click, "Open in new tab"); trang đã có tab thì về tab đó
   function open(path: string, { background = true } = {}) {
-    const r = openTab(tabs.value, activeId.value, path, { background }, newId)
+    const meta = router.resolve(path).meta
+    const r = openTab(tabs.value, activeId.value, path, { background }, newId, { title: meta.title, icon: meta.icon })
     tabs.value = r.tabs
     const target = r.opened ?? r.existing
     if (!target) return Promise.resolve()

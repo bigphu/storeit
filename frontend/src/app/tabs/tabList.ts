@@ -47,11 +47,13 @@ export function openTab(
   path: string,
   { background }: { background: boolean },
   newId: () => string,
+  // tiêu đề, icon tạm theo route: tab mở nền chưa tải trang nên chưa có tiêu đề riêng
+  meta: { title?: string; icon?: string } = {},
 ): OpenResult {
   const key = dedupeKey(path)
   const existing = key ? tabs.find((t) => dedupeKey(t.path) === key) : undefined
   if (existing) return { tabs, activeId: background ? activeId : existing.id, existing: existing.id }
-  const tab: Tab = { id: newId(), path, pinned: false }
+  const tab: Tab = { id: newId(), path, pinned: false, title: meta.title, icon: meta.icon }
   const at = Math.max(tabs.findIndex((t) => t.id === activeId) + 1, pinnedCount(tabs))
   const next = [...tabs.slice(0, at), tab, ...tabs.slice(at)]
   return { tabs: next, activeId: background ? activeId : tab.id, opened: tab.id }
