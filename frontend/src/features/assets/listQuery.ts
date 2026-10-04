@@ -118,17 +118,30 @@ export function switchType(
   return { state: saved ? { ...fresh, filters: saved.filters, sort: saved.sort, page: saved.page } : fresh, views: next }
 }
 
-// typeListQuery: query mở danh sách của một loại với view đã nhớ (breadcrumb, liên kết loại)
-export function typeListQuery(typeId: string, views: TypeViews): LocationQueryRaw {
+// Đường dẫn của danh sách: loại nằm trên path (/types/:id/assets), phần còn lại ở query
+export interface ListLocation {
+  path: string
+  query: LocationQueryRaw
+}
+
+export function listLocation(s: AssetListState): ListLocation {
+  if (!s.typeId) return { path: '/assets', query: serializeAssetQuery(s) }
+  return { path: `/types/${s.typeId}/assets`, query: serializeAssetQuery({ ...s, typeId: undefined }) }
+}
+
+// typeListLocation: mở danh sách của một loại với view đã nhớ (sidebar, breadcrumb)
+export function typeListLocation(typeId: string, views: TypeViews): ListLocation {
   const v = views[typeId]
-  return serializeAssetQuery({
-    q: '',
-    includeRetired: false,
-    typeId,
-    filters: v?.filters ?? [],
-    sort: v?.sort,
-    page: v?.page ?? 1,
-  })
+  return listLocation({ q: '', includeRetired: false, typeId, filters: v?.filters ?? [], sort: v?.sort, page: v?.page ?? 1 })
+}
+
+// legacyListRedirect: link cũ /assets?type_id=… sang /types/…/assets
+export function legacyListRedirect(q: LocationQuery): ListLocation | null {
+  const typeId = queryString(q.type_id)
+  if (!typeId) return null
+  const query: LocationQueryRaw = { ...q }
+  delete query.type_id
+  return { path: `/types/${typeId}/assets`, query }
 }
 
 // fromTableSort: sự kiện sort của DataTable (removable-sort: tăng -> giảm -> bỏ) -> sort của API

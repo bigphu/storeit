@@ -12,7 +12,7 @@ import { kindSeverity } from '@/features/statuses/api'
 import { fetchAssetPage, useAsset } from '../api'
 import RetireDialog from '../components/RetireDialog.vue'
 import { position, stepFrom, useListContext } from '../listContext'
-import { serializeAssetQuery, toApiParams, typeListQuery } from '../listQuery'
+import { listLocation, toApiParams, typeListLocation } from '../listQuery'
 import { useAssetActions } from '../useAssetActions'
 import { formatValue } from '../values'
 
@@ -39,11 +39,9 @@ const crumbs = computed<Crumb[]>(() => {
   const a = asset.value
   if (!a) return []
   const c = ctx.value
-  const allTo = c && !c.state.typeId ? { path: '/assets', query: serializeAssetQuery(c.state) } : '/assets'
+  const allTo = c && !c.state.typeId ? listLocation(c.state) : '/assets'
   const typeTo =
-    c && c.state.typeId === a.asset_type.id
-      ? { path: '/assets', query: serializeAssetQuery(c.state) }
-      : { path: '/assets', query: typeListQuery(a.asset_type.id, listContext.views) }
+    c && c.state.typeId === a.asset_type.id ? listLocation(c.state) : typeListLocation(a.asset_type.id, listContext.views)
   return [{ label: 'Assets', to: allTo }, { label: a.asset_type.name, to: typeTo }, { label: a.tag }]
 })
 
@@ -101,7 +99,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <dl class="props">
       <dt>Type</dt>
       <dd>
-        <RouterLink :to="`/asset-types/${asset.asset_type.id}`">{{ asset.asset_type.name }}</RouterLink>
+        <RouterLink :to="typeListLocation(asset.asset_type.id, listContext.views)">{{ asset.asset_type.name }}</RouterLink>
       </dd>
       <dt>Status</dt>
       <dd><Tag :value="asset.status.name" :severity="kindSeverity(asset.status.kind)" /></dd>

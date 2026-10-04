@@ -2,6 +2,7 @@ import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClie
 import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 import { inventoryApi } from '@/lib/api/client'
 import { unwrap } from '@/lib/errors'
+import { typeKeys } from '@/features/asset-types/api'
 import type { toApiParams } from './listQuery'
 
 export type ListParams = ReturnType<typeof toApiParams>
@@ -53,7 +54,8 @@ function useAssetMutation<V, R>(fn: (v: V) => Promise<R>, toast = true) {
   return useMutation({
     mutationFn: fn,
     meta: { toast },
-    onSuccess: () => qc.invalidateQueries({ queryKey: assetKeys.all }),
+    // số tài sản theo loại (sidebar) cũng đổi
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: assetKeys.all }), qc.invalidateQueries({ queryKey: typeKeys.all })]),
   })
 }
 

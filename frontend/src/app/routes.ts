@@ -1,5 +1,6 @@
 import type { RouteRecordRaw } from 'vue-router'
 import { Perm } from '@/lib/auth/permissions'
+import { legacyListRedirect } from '@/features/assets/listQuery'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -47,6 +48,8 @@ export const routes: RouteRecordRaw[] = [
         name: 'assets',
         component: () => import('@/features/assets/pages/AssetsPage.vue'),
         meta: { perm: Perm.AssetRead },
+        // link cũ /assets?type_id=… sang danh sách của loại
+        beforeEnter: (to) => legacyListRedirect(to.query) ?? true,
       },
       {
         path: 'assets/new',
@@ -68,19 +71,36 @@ export const routes: RouteRecordRaw[] = [
         props: true,
         meta: { perm: Perm.AssetManage },
       },
+      // Các trang trong phạm vi một loại: sidebar đổi sang các mục của loại đó
       {
-        path: 'asset-types',
-        name: 'asset-types',
+        path: 'types',
+        name: 'types',
         component: () => import('@/features/asset-types/pages/AssetTypesPage.vue'),
         meta: { perm: Perm.AssetRead },
       },
       {
-        path: 'asset-types/:id',
-        name: 'asset-type',
-        component: () => import('@/features/asset-types/pages/AssetTypeDetailPage.vue'),
+        path: 'types/:typeId/assets',
+        name: 'type-assets',
+        component: () => import('@/features/assets/pages/AssetsPage.vue'),
         props: true,
         meta: { perm: Perm.AssetRead },
       },
+      {
+        path: 'types/:typeId/assets/new',
+        name: 'type-asset-new',
+        component: () => import('@/features/assets/pages/AssetFormPage.vue'),
+        props: true,
+        meta: { perm: Perm.AssetManage },
+      },
+      {
+        path: 'types/:typeId/settings',
+        name: 'type-settings',
+        component: () => import('@/features/asset-types/pages/TypeSettingsPage.vue'),
+        props: true,
+        meta: { perm: Perm.AssetRead },
+      },
+      { path: 'asset-types', redirect: '/types' },
+      { path: 'asset-types/:id', redirect: (to) => `/types/${to.params.id}/settings` },
       {
         path: 'statuses',
         name: 'statuses',
@@ -113,10 +133,13 @@ export const routes: RouteRecordRaw[] = [
         props: true,
         meta: { perm: Perm.RoleRead },
       },
+      // Tài khoản của tôi: hồ sơ, mật khẩu, tuỳ chọn
+      { path: 'account', redirect: '/account/profile' },
       {
-        path: 'account/password',
-        name: 'change-password',
-        component: () => import('@/features/auth/pages/ChangePasswordPage.vue'),
+        path: 'account/:section(profile|password|preferences)',
+        name: 'account-settings',
+        component: () => import('@/features/account/pages/AccountSettingsPage.vue'),
+        props: true,
       },
       { path: ':path(.*)*', name: 'not-found', component: () => import('./pages/NotFoundPage.vue') },
     ],

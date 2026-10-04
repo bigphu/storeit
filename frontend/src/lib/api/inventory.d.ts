@@ -322,6 +322,11 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            /**
+             * Format: int64
+             * @description Assets of this type that are not retired; only with `with_counts=true`
+             */
+            asset_count?: number;
         };
         AssetTypeDetail: components["schemas"]["AssetType"] & {
             /** @description All attributes in display order, including removed ones (removed = true) */
@@ -575,6 +580,8 @@ export interface operations {
         parameters: {
             query?: {
                 include_archived?: components["parameters"]["IncludeArchived"];
+                /** @description Add `asset_count` (assets not retired) to each type. */
+                with_counts?: boolean;
             };
             header?: never;
             path?: never;

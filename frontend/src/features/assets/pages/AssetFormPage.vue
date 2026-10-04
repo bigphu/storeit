@@ -17,11 +17,12 @@ import { useStatuses } from '@/features/statuses/api'
 import { useAsset, useCreateAsset, useReplaceAsset } from '../api'
 import AttributeInput from '../components/AttributeInput.vue'
 import { useListContext } from '../listContext'
-import { typeListQuery } from '../listQuery'
+import { typeListLocation } from '../listQuery'
 import { type FormValues, fromApiValues, toApiValues } from '../values'
 
 // Không có id là tạo mới; có id là sửa (PUT thay toàn bộ)
-const props = defineProps<{ id?: string }>()
+// typeId (từ /types/:typeId/assets/new): chọn sẵn loại cho tài sản mới
+const props = defineProps<{ id?: string; typeId?: string }>()
 
 const router = useRouter()
 const listContext = useListContext()
@@ -32,7 +33,7 @@ const { data: asset, refetch } = useAsset(() => props.id)
 const tag = ref('')
 const name = ref('')
 const description = ref('')
-const typeId = ref<string | null>(null)
+const typeId = ref<string | null>(props.typeId ?? null)
 // null: tạo mới thì backend chọn status mặc định, sửa thì giữ nguyên
 const statusId = ref<string | null>(null)
 const purchaseDate = ref<Date | null>(null)
@@ -138,7 +139,7 @@ function leave(fallback: string) {
 const crumbs = computed<Crumb[]>(() => {
   const t = (types.value ?? []).find((x) => x.id === (asset.value?.asset_type.id ?? typeId.value))
   const items: Crumb[] = [{ label: 'Assets', to: '/assets' }]
-  if (t) items.push({ label: t.name, to: { path: '/assets', query: typeListQuery(t.id, listContext.views) } })
+  if (t) items.push({ label: t.name, to: typeListLocation(t.id, listContext.views) })
   if (isEdit.value && asset.value) items.push({ label: asset.value.tag, to: `/assets/${asset.value.id}` }, { label: 'Edit' })
   else if (!isEdit.value) items.push({ label: 'New asset' })
   return items
@@ -217,7 +218,7 @@ const crumbs = computed<Crumb[]>(() => {
 
       <div class="actions">
         <Button type="submit" label="Save" :loading="busy" :disabled="!typeId" />
-        <Button label="Cancel" severity="secondary" text @click="leave(isEdit ? `/assets/${id}` : '/assets')" />
+        <Button label="Cancel" severity="secondary" text @click="leave(isEdit ? `/assets/${id}` : props.typeId ? `/types/${props.typeId}/assets` : '/assets')" />
       </div>
     </form>
   </section>

@@ -26,3 +26,34 @@ describe('routes', () => {
     expect(isPublic('/nope/at/all')).toBe(false)
   })
 })
+
+describe('type and account routes', () => {
+  it('scopes asset lists, forms and settings by type', () => {
+    expect(router.resolve('/types/L/assets').name).toBe('type-assets')
+    expect(router.resolve('/types/L/assets').params.typeId).toBe('L')
+    expect(router.resolve('/types/L/assets/new').name).toBe('type-asset-new')
+    expect(router.resolve('/types/L/settings').name).toBe('type-settings')
+    expect(router.resolve('/types').name).toBe('types')
+  })
+
+  it('redirects old links', async () => {
+    const r = createRouter({ history: createMemoryHistory(), routes })
+    await r.push('/asset-types/X')
+    expect(r.currentRoute.value.fullPath).toBe('/types/X/settings')
+    await r.push('/asset-types')
+    expect(r.currentRoute.value.fullPath).toBe('/types')
+    await r.push('/assets?type_id=L&q=dell')
+    expect(r.currentRoute.value.fullPath).toBe('/types/L/assets?q=dell')
+    await r.push('/account')
+    expect(r.currentRoute.value.fullPath).toBe('/account/profile')
+  })
+
+  it('has one account settings page with sections', () => {
+    for (const s of ['profile', 'password', 'preferences']) {
+      const r = router.resolve(`/account/${s}`)
+      expect(r.name).toBe('account-settings')
+      expect(r.params.section).toBe(s)
+    }
+    expect(router.resolve('/account/bogus').name).toBe('not-found')
+  })
+})

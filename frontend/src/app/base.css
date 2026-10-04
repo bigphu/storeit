@@ -1,4 +1,10 @@
 /* Chỉ bố cục tối thiểu; giao diện sẽ làm lại sau */
+
+/* Mật độ "compact" (Preferences): bảng dùng khoảng cách của size="small" */
+:root.density-compact {
+  --p-datatable-header-cell-padding: 0.375rem 0.5rem;
+  --p-datatable-body-cell-padding: 0.375rem 0.5rem;
+}
 body {
   margin: 0;
   font-family: system-ui, sans-serif;

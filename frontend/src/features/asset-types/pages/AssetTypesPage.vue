@@ -19,7 +19,7 @@ import { useAssetTypes, useCreateAssetType } from '../api'
 const session = useSession()
 const router = useRouter()
 const showArchived = ref(false)
-const { data: types, isFetching } = useAssetTypes(showArchived)
+const { data: types, isFetching } = useAssetTypes(showArchived, true)
 
 const creating = ref(false)
 const code = ref('')
@@ -40,7 +40,7 @@ async function submit() {
     const t = await create.mutateAsync({ code: code.value, name: name.value, description: description.value })
     creating.value = false
     // thêm thuộc tính ở trang chi tiết
-    await router.push(`/asset-types/${t.id}`)
+    await router.push(`/types/${t.id}/settings`)
   } catch (err) {
     errors.set(err)
   }
@@ -60,15 +60,18 @@ async function submit() {
     <DataTable :value="types ?? []" :loading="isFetching" data-key="id">
       <Column header="Name">
         <template #body="{ data: t }: { data: AssetType }">
-          <RouterLink :to="`/asset-types/${t.id}`">{{ t.name }}</RouterLink>
+          <RouterLink :to="`/types/${t.id}/assets`">{{ t.name }}</RouterLink>
           <Tag v-if="t.archived_at" value="archived" severity="secondary" class="ml" />
         </template>
       </Column>
       <Column field="code" header="Code" />
       <Column field="description" header="Description" />
       <Column header="Assets">
+        <template #body="{ data: t }: { data: AssetType }">{{ t.asset_count ?? '' }}</template>
+      </Column>
+      <Column header="">
         <template #body="{ data: t }: { data: AssetType }">
-          <RouterLink :to="{ path: '/assets', query: { type_id: t.id } }">View assets</RouterLink>
+          <RouterLink :to="`/types/${t.id}/settings`">Settings</RouterLink>
         </template>
       </Column>
     </DataTable>

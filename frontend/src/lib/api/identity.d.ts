@@ -120,7 +120,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Change your own display name (any signed-in account) */
+        patch: operations["updateMe"];
         trace?: never;
     };
     "/accounts": {
@@ -346,6 +347,14 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
             account: components["schemas"]["Account"];
+        };
+        UpdateMeRequest: {
+            name: string;
+            /**
+             * Format: int32
+             * @description The version you last read; a newer one returns 409
+             */
+            version: number;
         };
         ChangePasswordRequest: {
             current_password: string;
@@ -654,6 +663,31 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Current account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMeRequest"];
+            };
+        };
+        responses: {
+            /** @description Your account after the change */
             200: {
                 headers: {
                     [name: string]: unknown;

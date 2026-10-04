@@ -9,6 +9,7 @@ import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 import { useConfirm } from 'primevue/useconfirm'
 import { computed, ref, watch } from 'vue'
+import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
 import type { Attribute } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
@@ -24,14 +25,17 @@ import {
 } from '../api'
 import AttributeDialog from '../components/AttributeDialog.vue'
 import OptionsDialog from '../components/OptionsDialog.vue'
+import { useListContext } from '@/features/assets/listContext'
+import { typeListLocation } from '@/features/assets/listQuery'
 
-const props = defineProps<{ id: string }>()
+// Cài đặt của một loại: tên, mô tả, thuộc tính và option, lưu trữ
+const props = defineProps<{ typeId: string }>()
 
 const session = useSession()
 const confirm = useConfirm()
 const canManage = computed(() => session.can(Perm.TypeManage))
 
-const { data: type, refetch } = useAssetType(() => props.id)
+const { data: type, refetch } = useAssetType(() => props.typeId)
 
 const showRemoved = ref(false)
 const attributes = computed(() =>
@@ -59,7 +63,7 @@ async function saveDetails() {
   if (!type.value) return
   errors.clear()
   try {
-    await update.mutateAsync({ id: props.id, name: name.value, description: description.value, version: type.value.version })
+    await update.mutateAsync({ id: props.typeId, name: name.value, description: description.value, version: type.value.version })
     notify.success('Asset type saved.')
   } catch (err) {
     if (isApiError(err) && err.status === 409) {
@@ -120,21 +124,32 @@ function askRemove(a: Attribute) {
     rejectLabel: 'Cancel',
     accept: () =>
       removeAttr
-        .mutateAsync({ typeId: props.id, attrId: a.id })
+        .mutateAsync({ typeId: props.typeId, attrId: a.id })
         .then(() => notify.success('Attribute removed.'))
         .catch(() => {}),
   })
 }
+
+const listContext = useListContext()
+const crumbs = computed<Crumb[]>(() =>
+  type.value
+    ? [
+        { label: 'Assets', to: '/assets' },
+        { label: type.value.name, to: typeListLocation(type.value.id, listContext.views) },
+        { label: 'Settings' },
+      ]
+    : [],
+)
 </script>
 
 <template>
   <section v-if="type">
+    <AppBreadcrumb :items="crumbs" />
     <div class="page-header">
-      <h1>{{ type.name }} <small>({{ type.code }})</small></h1>
+      <h1>{{ type.name }} settings <small>({{ type.code }})</small></h1>
       <div class="actions">
         <Tag v-if="type.is_system" value="built-in" severity="secondary" />
         <Tag v-if="type.archived_at" value="archived" severity="secondary" />
-        <RouterLink :to="{ path: '/assets', query: { type_id: type.id } }">View assets</RouterLink>
       </div>
     </div>
 

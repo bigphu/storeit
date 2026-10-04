@@ -65,6 +65,16 @@ TLS is the job of the reverse proxy in front. The build puts bundles under `/sta
   `holder_member_id` even though it doesn't show them.
 - Asset list state (filters, attribute filters, sort, page) lives in the URL using the API
   parameter names (`features/assets/listQuery.ts`).
+- Navigation: the sidebar (`app/layouts/AppSidebar.vue`) has a workspace level (All assets
+  expanding to every type with counts from `GET /asset-types?with_counts=true`,
+  Configuration, Administration) and a type level for routes under `/types/:typeId`
+  and an asset's own pages (Assets, Settings). `Ctrl K` or the switcher opens
+  `TypeSwitcher.vue`; choosing a type keeps the section (`app/useTypeNav.ts`).
+  Old `/asset-types…` and `/assets?type_id=` links redirect.
+- Account settings live at `/account/(profile|password|preferences)`; preferences (theme,
+  density, default rows per page, tables with their own size, recent types) are per
+  account on the device (`lib/preferences.ts`). The theme toggles `app-dark` on `<html>`,
+  PrimeVue's `darkModeSelector`; compact density overrides the DataTable padding tokens.
 - Build UI from PrimeVue v4 components (Breadcrumb, DataTable paginator, ContextMenu,
   Dialog, ConfirmDialog…) before writing custom markup.
 - Open things through `openLocation` (`lib/navigation.ts`): plain click navigates,

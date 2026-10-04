@@ -10,13 +10,16 @@ export const typeKeys = {
   one: (id: string) => ['asset-types', id] as const,
 }
 
-export function useAssetTypes(includeArchived: MaybeRefOrGetter<boolean> = false) {
+// withCounts: kèm asset_count (tài sản chưa retire) cho sidebar và bộ chọn loại
+export function useAssetTypes(includeArchived: MaybeRefOrGetter<boolean> = false, withCounts = false) {
   return useQuery({
-    queryKey: computed(() => typeKeys.list(toValue(includeArchived))),
+    queryKey: computed(() => [...typeKeys.list(toValue(includeArchived)), withCounts] as const),
     queryFn: async () =>
       (
         await unwrap(
-          inventoryApi.GET('/asset-types', { params: { query: { include_archived: toValue(includeArchived) } } }),
+          inventoryApi.GET('/asset-types', {
+            params: { query: { include_archived: toValue(includeArchived), with_counts: withCounts || undefined } },
+          }),
         )
       ).items,
   })

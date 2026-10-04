@@ -8,13 +8,42 @@ import { readJSON, writeJSON } from '@/lib/storage'
 // page_size của API: 1..200
 export const PAGE_SIZES = [10, 25, 50, 100]
 
+export type Theme = 'system' | 'light' | 'dark'
+export type Density = 'comfortable' | 'compact'
+
 export interface Prefs {
+  theme: Theme
+  density: Density
   defaultPageSize: number
   // khoá bảng ("assets:all", "assets:<typeId>", "accounts") -> số dòng
   tableSizes: Record<string, number>
+  // loại tài sản mở gần đây, mới nhất trước (bộ chọn loại)
+  recentTypes: string[]
 }
 
-export const defaultPrefs = (): Prefs => ({ defaultPageSize: 50, tableSizes: {} })
+export const defaultPrefs = (): Prefs => ({
+  theme: 'system',
+  density: 'comfortable',
+  defaultPageSize: 50,
+  tableSizes: {},
+  recentTypes: [],
+})
+
+export function pushRecent(list: string[], id: string, max = 5): string[] {
+  return [id, ...list.filter((x) => x !== id)].slice(0, max)
+}
+
+export function isDark(theme: Theme, systemDark: boolean): boolean {
+  return theme === 'dark' || (theme === 'system' && systemDark)
+}
+
+// tableLabel: tên bảng cho trang Preferences
+export function tableLabel(key: string, typeName: (id: string) => string | undefined): string {
+  if (key === 'assets:all') return 'All assets'
+  if (key.startsWith('assets:')) return typeName(key.slice(7)) ?? 'A removed asset type'
+  if (key === 'accounts') return 'Accounts'
+  return key
+}
 
 export function pageSizeFor(p: Prefs, key: string): number {
   return p.tableSizes[key] ?? p.defaultPageSize
@@ -48,7 +77,26 @@ export const usePreferences = defineStore('preferences', () => {
     { deep: true },
   )
 
-  return { prefs }
+  // Theme và mật độ áp lên <html>: PrimeVue bật màu tối theo class app-dark
+  // (darkModeSelector trong main.ts); "system" theo cài đặt của máy
+  const media = typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)') : null
+  const systemDark = ref(media?.matches ?? false)
+  media?.addEventListener('change', (e) => (systemDark.value = e.matches))
+  watch(
+    [() => prefs.value.theme, () => prefs.value.density, systemDark],
+    ([theme, density, sys]) => {
+      const root = document.documentElement
+      root.classList.toggle('app-dark', isDark(theme, sys))
+      root.classList.toggle('density-compact', density === 'compact')
+    },
+    { immediate: true },
+  )
+
+  function touchType(id: string) {
+    if (prefs.value.recentTypes[0] !== id) prefs.value.recentTypes = pushRecent(prefs.value.recentTypes, id)
+  }
+
+  return { prefs, touchType }
 })
 
 // usePageSize: số dòng của một bảng; set gọi từ sự kiện @page của DataTable

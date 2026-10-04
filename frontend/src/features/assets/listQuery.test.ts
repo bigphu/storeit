@@ -3,13 +3,15 @@ import {
   type AssetListState,
   changeType,
   fromTableSort,
+  legacyListRedirect,
+  listLocation,
   operatorsFor,
   parseAssetQuery,
   serializeAssetQuery,
   switchType,
   toApiParams,
   toTableSort,
-  typeListQuery,
+  typeListLocation,
 } from './listQuery'
 
 const base: AssetListState = { q: '', includeRetired: false, filters: [], page: 1 }
@@ -169,10 +171,27 @@ describe('switchType', () => {
   })
 })
 
-describe('typeListQuery', () => {
+describe('list locations', () => {
+  it('puts the type in the path, the rest in the query', () => {
+    const s: AssetListState = { ...base, typeId: 'L', q: 'dell', page: 2 }
+    expect(listLocation(s)).toEqual({ path: '/types/L/assets', query: { q: 'dell', page: '2' } })
+    expect(listLocation({ ...base, q: 'x' })).toEqual({ path: '/assets', query: { q: 'x' } })
+  })
+
   it('opens a type with its remembered view', () => {
     const views = { L: { filters: [{ key: 'ram_gb', op: 'gte', value: '16' }], sort: 'name', page: 2 } }
-    expect(typeListQuery('L', views)).toEqual({ type_id: 'L', attr: ['ram_gb:gte:16'], sort: 'name', page: '2' })
-    expect(typeListQuery('M', views)).toEqual({ type_id: 'M' })
+    expect(typeListLocation('L', views)).toEqual({
+      path: '/types/L/assets',
+      query: { attr: ['ram_gb:gte:16'], sort: 'name', page: '2' },
+    })
+    expect(typeListLocation('M', views)).toEqual({ path: '/types/M/assets', query: {} })
+  })
+
+  it('redirects old ?type_id= links', () => {
+    expect(legacyListRedirect({ type_id: 'L', q: 'x', attr: ['a:eq:1'] })).toEqual({
+      path: '/types/L/assets',
+      query: { q: 'x', attr: ['a:eq:1'] },
+    })
+    expect(legacyListRedirect({ q: 'x' })).toBeNull()
   })
 })
