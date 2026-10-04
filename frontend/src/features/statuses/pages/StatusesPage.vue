@@ -174,9 +174,10 @@ function doRestore(s: Status) {
           row-hover
           size="small"
           class="lane-table"
+          table-style="width: 100%; table-layout: fixed"
           @row-reorder="(e: DataTableRowReorderEvent) => onReorder(k, e)"
         >
-          <Column v-if="canManage" row-reorder header-style="width: 2rem" />
+          <Column v-if="canManage" row-reorder header-style="width: 2.5rem" />
           <Column>
             <template #body="{ data: s }: { data: Status }">
               <div class="name-cell">
@@ -319,6 +320,8 @@ function doRestore(s: Status) {
   flex-direction: column;
   gap: 0.6rem;
   min-width: 0;
+  /* làn là <section>: bỏ margin "section + section" chung của base.css */
+  margin: 0;
   padding: 0.9rem;
   border: 1px solid var(--app-line);
   border-radius: 10px;
