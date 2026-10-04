@@ -121,14 +121,25 @@ function askArchive(s: Status) {
       </Column>
       <Column v-if="canManage" header="">
         <template #body="{ data: s }: { data: Status }">
-          <div class="actions">
-            <Button label="Edit" size="small" text @click="openEdit(s)" />
+          <div class="actions end">
             <Button
-              v-if="!s.archived_at && !s.is_system"
-              label="Archive"
+              v-tooltip.top="'Edit'"
+              icon="pi pi-pencil"
               size="small"
               text
+              rounded
+              aria-label="Edit"
+              @click="openEdit(s)"
+            />
+            <Button
+              v-if="!s.archived_at && !s.is_system"
+              v-tooltip.top="'Archive'"
+              icon="pi pi-inbox"
+              size="small"
+              text
+              rounded
               severity="danger"
+              aria-label="Archive"
               @click="askArchive(s)"
             />
           </div>
@@ -171,3 +182,10 @@ function askArchive(s: Status) {
     </Dialog>
   </section>
 </template>
+
+<style scoped>
+.actions.end {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+</style>

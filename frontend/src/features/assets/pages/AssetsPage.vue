@@ -357,10 +357,36 @@ function cell(row: AssetListItem, key: string) {
         <template #body="{ data: a }: { data: AssetListItem }">
           <div class="row-actions">
             <template v-if="!a.retired_at">
-              <Button label="Edit" size="small" text @click="(e: MouseEvent) => actions.edit(a, e)" />
-              <Button label="Retire" size="small" text severity="danger" @click="actions.askRetire(a)" />
+              <Button
+                v-tooltip.top="'Edit'"
+                icon="pi pi-pencil"
+                size="small"
+                text
+                rounded
+                aria-label="Edit"
+                @click="(e: MouseEvent) => actions.edit(a, e)"
+              />
+              <Button
+                v-tooltip.top="'Retire'"
+                icon="pi pi-ban"
+                size="small"
+                text
+                rounded
+                severity="danger"
+                aria-label="Retire"
+                @click="actions.askRetire(a)"
+              />
             </template>
-            <Button v-else label="Restore" size="small" text @click="actions.askRestore(a)" />
+            <Button
+              v-else
+              v-tooltip.top="'Restore'"
+              icon="pi pi-replay"
+              size="small"
+              text
+              rounded
+              aria-label="Restore"
+              @click="actions.askRestore(a)"
+            />
           </div>
         </template>
       </Column>

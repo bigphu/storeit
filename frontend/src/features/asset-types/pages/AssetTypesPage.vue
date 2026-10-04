@@ -69,9 +69,14 @@ async function submit() {
       <Column header="Assets">
         <template #body="{ data: t }: { data: AssetType }">{{ t.asset_count ?? '' }}</template>
       </Column>
-      <Column header="">
+      <Column header="" header-style="width: 4rem" body-class="end-cell">
+        <!-- liên kết thật (Ctrl/chuột giữa mở tab mới), hiển thị như nút biểu tượng -->
         <template #body="{ data: t }: { data: AssetType }">
-          <RouterLink :to="`/types/${t.id}/settings`">Settings</RouterLink>
+          <Button v-slot="slot" v-tooltip.top="'Type settings'" icon="pi pi-cog" text rounded size="small" as-child>
+            <RouterLink :to="`/types/${t.id}/settings`" :class="slot.class" aria-label="Type settings">
+              <i class="pi pi-cog" />
+            </RouterLink>
+          </Button>
         </template>
       </Column>
     </DataTable>
@@ -106,5 +111,8 @@ async function submit() {
 <style scoped>
 .ml {
   margin-left: 0.5rem;
+}
+:deep(.end-cell) {
+  text-align: right;
 }
 </style>

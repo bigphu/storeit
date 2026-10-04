@@ -246,24 +246,44 @@ const crumbs = computed<Crumb[]>(() =>
         </Column>
         <Column header="Options" header-style="width: 18%">
           <template #body="{ data: a }: { data: Attribute }">
-            <template v-if="a.data_type === 'select'">
+            <div v-if="a.data_type === 'select'" class="opts-cell">
               <span class="opts">{{ activeOptions(a) || 'No options yet' }}</span>
               <Button
-                :label="canManage ? 'Edit' : 'View'"
+                v-tooltip.top="canManage ? 'Edit options' : 'View options'"
+                :icon="canManage ? 'pi pi-pencil' : 'pi pi-eye'"
                 size="small"
                 text
+                rounded
                 class="opts-btn"
+                :aria-label="canManage ? 'Edit options' : 'View options'"
                 @click="openOptions(a)"
               />
-            </template>
+            </div>
           </template>
         </Column>
-        <Column header="" header-style="width: 9.5rem" body-class="row-actions-cell">
+        <Column header="" header-style="width: 6rem" body-class="row-actions-cell">
           <template #body="{ data: a }: { data: Attribute }">
             <Tag v-if="a.removed" value="removed" severity="secondary" />
             <div v-else-if="canManage" class="actions end">
-              <Button label="Edit" size="small" text @click="openAttribute(a)" />
-              <Button label="Remove" size="small" text severity="danger" @click="askRemove(a)" />
+              <Button
+                v-tooltip.top="'Edit'"
+                icon="pi pi-pencil"
+                size="small"
+                text
+                rounded
+                aria-label="Edit"
+                @click="openAttribute(a)"
+              />
+              <Button
+                v-tooltip.top="'Remove'"
+                icon="pi pi-trash"
+                size="small"
+                text
+                rounded
+                severity="danger"
+                aria-label="Remove"
+                @click="askRemove(a)"
+              />
             </div>
           </template>
         </Column>
@@ -307,14 +327,21 @@ const crumbs = computed<Crumb[]>(() =>
 :deep(.center .p-datatable-column-header-content) {
   justify-content: center;
 }
+/* Nhãn các lựa chọn cắt bằng "…", nút sửa luôn nằm cùng dòng bên phải */
+.opts-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
 .opts {
-  display: block;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .opts-btn {
-  padding-left: 0;
+  flex: none;
 }
 .actions.end {
   justify-content: flex-end;

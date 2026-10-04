@@ -86,8 +86,26 @@ function askRemove(o: Option) {
       </Column>
       <Column v-if="canManage" header="" body-class="actions-cell">
         <template #body="{ data: o }: { data: Option }">
-          <Button label="Save" size="small" text :disabled="labels[o.id] === o.label" @click="save(o)" />
-          <Button label="Remove" size="small" text severity="danger" @click="askRemove(o)" />
+          <Button
+            v-tooltip.top="'Save'"
+            icon="pi pi-check"
+            size="small"
+            text
+            rounded
+            aria-label="Save"
+            :disabled="labels[o.id] === o.label"
+            @click="save(o)"
+          />
+          <Button
+            v-tooltip.top="'Remove'"
+            icon="pi pi-trash"
+            size="small"
+            text
+            rounded
+            severity="danger"
+            aria-label="Remove"
+            @click="askRemove(o)"
+          />
         </template>
       </Column>
       <template #empty>No options yet.</template>
