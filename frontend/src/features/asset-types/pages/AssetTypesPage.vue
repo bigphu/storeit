@@ -438,8 +438,13 @@ async function submit() {
   height: 2rem;
   font-size: 0.7rem;
 }
+/* ổ khoá chiếm ô vuông bằng nút cài đặt (nút nhỏ chỉ có icon) để hai cái thẳng hàng */
 .lock {
-  margin-top: 0.4rem;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: var(--p-button-sm-icon-only-width, 2rem);
+  height: var(--p-button-sm-icon-only-width, 2rem);
   color: var(--p-text-muted-color);
   font-size: 0.8rem;
 }
