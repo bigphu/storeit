@@ -136,6 +136,14 @@ func (f *fakeTypes) UpdateAttribute(_ context.Context, typeID, attrID uuid.UUID,
 	return domain.Attribute{}, domain.ErrAttributeNotFound
 }
 
+func (f *fakeTypes) ReorderAttributes(_ context.Context, typeID uuid.UUID, _ []uuid.UUID) (domain.AssetType, error) {
+	return f.Get(context.Background(), typeID)
+}
+
+func (f *fakeTypes) ReorderOptions(context.Context, uuid.UUID, uuid.UUID, []uuid.UUID) (domain.Attribute, error) {
+	return domain.Attribute{}, nil
+}
+
 func (f *fakeTypes) RemoveAttribute(_ context.Context, typeID, attrID uuid.UUID) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

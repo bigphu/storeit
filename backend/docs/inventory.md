@@ -56,6 +56,10 @@ Seeded IDs are in `domain/permissions.go` (`GeneralTypeID`, `AvailableStatusID`,
   only by retire. Archived types/statuses stay on assets that already use them.
 - Retire: default retired status, hidden from the list unless `include_retired`, not
   editable (409 `/errors/asset-retired`) until restored to the default available status.
+- Order: `PUT …/attributes/order` and `PUT …/options/order` take every active attribute
+  (option) id once in the new order and set positions 1..n in one transaction with one
+  `asset_type_updated` event (only changed positions); a different set is 422
+  `/errors/invalid-order`.
 - Attributes: removing one hides it and keeps its values; changing data type or unit
   while values exist is 409 `/errors/attribute-in-use`; leaving `select` drops its options;
   `"unit": ""` removes the unit.
@@ -85,7 +89,7 @@ Seeded IDs are in `domain/permissions.go` (`GeneralTypeID`, `AvailableStatusID`,
 |---|---|
 | `GET /asset-types` (`with_counts=true` adds `asset_count`, assets not retired), `GET /asset-types/{typeID}`, `GET /asset-statuses`, `GET /assets`, `GET /assets/{assetID}` | `inventory.asset.read` |
 | `POST /assets`, `PUT /assets/{assetID}`, `POST …/retire`, `POST …/restore`, `POST /assets/bulk-retire`, `POST /assets/bulk-status` | `inventory.asset.manage` |
-| `POST /asset-types`, `PATCH /asset-types/{typeID}`, `POST …/archive`, `POST …/restore`, attributes (`POST`, `PATCH`, `DELETE`), options (`POST`, `PATCH`, `DELETE`) | `inventory.type.manage` |
+| `POST /asset-types`, `PATCH /asset-types/{typeID}`, `POST …/archive`, `POST …/restore`, attributes (`POST`, `PATCH`, `DELETE`, `PUT …/attributes/order`), options (`POST`, `PATCH`, `DELETE`, `PUT …/options/order`) | `inventory.type.manage` |
 | `POST /asset-statuses`, `PATCH /asset-statuses/{statusID}`, `POST …/archive` | `inventory.status.manage` |
 
 Grants (migration): Administrator all four; Authorized Manager read + type.manage +

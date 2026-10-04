@@ -47,6 +47,11 @@ type TypeRepository interface {
 	// bỏ kiểu select thì xoá option của nó
 	UpdateAttribute(ctx context.Context, typeID, attrID uuid.UUID, ch AttributeChange) (Attribute, error)
 	RemoveAttribute(ctx context.Context, typeID, attrID uuid.UUID) error
+	// ReorderAttributes: ids là mọi thuộc tính đang hoạt động theo thứ tự mới (vị trí
+	// 1..n), không thì ErrInvalidOrder; một event cho cả lần sắp xếp
+	ReorderAttributes(ctx context.Context, typeID uuid.UUID, ids []uuid.UUID) (AssetType, error)
+	// ReorderOptions: như trên cho option đang hoạt động của một thuộc tính select
+	ReorderOptions(ctx context.Context, typeID, attrID uuid.UUID, ids []uuid.UUID) (Attribute, error)
 	// AddOption: thuộc tính không phải select là ErrNotSelectAttribute
 	AddOption(ctx context.Context, typeID, attrID uuid.UUID, label string, position int32) (Option, error)
 	UpdateOption(ctx context.Context, typeID, attrID, optID uuid.UUID, label *string, position *int32) (Option, error)

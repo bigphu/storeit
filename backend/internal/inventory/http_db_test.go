@@ -493,3 +493,49 @@ func TestBulkActionsOverHTTP(t *testing.T) {
 		t.Errorf("single asset route: %d", rec.Code)
 	}
 }
+
+func TestReorderOverHTTP(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	code := "RO" + strings.ToUpper(uuid.NewString()[:6])
+	typ := decode[typeDetail](t, a.do("POST", "/api/v1/asset-types", tok, map[string]any{
+		"code": code, "name": "Reorder " + code,
+		"attributes": []map[string]any{
+			{"key": "a1", "label": "First", "data_type": "text", "position": 1},
+			{"key": "a2", "label": "Second", "data_type": "select", "position": 2, "options": []string{"X", "Y", "Z"}},
+		},
+	}), 201)
+	first, second := typ.Attributes[0].ID, typ.Attributes[1].ID
+
+	got := decode[typeDetail](t, a.do("PUT", "/api/v1/asset-types/"+typ.ID+"/attributes/order", tok, map[string]any{
+		"ids": []string{second, first},
+	}), 200)
+	if got.Attributes[0].ID != second {
+		t.Errorf("attribute order = %+v", got.Attributes)
+	}
+
+	opts := typ.Attributes[1].Options
+	type attrOut struct {
+		Options []struct{ ID, Label string }
+	}
+	at := decode[attrOut](t, a.do("PUT", "/api/v1/asset-types/"+typ.ID+"/attributes/"+second+"/options/order", tok, map[string]any{
+		"ids": []string{opts[2].ID, opts[0].ID, opts[1].ID},
+	}), 200)
+	if at.Options[0].Label != "Z" || at.Options[2].Label != "Y" {
+		t.Errorf("option order = %+v", at.Options)
+	}
+
+	rec := a.do("PUT", "/api/v1/asset-types/"+typ.ID+"/attributes/order", tok, map[string]any{"ids": []string{first}})
+	if typ, _ := problem(t, rec); rec.Code != 422 || typ != "/errors/invalid-order" {
+		t.Errorf("missing attribute: %d %s", rec.Code, typ)
+	}
+	if rec := a.do("PUT", "/api/v1/asset-types/"+typ.ID+"/attributes/order", a.token(domain.PermAssetRead), map[string]any{
+		"ids": []string{first, second},
+	}); rec.Code != 403 {
+		t.Errorf("without type.manage: %d", rec.Code)
+	}
+	// các route của từng thuộc tính vẫn chạy bên cạnh
+	if rec := a.do("PATCH", "/api/v1/asset-types/"+typ.ID+"/attributes/"+first, tok, map[string]any{"label": "Renamed"}); rec.Code != 200 {
+		t.Errorf("patch attribute: %d %s", rec.Code, rec.Body)
+	}
+}

@@ -53,7 +53,10 @@ type Querier interface {
 	RestoreAsset(ctx context.Context, arg RestoreAssetParams) (InventoryAsset, error)
 	RetireAsset(ctx context.Context, arg RetireAssetParams) (InventoryAsset, error)
 	SetAssetTypeArchived(ctx context.Context, arg SetAssetTypeArchivedParams) (InventoryAssetType, error)
+	// Sắp xếp lại (kéo thả): chỉ đổi vị trí
+	SetAttributePosition(ctx context.Context, arg SetAttributePositionParams) error
 	SetDefaultStatus(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
+	SetOptionPosition(ctx context.Context, arg SetOptionPositionParams) error
 	UpdateAsset(ctx context.Context, arg UpdateAssetParams) (InventoryAsset, error)
 	// Optimistic locking: 0 hàng là version đã đổi
 	UpdateAssetType(ctx context.Context, arg UpdateAssetTypeParams) (InventoryAssetType, error)

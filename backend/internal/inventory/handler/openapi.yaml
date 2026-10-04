@@ -127,6 +127,45 @@ paths:
               schema: { $ref: '#/components/schemas/Attribute' }
         default: { $ref: '#/components/responses/Problem' }
 
+  /asset-types/{typeID}/attributes/order:
+    put:
+      operationId: reorderAttributes
+      summary: Put the type's active attributes in a new order, in one change (inventory.type.manage)
+      parameters:
+        - $ref: '#/components/parameters/TypeID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrderRequest' }
+      responses:
+        "200":
+          description: The type with its attributes in the new order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetTypeDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /asset-types/{typeID}/attributes/{attributeID}/options/order:
+    put:
+      operationId: reorderOptions
+      summary: Put a select attribute's active options in a new order, in one change (inventory.type.manage)
+      parameters:
+        - $ref: '#/components/parameters/TypeID'
+        - $ref: '#/components/parameters/AttributeID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrderRequest' }
+      responses:
+        "200":
+          description: The attribute with its options in the new order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attribute' }
+        default: { $ref: '#/components/responses/Problem' }
+
   /asset-types/{typeID}/attributes/{attributeID}:
     parameters:
       - $ref: '#/components/parameters/TypeID'
@@ -600,6 +639,16 @@ components:
         data_type: { $ref: '#/components/schemas/DataType' }
         is_required: { type: boolean }
         position: { type: integer, format: int32, minimum: 0, maximum: 10000 }
+
+    OrderRequest:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          description: Every active attribute (or option) exactly once, in the new order
+          type: array
+          maxItems: 500
+          items: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
 
     OptionRequest:
       type: object

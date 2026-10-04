@@ -432,3 +432,17 @@ func TestBulkActions(t *testing.T) {
 		t.Errorf("without manage: %v", err)
 	}
 }
+
+func TestReorderNeedsTypeManage(t *testing.T) {
+	e := newEnv()
+	typ := e.laptop(t)
+	if _, err := e.svc.ReorderAttributes(as(domain.PermAssetRead, domain.PermAssetManage), typ.ID, nil); status(err) != 403 {
+		t.Errorf("reorder attributes without type.manage: %v", err)
+	}
+	if _, err := e.svc.ReorderOptions(as(domain.PermAssetRead), typ.ID, uuid.New(), nil); status(err) != 403 {
+		t.Errorf("reorder options without type.manage: %v", err)
+	}
+	if _, err := e.svc.ReorderAttributes(manager, typ.ID, nil); err != nil {
+		t.Errorf("manager: %v", err)
+	}
+}

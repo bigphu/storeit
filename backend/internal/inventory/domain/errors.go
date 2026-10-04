@@ -13,6 +13,9 @@ var (
 	ErrInvalidBulk = errs.Unprocessable("/errors/invalid-bulk", "Invalid selection",
 		errs.WithFields(errs.FieldError{Field: "items", Detail: "choose between 1 and 200 assets"}))
 
+	ErrInvalidOrder = errs.Unprocessable("/errors/invalid-order", "Order doesn't match",
+		errs.WithDetail("Send every active attribute or option exactly once. Someone may have just added or removed one; reload and try again."))
+
 	ErrInvalidTag = errs.Unprocessable("/errors/invalid-tag", "Invalid asset tag",
 		errs.WithFields(errs.FieldError{Field: "tag", Detail: "must be 1-64 characters: A-Z, 0-9, '.', '_' or '-', starting with a letter or digit"}))
 	ErrInvalidTypeCode = errs.Unprocessable("/errors/invalid-type-code", "Invalid asset type code",

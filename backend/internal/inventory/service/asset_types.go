@@ -160,6 +160,21 @@ func (s *Service) RemoveAttribute(ctx context.Context, typeID, attrID uuid.UUID)
 	return s.types.RemoveAttribute(ctx, typeID, attrID)
 }
 
+// ReorderAttributes, ReorderOptions: kéo thả trong trang cài đặt loại
+func (s *Service) ReorderAttributes(ctx context.Context, typeID uuid.UUID, ids []uuid.UUID) (domain.AssetType, error) {
+	if _, err := auth.Require(ctx, domain.PermTypeManage); err != nil {
+		return domain.AssetType{}, err
+	}
+	return s.types.ReorderAttributes(ctx, typeID, ids)
+}
+
+func (s *Service) ReorderOptions(ctx context.Context, typeID, attrID uuid.UUID, ids []uuid.UUID) (domain.Attribute, error) {
+	if _, err := auth.Require(ctx, domain.PermTypeManage); err != nil {
+		return domain.Attribute{}, err
+	}
+	return s.types.ReorderOptions(ctx, typeID, attrID, ids)
+}
+
 func (s *Service) AddOption(ctx context.Context, typeID, attrID uuid.UUID, label string, position int32) (domain.Option, error) {
 	if _, err := auth.Require(ctx, domain.PermTypeManage); err != nil {
 		return domain.Option{}, err

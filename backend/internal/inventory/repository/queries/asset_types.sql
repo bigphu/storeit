@@ -78,6 +78,13 @@ SELECT * FROM inventory.asset_attribute_options
 WHERE id = @id AND attribute_id = @attribute_id
 FOR NO KEY UPDATE;
 
+-- Sắp xếp lại (kéo thả): chỉ đổi vị trí
+-- name: SetAttributePosition :exec
+UPDATE inventory.asset_type_attributes SET position = @position, updated_at = now() WHERE id = @id;
+
+-- name: SetOptionPosition :exec
+UPDATE inventory.asset_attribute_options SET position = @position, updated_at = now() WHERE id = @id;
+
 -- name: UpdateOption :one
 UPDATE inventory.asset_attribute_options
 SET label = @label, position = @position, updated_at = now()

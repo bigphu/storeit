@@ -103,6 +103,22 @@ func (h *Handler) RemoveAttribute(ctx context.Context, req api.RemoveAttributeRe
 	return api.RemoveAttribute204Response{}, nil
 }
 
+func (h *Handler) ReorderAttributes(ctx context.Context, req api.ReorderAttributesRequestObject) (api.ReorderAttributesResponseObject, error) {
+	t, err := h.svc.ReorderAttributes(ctx, req.TypeID, req.Body.Ids)
+	if err != nil {
+		return nil, err
+	}
+	return api.ReorderAttributes200JSONResponse(toAPITypeDetail(t)), nil
+}
+
+func (h *Handler) ReorderOptions(ctx context.Context, req api.ReorderOptionsRequestObject) (api.ReorderOptionsResponseObject, error) {
+	a, err := h.svc.ReorderOptions(ctx, req.TypeID, req.AttributeID, req.Body.Ids)
+	if err != nil {
+		return nil, err
+	}
+	return api.ReorderOptions200JSONResponse(toAPIAttribute(a)), nil
+}
+
 func (h *Handler) AddOption(ctx context.Context, req api.AddOptionRequestObject) (api.AddOptionResponseObject, error) {
 	o, err := h.svc.AddOption(ctx, req.TypeID, req.AttributeID, req.Body.Label, deref(req.Body.Position))
 	if err != nil {

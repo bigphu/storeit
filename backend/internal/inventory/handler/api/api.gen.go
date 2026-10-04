@@ -283,6 +283,12 @@ type OptionRequest struct {
 	Position *int32 `json:"position,omitempty"`
 }
 
+// OrderRequest defines model for OrderRequest.
+type OrderRequest struct {
+	// Ids Every active attribute (or option) exactly once, in the new order
+	Ids []externalRef0.ID `json:"ids"`
+}
+
 // RetireAssetRequest defines model for RetireAssetRequest.
 type RetireAssetRequest struct {
 	Reason  *string `json:"reason,omitempty"`
@@ -447,11 +453,17 @@ type UpdateAssetTypeJSONRequestBody = UpdateAssetTypeRequest
 // AddAttributeJSONRequestBody defines body for AddAttribute for application/json ContentType.
 type AddAttributeJSONRequestBody = NewAttribute
 
+// ReorderAttributesJSONRequestBody defines body for ReorderAttributes for application/json ContentType.
+type ReorderAttributesJSONRequestBody = OrderRequest
+
 // UpdateAttributeJSONRequestBody defines body for UpdateAttribute for application/json ContentType.
 type UpdateAttributeJSONRequestBody = UpdateAttributeRequest
 
 // AddOptionJSONRequestBody defines body for AddOption for application/json ContentType.
 type AddOptionJSONRequestBody = OptionRequest
+
+// ReorderOptionsJSONRequestBody defines body for ReorderOptions for application/json ContentType.
+type ReorderOptionsJSONRequestBody = OrderRequest
 
 // UpdateOptionJSONRequestBody defines body for UpdateOption for application/json ContentType.
 type UpdateOptionJSONRequestBody = UpdateOptionRequest
@@ -506,6 +518,9 @@ type ServerInterface interface {
 	// AddAttribute Add a custom attribute (inventory.type.manage)
 	// (POST /asset-types/{typeID}/attributes)
 	AddAttribute(w http.ResponseWriter, r *http.Request, typeID TypeID)
+	// ReorderAttributes Put the type's active attributes in a new order, in one change (inventory.type.manage)
+	// (PUT /asset-types/{typeID}/attributes/order)
+	ReorderAttributes(w http.ResponseWriter, r *http.Request, typeID TypeID)
 	// RemoveAttribute Remove a custom attribute; stored values are kept (inventory.type.manage)
 	// (DELETE /asset-types/{typeID}/attributes/{attributeID})
 	RemoveAttribute(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID)
@@ -515,6 +530,9 @@ type ServerInterface interface {
 	// AddOption Add an option to a select attribute (inventory.type.manage)
 	// (POST /asset-types/{typeID}/attributes/{attributeID}/options)
 	AddOption(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID)
+	// ReorderOptions Put a select attribute's active options in a new order, in one change (inventory.type.manage)
+	// (PUT /asset-types/{typeID}/attributes/{attributeID}/options/order)
+	ReorderOptions(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID)
 	// RemoveOption Remove an option; assets using it keep it (inventory.type.manage)
 	// (DELETE /asset-types/{typeID}/attributes/{attributeID}/options/{optionID})
 	RemoveOption(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID, optionID OptionID)
@@ -614,6 +632,12 @@ func (_ Unimplemented) AddAttribute(w http.ResponseWriter, r *http.Request, type
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ReorderAttributes Put the type's active attributes in a new order, in one change (inventory.type.manage)
+// (PUT /asset-types/{typeID}/attributes/order)
+func (_ Unimplemented) ReorderAttributes(w http.ResponseWriter, r *http.Request, typeID TypeID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // RemoveAttribute Remove a custom attribute; stored values are kept (inventory.type.manage)
 // (DELETE /asset-types/{typeID}/attributes/{attributeID})
 func (_ Unimplemented) RemoveAttribute(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID) {
@@ -629,6 +653,12 @@ func (_ Unimplemented) UpdateAttribute(w http.ResponseWriter, r *http.Request, t
 // AddOption Add an option to a select attribute (inventory.type.manage)
 // (POST /asset-types/{typeID}/attributes/{attributeID}/options)
 func (_ Unimplemented) AddOption(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ReorderOptions Put a select attribute's active options in a new order, in one change (inventory.type.manage)
+// (PUT /asset-types/{typeID}/attributes/{attributeID}/options/order)
+func (_ Unimplemented) ReorderOptions(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -970,6 +1000,32 @@ func (siw *ServerInterfaceWrapper) AddAttribute(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ReorderAttributes operation middleware
+func (siw *ServerInterfaceWrapper) ReorderAttributes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "typeID" -------------
+	var typeID TypeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "typeID", chi.URLParam(r, "typeID"), &typeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "typeID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReorderAttributes(w, r, typeID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RemoveAttribute operation middleware
 func (siw *ServerInterfaceWrapper) RemoveAttribute(w http.ResponseWriter, r *http.Request) {
 
@@ -1066,6 +1122,41 @@ func (siw *ServerInterfaceWrapper) AddOption(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AddOption(w, r, typeID, attributeID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReorderOptions operation middleware
+func (siw *ServerInterfaceWrapper) ReorderOptions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "typeID" -------------
+	var typeID TypeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "typeID", chi.URLParam(r, "typeID"), &typeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "typeID", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "attributeID" -------------
+	var attributeID AttributeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "attributeID", chi.URLParam(r, "attributeID"), &attributeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attributeID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReorderOptions(w, r, typeID, attributeID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1633,6 +1724,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/asset-types/{typeID}/attributes", wrapper.AddAttribute)
 	})
 	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/asset-types/{typeID}/attributes/order", wrapper.ReorderAttributes)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/asset-types/{typeID}/attributes/{attributeID}/options/order", wrapper.ReorderOptions)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/asset-types/{typeID}/attributes/{attributeID}", wrapper.RemoveAttribute)
 	})
 	r.Group(func(r chi.Router) {
@@ -2086,6 +2183,46 @@ func (response AddAttributedefaultApplicationProblemPlusJSONResponse) VisitAddAt
 	return err
 }
 
+type ReorderAttributesRequestObject struct {
+	TypeID TypeID `json:"typeID"`
+	Body   *ReorderAttributesJSONRequestBody
+}
+
+type ReorderAttributesResponseObject interface {
+	VisitReorderAttributesResponse(w http.ResponseWriter) error
+}
+
+type ReorderAttributes200JSONResponse AssetTypeDetail
+
+func (response ReorderAttributes200JSONResponse) VisitReorderAttributesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderAttributesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ReorderAttributesdefaultApplicationProblemPlusJSONResponse) VisitReorderAttributesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RemoveAttributeRequestObject struct {
 	TypeID      TypeID      `json:"typeID"`
 	AttributeID AttributeID `json:"attributeID"`
@@ -2191,6 +2328,47 @@ type AddOptiondefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AddOptiondefaultApplicationProblemPlusJSONResponse) VisitAddOptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderOptionsRequestObject struct {
+	TypeID      TypeID      `json:"typeID"`
+	AttributeID AttributeID `json:"attributeID"`
+	Body        *ReorderOptionsJSONRequestBody
+}
+
+type ReorderOptionsResponseObject interface {
+	VisitReorderOptionsResponse(w http.ResponseWriter) error
+}
+
+type ReorderOptions200JSONResponse Attribute
+
+func (response ReorderOptions200JSONResponse) VisitReorderOptionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderOptionsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ReorderOptionsdefaultApplicationProblemPlusJSONResponse) VisitReorderOptionsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -2665,6 +2843,9 @@ type StrictServerInterface interface {
 	// AddAttribute Add a custom attribute (inventory.type.manage)
 	// (POST /asset-types/{typeID}/attributes)
 	AddAttribute(ctx context.Context, request AddAttributeRequestObject) (AddAttributeResponseObject, error)
+	// ReorderAttributes Put the type's active attributes in a new order, in one change (inventory.type.manage)
+	// (PUT /asset-types/{typeID}/attributes/order)
+	ReorderAttributes(ctx context.Context, request ReorderAttributesRequestObject) (ReorderAttributesResponseObject, error)
 	// RemoveAttribute Remove a custom attribute; stored values are kept (inventory.type.manage)
 	// (DELETE /asset-types/{typeID}/attributes/{attributeID})
 	RemoveAttribute(ctx context.Context, request RemoveAttributeRequestObject) (RemoveAttributeResponseObject, error)
@@ -2674,6 +2855,9 @@ type StrictServerInterface interface {
 	// AddOption Add an option to a select attribute (inventory.type.manage)
 	// (POST /asset-types/{typeID}/attributes/{attributeID}/options)
 	AddOption(ctx context.Context, request AddOptionRequestObject) (AddOptionResponseObject, error)
+	// ReorderOptions Put a select attribute's active options in a new order, in one change (inventory.type.manage)
+	// (PUT /asset-types/{typeID}/attributes/{attributeID}/options/order)
+	ReorderOptions(ctx context.Context, request ReorderOptionsRequestObject) (ReorderOptionsResponseObject, error)
 	// RemoveOption Remove an option; assets using it keep it (inventory.type.manage)
 	// (DELETE /asset-types/{typeID}/attributes/{attributeID}/options/{optionID})
 	RemoveOption(ctx context.Context, request RemoveOptionRequestObject) (RemoveOptionResponseObject, error)
@@ -3039,6 +3223,39 @@ func (sh *strictHandler) AddAttribute(w http.ResponseWriter, r *http.Request, ty
 	}
 }
 
+// ReorderAttributes operation middleware
+func (sh *strictHandler) ReorderAttributes(w http.ResponseWriter, r *http.Request, typeID TypeID) {
+	var request ReorderAttributesRequestObject
+
+	request.TypeID = typeID
+
+	var body ReorderAttributesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReorderAttributes(ctx, request.(ReorderAttributesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReorderAttributes")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReorderAttributesResponseObject); ok {
+		if err := validResponse.VisitReorderAttributesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // RemoveAttribute operation middleware
 func (sh *strictHandler) RemoveAttribute(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID) {
 	var request RemoveAttributeRequestObject
@@ -3127,6 +3344,40 @@ func (sh *strictHandler) AddOption(w http.ResponseWriter, r *http.Request, typeI
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AddOptionResponseObject); ok {
 		if err := validResponse.VisitAddOptionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReorderOptions operation middleware
+func (sh *strictHandler) ReorderOptions(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID) {
+	var request ReorderOptionsRequestObject
+
+	request.TypeID = typeID
+	request.AttributeID = attributeID
+
+	var body ReorderOptionsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReorderOptions(ctx, request.(ReorderOptionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReorderOptions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReorderOptionsResponseObject); ok {
+		if err := validResponse.VisitReorderOptionsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -3472,77 +3723,80 @@ func (sh *strictHandler) RetireAsset(w http.ResponseWriter, r *http.Request, ass
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

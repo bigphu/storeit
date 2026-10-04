@@ -422,6 +422,35 @@ func (q *Queries) SetAssetTypeArchived(ctx context.Context, arg SetAssetTypeArch
 	return i, err
 }
 
+const setAttributePosition = `-- name: SetAttributePosition :exec
+UPDATE inventory.asset_type_attributes SET position = $1, updated_at = now() WHERE id = $2
+`
+
+type SetAttributePositionParams struct {
+	Position int32
+	ID       uuid.UUID
+}
+
+// Sắp xếp lại (kéo thả): chỉ đổi vị trí
+func (q *Queries) SetAttributePosition(ctx context.Context, arg SetAttributePositionParams) error {
+	_, err := q.db.Exec(ctx, setAttributePosition, arg.Position, arg.ID)
+	return err
+}
+
+const setOptionPosition = `-- name: SetOptionPosition :exec
+UPDATE inventory.asset_attribute_options SET position = $1, updated_at = now() WHERE id = $2
+`
+
+type SetOptionPositionParams struct {
+	Position int32
+	ID       uuid.UUID
+}
+
+func (q *Queries) SetOptionPosition(ctx context.Context, arg SetOptionPositionParams) error {
+	_, err := q.db.Exec(ctx, setOptionPosition, arg.Position, arg.ID)
+	return err
+}
+
 const updateAssetType = `-- name: UpdateAssetType :one
 UPDATE inventory.asset_types
 SET name = $1, description = $2, version = version + 1, updated_at = now()
