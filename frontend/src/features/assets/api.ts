@@ -88,3 +88,21 @@ export function useRestoreAsset() {
     unwrap(inventoryApi.POST('/assets/{assetID}/restore', { ...path(id), body: { version } })),
   )
 }
+
+// Hàng loạt: mỗi tài sản thành công hay thất bại riêng; kết quả liệt kê từng cái
+export interface BulkItemRef {
+  id: string
+  version: number
+}
+
+export function useBulkRetire() {
+  return useAssetMutation(({ items, reason }: { items: BulkItemRef[]; reason: string }) =>
+    unwrap(inventoryApi.POST('/assets/bulk-retire', { body: { items, reason: reason || undefined } })),
+  )
+}
+
+export function useBulkStatus() {
+  return useAssetMutation(({ items, statusId }: { items: BulkItemRef[]; statusId: string }) =>
+    unwrap(inventoryApi.POST('/assets/bulk-status', { body: { items, status_id: statusId } })),
+  )
+}

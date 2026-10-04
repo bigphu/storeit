@@ -27,6 +27,7 @@ import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
 import { kindSeverity, statusKinds, useStatuses } from '@/features/statuses/api'
 import { useAssetList } from '../api'
 import AttributeFilterPopover from '../components/AttributeFilterPopover.vue'
+import BulkActionDialog from '../components/BulkActionDialog.vue'
 import RetireDialog from '../components/RetireDialog.vue'
 import { attrFilterLabel, type FilterChip, filterChips, removeChip } from '../filterChips'
 import { useListContext } from '../listContext'
@@ -154,10 +155,23 @@ function onPage(e: DataTablePageEvent) {
   update({ page: e.page + 1 })
 }
 
-// Bấm dòng mở tài sản; Ctrl/⌘ mở tab mới. Bấm trúng liên kết hay nút trong dòng thì để chúng tự xử lý
+// Chọn nhiều dòng để đổi status hay retire một lần; đổi bộ lọc hay loại thì bỏ chọn
+const selected = ref<AssetListItem[]>([])
+watch(
+  () => JSON.stringify({ ...state.value, page: 0, sort: '' }),
+  () => (selected.value = []),
+)
+const bulkOpen = ref(false)
+const bulkMode = ref<'status' | 'retire'>('status')
+function openBulk(mode: 'status' | 'retire') {
+  bulkMode.value = mode
+  bulkOpen.value = true
+}
+
+// Bấm dòng mở tài sản; Ctrl/⌘ mở tab mới. Bấm trúng liên kết, nút hay ô chọn thì để chúng tự xử lý
 function onRowClick(e: DataTableRowClickEvent) {
   const target = e.originalEvent.target as HTMLElement | null
-  if (target?.closest('a, button, input')) return
+  if (target?.closest('a, button, input, .p-checkbox, .select-cell')) return
   actions.open(e.data as AssetListItem, e.originalEvent as MouseEvent)
 }
 
@@ -267,6 +281,14 @@ function cell(row: AssetListItem, key: string) {
     </div>
     <AttributeFilterPopover ref="filterPop" :attributes="attributes" @add="addFilter" />
 
+    <div v-if="selected.length" class="selection-bar" role="region" aria-label="Selected assets">
+      <span class="selection-count">{{ selected.length }} selected</span>
+      <Button label="Change status" icon="pi pi-tag" size="small" @click="openBulk('status')" />
+      <Button label="Retire" icon="pi pi-ban" size="small" severity="danger" outlined @click="openBulk('retire')" />
+      <Button label="Clear selection" size="small" text severity="secondary" @click="selected = []" />
+    </div>
+    <BulkActionDialog v-model:visible="bulkOpen" :mode="bulkMode" :rows="selected" @done="selected = []" />
+
     <ContextMenu ref="menu" :model="menuItems" @hide="menuRow = null" />
     <DataTable
       :value="data?.items ?? []"
@@ -280,6 +302,7 @@ function cell(row: AssetListItem, key: string) {
       :sort-field="tableSort.field"
       :sort-order="tableSort.order"
       removable-sort
+      v-model:selection="selected"
       data-key="id"
       scrollable
       row-hover
@@ -289,6 +312,7 @@ function cell(row: AssetListItem, key: string) {
       @row-click="onRowClick"
       @row-contextmenu="onRowContextMenu"
     >
+      <Column v-if="canManage" selection-mode="multiple" header-style="width: 3rem" body-class="select-cell" />
       <Column header="Tag" sort-field="tag" sortable>
         <template #body="{ data: a }: { data: AssetListItem }">
           <RouterLink :to="`/assets/${a.id}`">{{ a.tag }}</RouterLink>
@@ -335,6 +359,21 @@ function cell(row: AssetListItem, key: string) {
 </template>
 
 <style scoped>
+.selection-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  border-radius: var(--p-content-border-radius);
+  background: var(--p-highlight-background);
+  color: var(--p-highlight-color);
+}
+.selection-count {
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
 .chips {
   display: flex;
   flex-wrap: wrap;

@@ -262,6 +262,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/bulk-retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retire several assets; each succeeds or fails on its own (inventory.asset.manage) */
+        post: operations["retireAssets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/bulk-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change the status of several assets; each succeeds or fails on its own (inventory.asset.manage) */
+        post: operations["setAssetsStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assets/{assetID}/retire": {
         parameters: {
             query?: never;
@@ -513,6 +547,31 @@ export interface components {
         /** @description Attribute key -> value (string, number, boolean; select = option id; date = YYYY-MM-DD) */
         AttributeValues: {
             [key: string]: unknown;
+        };
+        BulkItem: {
+            id: components["schemas"]["ID"];
+            /**
+             * Format: int32
+             * @description The version you last read; a newer one fails that asset with asset-changed
+             */
+            version: number;
+        };
+        BulkItems: components["schemas"]["BulkItem"][];
+        BulkRetireRequest: {
+            items: components["schemas"]["BulkItems"];
+            reason?: string;
+        };
+        BulkStatusRequest: {
+            items: components["schemas"]["BulkItems"];
+            status_id: components["schemas"]["ID"];
+        };
+        BulkResult: {
+            succeeded: components["schemas"]["ID"][];
+            failed: components["schemas"]["BulkFailure"][];
+        };
+        BulkFailure: {
+            id: components["schemas"]["ID"];
+            problem: components["schemas"]["Problem"];
         };
         RetireAssetRequest: {
             reason?: string;
@@ -1099,6 +1158,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    retireAssets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkRetireRequest"];
+            };
+        };
+        responses: {
+            /** @description Which assets were retired and which were not, with the reason */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkResult"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    setAssetsStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Which assets changed and which did not, with the reason */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkResult"];
                 };
             };
             default: components["responses"]["Problem"];
