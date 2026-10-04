@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -68,9 +69,39 @@ func (r *AccountRepository) Create(ctx context.Context, in domain.NewAccount) (d
 	return out, err
 }
 
+// Get kèm lần đăng nhập gần nhất (bảng account_sign_ins)
 func (r *AccountRepository) Get(ctx context.Context, id uuid.UUID) (domain.Account, error) {
-	row, err := r.q.GetAccount(ctx, id)
-	return accountOrNotFound(row, err)
+	a, err := accountOrNotFound(r.q.GetAccount(ctx, id))
+	if err != nil {
+		return domain.Account{}, err
+	}
+	out := []domain.Account{a}
+	if err := r.attachSignIns(ctx, out); err != nil {
+		return domain.Account{}, err
+	}
+	return out[0], nil
+}
+
+// attachSignIns điền LastSignInAt cho các account trong một truy vấn
+func (r *AccountRepository) attachSignIns(ctx context.Context, accounts []domain.Account) error {
+	ids := make([]uuid.UUID, len(accounts))
+	for i, a := range accounts {
+		ids[i] = a.ID
+	}
+	rows, err := r.q.ListLastSignIns(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("identity: last sign-ins: %w", err)
+	}
+	at := make(map[uuid.UUID]time.Time, len(rows))
+	for _, row := range rows {
+		at[row.AccountID] = row.LastAt
+	}
+	for i := range accounts {
+		if t, ok := at[accounts[i].ID]; ok {
+			accounts[i].LastSignInAt = &t
+		}
+	}
+	return nil
 }
 
 func (r *AccountRepository) GetByEmail(ctx context.Context, email string) (domain.Account, error) {
@@ -98,17 +129,26 @@ func (r *AccountRepository) List(ctx context.Context, f domain.AccountFilter) ([
 		esc := likeEscaper.Replace(f.Query)
 		q = &esc
 	}
-	rows, err := r.q.ListAccounts(ctx, db.ListAccountsParams{Q: q, Active: f.Active, Lim: f.Limit, Off: f.Offset})
+	var status *string
+	if f.Status != nil {
+		status = ptr(string(*f.Status))
+	}
+	rows, err := r.q.ListAccounts(ctx, db.ListAccountsParams{
+		Q: q, Active: f.Active, Status: status, RoleID: f.RoleID, Lim: f.Limit, Off: f.Offset,
+	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("identity: list accounts: %w", err)
 	}
-	total, err := r.q.CountAccounts(ctx, db.CountAccountsParams{Q: q, Active: f.Active})
+	total, err := r.q.CountAccounts(ctx, db.CountAccountsParams{Q: q, Active: f.Active, Status: status, RoleID: f.RoleID})
 	if err != nil {
 		return nil, 0, fmt.Errorf("identity: count accounts: %w", err)
 	}
 	out := make([]domain.Account, len(rows))
 	for i, row := range rows {
 		out[i] = toAccount(row)
+	}
+	if err := r.attachSignIns(ctx, out); err != nil {
+		return nil, 0, err
 	}
 	return out, total, nil
 }
@@ -345,6 +385,76 @@ func accountOrNotFound(row db.IdentityAccount, err error) (domain.Account, error
 		return domain.Account{}, fmt.Errorf("identity: get account: %w", err)
 	}
 	return toAccount(row), nil
+}
+
+func (r *AccountRepository) StatusCounts(ctx context.Context, f domain.AccountFilter) (map[domain.AccountStatus]int64, error) {
+	var q *string
+	if f.Query != "" {
+		esc := likeEscaper.Replace(f.Query)
+		q = &esc
+	}
+	rows, err := r.q.CountAccountsByStatus(ctx, db.CountAccountsByStatusParams{Q: q, RoleID: f.RoleID})
+	if err != nil {
+		return nil, fmt.Errorf("identity: count accounts by status: %w", err)
+	}
+	out := make(map[domain.AccountStatus]int64, len(rows))
+	for _, row := range rows {
+		out[domain.AccountStatus(row.Status)] = row.N
+	}
+	return out, nil
+}
+
+func (r *AccountRepository) RolesOf(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID][]domain.Role, error) {
+	rows, err := r.q.ListRolesOfAccounts(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("identity: roles of accounts: %w", err)
+	}
+	out := make(map[uuid.UUID][]domain.Role)
+	for _, row := range rows {
+		out[row.AccountID] = append(out[row.AccountID], domain.Role{ID: row.ID, Name: row.Name})
+	}
+	return out, nil
+}
+
+func (r *AccountRepository) InviteExpiries(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]time.Time, error) {
+	rows, err := r.q.ListInviteExpiries(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("identity: invite expiries: %w", err)
+	}
+	out := make(map[uuid.UUID]time.Time, len(rows))
+	for _, row := range rows {
+		out[row.AccountID] = row.ExpiresAt
+	}
+	return out, nil
+}
+
+func (r *AccountRepository) LiveSessions(ctx context.Context, id uuid.UUID) (int64, error) {
+	n, err := r.q.CountLiveFamilies(ctx, id)
+	if err != nil {
+		return 0, fmt.Errorf("identity: count sessions: %w", err)
+	}
+	return n, nil
+}
+
+func (r *AccountRepository) SignOutEverywhere(ctx context.Context, id uuid.UUID) (int64, error) {
+	var n int64
+	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
+		q := r.q.WithTx(tx)
+		// khoá account trước family, cùng thứ tự với SetActive
+		if _, err := accountOrNotFound(q.GetAccountForUpdate(ctx, id)); err != nil {
+			return err
+		}
+		var err error
+		n, err = q.RevokeAccountFamilies(ctx, db.RevokeAccountFamiliesParams{AccountID: id, Reason: ptr(string(domain.RevokeAdmin))})
+		if err != nil {
+			return fmt.Errorf("identity: revoke sessions: %w", err)
+		}
+		if n == 0 {
+			return nil
+		}
+		return r.append(ctx, tx, contract.EventAccountSignedOut, id, contract.AccountSignedOut{AccountID: id, Sessions: n})
+	})
+	return n, err
 }
 
 func ptr[T any](v T) *T { return &v }

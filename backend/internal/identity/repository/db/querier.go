@@ -17,8 +17,14 @@ type Querier interface {
 	// Dùng token: xoá rồi mới kiểm tra, nên hai lần gửi cùng lúc chỉ một bên thấy hàng
 	ConsumePasswordToken(ctx context.Context, tokenHash []byte) (IdentityPasswordToken, error)
 	CountAccounts(ctx context.Context, arg CountAccountsParams) (int64, error)
+	// Số account theo trạng thái với cùng tìm kiếm và lọc role, bỏ qua lọc trạng thái
+	// (đếm cho các nút lọc)
+	// trạng thái suy ra như domain.Account.Status
+	CountAccountsByStatus(ctx context.Context, arg CountAccountsByStatusParams) ([]CountAccountsByStatusRow, error)
 	CountActiveAccountsWithRole(ctx context.Context, roleID uuid.UUID) (int64, error)
 	CountAllAccounts(ctx context.Context) (int64, error)
+	// Phiên còn sống: chưa thu hồi, chưa quá hạn tuyệt đối, ngọn còn hạn
+	CountLiveFamilies(ctx context.Context, accountID uuid.UUID) (int64, error)
 	CountRoleAssignments(ctx context.Context, roleID uuid.UUID) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (IdentityAccount, error)
 	CreateFamily(ctx context.Context, arg CreateFamilyParams) error
@@ -57,14 +63,20 @@ type Querier interface {
 	InsertAccountRole(ctx context.Context, arg InsertAccountRoleParams) error
 	InsertRolePermission(ctx context.Context, arg InsertRolePermissionParams) error
 	ListAccounts(ctx context.Context, arg ListAccountsParams) ([]IdentityAccount, error)
+	// Hạn link mời còn hiệu lực của nhiều account
+	ListInviteExpiries(ctx context.Context, ids []uuid.UUID) ([]ListInviteExpiriesRow, error)
+	ListLastSignIns(ctx context.Context, ids []uuid.UUID) ([]IdentityAccountSignIn, error)
 	ListPermissions(ctx context.Context) ([]IdentityPermission, error)
 	ListRoles(ctx context.Context) ([]IdentityRole, error)
+	// Role của nhiều account một lần (danh sách account)
+	ListRolesOfAccounts(ctx context.Context, ids []uuid.UUID) ([]ListRolesOfAccountsRow, error)
 	// Khoá hàng role Administrator: mọi thao tác có thể làm mất một admin (khoá
 	// account, đổi role) chạy lần lượt, để kiểm tra "còn admin" không bị hai
 	// transaction cùng lọt. Luôn khoá trước hàng account.
 	LockRole(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	// Guard used_at IS NULL: 0 hàng là có ai đó đánh dấu trước
 	MarkRefreshTokenUsed(ctx context.Context, arg MarkRefreshTokenUsedParams) (int64, error)
+	RecordSignIn(ctx context.Context, accountID uuid.UUID) error
 	// Thu hồi mọi phiên còn sống của account, trừ family đang dùng (nếu có)
 	RevokeAccountFamilies(ctx context.Context, arg RevokeAccountFamiliesParams) (int64, error)
 	RevokeFamily(ctx context.Context, arg RevokeFamilyParams) error

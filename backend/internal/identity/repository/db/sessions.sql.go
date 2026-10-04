@@ -12,6 +12,21 @@ import (
 	"github.com/google/uuid"
 )
 
+const countLiveFamilies = `-- name: CountLiveFamilies :one
+SELECT count(*) FROM identity.refresh_families f
+WHERE f.account_id = $1 AND f.revoked_at IS NULL AND f.absolute_expires_at > now()
+  AND EXISTS (SELECT 1 FROM identity.refresh_tokens t
+              WHERE t.family_id = f.id AND t.used_at IS NULL AND t.expires_at > now())
+`
+
+// Phiên còn sống: chưa thu hồi, chưa quá hạn tuyệt đối, ngọn còn hạn
+func (q *Queries) CountLiveFamilies(ctx context.Context, accountID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countLiveFamilies, accountID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createFamily = `-- name: CreateFamily :exec
 INSERT INTO identity.refresh_families (id, account_id, user_agent, ip, absolute_expires_at)
 VALUES ($1, $2, $3, $4, $5)

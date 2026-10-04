@@ -35,6 +35,10 @@ WHERE (sqlc.narg('q')::text IS NULL
        OR name ILIKE '%' || sqlc.narg('q')::text || '%'
        OR email ILIKE '%' || sqlc.narg('q')::text || '%')
   AND (sqlc.narg('active')::boolean IS NULL OR active = sqlc.narg('active')::boolean)
+  AND (sqlc.narg('status')::text IS NULL OR (CASE WHEN NOT active THEN 'disabled' WHEN password_hash IS NULL THEN 'invited' ELSE 'active' END) = sqlc.narg('status')::text)
+  AND (sqlc.narg('role_id')::uuid IS NULL OR EXISTS (
+        SELECT 1 FROM identity.account_roles ar
+        WHERE ar.account_id = accounts.id AND ar.role_id = sqlc.narg('role_id')::uuid))
 ORDER BY name, id
 LIMIT @lim OFFSET @off;
 
@@ -43,7 +47,45 @@ SELECT count(*) FROM identity.accounts
 WHERE (sqlc.narg('q')::text IS NULL
        OR name ILIKE '%' || sqlc.narg('q')::text || '%'
        OR email ILIKE '%' || sqlc.narg('q')::text || '%')
-  AND (sqlc.narg('active')::boolean IS NULL OR active = sqlc.narg('active')::boolean);
+  AND (sqlc.narg('active')::boolean IS NULL OR active = sqlc.narg('active')::boolean)
+  AND (sqlc.narg('status')::text IS NULL OR (CASE WHEN NOT active THEN 'disabled' WHEN password_hash IS NULL THEN 'invited' ELSE 'active' END) = sqlc.narg('status')::text)
+  AND (sqlc.narg('role_id')::uuid IS NULL OR EXISTS (
+        SELECT 1 FROM identity.account_roles ar
+        WHERE ar.account_id = accounts.id AND ar.role_id = sqlc.narg('role_id')::uuid));
+
+-- Số account theo trạng thái với cùng tìm kiếm và lọc role, bỏ qua lọc trạng thái
+-- (đếm cho các nút lọc)
+-- name: CountAccountsByStatus :many
+-- trạng thái suy ra như domain.Account.Status
+SELECT (CASE WHEN NOT active THEN 'disabled' WHEN password_hash IS NULL THEN 'invited' ELSE 'active' END)::text AS status, count(*)::bigint AS n
+FROM identity.accounts
+WHERE (sqlc.narg('q')::text IS NULL
+       OR name ILIKE '%' || sqlc.narg('q')::text || '%'
+       OR email ILIKE '%' || sqlc.narg('q')::text || '%')
+  AND (sqlc.narg('role_id')::uuid IS NULL OR EXISTS (
+        SELECT 1 FROM identity.account_roles ar
+        WHERE ar.account_id = accounts.id AND ar.role_id = sqlc.narg('role_id')::uuid))
+GROUP BY 1;
+
+-- Role của nhiều account một lần (danh sách account)
+-- name: ListRolesOfAccounts :many
+SELECT ar.account_id, r.id, r.name
+FROM identity.account_roles ar
+JOIN identity.roles r ON r.id = ar.role_id
+WHERE ar.account_id = ANY(@ids::uuid[])
+ORDER BY ar.account_id, r.name, r.id;
+
+-- Hạn link mời còn hiệu lực của nhiều account
+-- name: ListInviteExpiries :many
+SELECT account_id, expires_at FROM identity.password_tokens
+WHERE purpose = 'invite' AND account_id = ANY(@ids::uuid[]);
+
+-- name: RecordSignIn :exec
+INSERT INTO identity.account_sign_ins (account_id, last_at) VALUES (@account_id, now())
+ON CONFLICT (account_id) DO UPDATE SET last_at = excluded.last_at;
+
+-- name: ListLastSignIns :many
+SELECT account_id, last_at FROM identity.account_sign_ins WHERE account_id = ANY(@ids::uuid[]);
 
 -- name: CountAllAccounts :one
 SELECT count(*) FROM identity.accounts;

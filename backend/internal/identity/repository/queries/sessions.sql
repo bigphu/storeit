@@ -49,6 +49,13 @@ SET revoked_at = now(), revoked_reason = @reason
 WHERE account_id = @account_id AND revoked_at IS NULL
   AND (sqlc.narg('keep')::uuid IS NULL OR id <> sqlc.narg('keep')::uuid);
 
+-- Phiên còn sống: chưa thu hồi, chưa quá hạn tuyệt đối, ngọn còn hạn
+-- name: CountLiveFamilies :one
+SELECT count(*) FROM identity.refresh_families f
+WHERE f.account_id = @account_id AND f.revoked_at IS NULL AND f.absolute_expires_at > now()
+  AND EXISTS (SELECT 1 FROM identity.refresh_tokens t
+              WHERE t.family_id = f.id AND t.used_at IS NULL AND t.expires_at > now());
+
 -- Dọn rác: family đã chết (thu hồi hoặc hết hạn tuyệt đối) quá retention
 -- name: DeleteDeadFamilies :execrows
 DELETE FROM identity.refresh_families

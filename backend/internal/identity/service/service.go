@@ -101,6 +101,9 @@ type Device struct {
 type AccountView struct {
 	domain.Account
 	Roles []domain.Role
+	// chỉ GetAccount điền: số phiên còn sống, hạn link mời đang chờ
+	Sessions        *int64
+	InviteExpiresAt *time.Time
 }
 
 // currentActor trả actor của request; không có (hoặc là SystemActor, không

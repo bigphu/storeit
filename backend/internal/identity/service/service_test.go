@@ -199,7 +199,7 @@ func TestPermissionChecks(t *testing.T) {
 	id := target.ID
 	calls := map[string]func(ctx context.Context) error{
 		"ListAccounts": func(ctx context.Context) error {
-			_, _, err := e.svc.ListAccounts(ctx, domain.AccountFilter{})
+			_, err := e.svc.ListAccounts(ctx, domain.AccountFilter{})
 			return err
 		},
 		"GetAccount": func(ctx context.Context) error { _, err := e.svc.GetAccount(ctx, id); return err },
@@ -213,6 +213,7 @@ func TestPermissionChecks(t *testing.T) {
 		},
 		"DisableAccount":    func(ctx context.Context) error { _, err := e.svc.DisableAccount(ctx, id); return err },
 		"EnableAccount":     func(ctx context.Context) error { _, err := e.svc.EnableAccount(ctx, id); return err },
+		"SignOutEverywhere": func(ctx context.Context) error { _, err := e.svc.SignOutEverywhere(ctx, id); return err },
 		"ResendInvitation":  func(ctx context.Context) error { return e.svc.ResendInvitation(ctx, id) },
 		"SendPasswordReset": func(ctx context.Context) error { return e.svc.SendPasswordReset(ctx, id) },
 		"AssignRoles":       func(ctx context.Context) error { _, err := e.svc.AssignRoles(ctx, id, nil); return err },

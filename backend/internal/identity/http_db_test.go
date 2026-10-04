@@ -488,3 +488,57 @@ func TestUpdateMeOverHTTP(t *testing.T) {
 		t.Errorf("missing name: %d %s", rec.Code, rec.Body)
 	}
 }
+
+// Danh sách có role, đếm theo trạng thái, lọc trạng thái/role; chi tiết có phiên và
+// lần đăng nhập; đăng xuất mọi nơi
+func TestAccountListExtrasAndSignOut(t *testing.T) {
+	a := newApp(t)
+	admin, _ := a.login(a.seed(domain.AdministratorRoleID))
+	email := a.seed(domain.InventoryOfficerRoleID)
+	a.login(email)
+	a.login(email)
+
+	type item struct {
+		ID       string                  `json:"id"`
+		Email    string                  `json:"email"`
+		Status   string                  `json:"status"`
+		Roles    []struct{ Name string } `json:"roles"`
+		LastSign *string                 `json:"last_sign_in_at"`
+	}
+	var list struct {
+		Items        []item           `json:"items"`
+		StatusCounts map[string]int64 `json:"status_counts"`
+	}
+	rec := a.do(call{method: "GET", path: "/api/v1/accounts?status=active&role_id=" + domain.InventoryOfficerRoleID.String() + "&q=" + email, token: admin})
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &list) != nil || len(list.Items) != 1 {
+		t.Fatalf("list: %d %s", rec.Code, rec.Body)
+	}
+	got := list.Items[0]
+	if got.Email != email || len(got.Roles) != 1 || got.Roles[0].Name != "Inventory Officer" || got.LastSign == nil {
+		t.Errorf("item = %+v", got)
+	}
+	if list.StatusCounts["active"] != 1 || list.StatusCounts["invited"] != 0 {
+		t.Errorf("status_counts = %v", list.StatusCounts)
+	}
+	if rec := a.do(call{method: "GET", path: "/api/v1/accounts?status=gone", token: admin}); rec.Code != 400 {
+		t.Errorf("unknown status: %d", rec.Code)
+	}
+
+	var detail struct {
+		ActiveSessions *int64 `json:"active_sessions"`
+	}
+	rec = a.do(call{method: "GET", path: "/api/v1/accounts/" + got.ID, token: admin})
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &detail) != nil || detail.ActiveSessions == nil || *detail.ActiveSessions != 2 {
+		t.Fatalf("detail: %d %s", rec.Code, rec.Body)
+	}
+
+	var out struct{ Revoked int64 }
+	rec = a.do(call{method: "POST", path: "/api/v1/accounts/" + got.ID + "/sign-out", token: admin})
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &out) != nil || out.Revoked != 2 {
+		t.Errorf("sign out: %d %s", rec.Code, rec.Body)
+	}
+	officer, _ := a.login(a.seed(domain.InventoryOfficerRoleID))
+	if rec := a.do(call{method: "POST", path: "/api/v1/accounts/" + got.ID + "/sign-out", token: officer}); rec.Code != 403 {
+		t.Errorf("sign out without account.manage: %d", rec.Code)
+	}
+}

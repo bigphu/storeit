@@ -209,3 +209,129 @@ func TestAccount_SetPasswordRevokesOtherSessions(t *testing.T) {
 		t.Errorf("other session reason = %v, want password_change", reason)
 	}
 }
+
+// Danh sách: lọc theo trạng thái và role, đếm theo trạng thái, role và hạn link mời
+func TestAccount_ListStatusRoleAndExtras(t *testing.T) {
+	r := newRepos(t)
+	ctx := context.Background()
+	tag := strings.ToLower(uuid.NewString()[:8])
+	mk := func(name string, hash string, roles ...uuid.UUID) domain.Account {
+		t.Helper()
+		a, err := r.accounts.Create(ctx, domain.NewAccount{
+			Email: name + "-" + tag + "@storeit.test", Name: name + " " + tag, PasswordHash: hash, RoleIDs: roles,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	active := mk("active", "h", domain.EmployeeRoleID, domain.InventoryOfficerRoleID)
+	disabled := mk("disabled", "h", domain.EmployeeRoleID)
+	if _, err := r.accounts.SetActive(ctx, disabled.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	inv := issued(domain.PurposeInvite, time.Now().Add(72*time.Hour).Truncate(time.Microsecond))
+	invited, err := r.accounts.Create(actorCtx(uuid.New()), domain.NewAccount{
+		Email: "invited-" + tag + "@storeit.test", Name: "invited " + tag, Invite: &inv,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	list := func(f domain.AccountFilter) []uuid.UUID {
+		t.Helper()
+		f.Query, f.Limit = tag, 10
+		items, _, err := r.accounts.List(ctx, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []uuid.UUID
+		for _, a := range items {
+			out = append(out, a.ID)
+		}
+		return out
+	}
+	for st, want := range map[domain.AccountStatus]uuid.UUID{
+		domain.StatusActive: active.ID, domain.StatusInvited: invited.ID, domain.StatusDisabled: disabled.ID,
+	} {
+		if got := list(domain.AccountFilter{Status: &st}); len(got) != 1 || got[0] != want {
+			t.Errorf("status %s = %v, want [%s]", st, got, want)
+		}
+	}
+	officer := domain.InventoryOfficerRoleID
+	if got := list(domain.AccountFilter{RoleID: &officer}); len(got) != 1 || got[0] != active.ID {
+		t.Errorf("role filter = %v, want [%s]", got, active.ID)
+	}
+
+	counts, err := r.accounts.StatusCounts(ctx, domain.AccountFilter{Query: tag})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if counts[domain.StatusActive] != 1 || counts[domain.StatusInvited] != 1 || counts[domain.StatusDisabled] != 1 {
+		t.Errorf("counts = %v, want one of each", counts)
+	}
+	emp := domain.EmployeeRoleID
+	if c, _ := r.accounts.StatusCounts(ctx, domain.AccountFilter{Query: tag, RoleID: &emp}); c[domain.StatusInvited] != 0 || c[domain.StatusActive] != 1 {
+		t.Errorf("counts with role = %v, want active 1, no invited", c)
+	}
+
+	roles, err := r.accounts.RolesOf(ctx, []uuid.UUID{active.ID, invited.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(roles[active.ID]) != 2 || len(roles[invited.ID]) != 0 {
+		t.Errorf("roles = %v, want 2 for active, none for invited", roles)
+	}
+	exp, err := r.accounts.InviteExpiries(ctx, []uuid.UUID{active.ID, invited.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := exp[invited.ID]; !ok || !got.Equal(inv.ExpiresAt) {
+		t.Errorf("invite expiry = %v, want %v", got, inv.ExpiresAt)
+	}
+	if _, ok := exp[active.ID]; ok {
+		t.Error("account without invite has an expiry")
+	}
+}
+
+// Đăng nhập ghi last_sign_in_at; đăng xuất mọi nơi thu hồi phiên còn sống và ghi event
+func TestAccount_SignInAndSignOutEverywhere(t *testing.T) {
+	r := newRepos(t)
+	a := newAccount(t, r)
+	ctx := context.Background()
+	if a.LastSignInAt != nil {
+		t.Fatalf("new account has a sign-in time")
+	}
+	now := time.Now()
+	for i := range 2 {
+		startSession(t, r, a.ID, now, time.Duration(i+1)*24*time.Hour)
+	}
+	got, err := r.accounts.Get(ctx, a.ID)
+	if err != nil || got.LastSignInAt == nil {
+		t.Fatalf("last sign-in = %v, %v", got.LastSignInAt, err)
+	}
+	if n, err := r.accounts.LiveSessions(ctx, a.ID); err != nil || n != 2 {
+		t.Errorf("live sessions = %d, %v, want 2", n, err)
+	}
+
+	n, err := r.accounts.SignOutEverywhere(actorCtx(uuid.New()), a.ID)
+	if err != nil || n != 2 {
+		t.Fatalf("sign out = %d, %v, want 2", n, err)
+	}
+	if live, _ := r.accounts.LiveSessions(ctx, a.ID); live != 0 {
+		t.Errorf("live sessions after sign-out = %d", live)
+	}
+	if c, _ := countEvents(t, r, contract.EventAccountSignedOut, a.ID); c != 1 {
+		t.Errorf("account_signed_out events = %d, want 1", c)
+	}
+	// không còn phiên: không event
+	if n, err := r.accounts.SignOutEverywhere(actorCtx(uuid.New()), a.ID); err != nil || n != 0 {
+		t.Errorf("second sign out = %d, %v", n, err)
+	}
+	if c, _ := countEvents(t, r, contract.EventAccountSignedOut, a.ID); c != 1 {
+		t.Errorf("empty sign-out wrote an event")
+	}
+	if _, err := r.accounts.SignOutEverywhere(ctx, uuid.New()); !errors.Is(err, domain.ErrAccountNotFound) {
+		t.Errorf("unknown account: %v", err)
+	}
+}

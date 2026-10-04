@@ -14,6 +14,8 @@ import (
 type AccountFilter struct {
 	Query  string // tìm theo tên hoặc email, rỗng là không lọc
 	Active *bool
+	Status *AccountStatus
+	RoleID *uuid.UUID
 	Limit  int32
 	Offset int32
 }
@@ -58,6 +60,18 @@ type AccountRepository interface {
 	Roles(ctx context.Context, id uuid.UUID) ([]Role, error)
 	Permissions(ctx context.Context, id uuid.UUID) ([]string, error)
 	Count(ctx context.Context) (int64, error)
+	// StatusCounts: số account theo trạng thái với Query và RoleID của f (bỏ qua
+	// Active, Status, phân trang); trạng thái không có account thì không có trong map
+	StatusCounts(ctx context.Context, f AccountFilter) (map[AccountStatus]int64, error)
+	// RolesOf: role của từng account (danh sách account, tránh N+1)
+	RolesOf(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID][]Role, error)
+	// InviteExpiries: hạn link mời đang chờ của các account có link mời
+	InviteExpiries(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]time.Time, error)
+	// LiveSessions: số phiên đăng nhập còn dùng được
+	LiveSessions(ctx context.Context, id uuid.UUID) (int64, error)
+	// SignOutEverywhere thu hồi mọi phiên (admin); có phiên bị thu hồi thì event
+	// account_signed_out. Trả số phiên đã thu hồi.
+	SignOutEverywhere(ctx context.Context, id uuid.UUID) (int64, error)
 }
 
 // TokenRepository lưu link đặt mật khẩu (invite, reset)

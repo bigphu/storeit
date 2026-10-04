@@ -16,6 +16,7 @@ type Account struct {
 	MemberID     *uuid.UUID // liên kết tới directory, có thể chưa có
 	Active       bool
 	Version      int32 // optimistic locking cho cập nhật hồ sơ
+	LastSignInAt *time.Time
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }

@@ -12,7 +12,7 @@ func toAPIAccount(a domain.Account) api.Account {
 	return api.Account{
 		Id: a.ID, Email: a.Email, Name: a.Name, MemberId: a.MemberID,
 		Active: a.Active, Status: api.AccountStatus(a.Status()), Version: a.Version,
-		CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
+		LastSignInAt: a.LastSignInAt, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
 	}
 }
 
@@ -20,9 +20,9 @@ func toAPIDetail(v service.AccountView) api.AccountDetail {
 	a := v.Account
 	return api.AccountDetail{
 		Id: a.ID, Email: a.Email, Name: a.Name, MemberId: a.MemberID,
-		Active: a.Active, Status: api.AccountDetailStatus(a.Status()), Version: a.Version,
-		CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
-		Roles: toSummaries(v.Roles),
+		Active: a.Active, Status: api.AccountStatus(a.Status()), Version: a.Version,
+		LastSignInAt: a.LastSignInAt, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
+		Roles: toSummaries(v.Roles), ActiveSessions: v.Sessions, InviteExpiresAt: v.InviteExpiresAt,
 	}
 }
 

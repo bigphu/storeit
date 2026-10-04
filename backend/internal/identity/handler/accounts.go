@@ -21,20 +21,48 @@ func (h *Handler) ListAccounts(ctx context.Context, req api.ListAccountsRequestO
 	if req.Params.PageSize != nil {
 		size = *req.Params.PageSize
 	}
-	items, total, err := h.svc.ListAccounts(ctx, domain.AccountFilter{
+	f := domain.AccountFilter{
 		Query:  deref(req.Params.Q),
 		Active: req.Params.Active,
+		RoleID: req.Params.RoleId,
 		Limit:  int32(size),
 		Offset: int32((page - 1) * size),
-	})
+	}
+	if req.Params.Status != nil {
+		st := domain.AccountStatus(*req.Params.Status)
+		f.Status = &st
+	}
+	p, err := h.svc.ListAccounts(ctx, f)
 	if err != nil {
 		return nil, err
 	}
-	out := api.ListAccounts200JSONResponse{Items: make([]api.Account, len(items)), Total: total}
-	for i, a := range items {
-		out.Items[i] = toAPIAccount(a)
+	out := api.ListAccounts200JSONResponse{
+		Items: make([]api.AccountListItem, len(p.Items)),
+		Total: p.Total,
+		StatusCounts: api.AccountStatusCounts{
+			Invited:  p.StatusCounts[domain.StatusInvited],
+			Active:   p.StatusCounts[domain.StatusActive],
+			Disabled: p.StatusCounts[domain.StatusDisabled],
+		},
+	}
+	for i, it := range p.Items {
+		a := it.Account
+		out.Items[i] = api.AccountListItem{
+			Id: a.ID, Email: a.Email, Name: a.Name, MemberId: a.MemberID,
+			Active: a.Active, Status: api.AccountStatus(a.Status()), Version: a.Version,
+			LastSignInAt: a.LastSignInAt, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
+			Roles: toSummaries(it.Roles), InviteExpiresAt: it.InviteExpiresAt,
+		}
 	}
 	return out, nil
+}
+
+func (h *Handler) SignOutAccount(ctx context.Context, req api.SignOutAccountRequestObject) (api.SignOutAccountResponseObject, error) {
+	n, err := h.svc.SignOutEverywhere(ctx, req.AccountID)
+	if err != nil {
+		return nil, err
+	}
+	return api.SignOutAccount200JSONResponse{Revoked: n}, nil
 }
 
 func (h *Handler) CreateAccount(ctx context.Context, req api.CreateAccountRequestObject) (api.CreateAccountResponseObject, error) {

@@ -154,6 +154,14 @@ paths:
         - name: active
           in: query
           schema: { type: boolean }
+        - name: status
+          in: query
+          description: Only accounts with this status
+          schema: { $ref: '#/components/schemas/AccountStatus' }
+        - name: role_id
+          in: query
+          description: Only accounts holding this role
+          schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
       responses:
         "200":
           description: Page of accounts
@@ -218,6 +226,27 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AccountDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /accounts/{accountID}/sign-out:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    post:
+      operationId: signOutAccount
+      summary: Sign an account out of every device (identity.account.manage)
+      responses:
+        "200":
+          description: Sessions ended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revoked]
+                properties:
+                  revoked:
+                    type: integer
+                    format: int64
+                    description: Number of sessions that were still live
         default: { $ref: '#/components/responses/Problem' }
 
   /accounts/{accountID}/enable:
@@ -454,11 +483,12 @@ components:
         name: { type: string }
         member_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
         active: { type: boolean }
-        status:
-          type: string
-          enum: [invited, active, disabled]
-          description: invited = has not set a password yet
+        status: { $ref: '#/components/schemas/AccountStatus' }
         version: { type: integer, format: int32 }
+        last_sign_in_at:
+          type: string
+          format: date-time
+          description: Last time the account signed in (refreshing a session doesn't count)
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -478,16 +508,53 @@ components:
             roles:
               type: array
               items: { $ref: '#/components/schemas/RoleSummary' }
+            active_sessions:
+              type: integer
+              format: int64
+              description: Sessions still usable; only on GET /accounts/{accountID}
+            invite_expires_at:
+              type: string
+              format: date-time
+              description: When the pending invitation link stops working; only on GET /accounts/{accountID}
+
+    AccountListItem:
+      allOf:
+        - $ref: '#/components/schemas/Account'
+        - type: object
+          required: [roles]
+          properties:
+            roles:
+              type: array
+              items: { $ref: '#/components/schemas/RoleSummary' }
+            invite_expires_at:
+              type: string
+              format: date-time
+              description: When the pending invitation link stops working (invited accounts)
+
+    AccountStatus:
+      type: string
+      description: invited = has not set a password yet
+      enum: [invited, active, disabled]
+
+    AccountStatusCounts:
+      type: object
+      description: Accounts per status for the same q and role_id, ignoring active and status
+      required: [invited, active, disabled]
+      properties:
+        invited: { type: integer, format: int64 }
+        active: { type: integer, format: int64 }
+        disabled: { type: integer, format: int64 }
 
     AccountList:
       allOf:
         - $ref: '../../../api/common.yaml#/components/schemas/Paged'
         - type: object
-          required: [items]
+          required: [items, status_counts]
           properties:
             items:
               type: array
-              items: { $ref: '#/components/schemas/Account' }
+              items: { $ref: '#/components/schemas/AccountListItem' }
+            status_counts: { $ref: '#/components/schemas/AccountStatusCounts' }
 
     Me:
       type: object
