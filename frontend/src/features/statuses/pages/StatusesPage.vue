@@ -2,6 +2,7 @@
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import Column from 'primevue/column'
+import ContextMenu from 'primevue/contextmenu'
 import DataTable from 'primevue/datatable'
 import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
@@ -16,6 +17,7 @@ import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { useFormErrors } from '@/lib/forms'
 import { notify } from '@/lib/notify'
+import { onRowClick, useRowMenu } from '@/lib/tableRows'
 import { kindSeverity, statusKinds, useArchiveStatus, useCreateStatus, useStatuses, useUpdateStatus } from '../api'
 
 const session = useSession()
@@ -90,6 +92,18 @@ function askArchive(s: Status) {
         .catch(() => {}),
   })
 }
+
+// Không có trang chi tiết: người được quản lý bấm dòng để sửa, chuột phải có sửa/lưu trữ
+const rowClick = onRowClick((s: Status) => openEdit(s))
+const menu = ref<InstanceType<typeof ContextMenu>>()
+const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Status>(menu, (s) =>
+  canManage.value
+    ? [
+        { label: 'Edit', icon: 'pi pi-pencil', command: () => openEdit(s) },
+        { label: 'Archive', icon: 'pi pi-inbox', visible: !s.archived_at && !s.is_system, command: () => askArchive(s) },
+      ]
+    : [],
+)
 </script>
 
 <template>
@@ -102,9 +116,19 @@ function askArchive(s: Status) {
       <Checkbox v-model="showArchived" input-id="show-archived" binary />
       <label for="show-archived">Show archived</label>
     </div>
-    <DataTable :value="statuses ?? []" :loading="isFetching" data-key="id">
-      <Column field="name" header="Name" />
-      <Column header="Kind">
+    <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />
+    <DataTable
+      :value="statuses ?? []"
+      :loading="isFetching"
+      data-key="id"
+      removable-sort
+      row-hover
+      :row-class="() => (canManage ? 'clickable-row' : undefined)"
+      @row-click="(e) => canManage && rowClick(e)"
+      @row-contextmenu="showMenu"
+    >
+      <Column field="name" header="Name" sortable />
+      <Column header="Kind" sort-field="kind" sortable>
         <template #body="{ data: s }: { data: Status }">
           <Tag :value="s.kind" :severity="kindSeverity(s.kind)" />
         </template>
@@ -115,13 +139,13 @@ function askArchive(s: Status) {
       <Column header="Built-in">
         <template #body="{ data: s }: { data: Status }">{{ s.is_system ? 'Yes' : '' }}</template>
       </Column>
-      <Column field="position" header="Position" />
+      <Column field="position" header="Position" sortable />
       <Column header="Archived">
         <template #body="{ data: s }: { data: Status }">{{ s.archived_at ? 'Yes' : '' }}</template>
       </Column>
       <Column v-if="canManage" header="">
         <template #body="{ data: s }: { data: Status }">
-          <div class="actions end">
+          <div class="row-actions">
             <Button
               v-tooltip.top="'Edit'"
               icon="pi pi-pencil"
@@ -145,6 +169,7 @@ function askArchive(s: Status) {
           </div>
         </template>
       </Column>
+      <template #empty>No statuses yet.</template>
     </DataTable>
 
     <Dialog v-model:visible="open" modal :header="editing ? 'Edit status' : 'New status'" :style="{ width: '30rem' }">
@@ -182,10 +207,3 @@ function askArchive(s: Status) {
     </Dialog>
   </section>
 </template>
-
-<style scoped>
-.actions.end {
-  justify-content: flex-end;
-  flex-wrap: nowrap;
-}
-</style>

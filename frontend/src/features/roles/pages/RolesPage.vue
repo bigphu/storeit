@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Column from 'primevue/column'
+import ContextMenu from 'primevue/contextmenu'
 import DataTable from 'primevue/datatable'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
@@ -13,6 +14,8 @@ import type { Role } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { useFormErrors } from '@/lib/forms'
+import { openLocation } from '@/lib/navigation'
+import { onRowClick, useRowMenu } from '@/lib/tableRows'
 import { useCreateRole, useRoles } from '../api'
 
 const session = useSession()
@@ -41,6 +44,17 @@ async function submit() {
     errors.set(err)
   }
 }
+
+// Bấm dòng mở vai trò (Ctrl/⌘ mở tab mới); chuột phải có menu mở
+function openRole(r: Role, e?: MouseEvent, newTab?: boolean) {
+  openLocation(router, `/roles/${r.id}`, e, newTab)
+}
+const rowClick = onRowClick(openRole)
+const menu = ref<InstanceType<typeof ContextMenu>>()
+const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Role>(menu, (r) => [
+  { label: 'Open', icon: 'pi pi-arrow-right', command: () => openRole(r) },
+  { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => openRole(r, undefined, true) },
+])
 </script>
 
 <template>
@@ -49,17 +63,28 @@ async function submit() {
       <h1>Roles</h1>
       <Button v-if="session.can(Perm.RoleManage)" label="New role" icon="pi pi-plus" @click="openCreate" />
     </div>
-    <DataTable :value="roles ?? []" :loading="isFetching" data-key="id">
-      <Column header="Name">
+    <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />
+    <DataTable
+      :value="roles ?? []"
+      :loading="isFetching"
+      data-key="id"
+      removable-sort
+      row-hover
+      :row-class="() => 'clickable-row'"
+      @row-click="rowClick"
+      @row-contextmenu="showMenu"
+    >
+      <Column header="Name" sort-field="name" sortable>
         <template #body="{ data: r }: { data: Role }">
           <RouterLink :to="`/roles/${r.id}`">{{ r.name }}</RouterLink>
           <Tag v-if="r.is_system" value="system" severity="secondary" class="ml" />
         </template>
       </Column>
-      <Column field="description" header="Description" />
-      <Column header="Permissions">
+      <Column field="description" header="Description" sortable />
+      <Column header="Permissions" sort-field="permissions.length" sortable>
         <template #body="{ data: r }: { data: Role }">{{ r.permissions.length }}</template>
       </Column>
+      <template #empty>No roles yet.</template>
     </DataTable>
 
     <Dialog v-model:visible="creating" modal header="New role" :style="{ width: '32rem' }">

@@ -76,7 +76,7 @@ function askRemove(o: Option) {
 <template>
   <Dialog v-model:visible="visible" modal :header="`Options of ${attribute?.label ?? ''}`" :style="{ width: 'min(92vw, 34rem)' }">
     <p v-if="canManage" class="hint">Drag the handle to change the order.</p>
-    <DataTable :value="rows" data-key="id" size="small" @row-reorder="onReorder">
+    <DataTable :value="rows" data-key="id" size="small" row-hover @row-reorder="onReorder">
       <Column v-if="canManage" row-reorder header-style="width: 2.5rem" />
       <Column header="Label">
         <template #body="{ data: o }: { data: Option }">

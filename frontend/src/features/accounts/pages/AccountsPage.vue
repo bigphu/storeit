@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Column from 'primevue/column'
+import ContextMenu from 'primevue/contextmenu'
 import DataTable, { type DataTablePageEvent } from 'primevue/datatable'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import type { Account } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { formatDateTime } from '@/lib/dates'
+import { openLocation } from '@/lib/navigation'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
+import { onRowClick, useRowMenu } from '@/lib/tableRows'
 import { queryInt, queryString, useUrlState } from '@/lib/urlState'
 import { useAccounts } from '../api'
 import CreateAccountDialog from '../components/CreateAccountDialog.vue'
@@ -66,6 +70,18 @@ function onPage(e: DataTablePageEvent) {
 }
 
 const creating = ref(false)
+
+// Bấm dòng mở tài khoản (Ctrl/⌘ mở tab mới); chuột phải có menu mở
+const router = useRouter()
+function openAccount(a: Account, e?: MouseEvent, newTab?: boolean) {
+  openLocation(router, `/accounts/${a.id}`, e, newTab)
+}
+const rowClick = onRowClick(openAccount)
+const menu = ref<InstanceType<typeof ContextMenu>>()
+const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Account>(menu, (a) => [
+  { label: 'Open', icon: 'pi pi-arrow-right', command: () => openAccount(a) },
+  { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => openAccount(a, undefined, true) },
+])
 </script>
 
 <template>
@@ -96,7 +112,11 @@ const creating = ref(false)
       :total-records="data?.total ?? 0"
       :loading="isFetching"
       data-key="id"
+      row-hover
+      :row-class="() => 'clickable-row'"
       @page="onPage"
+      @row-click="rowClick"
+      @row-contextmenu="showMenu"
     >
       <Column header="Name">
         <template #body="{ data: a }: { data: Account }">
@@ -114,6 +134,7 @@ const creating = ref(false)
       </Column>
       <template #empty>No accounts found.</template>
     </DataTable>
+    <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />
     <CreateAccountDialog v-model:visible="creating" />
   </section>
 </template>

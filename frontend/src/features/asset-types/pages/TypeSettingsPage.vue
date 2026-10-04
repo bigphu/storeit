@@ -2,6 +2,7 @@
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import Column from 'primevue/column'
+import ContextMenu from 'primevue/contextmenu'
 import DataTable, { type DataTableRowReorderEvent } from 'primevue/datatable'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
@@ -18,6 +19,7 @@ import { useSession } from '@/lib/auth/session'
 import { describeError, isApiError } from '@/lib/errors'
 import { useFormErrors } from '@/lib/forms'
 import { notify } from '@/lib/notify'
+import { onRowClick, useRowMenu } from '@/lib/tableRows'
 import {
   useArchiveAssetType,
   useAssetType,
@@ -175,6 +177,24 @@ const crumbs = computed<Crumb[]>(() =>
       ]
     : [],
 )
+
+// Bấm dòng để sửa thuộc tính (người được quản lý, thuộc tính chưa xoá); chuột phải có thêm
+// sửa lựa chọn và xoá
+function canEditRow(a: Attribute) {
+  return canManage.value && !a.removed
+}
+const rowClick = onRowClick((a: Attribute) => canEditRow(a) && openAttribute(a))
+const menu = ref<InstanceType<typeof ContextMenu>>()
+const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attribute>(menu, (a) =>
+  canEditRow(a)
+    ? [
+        { label: 'Edit', icon: 'pi pi-pencil', command: () => openAttribute(a) },
+        { label: 'Edit options', icon: 'pi pi-list', visible: a.data_type === 'select', command: () => openOptions(a) },
+        { separator: true },
+        { label: 'Remove', icon: 'pi pi-trash', command: () => askRemove(a) },
+      ]
+    : [],
+)
 </script>
 
 <template>
@@ -223,7 +243,17 @@ const crumbs = computed<Crumb[]>(() =>
       </div>
       <p v-if="canManage && attributes.length > 1" class="hint">Drag the handle to change the order of columns and form fields.</p>
       <!-- Cột trải hết bề ngang; "Required" là checkbox (đổi ngay khi có quyền) -->
-      <DataTable :value="attributes" data-key="id" table-style="width: 100%; table-layout: fixed" @row-reorder="onReorder">
+      <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />
+      <DataTable
+        :value="attributes"
+        data-key="id"
+        table-style="width: 100%; table-layout: fixed"
+        row-hover
+        :row-class="(a: Attribute) => (canEditRow(a) ? 'clickable-row' : undefined)"
+        @row-reorder="onReorder"
+        @row-click="rowClick"
+        @row-contextmenu="showMenu"
+      >
         <Column v-if="canManage && !showRemoved" row-reorder header-style="width: 2.75rem" />
         <Column field="label" header="Label" header-style="width: 22%" />
         <Column header="Key" header-style="width: 16%">
@@ -264,7 +294,7 @@ const crumbs = computed<Crumb[]>(() =>
         <Column header="" header-style="width: 6rem" body-class="row-actions-cell">
           <template #body="{ data: a }: { data: Attribute }">
             <Tag v-if="a.removed" value="removed" severity="secondary" />
-            <div v-else-if="canManage" class="actions end">
+            <div v-else-if="canManage" class="row-actions">
               <Button
                 v-tooltip.top="'Edit'"
                 icon="pi pi-pencil"
@@ -342,10 +372,6 @@ const crumbs = computed<Crumb[]>(() =>
 }
 .opts-btn {
   flex: none;
-}
-.actions.end {
-  justify-content: flex-end;
-  flex-wrap: nowrap;
 }
 .hint.after {
   margin: 0.75rem 0 0;
