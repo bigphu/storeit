@@ -7,6 +7,7 @@ type V = Inventory['schemas']
 
 export type Account = I['Account']
 export type AccountDetail = I['AccountDetail']
+export type AccountListItem = I['AccountListItem']
 export type Role = I['Role']
 export type RoleSummary = I['RoleSummary']
 export type Permission = I['Permission']

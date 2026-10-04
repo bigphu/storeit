@@ -1,11 +1,15 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 import { identityApi } from '@/lib/api/client'
+import type { Account } from '@/lib/api/types'
 import { unwrap } from '@/lib/errors'
+
+export type AccountStatus = Account['status']
 
 export interface AccountListParams {
   q?: string
-  active?: boolean
+  status?: AccountStatus
+  role_id?: string
   page: number
   page_size: number
 }
@@ -81,4 +85,9 @@ export function useSendPasswordReset() {
   return useAccountMutation((id: string) =>
     unwrap(identityApi.POST('/accounts/{accountID}/password-reset', path(id))),
   )
+}
+
+// Đăng xuất account khỏi mọi thiết bị; trả số phiên đã kết thúc
+export function useSignOutAccount() {
+  return useAccountMutation((id: string) => unwrap(identityApi.POST('/accounts/{accountID}/sign-out', path(id))))
 }

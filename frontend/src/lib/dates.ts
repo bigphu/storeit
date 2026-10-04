@@ -22,3 +22,8 @@ export function formatDate(s: string | null | undefined): string {
 export function formatDateTime(s: string | null | undefined): string {
   return s ? new Date(s).toLocaleString() : '—'
 }
+
+// formatDay: ngày (theo giờ máy) của một thời điểm ISO, vd lần đăng nhập
+export function formatDay(s: string | null | undefined): string {
+  return s ? new Date(s).toLocaleDateString() : '—'
+}
