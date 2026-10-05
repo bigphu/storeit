@@ -32,3 +32,11 @@ server, pgx, River, sqlc, goose) and `frontend/`.
 - Code comments and package docs are written in Vietnamese; keep that style.
 - Files use LF line endings. When scripting edits with Python on this Windows machine,
   open files with `newline=''`, or CRLF gets written.
+
+## Frontend
+
+- `frontend/`: Vue 3 + TypeScript + PrimeVue + Vue Query, reference in `frontend/README.md`.
+  Commands (run in `frontend/`): `npm run dev` (:3000, proxies `/api` to :8080),
+  `npm run check` (vue-tsc, Vitest, build), `npm run gen:api` after changing a backend
+  OpenAPI spec (commit the generated `src/lib/api/*.d.ts`; never hand-edit them).
+- Comments in Vietnamese like the backend; UI text in English.

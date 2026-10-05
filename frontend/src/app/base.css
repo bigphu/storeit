@@ -1,0 +1,56 @@
+/* Chỉ bố cục tối thiểu; giao diện sẽ làm lại sau */
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: var(--p-content-background);
+  color: var(--p-text-color);
+}
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 40rem;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.field-error {
+  color: var(--p-red-500);
+  font-size: 0.875rem;
+}
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+dl.props {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.5rem 1rem;
+}
+dl.props dt {
+  font-weight: 600;
+}
+dl.props dd {
+  margin: 0;
+}
+section + section {
+  margin-top: 2rem;
+}
