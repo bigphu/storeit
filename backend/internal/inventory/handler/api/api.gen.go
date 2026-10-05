@@ -8,25 +8,627 @@ import (
 	"compress/flate"
 	"context"
 	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	externalRef0 "storeit/internal/platform/web/apicommon"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
+	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+// Defines values for DataType.
+const (
+	Boolean DataType = "boolean"
+	Date    DataType = "date"
+	Number  DataType = "number"
+	Select  DataType = "select"
+	Text    DataType = "text"
+)
+
+// Valid indicates whether the value is a known member of the DataType enum.
+func (e DataType) Valid() bool {
+	switch e {
+	case Boolean:
+		return true
+	case Date:
+		return true
+	case Number:
+		return true
+	case Select:
+		return true
+	case Text:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StatusKind.
+const (
+	Available   StatusKind = "available"
+	InUse       StatusKind = "in_use"
+	Retired     StatusKind = "retired"
+	Unavailable StatusKind = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the StatusKind enum.
+func (e StatusKind) Valid() bool {
+	switch e {
+	case Available:
+		return true
+	case InUse:
+		return true
+	case Retired:
+		return true
+	case Unavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// AssetDetail defines model for AssetDetail.
+type AssetDetail struct {
+	AssetType TypeSummary `json:"asset_type"`
+
+	// Attributes Active attributes of the asset's type in display order, with their values
+	Attributes     []AttributeValue    `json:"attributes"`
+	CreatedAt      time.Time           `json:"created_at"`
+	Description    string              `json:"description"`
+	HolderMemberId *externalRef0.ID    `json:"holder_member_id,omitempty"`
+	Id             externalRef0.ID     `json:"id"`
+	LocationId     *externalRef0.ID    `json:"location_id,omitempty"`
+	Name           string              `json:"name"`
+	PurchaseDate   *openapi_types.Date `json:"purchase_date,omitempty"`
+	RetiredAt      *time.Time          `json:"retired_at,omitempty"`
+	RetiredReason  *string             `json:"retired_reason,omitempty"`
+	Status         StatusSummary       `json:"status"`
+	Tag            string              `json:"tag"`
+	UpdatedAt      time.Time           `json:"updated_at"`
+	Version        int32               `json:"version"`
+}
+
+// AssetList defines model for AssetList.
+type AssetList struct {
+	Items []AssetListItem `json:"items"`
+	Total int64           `json:"total"`
+}
+
+// AssetListItem defines model for AssetListItem.
+type AssetListItem struct {
+	AssetTypeId   externalRef0.ID `json:"asset_type_id"`
+	AssetTypeName string          `json:"asset_type_name"`
+
+	// Attributes Chỉ có khi lọc theo `type_id`; như trong chi tiết tài sản.
+	Attributes     *[]AttributeValue   `json:"attributes,omitempty"`
+	HolderMemberId *externalRef0.ID    `json:"holder_member_id,omitempty"`
+	Id             externalRef0.ID     `json:"id"`
+	LocationId     *externalRef0.ID    `json:"location_id,omitempty"`
+	Name           string              `json:"name"`
+	PurchaseDate   *openapi_types.Date `json:"purchase_date,omitempty"`
+	RetiredAt      *time.Time          `json:"retired_at,omitempty"`
+	StatusId       externalRef0.ID     `json:"status_id"`
+	StatusKind     StatusKind          `json:"status_kind"`
+	StatusName     string              `json:"status_name"`
+	Tag            string              `json:"tag"`
+	UpdatedAt      time.Time           `json:"updated_at"`
+	Version        int32               `json:"version"`
+}
+
+// AssetType defines model for AssetType.
+type AssetType struct {
+	ArchivedAt  *time.Time      `json:"archived_at,omitempty"`
+	Code        string          `json:"code"`
+	CreatedAt   time.Time       `json:"created_at"`
+	Description string          `json:"description"`
+	Id          externalRef0.ID `json:"id"`
+	IsSystem    bool            `json:"is_system"`
+	Name        string          `json:"name"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+	Version     int32           `json:"version"`
+}
+
+// AssetTypeDetail defines model for AssetTypeDetail.
+type AssetTypeDetail struct {
+	ArchivedAt *time.Time `json:"archived_at,omitempty"`
+
+	// Attributes All attributes in display order, including removed ones (removed = true)
+	Attributes  []Attribute     `json:"attributes"`
+	Code        string          `json:"code"`
+	CreatedAt   time.Time       `json:"created_at"`
+	Description string          `json:"description"`
+	Id          externalRef0.ID `json:"id"`
+	IsSystem    bool            `json:"is_system"`
+	Name        string          `json:"name"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+	Version     int32           `json:"version"`
+}
+
+// Attribute defines model for Attribute.
+type Attribute struct {
+	DataType   DataType        `json:"data_type"`
+	Id         externalRef0.ID `json:"id"`
+	IsRequired bool            `json:"is_required"`
+	Key        string          `json:"key"`
+	Label      string          `json:"label"`
+	Options    []Option        `json:"options"`
+	Position   int32           `json:"position"`
+	Removed    bool            `json:"removed"`
+
+	// Unit Only for number attributes
+	Unit *string `json:"unit,omitempty"`
+}
+
+// AttributeValue defines model for AttributeValue.
+type AttributeValue struct {
+	DataType      DataType `json:"data_type"`
+	Key           string   `json:"key"`
+	Label         string   `json:"label"`
+	OptionLabel   *string  `json:"option_label,omitempty"`
+	OptionRemoved *bool    `json:"option_removed,omitempty"`
+	Unit          *string  `json:"unit,omitempty"`
+
+	// Value string (text, date YYYY-MM-DD, select option id), number or boolean; null when empty
+	Value interface{} `json:"value"`
+}
+
+// AttributeValues Attribute key -> value (string, number, boolean; select = option id; date = YYYY-MM-DD)
+type AttributeValues map[string]interface{}
+
+// CreateAssetRequest defines model for CreateAssetRequest.
+type CreateAssetRequest struct {
+	AssetTypeId externalRef0.ID `json:"asset_type_id"`
+
+	// Attributes Attribute key -> value (string, number, boolean; select = option id; date = YYYY-MM-DD)
+	Attributes     *AttributeValues    `json:"attributes,omitempty"`
+	Description    *string             `json:"description,omitempty"`
+	HolderMemberId *externalRef0.ID    `json:"holder_member_id,omitempty"`
+	LocationId     *externalRef0.ID    `json:"location_id,omitempty"`
+	Name           string              `json:"name"`
+	PurchaseDate   *openapi_types.Date `json:"purchase_date,omitempty"`
+	StatusId       *externalRef0.ID    `json:"status_id,omitempty"`
+	Tag            string              `json:"tag"`
+}
+
+// CreateAssetTypeRequest defines model for CreateAssetTypeRequest.
+type CreateAssetTypeRequest struct {
+	Attributes  *[]NewAttribute `json:"attributes,omitempty"`
+	Code        string          `json:"code"`
+	Description *string         `json:"description,omitempty"`
+	Name        string          `json:"name"`
+}
+
+// CreateStatusRequest defines model for CreateStatusRequest.
+type CreateStatusRequest struct {
+	Kind     StatusKind `json:"kind"`
+	Name     string     `json:"name"`
+	Position *int32     `json:"position,omitempty"`
+}
+
+// DataType defines model for DataType.
+type DataType string
+
+// NewAttribute defines model for NewAttribute.
+type NewAttribute struct {
+	DataType   DataType  `json:"data_type"`
+	IsRequired *bool     `json:"is_required,omitempty"`
+	Key        string    `json:"key"`
+	Label      string    `json:"label"`
+	Options    *[]string `json:"options,omitempty"`
+	Position   *int32    `json:"position,omitempty"`
+	Unit       *string   `json:"unit,omitempty"`
+}
+
+// Option defines model for Option.
+type Option struct {
+	Id       externalRef0.ID `json:"id"`
+	Label    string          `json:"label"`
+	Position int32           `json:"position"`
+	Removed  bool            `json:"removed"`
+}
+
+// OptionRequest defines model for OptionRequest.
+type OptionRequest struct {
+	Label    string `json:"label"`
+	Position *int32 `json:"position,omitempty"`
+}
+
+// RetireAssetRequest defines model for RetireAssetRequest.
+type RetireAssetRequest struct {
+	Reason  *string `json:"reason,omitempty"`
+	Version int32   `json:"version"`
+}
+
+// Status defines model for Status.
+type Status struct {
+	ArchivedAt *time.Time      `json:"archived_at,omitempty"`
+	Id         externalRef0.ID `json:"id"`
+	IsDefault  bool            `json:"is_default"`
+	IsSystem   bool            `json:"is_system"`
+	Kind       StatusKind      `json:"kind"`
+	Name       string          `json:"name"`
+	Position   int32           `json:"position"`
+}
+
+// StatusKind defines model for StatusKind.
+type StatusKind string
+
+// StatusSummary defines model for StatusSummary.
+type StatusSummary struct {
+	Id   externalRef0.ID `json:"id"`
+	Kind StatusKind      `json:"kind"`
+	Name string          `json:"name"`
+}
+
+// TypeSummary defines model for TypeSummary.
+type TypeSummary struct {
+	Code string          `json:"code"`
+	Id   externalRef0.ID `json:"id"`
+	Name string          `json:"name"`
+}
+
+// UpdateAssetRequest defines model for UpdateAssetRequest.
+type UpdateAssetRequest struct {
+	AssetTypeId externalRef0.ID `json:"asset_type_id"`
+
+	// Attributes Attribute key -> value (string, number, boolean; select = option id; date = YYYY-MM-DD)
+	Attributes     *AttributeValues    `json:"attributes,omitempty"`
+	Description    *string             `json:"description,omitempty"`
+	HolderMemberId *externalRef0.ID    `json:"holder_member_id,omitempty"`
+	LocationId     *externalRef0.ID    `json:"location_id,omitempty"`
+	Name           string              `json:"name"`
+	PurchaseDate   *openapi_types.Date `json:"purchase_date,omitempty"`
+	StatusId       *externalRef0.ID    `json:"status_id,omitempty"`
+	Version        int32               `json:"version"`
+}
+
+// UpdateAssetTypeRequest defines model for UpdateAssetTypeRequest.
+type UpdateAssetTypeRequest struct {
+	Description *string `json:"description,omitempty"`
+	Name        *string `json:"name,omitempty"`
+	Version     int32   `json:"version"`
+}
+
+// UpdateAttributeRequest defines model for UpdateAttributeRequest.
+type UpdateAttributeRequest struct {
+	DataType   *DataType `json:"data_type,omitempty"`
+	IsRequired *bool     `json:"is_required,omitempty"`
+	Label      *string   `json:"label,omitempty"`
+	Position   *int32    `json:"position,omitempty"`
+
+	// Unit "" removes the unit
+	Unit *string `json:"unit,omitempty"`
+}
+
+// UpdateOptionRequest defines model for UpdateOptionRequest.
+type UpdateOptionRequest struct {
+	Label    *string `json:"label,omitempty"`
+	Position *int32  `json:"position,omitempty"`
+}
+
+// UpdateStatusRequest defines model for UpdateStatusRequest.
+type UpdateStatusRequest struct {
+	// MakeDefault Make this the default status of its kind (moves the flag)
+	MakeDefault *bool   `json:"make_default,omitempty"`
+	Name        *string `json:"name,omitempty"`
+	Position    *int32  `json:"position,omitempty"`
+}
+
+// VersionRequest defines model for VersionRequest.
+type VersionRequest struct {
+	Version int32 `json:"version"`
+}
+
+// AssetID defines model for AssetID.
+type AssetID = externalRef0.ID
+
+// AttributeID defines model for AttributeID.
+type AttributeID = externalRef0.ID
+
+// IncludeArchived defines model for IncludeArchived.
+type IncludeArchived = bool
+
+// OptionID defines model for OptionID.
+type OptionID = externalRef0.ID
+
+// StatusID defines model for StatusID.
+type StatusID = externalRef0.ID
+
+// TypeID defines model for TypeID.
+type TypeID = externalRef0.ID
+
+// Problem defines model for Problem.
+type Problem = externalRef0.Problem
+
+// ListStatusesParams defines parameters for ListStatuses.
+type ListStatusesParams struct {
+	IncludeArchived *IncludeArchived `form:"include_archived,omitempty" json:"include_archived,omitempty"`
+}
+
+// ListAssetTypesParams defines parameters for ListAssetTypes.
+type ListAssetTypesParams struct {
+	IncludeArchived *IncludeArchived `form:"include_archived,omitempty" json:"include_archived,omitempty"`
+}
+
+// ListAssetsParams defines parameters for ListAssets.
+type ListAssetsParams struct {
+	// Q Case-insensitive substring of tag or name
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// TypeId Lọc theo loại; khi có, mỗi dòng kèm `attributes` (các cột của loại).
+	TypeId         *externalRef0.ID `form:"type_id,omitempty" json:"type_id,omitempty"`
+	StatusId       *externalRef0.ID `form:"status_id,omitempty" json:"status_id,omitempty"`
+	StatusKind     *StatusKind      `form:"status_kind,omitempty" json:"status_kind,omitempty"`
+	LocationId     *externalRef0.ID `form:"location_id,omitempty" json:"location_id,omitempty"`
+	HolderMemberId *externalRef0.ID `form:"holder_member_id,omitempty" json:"holder_member_id,omitempty"`
+	IncludeRetired *bool            `form:"include_retired,omitempty" json:"include_retired,omitempty"`
+
+	// Attr Lọc theo thuộc tính tuỳ chỉnh, cần `type_id`; lặp lại để kết hợp (AND).
+	// Dạng `<key>:<op>:<value>`. Toán tử theo kiểu: text `eq` (không phân biệt
+	// hoa thường), `contains`; number và date `eq`, `gt`, `gte`, `lt`, `lte`;
+	// boolean `eq` (`true`/`false`); select `eq` (id option), `in` (id ngăn
+	// bằng dấu phẩy). Ví dụ `attr=ram_gb:gte:16&attr=os:eq:<option id>`.
+	Attr *[]string `form:"attr,omitempty" json:"attr,omitempty"`
+
+	// Sort `tag`, `name`, `purchase_date`, `updated_at`, `asset_type` (tên loại),
+	// `status` (thứ tự status như `GET /asset-statuses`) hoặc `attributes.<key>`
+	// (cần `type_id`; tài sản không có giá trị ở cuối); tiền tố `-` là giảm dần.
+	// Mặc định `tag`.
+	Sort     *string                `form:"sort,omitempty" json:"sort,omitempty"`
+	Page     *externalRef0.Page     `form:"page,omitempty" json:"page,omitempty"`
+	PageSize *externalRef0.PageSize `form:"page_size,omitempty" json:"page_size,omitempty"`
+}
+
+// CreateStatusJSONRequestBody defines body for CreateStatus for application/json ContentType.
+type CreateStatusJSONRequestBody = CreateStatusRequest
+
+// UpdateStatusJSONRequestBody defines body for UpdateStatus for application/json ContentType.
+type UpdateStatusJSONRequestBody = UpdateStatusRequest
+
+// CreateAssetTypeJSONRequestBody defines body for CreateAssetType for application/json ContentType.
+type CreateAssetTypeJSONRequestBody = CreateAssetTypeRequest
+
+// UpdateAssetTypeJSONRequestBody defines body for UpdateAssetType for application/json ContentType.
+type UpdateAssetTypeJSONRequestBody = UpdateAssetTypeRequest
+
+// AddAttributeJSONRequestBody defines body for AddAttribute for application/json ContentType.
+type AddAttributeJSONRequestBody = NewAttribute
+
+// UpdateAttributeJSONRequestBody defines body for UpdateAttribute for application/json ContentType.
+type UpdateAttributeJSONRequestBody = UpdateAttributeRequest
+
+// AddOptionJSONRequestBody defines body for AddOption for application/json ContentType.
+type AddOptionJSONRequestBody = OptionRequest
+
+// UpdateOptionJSONRequestBody defines body for UpdateOption for application/json ContentType.
+type UpdateOptionJSONRequestBody = UpdateOptionRequest
+
+// CreateAssetJSONRequestBody defines body for CreateAsset for application/json ContentType.
+type CreateAssetJSONRequestBody = CreateAssetRequest
+
+// UpdateAssetJSONRequestBody defines body for UpdateAsset for application/json ContentType.
+type UpdateAssetJSONRequestBody = UpdateAssetRequest
+
+// RestoreAssetJSONRequestBody defines body for RestoreAsset for application/json ContentType.
+type RestoreAssetJSONRequestBody = VersionRequest
+
+// RetireAssetJSONRequestBody defines body for RetireAsset for application/json ContentType.
+type RetireAssetJSONRequestBody = RetireAssetRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListStatuses List asset statuses (inventory.asset.read)
+	// (GET /asset-statuses)
+	ListStatuses(w http.ResponseWriter, r *http.Request, params ListStatusesParams)
+	// CreateStatus Create a status (inventory.status.manage)
+	// (POST /asset-statuses)
+	CreateStatus(w http.ResponseWriter, r *http.Request)
+	// UpdateStatus Rename, move or make default of its kind (inventory.status.manage)
+	// (PATCH /asset-statuses/{statusID})
+	UpdateStatus(w http.ResponseWriter, r *http.Request, statusID StatusID)
+	// ArchiveStatus Stop offering a status (inventory.status.manage)
+	// (POST /asset-statuses/{statusID}/archive)
+	ArchiveStatus(w http.ResponseWriter, r *http.Request, statusID StatusID)
+	// ListAssetTypes List asset types (inventory.asset.read)
+	// (GET /asset-types)
+	ListAssetTypes(w http.ResponseWriter, r *http.Request, params ListAssetTypesParams)
+	// CreateAssetType Create an asset type, optionally with attributes (inventory.type.manage)
+	// (POST /asset-types)
+	CreateAssetType(w http.ResponseWriter, r *http.Request)
+	// GetAssetType Get an asset type with its attributes and options (inventory.asset.read)
+	// (GET /asset-types/{typeID})
+	GetAssetType(w http.ResponseWriter, r *http.Request, typeID TypeID)
+	// UpdateAssetType Rename or describe an asset type (inventory.type.manage)
+	// (PATCH /asset-types/{typeID})
+	UpdateAssetType(w http.ResponseWriter, r *http.Request, typeID TypeID)
+	// ArchiveAssetType Stop offering an asset type for new assets (inventory.type.manage)
+	// (POST /asset-types/{typeID}/archive)
+	ArchiveAssetType(w http.ResponseWriter, r *http.Request, typeID TypeID)
+	// AddAttribute Add a custom attribute (inventory.type.manage)
+	// (POST /asset-types/{typeID}/attributes)
+	AddAttribute(w http.ResponseWriter, r *http.Request, typeID TypeID)
+	// RemoveAttribute Remove a custom attribute; stored values are kept (inventory.type.manage)
+	// (DELETE /asset-types/{typeID}/attributes/{attributeID})
+	RemoveAttribute(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID)
+	// UpdateAttribute Change label, unit, data type, required or position (inventory.type.manage)
+	// (PATCH /asset-types/{typeID}/attributes/{attributeID})
+	UpdateAttribute(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID)
+	// AddOption Add an option to a select attribute (inventory.type.manage)
+	// (POST /asset-types/{typeID}/attributes/{attributeID}/options)
+	AddOption(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID)
+	// RemoveOption Remove an option; assets using it keep it (inventory.type.manage)
+	// (DELETE /asset-types/{typeID}/attributes/{attributeID}/options/{optionID})
+	RemoveOption(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID, optionID OptionID)
+	// UpdateOption Rename or move an option (inventory.type.manage)
+	// (PATCH /asset-types/{typeID}/attributes/{attributeID}/options/{optionID})
+	UpdateOption(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID, optionID OptionID)
+	// RestoreAssetType Offer an archived asset type again (inventory.type.manage)
+	// (POST /asset-types/{typeID}/restore)
+	RestoreAssetType(w http.ResponseWriter, r *http.Request, typeID TypeID)
+	// ListAssets Browse, search and filter assets (inventory.asset.read)
+	// (GET /assets)
+	ListAssets(w http.ResponseWriter, r *http.Request, params ListAssetsParams)
+	// CreateAsset Create an asset (inventory.asset.manage)
+	// (POST /assets)
+	CreateAsset(w http.ResponseWriter, r *http.Request)
+	// GetAsset Get an asset with its custom attributes (inventory.asset.read)
+	// (GET /assets/{assetID})
+	GetAsset(w http.ResponseWriter, r *http.Request, assetID AssetID)
+	// UpdateAsset Replace an asset's fields and attribute values (inventory.asset.manage)
+	// (PUT /assets/{assetID})
+	UpdateAsset(w http.ResponseWriter, r *http.Request, assetID AssetID)
+	// RestoreAsset Restore a retired asset to the default available status (inventory.asset.manage)
+	// (POST /assets/{assetID}/restore)
+	RestoreAsset(w http.ResponseWriter, r *http.Request, assetID AssetID)
+	// RetireAsset Retire an asset; it keeps its tag (inventory.asset.manage)
+	// (POST /assets/{assetID}/retire)
+	RetireAsset(w http.ResponseWriter, r *http.Request, assetID AssetID)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// ListStatuses List asset statuses (inventory.asset.read)
+// (GET /asset-statuses)
+func (_ Unimplemented) ListStatuses(w http.ResponseWriter, r *http.Request, params ListStatusesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateStatus Create a status (inventory.status.manage)
+// (POST /asset-statuses)
+func (_ Unimplemented) CreateStatus(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateStatus Rename, move or make default of its kind (inventory.status.manage)
+// (PATCH /asset-statuses/{statusID})
+func (_ Unimplemented) UpdateStatus(w http.ResponseWriter, r *http.Request, statusID StatusID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ArchiveStatus Stop offering a status (inventory.status.manage)
+// (POST /asset-statuses/{statusID}/archive)
+func (_ Unimplemented) ArchiveStatus(w http.ResponseWriter, r *http.Request, statusID StatusID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListAssetTypes List asset types (inventory.asset.read)
+// (GET /asset-types)
+func (_ Unimplemented) ListAssetTypes(w http.ResponseWriter, r *http.Request, params ListAssetTypesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateAssetType Create an asset type, optionally with attributes (inventory.type.manage)
+// (POST /asset-types)
+func (_ Unimplemented) CreateAssetType(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetAssetType Get an asset type with its attributes and options (inventory.asset.read)
+// (GET /asset-types/{typeID})
+func (_ Unimplemented) GetAssetType(w http.ResponseWriter, r *http.Request, typeID TypeID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateAssetType Rename or describe an asset type (inventory.type.manage)
+// (PATCH /asset-types/{typeID})
+func (_ Unimplemented) UpdateAssetType(w http.ResponseWriter, r *http.Request, typeID TypeID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ArchiveAssetType Stop offering an asset type for new assets (inventory.type.manage)
+// (POST /asset-types/{typeID}/archive)
+func (_ Unimplemented) ArchiveAssetType(w http.ResponseWriter, r *http.Request, typeID TypeID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AddAttribute Add a custom attribute (inventory.type.manage)
+// (POST /asset-types/{typeID}/attributes)
+func (_ Unimplemented) AddAttribute(w http.ResponseWriter, r *http.Request, typeID TypeID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RemoveAttribute Remove a custom attribute; stored values are kept (inventory.type.manage)
+// (DELETE /asset-types/{typeID}/attributes/{attributeID})
+func (_ Unimplemented) RemoveAttribute(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateAttribute Change label, unit, data type, required or position (inventory.type.manage)
+// (PATCH /asset-types/{typeID}/attributes/{attributeID})
+func (_ Unimplemented) UpdateAttribute(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AddOption Add an option to a select attribute (inventory.type.manage)
+// (POST /asset-types/{typeID}/attributes/{attributeID}/options)
+func (_ Unimplemented) AddOption(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RemoveOption Remove an option; assets using it keep it (inventory.type.manage)
+// (DELETE /asset-types/{typeID}/attributes/{attributeID}/options/{optionID})
+func (_ Unimplemented) RemoveOption(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID, optionID OptionID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateOption Rename or move an option (inventory.type.manage)
+// (PATCH /asset-types/{typeID}/attributes/{attributeID}/options/{optionID})
+func (_ Unimplemented) UpdateOption(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID, optionID OptionID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RestoreAssetType Offer an archived asset type again (inventory.type.manage)
+// (POST /asset-types/{typeID}/restore)
+func (_ Unimplemented) RestoreAssetType(w http.ResponseWriter, r *http.Request, typeID TypeID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListAssets Browse, search and filter assets (inventory.asset.read)
+// (GET /assets)
+func (_ Unimplemented) ListAssets(w http.ResponseWriter, r *http.Request, params ListAssetsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateAsset Create an asset (inventory.asset.manage)
+// (POST /assets)
+func (_ Unimplemented) CreateAsset(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetAsset Get an asset with its custom attributes (inventory.asset.read)
+// (GET /assets/{assetID})
+func (_ Unimplemented) GetAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateAsset Replace an asset's fields and attribute values (inventory.asset.manage)
+// (PUT /assets/{assetID})
+func (_ Unimplemented) UpdateAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RestoreAsset Restore a retired asset to the default available status (inventory.asset.manage)
+// (POST /assets/{assetID}/restore)
+func (_ Unimplemented) RestoreAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RetireAsset Retire an asset; it keeps its tag (inventory.asset.manage)
+// (POST /assets/{assetID}/retire)
+func (_ Unimplemented) RetireAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // ServerInterfaceWrapper converts contexts to parameters.
 type ServerInterfaceWrapper struct {
@@ -36,6 +638,756 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListStatuses operation middleware
+func (siw *ServerInterfaceWrapper) ListStatuses(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListStatusesParams
+
+	// ------------- Optional query parameter "include_archived" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "include_archived", r.URL.Query(), &params.IncludeArchived, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "include_archived"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "include_archived", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListStatuses(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateStatus operation middleware
+func (siw *ServerInterfaceWrapper) CreateStatus(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateStatus operation middleware
+func (siw *ServerInterfaceWrapper) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "statusID" -------------
+	var statusID StatusID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "statusID", chi.URLParam(r, "statusID"), &statusID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "statusID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateStatus(w, r, statusID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ArchiveStatus operation middleware
+func (siw *ServerInterfaceWrapper) ArchiveStatus(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "statusID" -------------
+	var statusID StatusID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "statusID", chi.URLParam(r, "statusID"), &statusID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "statusID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ArchiveStatus(w, r, statusID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAssetTypes operation middleware
+func (siw *ServerInterfaceWrapper) ListAssetTypes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAssetTypesParams
+
+	// ------------- Optional query parameter "include_archived" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "include_archived", r.URL.Query(), &params.IncludeArchived, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "include_archived"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "include_archived", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAssetTypes(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAssetType operation middleware
+func (siw *ServerInterfaceWrapper) CreateAssetType(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAssetType(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAssetType operation middleware
+func (siw *ServerInterfaceWrapper) GetAssetType(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "typeID" -------------
+	var typeID TypeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "typeID", chi.URLParam(r, "typeID"), &typeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "typeID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAssetType(w, r, typeID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAssetType operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAssetType(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "typeID" -------------
+	var typeID TypeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "typeID", chi.URLParam(r, "typeID"), &typeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "typeID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAssetType(w, r, typeID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ArchiveAssetType operation middleware
+func (siw *ServerInterfaceWrapper) ArchiveAssetType(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "typeID" -------------
+	var typeID TypeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "typeID", chi.URLParam(r, "typeID"), &typeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "typeID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ArchiveAssetType(w, r, typeID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddAttribute operation middleware
+func (siw *ServerInterfaceWrapper) AddAttribute(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "typeID" -------------
+	var typeID TypeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "typeID", chi.URLParam(r, "typeID"), &typeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "typeID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddAttribute(w, r, typeID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveAttribute operation middleware
+func (siw *ServerInterfaceWrapper) RemoveAttribute(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "typeID" -------------
+	var typeID TypeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "typeID", chi.URLParam(r, "typeID"), &typeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "typeID", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "attributeID" -------------
+	var attributeID AttributeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "attributeID", chi.URLParam(r, "attributeID"), &attributeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attributeID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveAttribute(w, r, typeID, attributeID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAttribute operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAttribute(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "typeID" -------------
+	var typeID TypeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "typeID", chi.URLParam(r, "typeID"), &typeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "typeID", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "attributeID" -------------
+	var attributeID AttributeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "attributeID", chi.URLParam(r, "attributeID"), &attributeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attributeID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAttribute(w, r, typeID, attributeID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddOption operation middleware
+func (siw *ServerInterfaceWrapper) AddOption(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "typeID" -------------
+	var typeID TypeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "typeID", chi.URLParam(r, "typeID"), &typeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "typeID", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "attributeID" -------------
+	var attributeID AttributeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "attributeID", chi.URLParam(r, "attributeID"), &attributeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attributeID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddOption(w, r, typeID, attributeID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveOption operation middleware
+func (siw *ServerInterfaceWrapper) RemoveOption(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "typeID" -------------
+	var typeID TypeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "typeID", chi.URLParam(r, "typeID"), &typeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "typeID", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "attributeID" -------------
+	var attributeID AttributeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "attributeID", chi.URLParam(r, "attributeID"), &attributeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attributeID", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "optionID" -------------
+	var optionID OptionID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "optionID", chi.URLParam(r, "optionID"), &optionID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "optionID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveOption(w, r, typeID, attributeID, optionID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateOption operation middleware
+func (siw *ServerInterfaceWrapper) UpdateOption(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "typeID" -------------
+	var typeID TypeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "typeID", chi.URLParam(r, "typeID"), &typeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "typeID", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "attributeID" -------------
+	var attributeID AttributeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "attributeID", chi.URLParam(r, "attributeID"), &attributeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attributeID", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "optionID" -------------
+	var optionID OptionID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "optionID", chi.URLParam(r, "optionID"), &optionID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "optionID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateOption(w, r, typeID, attributeID, optionID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreAssetType operation middleware
+func (siw *ServerInterfaceWrapper) RestoreAssetType(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "typeID" -------------
+	var typeID TypeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "typeID", chi.URLParam(r, "typeID"), &typeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "typeID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreAssetType(w, r, typeID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAssets operation middleware
+func (siw *ServerInterfaceWrapper) ListAssets(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAssetsParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "type_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "type_id", r.URL.Query(), &params.TypeId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status_id", r.URL.Query(), &params.StatusId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status_kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status_kind", r.URL.Query(), &params.StatusKind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status_kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status_kind", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "location_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "location_id", r.URL.Query(), &params.LocationId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "location_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "location_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "holder_member_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "holder_member_id", r.URL.Query(), &params.HolderMemberId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "holder_member_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "holder_member_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "include_retired" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "include_retired", r.URL.Query(), &params.IncludeRetired, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "include_retired"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "include_retired", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "attr" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "attr", r.URL.Query(), &params.Attr, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "attr"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attr", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page_size" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page_size", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page_size"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page_size", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAssets(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAsset operation middleware
+func (siw *ServerInterfaceWrapper) CreateAsset(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAsset(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAsset operation middleware
+func (siw *ServerInterfaceWrapper) GetAsset(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "assetID" -------------
+	var assetID AssetID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "assetID", chi.URLParam(r, "assetID"), &assetID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "assetID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAsset(w, r, assetID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAsset operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAsset(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "assetID" -------------
+	var assetID AssetID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "assetID", chi.URLParam(r, "assetID"), &assetID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "assetID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAsset(w, r, assetID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreAsset operation middleware
+func (siw *ServerInterfaceWrapper) RestoreAsset(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "assetID" -------------
+	var assetID AssetID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "assetID", chi.URLParam(r, "assetID"), &assetID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "assetID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreAsset(w, r, assetID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RetireAsset operation middleware
+func (siw *ServerInterfaceWrapper) RetireAsset(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "assetID" -------------
+	var assetID AssetID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "assetID", chi.URLParam(r, "assetID"), &assetID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "assetID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RetireAsset(w, r, assetID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 type UnescapedCookieParamError struct {
 	ParamName string
@@ -144,12 +1496,1018 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 	}
+	wrapper := ServerInterfaceWrapper{
+		Handler:            si,
+		HandlerMiddlewares: options.Middlewares,
+		ErrorHandlerFunc:   options.ErrorHandlerFunc,
+	}
+
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/asset-types", wrapper.ListAssetTypes)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/asset-types", wrapper.CreateAssetType)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/asset-types/{typeID}", wrapper.GetAssetType)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/asset-types/{typeID}", wrapper.UpdateAssetType)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/asset-types/{typeID}/archive", wrapper.ArchiveAssetType)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/asset-types/{typeID}/restore", wrapper.RestoreAssetType)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/asset-types/{typeID}/attributes", wrapper.AddAttribute)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/asset-types/{typeID}/attributes/{attributeID}", wrapper.RemoveAttribute)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/asset-types/{typeID}/attributes/{attributeID}", wrapper.UpdateAttribute)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/asset-types/{typeID}/attributes/{attributeID}/options", wrapper.AddOption)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/asset-types/{typeID}/attributes/{attributeID}/options/{optionID}", wrapper.RemoveOption)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/asset-types/{typeID}/attributes/{attributeID}/options/{optionID}", wrapper.UpdateOption)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/asset-statuses", wrapper.ListStatuses)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/asset-statuses", wrapper.CreateStatus)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/asset-statuses/{statusID}", wrapper.UpdateStatus)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/asset-statuses/{statusID}/archive", wrapper.ArchiveStatus)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/assets", wrapper.ListAssets)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/assets", wrapper.CreateAsset)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/assets/{assetID}", wrapper.GetAsset)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/assets/{assetID}", wrapper.UpdateAsset)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/assets/{assetID}/retire", wrapper.RetireAsset)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/assets/{assetID}/restore", wrapper.RestoreAsset)
+	})
 
 	return r
 }
 
+type ProblemApplicationProblemPlusJSONResponse externalRef0.Problem
+
+type ListStatusesRequestObject struct {
+	Params ListStatusesParams
+}
+
+type ListStatusesResponseObject interface {
+	VisitListStatusesResponse(w http.ResponseWriter) error
+}
+
+type ListStatuses200JSONResponse struct {
+	Items []Status `json:"items"`
+}
+
+func (response ListStatuses200JSONResponse) VisitListStatusesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListStatusesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ListStatusesdefaultApplicationProblemPlusJSONResponse) VisitListStatusesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStatusRequestObject struct {
+	Body *CreateStatusJSONRequestBody
+}
+
+type CreateStatusResponseObject interface {
+	VisitCreateStatusResponse(w http.ResponseWriter) error
+}
+
+type CreateStatus201JSONResponse Status
+
+func (response CreateStatus201JSONResponse) VisitCreateStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateStatusdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response CreateStatusdefaultApplicationProblemPlusJSONResponse) VisitCreateStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateStatusRequestObject struct {
+	StatusID StatusID `json:"statusID"`
+	Body     *UpdateStatusJSONRequestBody
+}
+
+type UpdateStatusResponseObject interface {
+	VisitUpdateStatusResponse(w http.ResponseWriter) error
+}
+
+type UpdateStatus200JSONResponse Status
+
+func (response UpdateStatus200JSONResponse) VisitUpdateStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateStatusdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response UpdateStatusdefaultApplicationProblemPlusJSONResponse) VisitUpdateStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveStatusRequestObject struct {
+	StatusID StatusID `json:"statusID"`
+}
+
+type ArchiveStatusResponseObject interface {
+	VisitArchiveStatusResponse(w http.ResponseWriter) error
+}
+
+type ArchiveStatus200JSONResponse Status
+
+func (response ArchiveStatus200JSONResponse) VisitArchiveStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveStatusdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ArchiveStatusdefaultApplicationProblemPlusJSONResponse) VisitArchiveStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAssetTypesRequestObject struct {
+	Params ListAssetTypesParams
+}
+
+type ListAssetTypesResponseObject interface {
+	VisitListAssetTypesResponse(w http.ResponseWriter) error
+}
+
+type ListAssetTypes200JSONResponse struct {
+	Items []AssetType `json:"items"`
+}
+
+func (response ListAssetTypes200JSONResponse) VisitListAssetTypesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAssetTypesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ListAssetTypesdefaultApplicationProblemPlusJSONResponse) VisitListAssetTypesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAssetTypeRequestObject struct {
+	Body *CreateAssetTypeJSONRequestBody
+}
+
+type CreateAssetTypeResponseObject interface {
+	VisitCreateAssetTypeResponse(w http.ResponseWriter) error
+}
+
+type CreateAssetType201JSONResponse AssetTypeDetail
+
+func (response CreateAssetType201JSONResponse) VisitCreateAssetTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAssetTypedefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response CreateAssetTypedefaultApplicationProblemPlusJSONResponse) VisitCreateAssetTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAssetTypeRequestObject struct {
+	TypeID TypeID `json:"typeID"`
+}
+
+type GetAssetTypeResponseObject interface {
+	VisitGetAssetTypeResponse(w http.ResponseWriter) error
+}
+
+type GetAssetType200JSONResponse AssetTypeDetail
+
+func (response GetAssetType200JSONResponse) VisitGetAssetTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAssetTypedefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response GetAssetTypedefaultApplicationProblemPlusJSONResponse) VisitGetAssetTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAssetTypeRequestObject struct {
+	TypeID TypeID `json:"typeID"`
+	Body   *UpdateAssetTypeJSONRequestBody
+}
+
+type UpdateAssetTypeResponseObject interface {
+	VisitUpdateAssetTypeResponse(w http.ResponseWriter) error
+}
+
+type UpdateAssetType200JSONResponse AssetTypeDetail
+
+func (response UpdateAssetType200JSONResponse) VisitUpdateAssetTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAssetTypedefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response UpdateAssetTypedefaultApplicationProblemPlusJSONResponse) VisitUpdateAssetTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveAssetTypeRequestObject struct {
+	TypeID TypeID `json:"typeID"`
+}
+
+type ArchiveAssetTypeResponseObject interface {
+	VisitArchiveAssetTypeResponse(w http.ResponseWriter) error
+}
+
+type ArchiveAssetType200JSONResponse AssetTypeDetail
+
+func (response ArchiveAssetType200JSONResponse) VisitArchiveAssetTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveAssetTypedefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ArchiveAssetTypedefaultApplicationProblemPlusJSONResponse) VisitArchiveAssetTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddAttributeRequestObject struct {
+	TypeID TypeID `json:"typeID"`
+	Body   *AddAttributeJSONRequestBody
+}
+
+type AddAttributeResponseObject interface {
+	VisitAddAttributeResponse(w http.ResponseWriter) error
+}
+
+type AddAttribute201JSONResponse Attribute
+
+func (response AddAttribute201JSONResponse) VisitAddAttributeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddAttributedefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response AddAttributedefaultApplicationProblemPlusJSONResponse) VisitAddAttributeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveAttributeRequestObject struct {
+	TypeID      TypeID      `json:"typeID"`
+	AttributeID AttributeID `json:"attributeID"`
+}
+
+type RemoveAttributeResponseObject interface {
+	VisitRemoveAttributeResponse(w http.ResponseWriter) error
+}
+
+type RemoveAttribute204Response struct {
+}
+
+func (response RemoveAttribute204Response) VisitRemoveAttributeResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveAttributedefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response RemoveAttributedefaultApplicationProblemPlusJSONResponse) VisitRemoveAttributeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAttributeRequestObject struct {
+	TypeID      TypeID      `json:"typeID"`
+	AttributeID AttributeID `json:"attributeID"`
+	Body        *UpdateAttributeJSONRequestBody
+}
+
+type UpdateAttributeResponseObject interface {
+	VisitUpdateAttributeResponse(w http.ResponseWriter) error
+}
+
+type UpdateAttribute200JSONResponse Attribute
+
+func (response UpdateAttribute200JSONResponse) VisitUpdateAttributeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAttributedefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response UpdateAttributedefaultApplicationProblemPlusJSONResponse) VisitUpdateAttributeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddOptionRequestObject struct {
+	TypeID      TypeID      `json:"typeID"`
+	AttributeID AttributeID `json:"attributeID"`
+	Body        *AddOptionJSONRequestBody
+}
+
+type AddOptionResponseObject interface {
+	VisitAddOptionResponse(w http.ResponseWriter) error
+}
+
+type AddOption201JSONResponse Option
+
+func (response AddOption201JSONResponse) VisitAddOptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddOptiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response AddOptiondefaultApplicationProblemPlusJSONResponse) VisitAddOptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveOptionRequestObject struct {
+	TypeID      TypeID      `json:"typeID"`
+	AttributeID AttributeID `json:"attributeID"`
+	OptionID    OptionID    `json:"optionID"`
+}
+
+type RemoveOptionResponseObject interface {
+	VisitRemoveOptionResponse(w http.ResponseWriter) error
+}
+
+type RemoveOption204Response struct {
+}
+
+func (response RemoveOption204Response) VisitRemoveOptionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveOptiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response RemoveOptiondefaultApplicationProblemPlusJSONResponse) VisitRemoveOptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateOptionRequestObject struct {
+	TypeID      TypeID      `json:"typeID"`
+	AttributeID AttributeID `json:"attributeID"`
+	OptionID    OptionID    `json:"optionID"`
+	Body        *UpdateOptionJSONRequestBody
+}
+
+type UpdateOptionResponseObject interface {
+	VisitUpdateOptionResponse(w http.ResponseWriter) error
+}
+
+type UpdateOption200JSONResponse Option
+
+func (response UpdateOption200JSONResponse) VisitUpdateOptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateOptiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response UpdateOptiondefaultApplicationProblemPlusJSONResponse) VisitUpdateOptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreAssetTypeRequestObject struct {
+	TypeID TypeID `json:"typeID"`
+}
+
+type RestoreAssetTypeResponseObject interface {
+	VisitRestoreAssetTypeResponse(w http.ResponseWriter) error
+}
+
+type RestoreAssetType200JSONResponse AssetTypeDetail
+
+func (response RestoreAssetType200JSONResponse) VisitRestoreAssetTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreAssetTypedefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response RestoreAssetTypedefaultApplicationProblemPlusJSONResponse) VisitRestoreAssetTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAssetsRequestObject struct {
+	Params ListAssetsParams
+}
+
+type ListAssetsResponseObject interface {
+	VisitListAssetsResponse(w http.ResponseWriter) error
+}
+
+type ListAssets200JSONResponse AssetList
+
+func (response ListAssets200JSONResponse) VisitListAssetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAssetsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ListAssetsdefaultApplicationProblemPlusJSONResponse) VisitListAssetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAssetRequestObject struct {
+	Body *CreateAssetJSONRequestBody
+}
+
+type CreateAssetResponseObject interface {
+	VisitCreateAssetResponse(w http.ResponseWriter) error
+}
+
+type CreateAsset201JSONResponse AssetDetail
+
+func (response CreateAsset201JSONResponse) VisitCreateAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAssetdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response CreateAssetdefaultApplicationProblemPlusJSONResponse) VisitCreateAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAssetRequestObject struct {
+	AssetID AssetID `json:"assetID"`
+}
+
+type GetAssetResponseObject interface {
+	VisitGetAssetResponse(w http.ResponseWriter) error
+}
+
+type GetAsset200JSONResponse AssetDetail
+
+func (response GetAsset200JSONResponse) VisitGetAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAssetdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response GetAssetdefaultApplicationProblemPlusJSONResponse) VisitGetAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAssetRequestObject struct {
+	AssetID AssetID `json:"assetID"`
+	Body    *UpdateAssetJSONRequestBody
+}
+
+type UpdateAssetResponseObject interface {
+	VisitUpdateAssetResponse(w http.ResponseWriter) error
+}
+
+type UpdateAsset200JSONResponse AssetDetail
+
+func (response UpdateAsset200JSONResponse) VisitUpdateAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAssetdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response UpdateAssetdefaultApplicationProblemPlusJSONResponse) VisitUpdateAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreAssetRequestObject struct {
+	AssetID AssetID `json:"assetID"`
+	Body    *RestoreAssetJSONRequestBody
+}
+
+type RestoreAssetResponseObject interface {
+	VisitRestoreAssetResponse(w http.ResponseWriter) error
+}
+
+type RestoreAsset200JSONResponse AssetDetail
+
+func (response RestoreAsset200JSONResponse) VisitRestoreAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreAssetdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response RestoreAssetdefaultApplicationProblemPlusJSONResponse) VisitRestoreAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetireAssetRequestObject struct {
+	AssetID AssetID `json:"assetID"`
+	Body    *RetireAssetJSONRequestBody
+}
+
+type RetireAssetResponseObject interface {
+	VisitRetireAssetResponse(w http.ResponseWriter) error
+}
+
+type RetireAsset200JSONResponse AssetDetail
+
+func (response RetireAsset200JSONResponse) VisitRetireAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetireAssetdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response RetireAssetdefaultApplicationProblemPlusJSONResponse) VisitRetireAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// ListStatuses List asset statuses (inventory.asset.read)
+	// (GET /asset-statuses)
+	ListStatuses(ctx context.Context, request ListStatusesRequestObject) (ListStatusesResponseObject, error)
+	// CreateStatus Create a status (inventory.status.manage)
+	// (POST /asset-statuses)
+	CreateStatus(ctx context.Context, request CreateStatusRequestObject) (CreateStatusResponseObject, error)
+	// UpdateStatus Rename, move or make default of its kind (inventory.status.manage)
+	// (PATCH /asset-statuses/{statusID})
+	UpdateStatus(ctx context.Context, request UpdateStatusRequestObject) (UpdateStatusResponseObject, error)
+	// ArchiveStatus Stop offering a status (inventory.status.manage)
+	// (POST /asset-statuses/{statusID}/archive)
+	ArchiveStatus(ctx context.Context, request ArchiveStatusRequestObject) (ArchiveStatusResponseObject, error)
+	// ListAssetTypes List asset types (inventory.asset.read)
+	// (GET /asset-types)
+	ListAssetTypes(ctx context.Context, request ListAssetTypesRequestObject) (ListAssetTypesResponseObject, error)
+	// CreateAssetType Create an asset type, optionally with attributes (inventory.type.manage)
+	// (POST /asset-types)
+	CreateAssetType(ctx context.Context, request CreateAssetTypeRequestObject) (CreateAssetTypeResponseObject, error)
+	// GetAssetType Get an asset type with its attributes and options (inventory.asset.read)
+	// (GET /asset-types/{typeID})
+	GetAssetType(ctx context.Context, request GetAssetTypeRequestObject) (GetAssetTypeResponseObject, error)
+	// UpdateAssetType Rename or describe an asset type (inventory.type.manage)
+	// (PATCH /asset-types/{typeID})
+	UpdateAssetType(ctx context.Context, request UpdateAssetTypeRequestObject) (UpdateAssetTypeResponseObject, error)
+	// ArchiveAssetType Stop offering an asset type for new assets (inventory.type.manage)
+	// (POST /asset-types/{typeID}/archive)
+	ArchiveAssetType(ctx context.Context, request ArchiveAssetTypeRequestObject) (ArchiveAssetTypeResponseObject, error)
+	// AddAttribute Add a custom attribute (inventory.type.manage)
+	// (POST /asset-types/{typeID}/attributes)
+	AddAttribute(ctx context.Context, request AddAttributeRequestObject) (AddAttributeResponseObject, error)
+	// RemoveAttribute Remove a custom attribute; stored values are kept (inventory.type.manage)
+	// (DELETE /asset-types/{typeID}/attributes/{attributeID})
+	RemoveAttribute(ctx context.Context, request RemoveAttributeRequestObject) (RemoveAttributeResponseObject, error)
+	// UpdateAttribute Change label, unit, data type, required or position (inventory.type.manage)
+	// (PATCH /asset-types/{typeID}/attributes/{attributeID})
+	UpdateAttribute(ctx context.Context, request UpdateAttributeRequestObject) (UpdateAttributeResponseObject, error)
+	// AddOption Add an option to a select attribute (inventory.type.manage)
+	// (POST /asset-types/{typeID}/attributes/{attributeID}/options)
+	AddOption(ctx context.Context, request AddOptionRequestObject) (AddOptionResponseObject, error)
+	// RemoveOption Remove an option; assets using it keep it (inventory.type.manage)
+	// (DELETE /asset-types/{typeID}/attributes/{attributeID}/options/{optionID})
+	RemoveOption(ctx context.Context, request RemoveOptionRequestObject) (RemoveOptionResponseObject, error)
+	// UpdateOption Rename or move an option (inventory.type.manage)
+	// (PATCH /asset-types/{typeID}/attributes/{attributeID}/options/{optionID})
+	UpdateOption(ctx context.Context, request UpdateOptionRequestObject) (UpdateOptionResponseObject, error)
+	// RestoreAssetType Offer an archived asset type again (inventory.type.manage)
+	// (POST /asset-types/{typeID}/restore)
+	RestoreAssetType(ctx context.Context, request RestoreAssetTypeRequestObject) (RestoreAssetTypeResponseObject, error)
+	// ListAssets Browse, search and filter assets (inventory.asset.read)
+	// (GET /assets)
+	ListAssets(ctx context.Context, request ListAssetsRequestObject) (ListAssetsResponseObject, error)
+	// CreateAsset Create an asset (inventory.asset.manage)
+	// (POST /assets)
+	CreateAsset(ctx context.Context, request CreateAssetRequestObject) (CreateAssetResponseObject, error)
+	// GetAsset Get an asset with its custom attributes (inventory.asset.read)
+	// (GET /assets/{assetID})
+	GetAsset(ctx context.Context, request GetAssetRequestObject) (GetAssetResponseObject, error)
+	// UpdateAsset Replace an asset's fields and attribute values (inventory.asset.manage)
+	// (PUT /assets/{assetID})
+	UpdateAsset(ctx context.Context, request UpdateAssetRequestObject) (UpdateAssetResponseObject, error)
+	// RestoreAsset Restore a retired asset to the default available status (inventory.asset.manage)
+	// (POST /assets/{assetID}/restore)
+	RestoreAsset(ctx context.Context, request RestoreAssetRequestObject) (RestoreAssetResponseObject, error)
+	// RetireAsset Retire an asset; it keeps its tag (inventory.asset.manage)
+	// (POST /assets/{assetID}/retire)
+	RetireAsset(ctx context.Context, request RetireAssetRequestObject) (RetireAssetResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -191,14 +2549,733 @@ type strictHandler struct {
 	options     StrictHTTPServerOptions
 }
 
+// ListStatuses operation middleware
+func (sh *strictHandler) ListStatuses(w http.ResponseWriter, r *http.Request, params ListStatusesParams) {
+	var request ListStatusesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListStatuses(ctx, request.(ListStatusesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListStatuses")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListStatusesResponseObject); ok {
+		if err := validResponse.VisitListStatusesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateStatus operation middleware
+func (sh *strictHandler) CreateStatus(w http.ResponseWriter, r *http.Request) {
+	var request CreateStatusRequestObject
+
+	var body CreateStatusJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateStatus(ctx, request.(CreateStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateStatusResponseObject); ok {
+		if err := validResponse.VisitCreateStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateStatus operation middleware
+func (sh *strictHandler) UpdateStatus(w http.ResponseWriter, r *http.Request, statusID StatusID) {
+	var request UpdateStatusRequestObject
+
+	request.StatusID = statusID
+
+	var body UpdateStatusJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateStatus(ctx, request.(UpdateStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateStatusResponseObject); ok {
+		if err := validResponse.VisitUpdateStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ArchiveStatus operation middleware
+func (sh *strictHandler) ArchiveStatus(w http.ResponseWriter, r *http.Request, statusID StatusID) {
+	var request ArchiveStatusRequestObject
+
+	request.StatusID = statusID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ArchiveStatus(ctx, request.(ArchiveStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ArchiveStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ArchiveStatusResponseObject); ok {
+		if err := validResponse.VisitArchiveStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAssetTypes operation middleware
+func (sh *strictHandler) ListAssetTypes(w http.ResponseWriter, r *http.Request, params ListAssetTypesParams) {
+	var request ListAssetTypesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAssetTypes(ctx, request.(ListAssetTypesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAssetTypes")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAssetTypesResponseObject); ok {
+		if err := validResponse.VisitListAssetTypesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateAssetType operation middleware
+func (sh *strictHandler) CreateAssetType(w http.ResponseWriter, r *http.Request) {
+	var request CreateAssetTypeRequestObject
+
+	var body CreateAssetTypeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateAssetType(ctx, request.(CreateAssetTypeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateAssetType")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateAssetTypeResponseObject); ok {
+		if err := validResponse.VisitCreateAssetTypeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAssetType operation middleware
+func (sh *strictHandler) GetAssetType(w http.ResponseWriter, r *http.Request, typeID TypeID) {
+	var request GetAssetTypeRequestObject
+
+	request.TypeID = typeID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAssetType(ctx, request.(GetAssetTypeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAssetType")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAssetTypeResponseObject); ok {
+		if err := validResponse.VisitGetAssetTypeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateAssetType operation middleware
+func (sh *strictHandler) UpdateAssetType(w http.ResponseWriter, r *http.Request, typeID TypeID) {
+	var request UpdateAssetTypeRequestObject
+
+	request.TypeID = typeID
+
+	var body UpdateAssetTypeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateAssetType(ctx, request.(UpdateAssetTypeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateAssetType")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateAssetTypeResponseObject); ok {
+		if err := validResponse.VisitUpdateAssetTypeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ArchiveAssetType operation middleware
+func (sh *strictHandler) ArchiveAssetType(w http.ResponseWriter, r *http.Request, typeID TypeID) {
+	var request ArchiveAssetTypeRequestObject
+
+	request.TypeID = typeID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ArchiveAssetType(ctx, request.(ArchiveAssetTypeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ArchiveAssetType")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ArchiveAssetTypeResponseObject); ok {
+		if err := validResponse.VisitArchiveAssetTypeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AddAttribute operation middleware
+func (sh *strictHandler) AddAttribute(w http.ResponseWriter, r *http.Request, typeID TypeID) {
+	var request AddAttributeRequestObject
+
+	request.TypeID = typeID
+
+	var body AddAttributeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AddAttribute(ctx, request.(AddAttributeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AddAttribute")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AddAttributeResponseObject); ok {
+		if err := validResponse.VisitAddAttributeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveAttribute operation middleware
+func (sh *strictHandler) RemoveAttribute(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID) {
+	var request RemoveAttributeRequestObject
+
+	request.TypeID = typeID
+	request.AttributeID = attributeID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveAttribute(ctx, request.(RemoveAttributeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveAttribute")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveAttributeResponseObject); ok {
+		if err := validResponse.VisitRemoveAttributeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateAttribute operation middleware
+func (sh *strictHandler) UpdateAttribute(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID) {
+	var request UpdateAttributeRequestObject
+
+	request.TypeID = typeID
+	request.AttributeID = attributeID
+
+	var body UpdateAttributeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateAttribute(ctx, request.(UpdateAttributeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateAttribute")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateAttributeResponseObject); ok {
+		if err := validResponse.VisitUpdateAttributeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AddOption operation middleware
+func (sh *strictHandler) AddOption(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID) {
+	var request AddOptionRequestObject
+
+	request.TypeID = typeID
+	request.AttributeID = attributeID
+
+	var body AddOptionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AddOption(ctx, request.(AddOptionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AddOption")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AddOptionResponseObject); ok {
+		if err := validResponse.VisitAddOptionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveOption operation middleware
+func (sh *strictHandler) RemoveOption(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID, optionID OptionID) {
+	var request RemoveOptionRequestObject
+
+	request.TypeID = typeID
+	request.AttributeID = attributeID
+	request.OptionID = optionID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveOption(ctx, request.(RemoveOptionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveOption")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveOptionResponseObject); ok {
+		if err := validResponse.VisitRemoveOptionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateOption operation middleware
+func (sh *strictHandler) UpdateOption(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID, optionID OptionID) {
+	var request UpdateOptionRequestObject
+
+	request.TypeID = typeID
+	request.AttributeID = attributeID
+	request.OptionID = optionID
+
+	var body UpdateOptionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateOption(ctx, request.(UpdateOptionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateOption")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateOptionResponseObject); ok {
+		if err := validResponse.VisitUpdateOptionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RestoreAssetType operation middleware
+func (sh *strictHandler) RestoreAssetType(w http.ResponseWriter, r *http.Request, typeID TypeID) {
+	var request RestoreAssetTypeRequestObject
+
+	request.TypeID = typeID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestoreAssetType(ctx, request.(RestoreAssetTypeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestoreAssetType")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestoreAssetTypeResponseObject); ok {
+		if err := validResponse.VisitRestoreAssetTypeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAssets operation middleware
+func (sh *strictHandler) ListAssets(w http.ResponseWriter, r *http.Request, params ListAssetsParams) {
+	var request ListAssetsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAssets(ctx, request.(ListAssetsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAssets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAssetsResponseObject); ok {
+		if err := validResponse.VisitListAssetsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateAsset operation middleware
+func (sh *strictHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
+	var request CreateAssetRequestObject
+
+	var body CreateAssetJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateAsset(ctx, request.(CreateAssetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateAsset")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateAssetResponseObject); ok {
+		if err := validResponse.VisitCreateAssetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAsset operation middleware
+func (sh *strictHandler) GetAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
+	var request GetAssetRequestObject
+
+	request.AssetID = assetID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAsset(ctx, request.(GetAssetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAsset")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAssetResponseObject); ok {
+		if err := validResponse.VisitGetAssetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateAsset operation middleware
+func (sh *strictHandler) UpdateAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
+	var request UpdateAssetRequestObject
+
+	request.AssetID = assetID
+
+	var body UpdateAssetJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateAsset(ctx, request.(UpdateAssetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateAsset")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateAssetResponseObject); ok {
+		if err := validResponse.VisitUpdateAssetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RestoreAsset operation middleware
+func (sh *strictHandler) RestoreAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
+	var request RestoreAssetRequestObject
+
+	request.AssetID = assetID
+
+	var body RestoreAssetJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestoreAsset(ctx, request.(RestoreAssetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestoreAsset")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestoreAssetResponseObject); ok {
+		if err := validResponse.VisitRestoreAssetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RetireAsset operation middleware
+func (sh *strictHandler) RetireAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
+	var request RetireAssetRequestObject
+
+	request.AssetID = assetID
+
+	var body RetireAssetJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RetireAsset(ctx, request.(RetireAssetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RetireAsset")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RetireAssetResponseObject); ok {
+		if err := validResponse.VisitRetireAssetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"AAAA//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

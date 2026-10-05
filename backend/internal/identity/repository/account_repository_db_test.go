@@ -147,8 +147,14 @@ func TestAccount_ReplaceRolesAndPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 	perms, err := r.accounts.Permissions(ctx, a.ID)
-	if err != nil || !slices.Equal(perms, []string{domain.PermAccountRead, domain.PermRoleRead}) {
+	// Chỉ xét quyền của identity: migration của module khác cũng phân quyền cho role hệ thống
+	identityPerms := slices.DeleteFunc(slices.Clone(perms), func(p string) bool { return !strings.HasPrefix(p, "identity.") })
+	if err != nil || !slices.Equal(identityPerms, []string{domain.PermAccountRead, domain.PermRoleRead}) {
 		t.Errorf("permissions = %v, %v", perms, err)
+	}
+	// Không trùng dù hai role cùng cấp một quyền
+	if len(slices.Compact(slices.Clone(perms))) != len(perms) {
+		t.Errorf("duplicate permissions: %v", perms)
 	}
 	if n, _ := countEvents(t, r, contract.EventRolesAssigned, a.ID); n != 1 {
 		t.Errorf("roles_assigned events = %d", n)

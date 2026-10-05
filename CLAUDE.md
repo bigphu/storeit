@@ -17,6 +17,9 @@ server, pgx, River, sqlc, goose) and `frontend/`.
 - **Identity module** (`backend/internal/identity`: sign-in, rotating refresh tokens, invitations,
   RBAC): reference in `backend/docs/identity.md`. Other modules check permissions with
   `auth.Require` and read accounts only through `identity/contract`.
+- **Inventory module** (`backend/internal/inventory`: asset types with typed custom
+  attributes, statuses, assets): reference in `backend/docs/inventory.md`. A new module's
+  migration must also grant its permissions to Administrator.
 - Rules that bite most often:
   - Config: each package owns its env names and `Validate()`. Binaries list only the
     blocks they use in `cmd/<bin>/config.go`, without `envPrefix`.

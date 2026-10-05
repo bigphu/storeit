@@ -1,26 +1,734 @@
 # API của module inventory. Sửa spec trước, rồi `make generate` để sinh api/api.gen.go.
 # operationId đặt trùng tên method của service, JSON dùng snake_case.
 #
-# Endpoint dự kiến (M4):
-#   /assets, /assets/{assetID}
-#   POST /assets/{assetID}/check-out, /check-in, /status, /parent; GET /children
-#   GET /assets/{assetID}/qr.svg
-#   GET /members/{memberID}/assets
-#   /categories, /statuses
-#   M5: POST /imports, GET /imports/{importID}, POST /imports/{importID}/commit, GET /imports/{importID}/errors.xlsx
-#   M5: GET /assets/import-template.xlsx, GET /assets/export.xlsx, GET /assets/export.csv
+# Sau Sprint 2 (chưa có): mượn/trả, thay thế, cha/con, QR /a/{tag}, import/export Excel.
 openapi: 3.0.3
 info:
   title: Inventory API
-  version: 0.1.0
+  version: 1.0.0
 servers:
   - url: /api/v1
 security:
   - bearerAuth: []
-paths: {}
+
+paths:
+  /asset-types:
+    get:
+      operationId: listAssetTypes
+      summary: List asset types (inventory.asset.read)
+      parameters:
+        - $ref: '#/components/parameters/IncludeArchived'
+      responses:
+        "200":
+          description: Asset types without attributes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AssetType' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createAssetType
+      summary: Create an asset type, optionally with attributes (inventory.type.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAssetTypeRequest' }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetTypeDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /asset-types/{typeID}:
+    parameters:
+      - $ref: '#/components/parameters/TypeID'
+    get:
+      operationId: getAssetType
+      summary: Get an asset type with its attributes and options (inventory.asset.read)
+      responses:
+        "200":
+          description: Asset type
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetTypeDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateAssetType
+      summary: Rename or describe an asset type (inventory.type.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAssetTypeRequest' }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetTypeDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /asset-types/{typeID}/archive:
+    parameters:
+      - $ref: '#/components/parameters/TypeID'
+    post:
+      operationId: archiveAssetType
+      summary: Stop offering an asset type for new assets (inventory.type.manage)
+      responses:
+        "200":
+          description: Archived
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetTypeDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /asset-types/{typeID}/restore:
+    parameters:
+      - $ref: '#/components/parameters/TypeID'
+    post:
+      operationId: restoreAssetType
+      summary: Offer an archived asset type again (inventory.type.manage)
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetTypeDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /asset-types/{typeID}/attributes:
+    parameters:
+      - $ref: '#/components/parameters/TypeID'
+    post:
+      operationId: addAttribute
+      summary: Add a custom attribute (inventory.type.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewAttribute' }
+      responses:
+        "201":
+          description: Added
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attribute' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /asset-types/{typeID}/attributes/{attributeID}:
+    parameters:
+      - $ref: '#/components/parameters/TypeID'
+      - $ref: '#/components/parameters/AttributeID'
+    patch:
+      operationId: updateAttribute
+      summary: Change label, unit, data type, required or position (inventory.type.manage)
+      description: Data type and unit can change only while no asset has a value; send "unit":"" to remove the unit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAttributeRequest' }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attribute' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: removeAttribute
+      summary: Remove a custom attribute; stored values are kept (inventory.type.manage)
+      responses:
+        "204": { description: Removed }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /asset-types/{typeID}/attributes/{attributeID}/options:
+    parameters:
+      - $ref: '#/components/parameters/TypeID'
+      - $ref: '#/components/parameters/AttributeID'
+    post:
+      operationId: addOption
+      summary: Add an option to a select attribute (inventory.type.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OptionRequest' }
+      responses:
+        "201":
+          description: Added
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Option' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /asset-types/{typeID}/attributes/{attributeID}/options/{optionID}:
+    parameters:
+      - $ref: '#/components/parameters/TypeID'
+      - $ref: '#/components/parameters/AttributeID'
+      - $ref: '#/components/parameters/OptionID'
+    patch:
+      operationId: updateOption
+      summary: Rename or move an option (inventory.type.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateOptionRequest' }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Option' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: removeOption
+      summary: Remove an option; assets using it keep it (inventory.type.manage)
+      responses:
+        "204": { description: Removed }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /asset-statuses:
+    get:
+      operationId: listStatuses
+      summary: List asset statuses (inventory.asset.read)
+      parameters:
+        - $ref: '#/components/parameters/IncludeArchived'
+      responses:
+        "200":
+          description: Statuses
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Status' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createStatus
+      summary: Create a status (inventory.status.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateStatusRequest' }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Status' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /asset-statuses/{statusID}:
+    parameters:
+      - $ref: '#/components/parameters/StatusID'
+    patch:
+      operationId: updateStatus
+      summary: Rename, move or make default of its kind (inventory.status.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateStatusRequest' }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Status' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /asset-statuses/{statusID}/archive:
+    parameters:
+      - $ref: '#/components/parameters/StatusID'
+    post:
+      operationId: archiveStatus
+      summary: Stop offering a status (inventory.status.manage)
+      responses:
+        "200":
+          description: Archived
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Status' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /assets:
+    get:
+      operationId: listAssets
+      summary: Browse, search and filter assets (inventory.asset.read)
+      parameters:
+        - name: q
+          in: query
+          description: Case-insensitive substring of tag or name
+          schema: { type: string, maxLength: 200 }
+        - name: type_id
+          in: query
+          description: Lọc theo loại; khi có, mỗi dòng kèm `attributes` (các cột của loại).
+          schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        - name: status_id
+          in: query
+          schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        - name: status_kind
+          in: query
+          schema: { $ref: '#/components/schemas/StatusKind' }
+        - name: location_id
+          in: query
+          schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        - name: holder_member_id
+          in: query
+          schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        - name: include_retired
+          in: query
+          schema: { type: boolean }
+        - name: attr
+          in: query
+          description: |
+            Lọc theo thuộc tính tuỳ chỉnh, cần `type_id`; lặp lại để kết hợp (AND).
+            Dạng `<key>:<op>:<value>`. Toán tử theo kiểu: text `eq` (không phân biệt
+            hoa thường), `contains`; number và date `eq`, `gt`, `gte`, `lt`, `lte`;
+            boolean `eq` (`true`/`false`); select `eq` (id option), `in` (id ngăn
+            bằng dấu phẩy). Ví dụ `attr=ram_gb:gte:16&attr=os:eq:<option id>`.
+          schema:
+            type: array
+            maxItems: 10
+            items:
+              type: string
+              pattern: '^[a-z][a-z0-9_]{0,31}:(eq|gt|gte|lt|lte|contains|in):.+$'
+        - name: sort
+          in: query
+          description: |
+            `tag`, `name`, `purchase_date`, `updated_at`, `asset_type` (tên loại),
+            `status` (thứ tự status như `GET /asset-statuses`) hoặc `attributes.<key>`
+            (cần `type_id`; tài sản không có giá trị ở cuối); tiền tố `-` là giảm dần.
+            Mặc định `tag`.
+          schema:
+            type: string
+            pattern: '^-?(tag|name|purchase_date|updated_at|asset_type|status|attributes\.[a-z][a-z0-9_]{0,31})$'
+        - $ref: '../../../api/common.yaml#/components/parameters/Page'
+        - $ref: '../../../api/common.yaml#/components/parameters/PageSize'
+      responses:
+        "200":
+          description: Page of assets (without custom attribute values)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetList' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createAsset
+      summary: Create an asset (inventory.asset.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAssetRequest' }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /assets/{assetID}:
+    parameters:
+      - $ref: '#/components/parameters/AssetID'
+    get:
+      operationId: getAsset
+      summary: Get an asset with its custom attributes (inventory.asset.read)
+      responses:
+        "200":
+          description: Asset
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+    put:
+      operationId: updateAsset
+      summary: Replace an asset's fields and attribute values (inventory.asset.manage)
+      description: Full replacement. Omitted optional fields and attributes are cleared; status_id omitted keeps the current status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAssetRequest' }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /assets/{assetID}/retire:
+    parameters:
+      - $ref: '#/components/parameters/AssetID'
+    post:
+      operationId: retireAsset
+      summary: Retire an asset; it keeps its tag (inventory.asset.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RetireAssetRequest' }
+      responses:
+        "200":
+          description: Retired
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /assets/{assetID}/restore:
+    parameters:
+      - $ref: '#/components/parameters/AssetID'
+    post:
+      operationId: restoreAsset
+      summary: Restore a retired asset to the default available status (inventory.asset.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VersionRequest' }
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
+  parameters:
+    TypeID:
+      name: typeID
+      in: path
+      required: true
+      schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+    AttributeID:
+      name: attributeID
+      in: path
+      required: true
+      schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+    OptionID:
+      name: optionID
+      in: path
+      required: true
+      schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+    StatusID:
+      name: statusID
+      in: path
+      required: true
+      schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+    AssetID:
+      name: assetID
+      in: path
+      required: true
+      schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+    IncludeArchived:
+      name: include_archived
+      in: query
+      schema: { type: boolean }
+
+  responses:
+    Problem:
+      description: Error (RFC 9457 problem details)
+      content:
+        application/problem+json:
+          schema: { $ref: '../../../api/common.yaml#/components/schemas/Problem' }
+
+  schemas:
+    DataType:
+      type: string
+      enum: [text, number, date, boolean, select]
+
+    StatusKind:
+      type: string
+      enum: [available, in_use, unavailable, retired]
+
+    AssetType:
+      type: object
+      required: [id, code, name, description, is_system, version, created_at, updated_at]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        code: { type: string }
+        name: { type: string }
+        description: { type: string }
+        is_system: { type: boolean }
+        archived_at: { type: string, format: date-time }
+        version: { type: integer, format: int32 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AssetTypeDetail:
+      allOf:
+        - $ref: '#/components/schemas/AssetType'
+        - type: object
+          required: [attributes]
+          properties:
+            attributes:
+              type: array
+              description: All attributes in display order, including removed ones (removed = true)
+              items: { $ref: '#/components/schemas/Attribute' }
+
+    Attribute:
+      type: object
+      required: [id, key, label, data_type, is_required, position, removed, options]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        key: { type: string }
+        label: { type: string }
+        data_type: { $ref: '#/components/schemas/DataType' }
+        unit: { type: string, description: Only for number attributes }
+        is_required: { type: boolean }
+        position: { type: integer, format: int32 }
+        removed: { type: boolean }
+        options:
+          type: array
+          items: { $ref: '#/components/schemas/Option' }
+
+    Option:
+      type: object
+      required: [id, label, position, removed]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        label: { type: string }
+        position: { type: integer, format: int32 }
+        removed: { type: boolean }
+
+    NewAttribute:
+      type: object
+      required: [key, label, data_type]
+      properties:
+        key: { type: string, minLength: 1, maxLength: 32 }
+        label: { type: string, minLength: 1, maxLength: 100 }
+        data_type: { $ref: '#/components/schemas/DataType' }
+        unit: { type: string, maxLength: 16 }
+        is_required: { type: boolean }
+        position: { type: integer, format: int32, minimum: 0, maximum: 10000 }
+        options:
+          type: array
+          maxItems: 200
+          items: { type: string, minLength: 1, maxLength: 100 }
+
+    CreateAssetTypeRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, minLength: 1, maxLength: 32 }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+        attributes:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/NewAttribute' }
+
+    UpdateAssetTypeRequest:
+      type: object
+      required: [version]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+        version: { type: integer, format: int32 }
+
+    UpdateAttributeRequest:
+      type: object
+      properties:
+        label: { type: string, minLength: 1, maxLength: 100 }
+        unit: { type: string, maxLength: 16, description: '"" removes the unit' }
+        data_type: { $ref: '#/components/schemas/DataType' }
+        is_required: { type: boolean }
+        position: { type: integer, format: int32, minimum: 0, maximum: 10000 }
+
+    OptionRequest:
+      type: object
+      required: [label]
+      properties:
+        label: { type: string, minLength: 1, maxLength: 100 }
+        position: { type: integer, format: int32, minimum: 0, maximum: 10000 }
+
+    UpdateOptionRequest:
+      type: object
+      properties:
+        label: { type: string, minLength: 1, maxLength: 100 }
+        position: { type: integer, format: int32, minimum: 0, maximum: 10000 }
+
+    Status:
+      type: object
+      required: [id, name, kind, is_default, is_system, position]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        name: { type: string }
+        kind: { $ref: '#/components/schemas/StatusKind' }
+        is_default: { type: boolean }
+        is_system: { type: boolean }
+        position: { type: integer, format: int32 }
+        archived_at: { type: string, format: date-time }
+
+    CreateStatusRequest:
+      type: object
+      required: [name, kind]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        kind: { $ref: '#/components/schemas/StatusKind' }
+        position: { type: integer, format: int32, minimum: 0, maximum: 10000 }
+
+    UpdateStatusRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        position: { type: integer, format: int32, minimum: 0, maximum: 10000 }
+        make_default:
+          type: boolean
+          description: Make this the default status of its kind (moves the flag)
+
+    AssetListItem:
+      type: object
+      required: [id, tag, name, asset_type_id, asset_type_name, status_id, status_name, status_kind, version, updated_at]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        tag: { type: string }
+        name: { type: string }
+        asset_type_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        asset_type_name: { type: string }
+        status_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        status_name: { type: string }
+        status_kind: { $ref: '#/components/schemas/StatusKind' }
+        location_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        holder_member_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        purchase_date: { type: string, format: date }
+        retired_at: { type: string, format: date-time }
+        version: { type: integer, format: int32 }
+        updated_at: { type: string, format: date-time }
+        attributes:
+          description: Chỉ có khi lọc theo `type_id`; như trong chi tiết tài sản.
+          type: array
+          items: { $ref: '#/components/schemas/AttributeValue' }
+
+    AssetList:
+      allOf:
+        - $ref: '../../../api/common.yaml#/components/schemas/Paged'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/AssetListItem' }
+
+    TypeSummary:
+      type: object
+      required: [id, code, name]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        code: { type: string }
+        name: { type: string }
+
+    StatusSummary:
+      type: object
+      required: [id, name, kind]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        name: { type: string }
+        kind: { $ref: '#/components/schemas/StatusKind' }
+
+    AttributeValue:
+      type: object
+      required: [key, label, data_type, value]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        data_type: { $ref: '#/components/schemas/DataType' }
+        unit: { type: string }
+        value:
+          nullable: true
+          description: string (text, date YYYY-MM-DD, select option id), number or boolean; null when empty
+        option_label: { type: string }
+        option_removed: { type: boolean }
+
+    AssetDetail:
+      type: object
+      required: [id, tag, name, description, asset_type, status, version, created_at, updated_at, attributes]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        tag: { type: string }
+        name: { type: string }
+        description: { type: string }
+        asset_type: { $ref: '#/components/schemas/TypeSummary' }
+        status: { $ref: '#/components/schemas/StatusSummary' }
+        location_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        holder_member_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        purchase_date: { type: string, format: date }
+        retired_at: { type: string, format: date-time }
+        retired_reason: { type: string }
+        version: { type: integer, format: int32 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        attributes:
+          type: array
+          description: Active attributes of the asset's type in display order, with their values
+          items: { $ref: '#/components/schemas/AttributeValue' }
+
+    CreateAssetRequest:
+      type: object
+      required: [tag, name, asset_type_id]
+      properties:
+        tag: { type: string, minLength: 1, maxLength: 64 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 2000 }
+        asset_type_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        status_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        location_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        holder_member_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        purchase_date: { type: string, format: date }
+        attributes: { $ref: '#/components/schemas/AttributeValues' }
+
+    UpdateAssetRequest:
+      type: object
+      required: [name, asset_type_id, version]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 2000 }
+        asset_type_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        status_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        location_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        holder_member_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        purchase_date: { type: string, format: date }
+        attributes: { $ref: '#/components/schemas/AttributeValues' }
+        version: { type: integer, format: int32 }
+
+    AttributeValues:
+      type: object
+      description: Attribute key -> value (string, number, boolean; select = option id; date = YYYY-MM-DD)
+      maxProperties: 100
+      additionalProperties: true
+
+    RetireAssetRequest:
+      type: object
+      required: [version]
+      properties:
+        reason: { type: string, maxLength: 500 }
+        version: { type: integer, format: int32 }
+
+    VersionRequest:
+      type: object
+      required: [version]
+      properties:
+        version: { type: integer, format: int32 }

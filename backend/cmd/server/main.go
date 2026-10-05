@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"storeit/internal/identity"
+	"storeit/internal/inventory"
 	"storeit/internal/platform/config"
 	"storeit/internal/platform/database"
 	"storeit/internal/platform/events"
@@ -70,6 +71,10 @@ func run() error {
 	if err := identityMod.Bootstrap(ctx); err != nil {
 		return err
 	}
+	inventoryMod, err := inventory.New(inventory.Deps{Pool: pool, Outbox: outbox})
+	if err != nil {
+		return err
+	}
 
 	srv := server.New(cfg.HTTP, log)
 	srv.Router().Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -82,13 +87,20 @@ func run() error {
 	if err := identityMod.Mount(srv.Router()); err != nil {
 		return err
 	}
+	if err := inventoryMod.Mount(srv.Router(), tokens); err != nil {
+		return err
+	}
 	// Swagger UI ở /api/docs, chỉ khi dev (HTTP_API_DOCS=true): trang không cần đăng nhập
 	if cfg.HTTP.APIDocs {
-		doc, err := identityMod.APIDoc()
-		if err != nil {
-			return err
+		var docs []web.APIDoc
+		for _, apiDoc := range []func() (web.APIDoc, error){identityMod.APIDoc, inventoryMod.APIDoc} {
+			doc, err := apiDoc()
+			if err != nil {
+				return err
+			}
+			docs = append(docs, doc)
 		}
-		if err := web.MountDocs(srv.Router(), doc); err != nil {
+		if err := web.MountDocs(srv.Router(), docs...); err != nil {
 			return err
 		}
 		log.Info("API docs enabled", slog.String("path", "/api/docs"))
