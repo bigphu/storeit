@@ -1,7 +1,7 @@
 #!/bin/sh
 # Tạo secrets + TLS cert cho dev, file đã có thì bỏ qua
 set -eu
-cd "$(dirname "$0")/../.."          # về backend/
+cd "$(dirname "$0")/../.."          # về thư mục gốc của repo
 export MSYS_NO_PATHCONV=1           # Git Bash: không đổi "/CN=..." thành đường dẫn Windows
 
 secret() {                          # secret <file> [giá trị cố định]

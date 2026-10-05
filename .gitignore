@@ -1,0 +1,25 @@
+# --- Env và secret của stack (compose ở thư mục gốc) ---
+.env
+.env.*
+!.env.example
+!.env.prod.example
+/deploy/postgres/secrets/
+/deploy/postgres/certs/
+/deploy/postgres/logs/
+/deploy/pgadmin/secrets/
+/deploy/app/secrets/
+*.pem
+*.key
+*.crt
+*.p12
+
+# --- Docker local overrides ---
+compose.override.yml
+docker-compose.override.yml
+
+# --- OS & editors ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+*.swp
