@@ -77,8 +77,8 @@ async function step(dir: 1 | -1) {
 
 // Phím tắt (chỉ khi trang đang hiện): J/K bước qua danh sách, E sửa
 usePageKeys((e) => {
-  if (e.key === 'j') step(1)
-  else if (e.key === 'k') step(-1)
+  if (e.key === 'j') step(-1)
+  else if (e.key === 'k') step(1)
   else if (e.key === 'e' && canManage.value && asset.value && !retired.value) actions.edit(asset.value)
 })
 </script>
@@ -93,9 +93,9 @@ usePageKeys((e) => {
         <Tag :value="asset.status.name" :severity="kindSeverity(asset.status.kind)" />
       </h1>
       <span v-if="pos" class="stepper" aria-label="Position in the list">
-        <Button icon="pi pi-angle-left" text rounded aria-label="Previous asset (K)" title="Previous (K)" :disabled="pos.index === 0" @click="step(-1)" />
+        <Button icon="pi pi-angle-left" text rounded aria-label="Previous asset (J)" title="Previous (J)" :disabled="pos.index === 0" @click="step(-1)" />
         <span>{{ pos.index + 1 }} of {{ pos.total }}</span>
-        <Button icon="pi pi-angle-right" text rounded aria-label="Next asset (J)" title="Next (J)" :disabled="pos.index + 1 >= pos.total" @click="step(1)" />
+        <Button icon="pi pi-angle-right" text rounded aria-label="Next asset (K)" title="Next (K)" :disabled="pos.index + 1 >= pos.total" @click="step(1)" />
       </span>
     </div>
 

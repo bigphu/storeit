@@ -226,6 +226,7 @@ function cell(row: AssetListItem, key: string) {
           as="router-link"
           :to="`/types/${typeId}/settings`"
           label="Type settings"
+          style="text-decoration: none"
           icon="pi pi-cog"
           severity="secondary"
           outlined
@@ -235,6 +236,7 @@ function cell(row: AssetListItem, key: string) {
           as="router-link"
           :to="newPath"
           :label="selectedType ? `New ${selectedType.name.toLowerCase()}` : 'New asset'"
+          style="text-decoration: none"
           icon="pi pi-plus"
         />
       </div>

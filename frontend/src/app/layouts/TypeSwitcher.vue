@@ -40,11 +40,26 @@ function onShow() {
   nextTick(() => wrap.value?.querySelector('input')?.focus())
 }
 
-function pick(e: ListboxChangeEvent) {
-  const o = e.value as Option | null
+function selectOption(o: Option | null, event?: MouseEvent | KeyboardEvent) {
   if (!o) return
   visible.value = false
-  openLocation(router, nav.locationFor(o.id), e.originalEvent as MouseEvent)
+  picked.value = null
+  openLocation(router, nav.locationFor(o.id), event as MouseEvent)
+}
+
+function pick(e: ListboxChangeEvent) {
+  selectOption(e.value as Option | null, e.originalEvent as MouseEvent | KeyboardEvent)
+}
+
+function onEnterKey(e: KeyboardEvent) {
+  if (!visible.value) return
+  const focusedEl =
+    wrap.value?.querySelector<HTMLElement>('[data-p-focused="true"]') ??
+    wrap.value?.querySelector<HTMLElement>('.p-listbox-option')
+  if (focusedEl) {
+    e.preventDefault()
+    focusedEl.click()
+  }
 }
 </script>
 
@@ -54,10 +69,10 @@ function pick(e: ListboxChangeEvent) {
     modal
     dismissable-mask
     :show-header="false"
-    :style="{ width: 'min(92vw, 30rem)' }"
+    :style="{ width: 'min(92vw, 30rem)', paddingTop: '1rem' }"
     @show="onShow"
   >
-    <div ref="wrap">
+    <div ref="wrap" @keydown.enter="onEnterKey">
       <Listbox
         v-model="picked"
         :options="groups"
@@ -65,13 +80,14 @@ function pick(e: ListboxChangeEvent) {
         option-group-label="label"
         option-group-children="items"
         filter
+        auto-option-focus
         filter-placeholder="Go to asset type…"
         list-style="max-height: 50vh"
         class="switcher-list"
         @change="pick"
       >
         <template #option="{ option }">
-          <span class="opt">
+          <span class="opt" @click.stop="selectOption(option, $event)">
             <span>{{ option.name }}</span>
             <span class="count">{{ option.count ?? '' }}</span>
           </span>

@@ -40,23 +40,51 @@ const workspace = computed<NavItem[]>(() => {
   const items: NavItem[] = []
   if (session.can(Perm.AssetRead)) {
     const total = (types.value ?? []).reduce((n, t) => n + (t.asset_count ?? 0), 0)
-    items.push({ key: 'all', label: 'All assets', route: nav.listFor(undefined), count: total, toggle: true, active: name.value === 'assets' })
+    items.push({
+      key: 'all',
+      label: 'All assets',
+      icon: 'pi pi-box',
+      route: nav.listFor(undefined),
+      count: total,
+      toggle: true,
+      active: name.value === 'assets',
+    })
     if (allOpen.value) {
       for (const t of types.value ?? []) {
-        items.push({ key: t.id, label: t.name, route: nav.listFor(t.id), count: t.asset_count, sub: true })
+        items.push({
+          key: t.id,
+          label: t.name,
+          route: nav.listFor(t.id),
+          count: t.asset_count,
+          sub: true,
+        })
       }
     }
     items.push({
       label: 'Configuration',
       items: [
-        { label: 'Asset types', route: '/types', active: name.value === 'types' },
-        { label: 'Statuses', route: '/statuses', active: name.value === 'statuses' },
+        { label: 'Asset types', icon: 'pi pi-sitemap', route: '/types', active: name.value === 'types' },
+        { label: 'Statuses', icon: 'pi pi-tag', route: '/statuses', active: name.value === 'statuses' },
       ],
     })
   }
   const admin: NavItem[] = []
-  if (session.can(Perm.AccountRead)) admin.push({ label: 'Accounts', route: '/accounts', active: name.value.startsWith('account') && name.value !== 'account-settings' })
-  if (session.can(Perm.RoleRead)) admin.push({ label: 'Roles', route: '/roles', active: name.value.startsWith('role') })
+  if (session.can(Perm.AccountRead)) {
+    admin.push({
+      label: 'Accounts',
+      icon: 'pi pi-users',
+      route: '/accounts',
+      active: name.value.startsWith('account') && name.value !== 'account-settings',
+    })
+  }
+  if (session.can(Perm.RoleRead)) {
+    admin.push({
+      label: 'Roles',
+      icon: 'pi pi-shield',
+      route: '/roles',
+      active: name.value.startsWith('role'),
+    })
+  }
   if (admin.length) items.push({ label: 'Administration', items: admin })
   return items
 })
@@ -65,10 +93,10 @@ const scoped = computed<NavItem[]>(() => {
   const id = nav.scopeTypeId.value!
   const count = types.value?.find((t) => t.id === id)?.asset_count
   return [
-    { label: 'Assets', route: nav.listFor(id), count, active: name.value !== 'type-settings' },
-    { label: 'Settings', route: `/types/${id}/settings`, active: name.value === 'type-settings' },
-    { label: 'Activity', disabled: true, later: true },
-    { label: 'Reports', disabled: true, later: true },
+    { label: 'Assets', icon: 'pi pi-database', route: nav.listFor(id), count, active: name.value !== 'type-settings' },
+    { label: 'Settings', icon: 'pi pi-cog', route: `/types/${id}/settings`, active: name.value === 'type-settings' },
+    { label: 'Activity', icon: 'pi pi-history', disabled: true, later: true },
+    { label: 'Reports', icon: 'pi pi-chart-bar', disabled: true, later: true },
   ]
 })
 
@@ -91,7 +119,9 @@ const model = computed(() => (nav.scopeTypeId.value ? scoped.value : workspace.v
     <Menu :model="model" class="nav-menu">
       <template #item="{ item, props }">
         <span v-if="item.later" class="nav-link is-later" v-bind="props.action">
-          {{ item.label }} <span class="nav-count">later</span>
+          <i v-if="item.icon" :class="[item.icon, 'nav-icon']" aria-hidden="true" />
+          <span class="nav-label">{{ item.label }}</span>
+          <span class="nav-count">later</span>
         </span>
         <RouterLink v-else-if="item.route" v-slot="{ href, navigate }" :to="item.route" custom>
           <a
@@ -102,6 +132,9 @@ const model = computed(() => (nav.scopeTypeId.value ? scoped.value : workspace.v
             :aria-current="item.active ? 'page' : undefined"
             @click="navigate"
           >
+            <i v-if="item.icon" :class="[item.icon, 'nav-icon']" aria-hidden="true" />
+            <span class="nav-label">{{ item.label }}</span>
+            <span v-if="item.count !== undefined" class="nav-count">{{ item.count }}</span>
             <Button
               v-if="item.toggle"
               :icon="allOpen ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"
@@ -113,8 +146,6 @@ const model = computed(() => (nav.scopeTypeId.value ? scoped.value : workspace.v
               :aria-expanded="allOpen"
               @click.stop.prevent="allOpen = !allOpen"
             />
-            <span class="nav-label">{{ item.label }}</span>
-            <span v-if="item.count !== undefined" class="nav-count">{{ item.count }}</span>
           </a>
         </RouterLink>
       </template>
@@ -128,7 +159,7 @@ const model = computed(() => (nav.scopeTypeId.value ? scoped.value : workspace.v
   flex-direction: column;
   gap: 0.25rem;
   padding: 0.75rem 0.6rem;
-  background: var(--p-content-background);
+  background: var(--app-ground);
   border-right: 1px solid var(--app-line);
   overflow-y: auto;
 }
@@ -187,31 +218,50 @@ const model = computed(() => (nav.scopeTypeId.value ? scoped.value : workspace.v
 .nav-link {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.65rem;
   width: 100%;
   border-radius: 7px;
   color: var(--p-text-color);
   text-decoration: none;
 }
-/* loại dưới "All assets": thụt vào, có đường dẫn bên trái */
+.nav-icon {
+  width: 1.15rem;
+  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--p-text-muted-color);
+  transition: color 0.15s ease;
+}
+.nav-link:hover .nav-icon {
+  color: var(--p-text-color);
+}
+/* loại dưới "All assets": thụt vào, có đường dẫn bên trái căn giữa theo icon cha */
 .nav-link.is-sub {
-  margin-left: 1.4rem;
-  width: calc(100% - 1.4rem);
+  margin-left: 1.15rem;
+  padding-left: 0.85rem;
+  width: calc(100% - 1.15rem);
   border-left: 1px solid var(--app-line);
   border-radius: 0 7px 7px 0;
   padding-top: 0.35rem;
   padding-bottom: 0.35rem;
 }
-/* mục đang mở: nền hổ phách nhạt, vạch hổ phách bên trái */
+/* mục đang mở: nền xanh nhạt phẳng, chữ đậm màu thường, icon xanh; không bóng, không vạch */
 .nav-link.is-active {
   font-weight: 600;
-  background: var(--p-highlight-background);
-  color: var(--p-highlight-color);
-  box-shadow: inset 3px 0 0 var(--app-accent);
+  background: var(--app-selected);
+  color: var(--p-text-color);
+}
+.nav-link.is-active .nav-icon {
+  color: var(--app-accent);
 }
 .nav-link.is-later {
   color: var(--p-text-muted-color);
   cursor: default;
+}
+.nav-link.is-later .nav-icon {
+  opacity: 0.55;
 }
 .nav-label {
   flex: 1;
@@ -228,8 +278,9 @@ const model = computed(() => (nav.scopeTypeId.value ? scoped.value : workspace.v
   font-style: italic;
 }
 .toggle {
-  width: 1.5rem;
-  height: 1.5rem;
-  margin: -0.25rem 0 -0.25rem -0.25rem;
+  width: 1.4rem;
+  height: 1.4rem;
+  margin: -0.25rem -0.25rem -0.25rem 0;
+  color: var(--p-text-muted-color);
 }
 </style>

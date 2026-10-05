@@ -66,6 +66,7 @@ defineExpose({
         :options="attributes"
         option-label="label"
         option-value="key"
+        append-to="self"
         @update:model-value="changeKey"
       />
       <label for="filter-op">Condition</label>
@@ -75,6 +76,7 @@ defineExpose({
         :options="operators"
         option-label="label"
         option-value="value"
+        append-to="self"
         @update:model-value="changeOp"
       />
       <label for="filter-value">Value</label>
@@ -93,6 +95,7 @@ defineExpose({
           :model-value="fromDateString(row.value)"
           input-id="filter-value"
           date-format="yy-mm-dd"
+          append-to="self"
           @update:model-value="(d) => (row.value = toDateString(d as Date | null) ?? '')"
         />
         <Select
@@ -102,6 +105,7 @@ defineExpose({
           :options="boolOptions"
           option-label="label"
           option-value="value"
+          append-to="self"
         />
         <MultiSelect
           v-else-if="attr.data_type === 'select' && row.op === 'in'"
@@ -110,6 +114,7 @@ defineExpose({
           :options="options"
           option-label="label"
           option-value="value"
+          append-to="self"
           @update:model-value="(v: string[]) => (row.value = v.join(','))"
         />
         <Select
@@ -119,6 +124,7 @@ defineExpose({
           :options="options"
           option-label="label"
           option-value="value"
+          append-to="self"
         />
         <InputText v-else id="filter-value" v-model="row.value" />
       </template>

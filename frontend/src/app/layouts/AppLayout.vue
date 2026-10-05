@@ -57,7 +57,7 @@ const SHORTCUTS: [string, string][] = [
   ['Ctrl K', 'Go to an asset type (keeps the section you are in)'],
   ['/', 'Search the asset list'],
   ['N', 'New asset of the type you are viewing'],
-  ['J / K', 'Next / previous asset, on an asset page'],
+  ['J / K', 'Previous / next asset, on an asset page'],
   ['E', 'Edit the open asset'],
   ['Alt 1–9', 'Go to tab 1–9'],
   ['Ctrl-click, middle-click', 'Open a link in a new tab'],
