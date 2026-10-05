@@ -134,6 +134,36 @@ func attrFilterArgs(filters []domain.AttrFilter) (attrs []uuid.UUID, ops, vals [
 	return attrs, ops, vals
 }
 
+func (r *AssetRepository) CountByType(ctx context.Context) (map[uuid.UUID]domain.TypeCounts, error) {
+	rows, err := r.q.CountActiveAssetsByTypeAndKind(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("inventory: count assets by type: %w", err)
+	}
+	out := make(map[uuid.UUID]domain.TypeCounts)
+	for _, row := range rows {
+		c := out[row.AssetTypeID]
+		if c.ByKind == nil {
+			c.ByKind = map[domain.StatusKind]int64{}
+		}
+		c.Total += row.N
+		c.ByKind[domain.StatusKind(row.Kind)] += row.N
+		out[row.AssetTypeID] = c
+	}
+	return out, nil
+}
+
+func (r *AssetRepository) CountByStatus(ctx context.Context) (map[uuid.UUID]int64, error) {
+	rows, err := r.q.CountAssetsByStatus(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("inventory: count assets by status: %w", err)
+	}
+	out := make(map[uuid.UUID]int64, len(rows))
+	for _, row := range rows {
+		out[row.StatusID] = row.N
+	}
+	return out, nil
+}
+
 // attachValues nạp giá trị thuộc tính của mọi dòng trong một truy vấn
 func (r *AssetRepository) attachValues(ctx context.Context, items []domain.AssetListItem) error {
 	ids := make([]uuid.UUID, len(items))

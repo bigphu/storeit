@@ -3,8 +3,11 @@ package repository_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
 
 	"storeit/internal/inventory/contract"
 	"storeit/internal/inventory/domain"
@@ -188,5 +191,95 @@ func TestTypes_ChangeDataType(t *testing.T) {
 	}
 	if _, err := r.types.UpdateAttribute(ctx, typ.ID, ram2.ID, domain.AttributeChange{Label: ptr("x")}); !errors.Is(err, domain.ErrAttributeNotFound) {
 		t.Errorf("attribute of another type: %v", err)
+	}
+}
+
+func TestTypes_Reorder(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	typ := laptop(t, r)
+	ids := func(t domain.AssetType) []uuid.UUID {
+		var out []uuid.UUID
+		for _, a := range t.ActiveAttributes() {
+			out = append(out, a.ID)
+		}
+		return out
+	}
+	before := ids(typ)
+	reversed := slices.Clone(before)
+	slices.Reverse(reversed)
+	events := countEvents(t, r, contract.EventAssetTypeUpdated, typ.ID)
+
+	got, err := r.types.ReorderAttributes(ctx, typ.ID, reversed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(ids(got), reversed) {
+		t.Errorf("order = %v, want %v", ids(got), reversed)
+	}
+	for i, a := range got.ActiveAttributes() {
+		if a.Position != int32(i+1) {
+			t.Errorf("%s position = %d, want %d", a.Key, a.Position, i+1)
+		}
+	}
+	// một event cho cả lần sắp xếp
+	if n := countEvents(t, r, contract.EventAssetTypeUpdated, typ.ID); n != events+1 {
+		t.Errorf("events = %d, want %d", n, events+1)
+	}
+	// cùng thứ tự: không ghi, không event
+	if _, err := r.types.ReorderAttributes(ctx, typ.ID, reversed); err != nil {
+		t.Fatal(err)
+	}
+	if n := countEvents(t, r, contract.EventAssetTypeUpdated, typ.ID); n != events+1 {
+		t.Errorf("unchanged order wrote an event")
+	}
+	// danh sách phải đúng các thuộc tính đang hoạt động, mỗi cái một lần
+	for name, bad := range map[string][]uuid.UUID{
+		"missing one": reversed[1:],
+		"duplicate":   append(slices.Clone(reversed[1:]), reversed[1]),
+		"unknown":     append(slices.Clone(reversed[1:]), uuid.New()),
+	} {
+		if _, err := r.types.ReorderAttributes(ctx, typ.ID, bad); !errors.Is(err, domain.ErrInvalidOrder) {
+			t.Errorf("%s: %v, want ErrInvalidOrder", name, err)
+		}
+	}
+
+	// option của thuộc tính select
+	os := attr(t, typ, "os")
+	opts := []uuid.UUID{os.Options[1].ID, os.Options[0].ID}
+	a, err := r.types.ReorderOptions(ctx, typ.ID, os.ID, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Options[0].ID != opts[0] || a.Options[0].Position != 1 || a.Options[1].Position != 2 {
+		t.Errorf("options = %+v", a.Options)
+	}
+	if _, err := r.types.ReorderOptions(ctx, typ.ID, os.ID, opts[:1]); !errors.Is(err, domain.ErrInvalidOrder) {
+		t.Errorf("missing option: %v", err)
+	}
+	if _, err := r.types.ReorderOptions(ctx, typ.ID, attr(t, typ, "serial").ID, nil); !errors.Is(err, domain.ErrNotSelectAttribute) {
+		t.Errorf("options of a text attribute: %v", err)
+	}
+}
+
+func TestTypes_AttributeLabels(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	typ := laptop(t, r)
+	active := typ.ActiveAttributes()
+	if err := r.types.RemoveAttribute(ctx, typ.ID, active[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	labels, err := r.types.AttributeLabels(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// đã gỡ thì không có; còn lại theo thứ tự hiển thị
+	var want []string
+	for _, a := range active[1:] {
+		want = append(want, a.Label)
+	}
+	if !slices.Equal(labels[typ.ID], want) {
+		t.Errorf("labels = %v, want %v", labels[typ.ID], want)
 	}
 }

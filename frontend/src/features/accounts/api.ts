@@ -1,11 +1,15 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 import { identityApi } from '@/lib/api/client'
+import type { Account } from '@/lib/api/types'
 import { unwrap } from '@/lib/errors'
+
+export type AccountStatus = Account['status']
 
 export interface AccountListParams {
   q?: string
-  active?: boolean
+  status?: AccountStatus
+  role_id?: string
   page: number
   page_size: number
 }
@@ -16,11 +20,13 @@ export const accountKeys = {
   one: (id: string) => ['accounts', id] as const,
 }
 
-export function useAccounts(params: MaybeRefOrGetter<AccountListParams>) {
+// enabled: false thì không tải (vd tab People của trang vai trò khi chưa mở)
+export function useAccounts(params: MaybeRefOrGetter<AccountListParams>, enabled: MaybeRefOrGetter<boolean> = true) {
   return useQuery({
     queryKey: computed(() => accountKeys.list(toValue(params))),
     queryFn: () => unwrap(identityApi.GET('/accounts', { params: { query: toValue(params) } })),
     placeholderData: keepPreviousData,
+    enabled: computed(() => toValue(enabled)),
   })
 }
 
@@ -32,13 +38,16 @@ export function useAccount(id: MaybeRefOrGetter<string>) {
   })
 }
 
-// Mọi thay đổi tài khoản làm mới danh sách và chi tiết
+// Mọi thay đổi tài khoản làm mới danh sách và chi tiết, và số thành viên của role
 function useAccountMutation<V, R>(fn: (v: V) => Promise<R>, toast = true) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: fn,
     meta: { toast },
-    onSuccess: () => qc.invalidateQueries({ queryKey: accountKeys.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: accountKeys.all })
+      qc.invalidateQueries({ queryKey: ['roles'] })
+    },
   })
 }
 
@@ -81,4 +90,9 @@ export function useSendPasswordReset() {
   return useAccountMutation((id: string) =>
     unwrap(identityApi.POST('/accounts/{accountID}/password-reset', path(id))),
   )
+}
+
+// Đăng xuất account khỏi mọi thiết bị; trả số phiên đã kết thúc
+export function useSignOutAccount() {
+  return useAccountMutation((id: string) => unwrap(identityApi.POST('/accounts/{accountID}/sign-out', path(id))))
 }

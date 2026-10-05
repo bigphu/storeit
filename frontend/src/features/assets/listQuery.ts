@@ -3,7 +3,7 @@
 // include_retired, attr (lặp lại), sort, page.
 import type { LocationQuery, LocationQueryRaw } from 'vue-router'
 import type { DataType, StatusKind } from '@/lib/api/types'
-import { queryInt, queryString } from '@/lib/urlState'
+import { queryInt, queryString } from '@/lib/queryParams'
 
 export interface AttrFilterRow {
   key: string
@@ -95,6 +95,53 @@ export function toApiParams(s: AssetListState, pageSize: number) {
 // changeType: thuộc tính thuộc về loại, nên đổi loại thì bỏ lọc và sắp theo thuộc tính
 export function changeType(s: AssetListState, typeId: string | undefined): AssetListState {
   return { ...s, typeId, filters: [], sort: isAttrSort(s.sort) ? undefined : s.sort, page: 1 }
+}
+
+// Bộ lọc thuộc tính, sắp và trang thuộc về một loại; mỗi loại nhớ của riêng nó
+// (khoá '' là danh sách mọi loại). Tìm kiếm, status, "include retired" dùng chung.
+export interface TypeView {
+  filters: AttrFilterRow[]
+  sort?: string
+  page: number
+}
+export type TypeViews = Record<string, TypeView>
+
+// switchType: lưu view của loại đang rời, mở loại mới với view đã nhớ (nếu có)
+export function switchType(
+  s: AssetListState,
+  typeId: string | undefined,
+  views: TypeViews,
+): { state: AssetListState; views: TypeViews } {
+  const next = { ...views, [s.typeId ?? '']: { filters: s.filters, sort: s.sort, page: s.page } }
+  const saved = next[typeId ?? '']
+  const fresh = changeType(s, typeId)
+  return { state: saved ? { ...fresh, filters: saved.filters, sort: saved.sort, page: saved.page } : fresh, views: next }
+}
+
+// Đường dẫn của danh sách: loại nằm trên path (/types/:id/assets), phần còn lại ở query
+export interface ListLocation {
+  path: string
+  query: LocationQueryRaw
+}
+
+export function listLocation(s: AssetListState): ListLocation {
+  if (!s.typeId) return { path: '/assets', query: serializeAssetQuery(s) }
+  return { path: `/types/${s.typeId}/assets`, query: serializeAssetQuery({ ...s, typeId: undefined }) }
+}
+
+// typeListLocation: mở danh sách của một loại với view đã nhớ (sidebar, breadcrumb)
+export function typeListLocation(typeId: string, views: TypeViews): ListLocation {
+  const v = views[typeId]
+  return listLocation({ q: '', includeRetired: false, typeId, filters: v?.filters ?? [], sort: v?.sort, page: v?.page ?? 1 })
+}
+
+// legacyListRedirect: link cũ /assets?type_id=… sang /types/…/assets
+export function legacyListRedirect(q: LocationQuery): ListLocation | null {
+  const typeId = queryString(q.type_id)
+  if (!typeId) return null
+  const query: LocationQueryRaw = { ...q }
+  delete query.type_id
+  return { path: `/types/${typeId}/assets`, query }
 }
 
 // fromTableSort: sự kiện sort của DataTable (removable-sort: tăng -> giảm -> bỏ) -> sort của API

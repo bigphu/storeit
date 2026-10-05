@@ -37,6 +37,10 @@ func TestCannotGrantOrActBeyondOwnPermissions(t *testing.T) {
 			_, err := e.svc.DisableAccount(hrCtx, admin.ID)
 			return err
 		},
+		"sign an admin out everywhere": func() error {
+			_, err := e.svc.SignOutEverywhere(hrCtx, admin.ID)
+			return err
+		},
 	}
 	for name, call := range denied {
 		if err := call(); !errors.Is(err, domain.ErrExceedsOwnPermissions) || status(err) != 403 {
@@ -55,6 +59,9 @@ func TestCannotGrantOrActBeyondOwnPermissions(t *testing.T) {
 	// Trong phạm vi quyền của mình thì được
 	if _, err := e.svc.AssignRoles(hrCtx, emp.ID, []uuid.UUID{domain.EmployeeRoleID, hrRole.ID}); err != nil {
 		t.Errorf("grant HR to an employee: %v", err)
+	}
+	if _, err := e.svc.SignOutEverywhere(hrCtx, emp.ID); err != nil {
+		t.Errorf("sign an employee out: %v", err)
 	}
 	if _, err := e.svc.DisableAccount(hrCtx, emp.ID); err != nil {
 		t.Errorf("disable an employee: %v", err)

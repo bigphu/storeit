@@ -126,20 +126,41 @@ type AssetListItem struct {
 
 // AssetType defines model for AssetType.
 type AssetType struct {
-	ArchivedAt  *time.Time      `json:"archived_at,omitempty"`
-	Code        string          `json:"code"`
-	CreatedAt   time.Time       `json:"created_at"`
-	Description string          `json:"description"`
-	Id          externalRef0.ID `json:"id"`
-	IsSystem    bool            `json:"is_system"`
-	Name        string          `json:"name"`
-	UpdatedAt   time.Time       `json:"updated_at"`
-	Version     int32           `json:"version"`
+	ArchivedAt *time.Time `json:"archived_at,omitempty"`
+
+	// AssetCount Assets of this type that are not retired; only with `with_counts=true`
+	AssetCount *int64 `json:"asset_count,omitempty"`
+
+	// AttributeCount Active attributes; only with `with_counts=true`
+	AttributeCount *int32 `json:"attribute_count,omitempty"`
+
+	// AttributeLabels Labels of the active attributes in display order; only with `with_counts=true`
+	AttributeLabels *[]string       `json:"attribute_labels,omitempty"`
+	Code            string          `json:"code"`
+	CreatedAt       time.Time       `json:"created_at"`
+	Description     string          `json:"description"`
+	Id              externalRef0.ID `json:"id"`
+	IsSystem        bool            `json:"is_system"`
+
+	// KindCounts Assets not retired by the kind of their status; only with `with_counts=true`
+	KindCounts *KindCounts `json:"kind_counts,omitempty"`
+	Name       string      `json:"name"`
+	UpdatedAt  time.Time   `json:"updated_at"`
+	Version    int32       `json:"version"`
 }
 
 // AssetTypeDetail defines model for AssetTypeDetail.
 type AssetTypeDetail struct {
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
+
+	// AssetCount Assets of this type that are not retired; only with `with_counts=true`
+	AssetCount *int64 `json:"asset_count,omitempty"`
+
+	// AttributeCount Active attributes; only with `with_counts=true`
+	AttributeCount *int32 `json:"attribute_count,omitempty"`
+
+	// AttributeLabels Labels of the active attributes in display order; only with `with_counts=true`
+	AttributeLabels *[]string `json:"attribute_labels,omitempty"`
 
 	// Attributes All attributes in display order, including removed ones (removed = true)
 	Attributes  []Attribute     `json:"attributes"`
@@ -148,9 +169,12 @@ type AssetTypeDetail struct {
 	Description string          `json:"description"`
 	Id          externalRef0.ID `json:"id"`
 	IsSystem    bool            `json:"is_system"`
-	Name        string          `json:"name"`
-	UpdatedAt   time.Time       `json:"updated_at"`
-	Version     int32           `json:"version"`
+
+	// KindCounts Assets not retired by the kind of their status; only with `with_counts=true`
+	KindCounts *KindCounts `json:"kind_counts,omitempty"`
+	Name       string      `json:"name"`
+	UpdatedAt  time.Time   `json:"updated_at"`
+	Version    int32       `json:"version"`
 }
 
 // Attribute defines model for Attribute.
@@ -183,6 +207,41 @@ type AttributeValue struct {
 
 // AttributeValues Attribute key -> value (string, number, boolean; select = option id; date = YYYY-MM-DD)
 type AttributeValues map[string]interface{}
+
+// BulkFailure defines model for BulkFailure.
+type BulkFailure struct {
+	Id      externalRef0.ID      `json:"id"`
+	Problem externalRef0.Problem `json:"problem"`
+}
+
+// BulkItem defines model for BulkItem.
+type BulkItem struct {
+	Id externalRef0.ID `json:"id"`
+
+	// Version The version you last read; a newer one fails that asset with asset-changed
+	Version int32 `json:"version"`
+}
+
+// BulkItems defines model for BulkItems.
+type BulkItems = []BulkItem
+
+// BulkResult defines model for BulkResult.
+type BulkResult struct {
+	Failed    []BulkFailure     `json:"failed"`
+	Succeeded []externalRef0.ID `json:"succeeded"`
+}
+
+// BulkRetireRequest defines model for BulkRetireRequest.
+type BulkRetireRequest struct {
+	Items  BulkItems `json:"items"`
+	Reason *string   `json:"reason,omitempty"`
+}
+
+// BulkStatusRequest defines model for BulkStatusRequest.
+type BulkStatusRequest struct {
+	Items    BulkItems       `json:"items"`
+	StatusId externalRef0.ID `json:"status_id"`
+}
 
 // CreateAssetRequest defines model for CreateAssetRequest.
 type CreateAssetRequest struct {
@@ -217,6 +276,13 @@ type CreateStatusRequest struct {
 // DataType defines model for DataType.
 type DataType string
 
+// KindCounts Assets not retired by the kind of their status; only with `with_counts=true`
+type KindCounts struct {
+	Available   int64 `json:"available"`
+	InUse       int64 `json:"in_use"`
+	Unavailable int64 `json:"unavailable"`
+}
+
 // NewAttribute defines model for NewAttribute.
 type NewAttribute struct {
 	DataType   DataType  `json:"data_type"`
@@ -242,6 +308,12 @@ type OptionRequest struct {
 	Position *int32 `json:"position,omitempty"`
 }
 
+// OrderRequest defines model for OrderRequest.
+type OrderRequest struct {
+	// Ids Every active attribute (or option) exactly once, in the new order
+	Ids []externalRef0.ID `json:"ids"`
+}
+
 // RetireAssetRequest defines model for RetireAssetRequest.
 type RetireAssetRequest struct {
 	Reason  *string `json:"reason,omitempty"`
@@ -250,7 +322,10 @@ type RetireAssetRequest struct {
 
 // Status defines model for Status.
 type Status struct {
-	ArchivedAt *time.Time      `json:"archived_at,omitempty"`
+	ArchivedAt *time.Time `json:"archived_at,omitempty"`
+
+	// AssetCount Assets with this status, retired ones included; only with `with_counts=true`
+	AssetCount *int64          `json:"asset_count,omitempty"`
 	Id         externalRef0.ID `json:"id"`
 	IsDefault  bool            `json:"is_default"`
 	IsSystem   bool            `json:"is_system"`
@@ -352,11 +427,17 @@ type Problem = externalRef0.Problem
 // ListStatusesParams defines parameters for ListStatuses.
 type ListStatusesParams struct {
 	IncludeArchived *IncludeArchived `form:"include_archived,omitempty" json:"include_archived,omitempty"`
+
+	// WithCounts Add `asset_count` (assets with this status, retired ones included) to each status.
+	WithCounts *bool `form:"with_counts,omitempty" json:"with_counts,omitempty"`
 }
 
 // ListAssetTypesParams defines parameters for ListAssetTypes.
 type ListAssetTypesParams struct {
 	IncludeArchived *IncludeArchived `form:"include_archived,omitempty" json:"include_archived,omitempty"`
+
+	// WithCounts Add `asset_count` and `kind_counts` (assets not retired), `attribute_count` and `attribute_labels` (active attributes in display order) to each type.
+	WithCounts *bool `form:"with_counts,omitempty" json:"with_counts,omitempty"`
 }
 
 // ListAssetsParams defines parameters for ListAssets.
@@ -391,6 +472,9 @@ type ListAssetsParams struct {
 // CreateStatusJSONRequestBody defines body for CreateStatus for application/json ContentType.
 type CreateStatusJSONRequestBody = CreateStatusRequest
 
+// ReorderStatusesJSONRequestBody defines body for ReorderStatuses for application/json ContentType.
+type ReorderStatusesJSONRequestBody = OrderRequest
+
 // UpdateStatusJSONRequestBody defines body for UpdateStatus for application/json ContentType.
 type UpdateStatusJSONRequestBody = UpdateStatusRequest
 
@@ -403,17 +487,29 @@ type UpdateAssetTypeJSONRequestBody = UpdateAssetTypeRequest
 // AddAttributeJSONRequestBody defines body for AddAttribute for application/json ContentType.
 type AddAttributeJSONRequestBody = NewAttribute
 
+// ReorderAttributesJSONRequestBody defines body for ReorderAttributes for application/json ContentType.
+type ReorderAttributesJSONRequestBody = OrderRequest
+
 // UpdateAttributeJSONRequestBody defines body for UpdateAttribute for application/json ContentType.
 type UpdateAttributeJSONRequestBody = UpdateAttributeRequest
 
 // AddOptionJSONRequestBody defines body for AddOption for application/json ContentType.
 type AddOptionJSONRequestBody = OptionRequest
 
+// ReorderOptionsJSONRequestBody defines body for ReorderOptions for application/json ContentType.
+type ReorderOptionsJSONRequestBody = OrderRequest
+
 // UpdateOptionJSONRequestBody defines body for UpdateOption for application/json ContentType.
 type UpdateOptionJSONRequestBody = UpdateOptionRequest
 
 // CreateAssetJSONRequestBody defines body for CreateAsset for application/json ContentType.
 type CreateAssetJSONRequestBody = CreateAssetRequest
+
+// RetireAssetsJSONRequestBody defines body for RetireAssets for application/json ContentType.
+type RetireAssetsJSONRequestBody = BulkRetireRequest
+
+// SetAssetsStatusJSONRequestBody defines body for SetAssetsStatus for application/json ContentType.
+type SetAssetsStatusJSONRequestBody = BulkStatusRequest
 
 // UpdateAssetJSONRequestBody defines body for UpdateAsset for application/json ContentType.
 type UpdateAssetJSONRequestBody = UpdateAssetRequest
@@ -432,12 +528,18 @@ type ServerInterface interface {
 	// CreateStatus Create a status (inventory.status.manage)
 	// (POST /asset-statuses)
 	CreateStatus(w http.ResponseWriter, r *http.Request)
+	// ReorderStatuses Put every active status in a new order, in one change (inventory.status.manage)
+	// (PUT /asset-statuses/order)
+	ReorderStatuses(w http.ResponseWriter, r *http.Request)
 	// UpdateStatus Rename, move or make default of its kind (inventory.status.manage)
 	// (PATCH /asset-statuses/{statusID})
 	UpdateStatus(w http.ResponseWriter, r *http.Request, statusID StatusID)
 	// ArchiveStatus Stop offering a status (inventory.status.manage)
 	// (POST /asset-statuses/{statusID}/archive)
 	ArchiveStatus(w http.ResponseWriter, r *http.Request, statusID StatusID)
+	// RestoreStatus Offer an archived status again (inventory.status.manage)
+	// (POST /asset-statuses/{statusID}/restore)
+	RestoreStatus(w http.ResponseWriter, r *http.Request, statusID StatusID)
 	// ListAssetTypes List asset types (inventory.asset.read)
 	// (GET /asset-types)
 	ListAssetTypes(w http.ResponseWriter, r *http.Request, params ListAssetTypesParams)
@@ -456,6 +558,9 @@ type ServerInterface interface {
 	// AddAttribute Add a custom attribute (inventory.type.manage)
 	// (POST /asset-types/{typeID}/attributes)
 	AddAttribute(w http.ResponseWriter, r *http.Request, typeID TypeID)
+	// ReorderAttributes Put the type's active attributes in a new order, in one change (inventory.type.manage)
+	// (PUT /asset-types/{typeID}/attributes/order)
+	ReorderAttributes(w http.ResponseWriter, r *http.Request, typeID TypeID)
 	// RemoveAttribute Remove a custom attribute; stored values are kept (inventory.type.manage)
 	// (DELETE /asset-types/{typeID}/attributes/{attributeID})
 	RemoveAttribute(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID)
@@ -465,6 +570,9 @@ type ServerInterface interface {
 	// AddOption Add an option to a select attribute (inventory.type.manage)
 	// (POST /asset-types/{typeID}/attributes/{attributeID}/options)
 	AddOption(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID)
+	// ReorderOptions Put a select attribute's active options in a new order, in one change (inventory.type.manage)
+	// (PUT /asset-types/{typeID}/attributes/{attributeID}/options/order)
+	ReorderOptions(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID)
 	// RemoveOption Remove an option; assets using it keep it (inventory.type.manage)
 	// (DELETE /asset-types/{typeID}/attributes/{attributeID}/options/{optionID})
 	RemoveOption(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID, optionID OptionID)
@@ -480,6 +588,12 @@ type ServerInterface interface {
 	// CreateAsset Create an asset (inventory.asset.manage)
 	// (POST /assets)
 	CreateAsset(w http.ResponseWriter, r *http.Request)
+	// RetireAssets Retire several assets; each succeeds or fails on its own (inventory.asset.manage)
+	// (POST /assets/bulk-retire)
+	RetireAssets(w http.ResponseWriter, r *http.Request)
+	// SetAssetsStatus Change the status of several assets; each succeeds or fails on its own (inventory.asset.manage)
+	// (POST /assets/bulk-status)
+	SetAssetsStatus(w http.ResponseWriter, r *http.Request)
 	// GetAsset Get an asset with its custom attributes (inventory.asset.read)
 	// (GET /assets/{assetID})
 	GetAsset(w http.ResponseWriter, r *http.Request, assetID AssetID)
@@ -510,6 +624,12 @@ func (_ Unimplemented) CreateStatus(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ReorderStatuses Put every active status in a new order, in one change (inventory.status.manage)
+// (PUT /asset-statuses/order)
+func (_ Unimplemented) ReorderStatuses(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // UpdateStatus Rename, move or make default of its kind (inventory.status.manage)
 // (PATCH /asset-statuses/{statusID})
 func (_ Unimplemented) UpdateStatus(w http.ResponseWriter, r *http.Request, statusID StatusID) {
@@ -519,6 +639,12 @@ func (_ Unimplemented) UpdateStatus(w http.ResponseWriter, r *http.Request, stat
 // ArchiveStatus Stop offering a status (inventory.status.manage)
 // (POST /asset-statuses/{statusID}/archive)
 func (_ Unimplemented) ArchiveStatus(w http.ResponseWriter, r *http.Request, statusID StatusID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RestoreStatus Offer an archived status again (inventory.status.manage)
+// (POST /asset-statuses/{statusID}/restore)
+func (_ Unimplemented) RestoreStatus(w http.ResponseWriter, r *http.Request, statusID StatusID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -558,6 +684,12 @@ func (_ Unimplemented) AddAttribute(w http.ResponseWriter, r *http.Request, type
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ReorderAttributes Put the type's active attributes in a new order, in one change (inventory.type.manage)
+// (PUT /asset-types/{typeID}/attributes/order)
+func (_ Unimplemented) ReorderAttributes(w http.ResponseWriter, r *http.Request, typeID TypeID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // RemoveAttribute Remove a custom attribute; stored values are kept (inventory.type.manage)
 // (DELETE /asset-types/{typeID}/attributes/{attributeID})
 func (_ Unimplemented) RemoveAttribute(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID) {
@@ -573,6 +705,12 @@ func (_ Unimplemented) UpdateAttribute(w http.ResponseWriter, r *http.Request, t
 // AddOption Add an option to a select attribute (inventory.type.manage)
 // (POST /asset-types/{typeID}/attributes/{attributeID}/options)
 func (_ Unimplemented) AddOption(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ReorderOptions Put a select attribute's active options in a new order, in one change (inventory.type.manage)
+// (PUT /asset-types/{typeID}/attributes/{attributeID}/options/order)
+func (_ Unimplemented) ReorderOptions(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -603,6 +741,18 @@ func (_ Unimplemented) ListAssets(w http.ResponseWriter, r *http.Request, params
 // CreateAsset Create an asset (inventory.asset.manage)
 // (POST /assets)
 func (_ Unimplemented) CreateAsset(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RetireAssets Retire several assets; each succeeds or fails on its own (inventory.asset.manage)
+// (POST /assets/bulk-retire)
+func (_ Unimplemented) RetireAssets(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetAssetsStatus Change the status of several assets; each succeeds or fails on its own (inventory.asset.manage)
+// (POST /assets/bulk-status)
+func (_ Unimplemented) SetAssetsStatus(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -661,6 +811,19 @@ func (siw *ServerInterfaceWrapper) ListStatuses(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// ------------- Optional query parameter "with_counts" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "with_counts", r.URL.Query(), &params.WithCounts, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "with_counts"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "with_counts", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListStatuses(w, r, params)
 	}))
@@ -677,6 +840,20 @@ func (siw *ServerInterfaceWrapper) CreateStatus(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReorderStatuses operation middleware
+func (siw *ServerInterfaceWrapper) ReorderStatuses(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReorderStatuses(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -738,6 +915,32 @@ func (siw *ServerInterfaceWrapper) ArchiveStatus(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// RestoreStatus operation middleware
+func (siw *ServerInterfaceWrapper) RestoreStatus(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "statusID" -------------
+	var statusID StatusID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "statusID", chi.URLParam(r, "statusID"), &statusID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "statusID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreStatus(w, r, statusID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListAssetTypes operation middleware
 func (siw *ServerInterfaceWrapper) ListAssetTypes(w http.ResponseWriter, r *http.Request) {
 
@@ -756,6 +959,19 @@ func (siw *ServerInterfaceWrapper) ListAssetTypes(w http.ResponseWriter, r *http
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "include_archived"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "include_archived", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "with_counts" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "with_counts", r.URL.Query(), &params.WithCounts, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "with_counts"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "with_counts", Err: err})
 		}
 		return
 	}
@@ -889,6 +1105,32 @@ func (siw *ServerInterfaceWrapper) AddAttribute(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ReorderAttributes operation middleware
+func (siw *ServerInterfaceWrapper) ReorderAttributes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "typeID" -------------
+	var typeID TypeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "typeID", chi.URLParam(r, "typeID"), &typeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "typeID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReorderAttributes(w, r, typeID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RemoveAttribute operation middleware
 func (siw *ServerInterfaceWrapper) RemoveAttribute(w http.ResponseWriter, r *http.Request) {
 
@@ -985,6 +1227,41 @@ func (siw *ServerInterfaceWrapper) AddOption(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AddOption(w, r, typeID, attributeID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReorderOptions operation middleware
+func (siw *ServerInterfaceWrapper) ReorderOptions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "typeID" -------------
+	var typeID TypeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "typeID", chi.URLParam(r, "typeID"), &typeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "typeID", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "attributeID" -------------
+	var attributeID AttributeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "attributeID", chi.URLParam(r, "attributeID"), &attributeID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attributeID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReorderOptions(w, r, typeID, attributeID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1285,6 +1562,34 @@ func (siw *ServerInterfaceWrapper) CreateAsset(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// RetireAssets operation middleware
+func (siw *ServerInterfaceWrapper) RetireAssets(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RetireAssets(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetAssetsStatus operation middleware
+func (siw *ServerInterfaceWrapper) SetAssetsStatus(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAssetsStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetAsset operation middleware
 func (siw *ServerInterfaceWrapper) GetAsset(w http.ResponseWriter, r *http.Request) {
 
@@ -1524,6 +1829,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/asset-types/{typeID}/attributes", wrapper.AddAttribute)
 	})
 	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/asset-types/{typeID}/attributes/order", wrapper.ReorderAttributes)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/asset-types/{typeID}/attributes/{attributeID}/options/order", wrapper.ReorderOptions)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/asset-types/{typeID}/attributes/{attributeID}", wrapper.RemoveAttribute)
 	})
 	r.Group(func(r chi.Router) {
@@ -1545,10 +1856,16 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/asset-statuses", wrapper.CreateStatus)
 	})
 	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/asset-statuses/order", wrapper.ReorderStatuses)
+	})
+	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/asset-statuses/{statusID}", wrapper.UpdateStatus)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/asset-statuses/{statusID}/archive", wrapper.ArchiveStatus)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/asset-statuses/{statusID}/restore", wrapper.RestoreStatus)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/assets", wrapper.ListAssets)
@@ -1561,6 +1878,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/assets/{assetID}", wrapper.UpdateAsset)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/assets/bulk-retire", wrapper.RetireAssets)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/assets/bulk-status", wrapper.SetAssetsStatus)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/assets/{assetID}/retire", wrapper.RetireAsset)
@@ -1654,6 +1977,47 @@ func (response CreateStatusdefaultApplicationProblemPlusJSONResponse) VisitCreat
 	return err
 }
 
+type ReorderStatusesRequestObject struct {
+	Body *ReorderStatusesJSONRequestBody
+}
+
+type ReorderStatusesResponseObject interface {
+	VisitReorderStatusesResponse(w http.ResponseWriter) error
+}
+
+type ReorderStatuses200JSONResponse struct {
+	Items []Status `json:"items"`
+}
+
+func (response ReorderStatuses200JSONResponse) VisitReorderStatusesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderStatusesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ReorderStatusesdefaultApplicationProblemPlusJSONResponse) VisitReorderStatusesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type UpdateStatusRequestObject struct {
 	StatusID StatusID `json:"statusID"`
 	Body     *UpdateStatusJSONRequestBody
@@ -1722,6 +2086,45 @@ type ArchiveStatusdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ArchiveStatusdefaultApplicationProblemPlusJSONResponse) VisitArchiveStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreStatusRequestObject struct {
+	StatusID StatusID `json:"statusID"`
+}
+
+type RestoreStatusResponseObject interface {
+	VisitRestoreStatusResponse(w http.ResponseWriter) error
+}
+
+type RestoreStatus200JSONResponse Status
+
+func (response RestoreStatus200JSONResponse) VisitRestoreStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestoreStatusdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response RestoreStatusdefaultApplicationProblemPlusJSONResponse) VisitRestoreStatusResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -1971,6 +2374,46 @@ func (response AddAttributedefaultApplicationProblemPlusJSONResponse) VisitAddAt
 	return err
 }
 
+type ReorderAttributesRequestObject struct {
+	TypeID TypeID `json:"typeID"`
+	Body   *ReorderAttributesJSONRequestBody
+}
+
+type ReorderAttributesResponseObject interface {
+	VisitReorderAttributesResponse(w http.ResponseWriter) error
+}
+
+type ReorderAttributes200JSONResponse AssetTypeDetail
+
+func (response ReorderAttributes200JSONResponse) VisitReorderAttributesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderAttributesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ReorderAttributesdefaultApplicationProblemPlusJSONResponse) VisitReorderAttributesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RemoveAttributeRequestObject struct {
 	TypeID      TypeID      `json:"typeID"`
 	AttributeID AttributeID `json:"attributeID"`
@@ -2076,6 +2519,47 @@ type AddOptiondefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AddOptiondefaultApplicationProblemPlusJSONResponse) VisitAddOptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderOptionsRequestObject struct {
+	TypeID      TypeID      `json:"typeID"`
+	AttributeID AttributeID `json:"attributeID"`
+	Body        *ReorderOptionsJSONRequestBody
+}
+
+type ReorderOptionsResponseObject interface {
+	VisitReorderOptionsResponse(w http.ResponseWriter) error
+}
+
+type ReorderOptions200JSONResponse Attribute
+
+func (response ReorderOptions200JSONResponse) VisitReorderOptionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderOptionsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ReorderOptionsdefaultApplicationProblemPlusJSONResponse) VisitReorderOptionsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -2281,6 +2765,84 @@ func (response CreateAssetdefaultApplicationProblemPlusJSONResponse) VisitCreate
 	return err
 }
 
+type RetireAssetsRequestObject struct {
+	Body *RetireAssetsJSONRequestBody
+}
+
+type RetireAssetsResponseObject interface {
+	VisitRetireAssetsResponse(w http.ResponseWriter) error
+}
+
+type RetireAssets200JSONResponse BulkResult
+
+func (response RetireAssets200JSONResponse) VisitRetireAssetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RetireAssetsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response RetireAssetsdefaultApplicationProblemPlusJSONResponse) VisitRetireAssetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAssetsStatusRequestObject struct {
+	Body *SetAssetsStatusJSONRequestBody
+}
+
+type SetAssetsStatusResponseObject interface {
+	VisitSetAssetsStatusResponse(w http.ResponseWriter) error
+}
+
+type SetAssetsStatus200JSONResponse BulkResult
+
+func (response SetAssetsStatus200JSONResponse) VisitSetAssetsStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAssetsStatusdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response SetAssetsStatusdefaultApplicationProblemPlusJSONResponse) VisitSetAssetsStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetAssetRequestObject struct {
 	AssetID AssetID `json:"assetID"`
 }
@@ -2448,12 +3010,18 @@ type StrictServerInterface interface {
 	// CreateStatus Create a status (inventory.status.manage)
 	// (POST /asset-statuses)
 	CreateStatus(ctx context.Context, request CreateStatusRequestObject) (CreateStatusResponseObject, error)
+	// ReorderStatuses Put every active status in a new order, in one change (inventory.status.manage)
+	// (PUT /asset-statuses/order)
+	ReorderStatuses(ctx context.Context, request ReorderStatusesRequestObject) (ReorderStatusesResponseObject, error)
 	// UpdateStatus Rename, move or make default of its kind (inventory.status.manage)
 	// (PATCH /asset-statuses/{statusID})
 	UpdateStatus(ctx context.Context, request UpdateStatusRequestObject) (UpdateStatusResponseObject, error)
 	// ArchiveStatus Stop offering a status (inventory.status.manage)
 	// (POST /asset-statuses/{statusID}/archive)
 	ArchiveStatus(ctx context.Context, request ArchiveStatusRequestObject) (ArchiveStatusResponseObject, error)
+	// RestoreStatus Offer an archived status again (inventory.status.manage)
+	// (POST /asset-statuses/{statusID}/restore)
+	RestoreStatus(ctx context.Context, request RestoreStatusRequestObject) (RestoreStatusResponseObject, error)
 	// ListAssetTypes List asset types (inventory.asset.read)
 	// (GET /asset-types)
 	ListAssetTypes(ctx context.Context, request ListAssetTypesRequestObject) (ListAssetTypesResponseObject, error)
@@ -2472,6 +3040,9 @@ type StrictServerInterface interface {
 	// AddAttribute Add a custom attribute (inventory.type.manage)
 	// (POST /asset-types/{typeID}/attributes)
 	AddAttribute(ctx context.Context, request AddAttributeRequestObject) (AddAttributeResponseObject, error)
+	// ReorderAttributes Put the type's active attributes in a new order, in one change (inventory.type.manage)
+	// (PUT /asset-types/{typeID}/attributes/order)
+	ReorderAttributes(ctx context.Context, request ReorderAttributesRequestObject) (ReorderAttributesResponseObject, error)
 	// RemoveAttribute Remove a custom attribute; stored values are kept (inventory.type.manage)
 	// (DELETE /asset-types/{typeID}/attributes/{attributeID})
 	RemoveAttribute(ctx context.Context, request RemoveAttributeRequestObject) (RemoveAttributeResponseObject, error)
@@ -2481,6 +3052,9 @@ type StrictServerInterface interface {
 	// AddOption Add an option to a select attribute (inventory.type.manage)
 	// (POST /asset-types/{typeID}/attributes/{attributeID}/options)
 	AddOption(ctx context.Context, request AddOptionRequestObject) (AddOptionResponseObject, error)
+	// ReorderOptions Put a select attribute's active options in a new order, in one change (inventory.type.manage)
+	// (PUT /asset-types/{typeID}/attributes/{attributeID}/options/order)
+	ReorderOptions(ctx context.Context, request ReorderOptionsRequestObject) (ReorderOptionsResponseObject, error)
 	// RemoveOption Remove an option; assets using it keep it (inventory.type.manage)
 	// (DELETE /asset-types/{typeID}/attributes/{attributeID}/options/{optionID})
 	RemoveOption(ctx context.Context, request RemoveOptionRequestObject) (RemoveOptionResponseObject, error)
@@ -2496,6 +3070,12 @@ type StrictServerInterface interface {
 	// CreateAsset Create an asset (inventory.asset.manage)
 	// (POST /assets)
 	CreateAsset(ctx context.Context, request CreateAssetRequestObject) (CreateAssetResponseObject, error)
+	// RetireAssets Retire several assets; each succeeds or fails on its own (inventory.asset.manage)
+	// (POST /assets/bulk-retire)
+	RetireAssets(ctx context.Context, request RetireAssetsRequestObject) (RetireAssetsResponseObject, error)
+	// SetAssetsStatus Change the status of several assets; each succeeds or fails on its own (inventory.asset.manage)
+	// (POST /assets/bulk-status)
+	SetAssetsStatus(ctx context.Context, request SetAssetsStatusRequestObject) (SetAssetsStatusResponseObject, error)
 	// GetAsset Get an asset with its custom attributes (inventory.asset.read)
 	// (GET /assets/{assetID})
 	GetAsset(ctx context.Context, request GetAssetRequestObject) (GetAssetResponseObject, error)
@@ -2606,6 +3186,37 @@ func (sh *strictHandler) CreateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ReorderStatuses operation middleware
+func (sh *strictHandler) ReorderStatuses(w http.ResponseWriter, r *http.Request) {
+	var request ReorderStatusesRequestObject
+
+	var body ReorderStatusesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReorderStatuses(ctx, request.(ReorderStatusesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReorderStatuses")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReorderStatusesResponseObject); ok {
+		if err := validResponse.VisitReorderStatusesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // UpdateStatus operation middleware
 func (sh *strictHandler) UpdateStatus(w http.ResponseWriter, r *http.Request, statusID StatusID) {
 	var request UpdateStatusRequestObject
@@ -2658,6 +3269,32 @@ func (sh *strictHandler) ArchiveStatus(w http.ResponseWriter, r *http.Request, s
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ArchiveStatusResponseObject); ok {
 		if err := validResponse.VisitArchiveStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RestoreStatus operation middleware
+func (sh *strictHandler) RestoreStatus(w http.ResponseWriter, r *http.Request, statusID StatusID) {
+	var request RestoreStatusRequestObject
+
+	request.StatusID = statusID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestoreStatus(ctx, request.(RestoreStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestoreStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestoreStatusResponseObject); ok {
+		if err := validResponse.VisitRestoreStatusResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -2840,6 +3477,39 @@ func (sh *strictHandler) AddAttribute(w http.ResponseWriter, r *http.Request, ty
 	}
 }
 
+// ReorderAttributes operation middleware
+func (sh *strictHandler) ReorderAttributes(w http.ResponseWriter, r *http.Request, typeID TypeID) {
+	var request ReorderAttributesRequestObject
+
+	request.TypeID = typeID
+
+	var body ReorderAttributesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReorderAttributes(ctx, request.(ReorderAttributesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReorderAttributes")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReorderAttributesResponseObject); ok {
+		if err := validResponse.VisitReorderAttributesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // RemoveAttribute operation middleware
 func (sh *strictHandler) RemoveAttribute(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID) {
 	var request RemoveAttributeRequestObject
@@ -2928,6 +3598,40 @@ func (sh *strictHandler) AddOption(w http.ResponseWriter, r *http.Request, typeI
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AddOptionResponseObject); ok {
 		if err := validResponse.VisitAddOptionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReorderOptions operation middleware
+func (sh *strictHandler) ReorderOptions(w http.ResponseWriter, r *http.Request, typeID TypeID, attributeID AttributeID) {
+	var request ReorderOptionsRequestObject
+
+	request.TypeID = typeID
+	request.AttributeID = attributeID
+
+	var body ReorderOptionsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReorderOptions(ctx, request.(ReorderOptionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReorderOptions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReorderOptionsResponseObject); ok {
+		if err := validResponse.VisitReorderOptionsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -3081,6 +3785,68 @@ func (sh *strictHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// RetireAssets operation middleware
+func (sh *strictHandler) RetireAssets(w http.ResponseWriter, r *http.Request) {
+	var request RetireAssetsRequestObject
+
+	var body RetireAssetsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RetireAssets(ctx, request.(RetireAssetsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RetireAssets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RetireAssetsResponseObject); ok {
+		if err := validResponse.VisitRetireAssetsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetAssetsStatus operation middleware
+func (sh *strictHandler) SetAssetsStatus(w http.ResponseWriter, r *http.Request) {
+	var request SetAssetsStatusRequestObject
+
+	var body SetAssetsStatusJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetAssetsStatus(ctx, request.(SetAssetsStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetAssetsStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetAssetsStatusResponseObject); ok {
+		if err := validResponse.VisitSetAssetsStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetAsset operation middleware
 func (sh *strictHandler) GetAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
 	var request GetAssetRequestObject
@@ -3211,71 +3977,84 @@ func (sh *strictHandler) RetireAsset(w http.ResponseWriter, r *http.Request, ass
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"HCeMDwNH62oieG0fr2rne+d/DQAA//8=",
+	"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",
+	"FwAA//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

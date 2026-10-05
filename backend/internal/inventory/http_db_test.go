@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -397,5 +398,217 @@ func TestListFilterAndSortByAttribute(t *testing.T) {
 		if rec := a.do("GET", "/api/v1/assets?"+q, tok, nil); rec.Code/100 != 4 {
 			t.Errorf("?%s = %d", q, rec.Code)
 		}
+	}
+}
+
+func TestListTypesWithCounts(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	code := "CN" + strings.ToUpper(uuid.NewString()[:6])
+	typ := decode[typeDetail](t, a.do("POST", "/api/v1/asset-types", tok, map[string]any{
+		"code": code, "name": "Counted " + code,
+		"attributes": []map[string]any{
+			{"key": "b", "label": "Second", "data_type": "text", "position": 2},
+			{"key": "a", "label": "First", "data_type": "text", "position": 1},
+		},
+	}), 201)
+	for _, status := range []string{"", domain.InUseStatusID.String()} {
+		body := map[string]any{"tag": "CN-" + strings.ToUpper(uuid.NewString()[:8]), "name": "x", "asset_type_id": typ.ID}
+		if status != "" {
+			body["status_id"] = status
+		}
+		decode[assetDetail](t, a.do("POST", "/api/v1/assets", tok, body), 201)
+	}
+	type item struct {
+		ID         string
+		AssetCount *int64 `json:"asset_count"`
+		KindCounts *struct {
+			Available   int64 `json:"available"`
+			InUse       int64 `json:"in_use"`
+			Unavailable int64 `json:"unavailable"`
+		} `json:"kind_counts"`
+		AttributeCount  *int32   `json:"attribute_count"`
+		AttributeLabels []string `json:"attribute_labels"`
+	}
+	type list struct{ Items []item }
+	find := func(l list) item {
+		for _, it := range l.Items {
+			if it.ID == typ.ID {
+				return it
+			}
+		}
+		t.Fatalf("type %s not listed", typ.ID)
+		return item{}
+	}
+	got := find(decode[list](t, a.do("GET", "/api/v1/asset-types?with_counts=true", tok, nil), 200))
+	if got.AssetCount == nil || *got.AssetCount != 2 {
+		t.Errorf("asset_count = %v, want 2", got.AssetCount)
+	}
+	if k := got.KindCounts; k == nil || k.Available != 1 || k.InUse != 1 || k.Unavailable != 0 {
+		t.Errorf("kind_counts = %+v, want 1 available, 1 in use", k)
+	}
+	if got.AttributeCount == nil || *got.AttributeCount != 2 || !slices.Equal(got.AttributeLabels, []string{"First", "Second"}) {
+		t.Errorf("attributes = %v %v, want 2 [First Second]", got.AttributeCount, got.AttributeLabels)
+	}
+	if got := find(decode[list](t, a.do("GET", "/api/v1/asset-types", tok, nil), 200)); got.AssetCount != nil || got.KindCounts != nil || got.AttributeLabels != nil {
+		t.Errorf("summary without with_counts = %+v, want absent", got)
+	}
+}
+
+func TestStatusesOverHTTP(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	type status struct {
+		ID         string
+		Position   int32
+		ArchivedAt *string `json:"archived_at"`
+		AssetCount *int64  `json:"asset_count"`
+	}
+	type list struct{ Items []status }
+	s := decode[status](t, a.do("POST", "/api/v1/asset-statuses", tok, map[string]any{"name": "Spare " + uuid.NewString()[:8], "kind": "available"}), 201)
+	typ := decode[typeDetail](t, a.do("POST", "/api/v1/asset-types", tok, map[string]any{"code": "ST" + strings.ToUpper(uuid.NewString()[:6]), "name": "Status " + uuid.NewString()[:8]}), 201)
+	decode[assetDetail](t, a.do("POST", "/api/v1/assets", tok, map[string]any{
+		"tag": "ST-" + strings.ToUpper(uuid.NewString()[:8]), "name": "x", "asset_type_id": typ.ID, "status_id": s.ID,
+	}), 201)
+
+	counted := decode[list](t, a.do("GET", "/api/v1/asset-statuses?with_counts=true", tok, nil), 200)
+	var ids []string
+	for _, x := range counted.Items {
+		ids = append(ids, x.ID)
+		if x.ID == s.ID && (x.AssetCount == nil || *x.AssetCount != 1) {
+			t.Errorf("asset_count = %v, want 1", x.AssetCount)
+		}
+	}
+	slices.Reverse(ids)
+	got := decode[list](t, a.do("PUT", "/api/v1/asset-statuses/order", tok, map[string]any{"ids": ids}), 200)
+	if len(got.Items) != len(ids) || got.Items[0].ID != ids[0] || got.Items[0].Position != 1 {
+		t.Errorf("reordered = %+v", got.Items)
+	}
+	rec := a.do("PUT", "/api/v1/asset-statuses/order", tok, map[string]any{"ids": ids[1:]})
+	if typ, _ := problem(t, rec); rec.Code != 422 || typ != "/errors/invalid-order" {
+		t.Errorf("missing status: %d %s", rec.Code, typ)
+	}
+	if rec := a.do("PUT", "/api/v1/asset-statuses/order", a.token(domain.PermAssetRead), map[string]any{"ids": ids}); rec.Code != 403 {
+		t.Errorf("without status.manage: %d", rec.Code)
+	}
+	// route theo id vẫn chạy bên cạnh /order
+	if rec := a.do("PATCH", "/api/v1/asset-statuses/"+s.ID, tok, map[string]any{"name": "Renamed " + uuid.NewString()[:8]}); rec.Code != 200 {
+		t.Errorf("patch status: %d %s", rec.Code, rec.Body)
+	}
+
+	decode[status](t, a.do("POST", "/api/v1/asset-statuses/"+s.ID+"/archive", tok, nil), 200)
+	back := decode[status](t, a.do("POST", "/api/v1/asset-statuses/"+s.ID+"/restore", tok, nil), 200)
+	if back.ArchivedAt != nil {
+		t.Errorf("restored status still archived: %+v", back)
+	}
+	if rec := a.do("POST", "/api/v1/asset-statuses/"+s.ID+"/restore", a.token(domain.PermAssetRead), nil); rec.Code != 403 {
+		t.Errorf("restore without status.manage: %d", rec.Code)
+	}
+}
+
+func TestBulkActionsOverHTTP(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	mk := func() assetDetail {
+		return decode[assetDetail](t, a.do("POST", "/api/v1/assets", tok, map[string]any{
+			"tag": "BK-" + strings.ToUpper(uuid.NewString()[:8]), "name": "Bulk", "asset_type_id": domain.GeneralTypeID.String(),
+		}), 201)
+	}
+	x, y := mk(), mk()
+	type result struct {
+		Succeeded []string
+		Failed    []struct {
+			ID      string
+			Problem struct{ Type string }
+		}
+	}
+
+	// y gửi version cũ: x đổi được, y báo asset-changed; cả lô vẫn 200
+	r := decode[result](t, a.do("POST", "/api/v1/assets/bulk-status", tok, map[string]any{
+		"status_id": domain.RepairStatusID.String(),
+		"items":     []map[string]any{{"id": x.ID, "version": x.Version}, {"id": y.ID, "version": y.Version - 1}},
+	}), 200)
+	if len(r.Succeeded) != 1 || r.Succeeded[0] != x.ID || len(r.Failed) != 1 || r.Failed[0].ID != y.ID ||
+		r.Failed[0].Problem.Type != "/errors/asset-changed" {
+		t.Fatalf("bulk status = %+v", r)
+	}
+	if got := decode[assetDetail](t, a.do("GET", "/api/v1/assets/"+x.ID, tok, nil), 200); got.Status.ID != domain.RepairStatusID.String() {
+		t.Errorf("x status = %+v", got.Status)
+	}
+
+	r = decode[result](t, a.do("POST", "/api/v1/assets/bulk-retire", tok, map[string]any{
+		"reason": "Disposal batch",
+		"items":  []map[string]any{{"id": y.ID, "version": y.Version}},
+	}), 200)
+	if len(r.Succeeded) != 1 || len(r.Failed) != 0 {
+		t.Fatalf("bulk retire = %+v", r)
+	}
+	if got := decode[assetDetail](t, a.do("GET", "/api/v1/assets/"+y.ID, tok, nil), 200); got.RetiredAt == nil {
+		t.Error("y not retired")
+	}
+
+	// lỗi của cả yêu cầu
+	if rec := a.do("POST", "/api/v1/assets/bulk-retire", tok, map[string]any{"items": []any{}}); rec.Code != 422 {
+		t.Errorf("empty items: %d %s", rec.Code, rec.Body)
+	}
+	if rec := a.do("POST", "/api/v1/assets/bulk-status", tok, map[string]any{
+		"status_id": domain.RetiredStatusID.String(), "items": []map[string]any{{"id": x.ID, "version": 1}},
+	}); rec.Code != 422 {
+		t.Errorf("retired-kind status: %d %s", rec.Code, rec.Body)
+	}
+	if rec := a.do("POST", "/api/v1/assets/bulk-retire", a.token(domain.PermAssetRead), map[string]any{
+		"items": []map[string]any{{"id": x.ID, "version": 1}},
+	}); rec.Code != 403 {
+		t.Errorf("without manage: %d", rec.Code)
+	}
+	// đường dẫn tài sản đơn vẫn chạy bên cạnh
+	if rec := a.do("GET", "/api/v1/assets/"+x.ID, tok, nil); rec.Code != 200 {
+		t.Errorf("single asset route: %d", rec.Code)
+	}
+}
+
+func TestReorderOverHTTP(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	code := "RO" + strings.ToUpper(uuid.NewString()[:6])
+	typ := decode[typeDetail](t, a.do("POST", "/api/v1/asset-types", tok, map[string]any{
+		"code": code, "name": "Reorder " + code,
+		"attributes": []map[string]any{
+			{"key": "a1", "label": "First", "data_type": "text", "position": 1},
+			{"key": "a2", "label": "Second", "data_type": "select", "position": 2, "options": []string{"X", "Y", "Z"}},
+		},
+	}), 201)
+	first, second := typ.Attributes[0].ID, typ.Attributes[1].ID
+
+	got := decode[typeDetail](t, a.do("PUT", "/api/v1/asset-types/"+typ.ID+"/attributes/order", tok, map[string]any{
+		"ids": []string{second, first},
+	}), 200)
+	if got.Attributes[0].ID != second {
+		t.Errorf("attribute order = %+v", got.Attributes)
+	}
+
+	opts := typ.Attributes[1].Options
+	type attrOut struct {
+		Options []struct{ ID, Label string }
+	}
+	at := decode[attrOut](t, a.do("PUT", "/api/v1/asset-types/"+typ.ID+"/attributes/"+second+"/options/order", tok, map[string]any{
+		"ids": []string{opts[2].ID, opts[0].ID, opts[1].ID},
+	}), 200)
+	if at.Options[0].Label != "Z" || at.Options[2].Label != "Y" {
+		t.Errorf("option order = %+v", at.Options)
+	}
+
+	rec := a.do("PUT", "/api/v1/asset-types/"+typ.ID+"/attributes/order", tok, map[string]any{"ids": []string{first}})
+	if typ, _ := problem(t, rec); rec.Code != 422 || typ != "/errors/invalid-order" {
+		t.Errorf("missing attribute: %d %s", rec.Code, typ)
+	}
+	if rec := a.do("PUT", "/api/v1/asset-types/"+typ.ID+"/attributes/order", a.token(domain.PermAssetRead), map[string]any{
+		"ids": []string{first, second},
+	}); rec.Code != 403 {
+		t.Errorf("without type.manage: %d", rec.Code)
+	}
+	// các route của từng thuộc tính vẫn chạy bên cạnh
+	if rec := a.do("PATCH", "/api/v1/asset-types/"+typ.ID+"/attributes/"+first, tok, map[string]any{"label": "Renamed"}); rec.Code != 200 {
+		t.Errorf("patch attribute: %d %s", rec.Code, rec.Body)
 	}
 }

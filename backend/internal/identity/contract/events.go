@@ -18,6 +18,7 @@ const (
 	EventRoleUpdated            = "identity.role_updated"
 	EventRolePermissionsUpdated = "identity.role_permissions_updated"
 	EventRoleDeleted            = "identity.role_deleted"
+	EventAccountSignedOut       = "identity.account_signed_out"
 )
 
 // Loại aggregate trong platform.events
@@ -69,6 +70,12 @@ type InvitationAccepted struct {
 // hay tự đổi mật khẩu thì không có event.
 type PasswordResetSent struct {
 	AccountID uuid.UUID `json:"account_id"`
+}
+
+// AccountSignedOut: quản trị đăng xuất account khỏi mọi thiết bị
+type AccountSignedOut struct {
+	AccountID uuid.UUID `json:"account_id"`
+	Sessions  int64     `json:"sessions"`
 }
 
 type RolesAssigned struct {

@@ -29,6 +29,11 @@ type IdentityAccountRole struct {
 	RoleID    uuid.UUID
 }
 
+type IdentityAccountSignIn struct {
+	AccountID uuid.UUID
+	LastAt    time.Time
+}
+
 type IdentityPasswordToken struct {
 	AccountID uuid.UUID
 	Purpose   string

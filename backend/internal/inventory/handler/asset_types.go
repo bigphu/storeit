@@ -16,6 +16,27 @@ func (h *Handler) ListAssetTypes(ctx context.Context, req api.ListAssetTypesRequ
 	for i, t := range types {
 		out.Items[i] = toAPIType(t)
 	}
+	if deref(req.Params.WithCounts) {
+		sums, err := h.svc.TypeSummaries(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for i, t := range types {
+			sum := sums[t.ID]
+			total, nAttrs, labels := sum.Counts.Total, int32(len(sum.AttributeLabels)), sum.AttributeLabels
+			if labels == nil {
+				labels = []string{}
+			}
+			out.Items[i].AssetCount = &total
+			out.Items[i].KindCounts = &api.KindCounts{
+				Available:   sum.Counts.ByKind[domain.KindAvailable],
+				InUse:       sum.Counts.ByKind[domain.KindInUse],
+				Unavailable: sum.Counts.ByKind[domain.KindUnavailable],
+			}
+			out.Items[i].AttributeCount = &nAttrs
+			out.Items[i].AttributeLabels = &labels
+		}
+	}
 	return out, nil
 }
 
@@ -91,6 +112,22 @@ func (h *Handler) RemoveAttribute(ctx context.Context, req api.RemoveAttributeRe
 		return nil, err
 	}
 	return api.RemoveAttribute204Response{}, nil
+}
+
+func (h *Handler) ReorderAttributes(ctx context.Context, req api.ReorderAttributesRequestObject) (api.ReorderAttributesResponseObject, error) {
+	t, err := h.svc.ReorderAttributes(ctx, req.TypeID, req.Body.Ids)
+	if err != nil {
+		return nil, err
+	}
+	return api.ReorderAttributes200JSONResponse(toAPITypeDetail(t)), nil
+}
+
+func (h *Handler) ReorderOptions(ctx context.Context, req api.ReorderOptionsRequestObject) (api.ReorderOptionsResponseObject, error) {
+	a, err := h.svc.ReorderOptions(ctx, req.TypeID, req.AttributeID, req.Body.Ids)
+	if err != nil {
+		return nil, err
+	}
+	return api.ReorderOptions200JSONResponse(toAPIAttribute(a)), nil
 }
 
 func (h *Handler) AddOption(ctx context.Context, req api.AddOptionRequestObject) (api.AddOptionResponseObject, error) {

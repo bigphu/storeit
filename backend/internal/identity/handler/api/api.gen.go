@@ -26,40 +26,19 @@ import (
 
 // Defines values for AccountStatus.
 const (
-	AccountStatusActive   AccountStatus = "active"
-	AccountStatusDisabled AccountStatus = "disabled"
-	AccountStatusInvited  AccountStatus = "invited"
+	Active   AccountStatus = "active"
+	Disabled AccountStatus = "disabled"
+	Invited  AccountStatus = "invited"
 )
 
 // Valid indicates whether the value is a known member of the AccountStatus enum.
 func (e AccountStatus) Valid() bool {
 	switch e {
-	case AccountStatusActive:
+	case Active:
 		return true
-	case AccountStatusDisabled:
+	case Disabled:
 		return true
-	case AccountStatusInvited:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for AccountDetailStatus.
-const (
-	AccountDetailStatusActive   AccountDetailStatus = "active"
-	AccountDetailStatusDisabled AccountDetailStatus = "disabled"
-	AccountDetailStatusInvited  AccountDetailStatus = "invited"
-)
-
-// Valid indicates whether the value is a known member of the AccountDetailStatus enum.
-func (e AccountDetailStatus) Valid() bool {
-	switch e {
-	case AccountDetailStatusActive:
-		return true
-	case AccountDetailStatusDisabled:
-		return true
-	case AccountDetailStatusInvited:
+	case Invited:
 		return true
 	default:
 		return false
@@ -83,12 +62,71 @@ func (e SessionResponseTokenType) Valid() bool {
 
 // Account defines model for Account.
 type Account struct {
-	Active    bool             `json:"active"`
-	CreatedAt time.Time        `json:"created_at"`
-	Email     string           `json:"email"`
-	Id        externalRef0.ID  `json:"id"`
-	MemberId  *externalRef0.ID `json:"member_id,omitempty"`
-	Name      string           `json:"name"`
+	Active    bool            `json:"active"`
+	CreatedAt time.Time       `json:"created_at"`
+	Email     string          `json:"email"`
+	Id        externalRef0.ID `json:"id"`
+
+	// LastSignInAt Last time the account signed in (refreshing a session doesn't count)
+	LastSignInAt *time.Time       `json:"last_sign_in_at,omitempty"`
+	MemberId     *externalRef0.ID `json:"member_id,omitempty"`
+	Name         string           `json:"name"`
+
+	// Status invited = has not set a password yet
+	Status    AccountStatus `json:"status"`
+	UpdatedAt time.Time     `json:"updated_at"`
+	Version   int32         `json:"version"`
+}
+
+// AccountDetail defines model for AccountDetail.
+type AccountDetail struct {
+	Active bool `json:"active"`
+
+	// ActiveSessions Sessions still usable; only on GET /accounts/{accountID}
+	ActiveSessions *int64          `json:"active_sessions,omitempty"`
+	CreatedAt      time.Time       `json:"created_at"`
+	Email          string          `json:"email"`
+	Id             externalRef0.ID `json:"id"`
+
+	// InviteExpiresAt When the pending invitation link stops working; only on GET /accounts/{accountID}
+	InviteExpiresAt *time.Time `json:"invite_expires_at,omitempty"`
+
+	// LastSignInAt Last time the account signed in (refreshing a session doesn't count)
+	LastSignInAt *time.Time       `json:"last_sign_in_at,omitempty"`
+	MemberId     *externalRef0.ID `json:"member_id,omitempty"`
+	Name         string           `json:"name"`
+	Roles        []RoleSummary    `json:"roles"`
+
+	// Status invited = has not set a password yet
+	Status    AccountStatus `json:"status"`
+	UpdatedAt time.Time     `json:"updated_at"`
+	Version   int32         `json:"version"`
+}
+
+// AccountList defines model for AccountList.
+type AccountList struct {
+	Items []AccountListItem `json:"items"`
+
+	// StatusCounts Accounts per status for the same q and role_id, ignoring active and status
+	StatusCounts AccountStatusCounts `json:"status_counts"`
+	Total        int64               `json:"total"`
+}
+
+// AccountListItem defines model for AccountListItem.
+type AccountListItem struct {
+	Active    bool            `json:"active"`
+	CreatedAt time.Time       `json:"created_at"`
+	Email     string          `json:"email"`
+	Id        externalRef0.ID `json:"id"`
+
+	// InviteExpiresAt When the pending invitation link stops working (invited accounts)
+	InviteExpiresAt *time.Time `json:"invite_expires_at,omitempty"`
+
+	// LastSignInAt Last time the account signed in (refreshing a session doesn't count)
+	LastSignInAt *time.Time       `json:"last_sign_in_at,omitempty"`
+	MemberId     *externalRef0.ID `json:"member_id,omitempty"`
+	Name         string           `json:"name"`
+	Roles        []RoleSummary    `json:"roles"`
 
 	// Status invited = has not set a password yet
 	Status    AccountStatus `json:"status"`
@@ -99,29 +137,11 @@ type Account struct {
 // AccountStatus invited = has not set a password yet
 type AccountStatus string
 
-// AccountDetail defines model for AccountDetail.
-type AccountDetail struct {
-	Active    bool             `json:"active"`
-	CreatedAt time.Time        `json:"created_at"`
-	Email     string           `json:"email"`
-	Id        externalRef0.ID  `json:"id"`
-	MemberId  *externalRef0.ID `json:"member_id,omitempty"`
-	Name      string           `json:"name"`
-	Roles     []RoleSummary    `json:"roles"`
-
-	// Status invited = has not set a password yet
-	Status    AccountDetailStatus `json:"status"`
-	UpdatedAt time.Time           `json:"updated_at"`
-	Version   int32               `json:"version"`
-}
-
-// AccountDetailStatus invited = has not set a password yet
-type AccountDetailStatus string
-
-// AccountList defines model for AccountList.
-type AccountList struct {
-	Items []Account `json:"items"`
-	Total int64     `json:"total"`
+// AccountStatusCounts Accounts per status for the same q and role_id, ignoring active and status
+type AccountStatusCounts struct {
+	Active   int64 `json:"active"`
+	Disabled int64 `json:"disabled"`
+	Invited  int64 `json:"invited"`
 }
 
 // AssignRolesRequest defines model for AssignRolesRequest.
@@ -179,8 +199,11 @@ type Role struct {
 	Description string          `json:"description"`
 	Id          externalRef0.ID `json:"id"`
 	IsSystem    bool            `json:"is_system"`
-	Name        string          `json:"name"`
-	Permissions []string        `json:"permissions"`
+
+	// MemberCount Accounts that hold the role and are not disabled; on GET /roles and GET /roles/{roleID}
+	MemberCount *int64   `json:"member_count,omitempty"`
+	Name        string   `json:"name"`
+	Permissions []string `json:"permissions"`
 }
 
 // RolePermissionsRequest defines model for RolePermissionsRequest.
@@ -222,6 +245,14 @@ type UpdateAccountRequest struct {
 	Version int32 `json:"version"`
 }
 
+// UpdateMeRequest defines model for UpdateMeRequest.
+type UpdateMeRequest struct {
+	Name string `json:"name"`
+
+	// Version The version you last read; a newer one returns 409
+	Version int32 `json:"version"`
+}
+
 // UpdateRoleRequest defines model for UpdateRoleRequest.
 type UpdateRoleRequest struct {
 	Description *string `json:"description,omitempty"`
@@ -251,6 +282,12 @@ type ListAccountsParams struct {
 	// Q Search by name or email
 	Q      *string `form:"q,omitempty" json:"q,omitempty"`
 	Active *bool   `form:"active,omitempty" json:"active,omitempty"`
+
+	// Status Only accounts with this status
+	Status *AccountStatus `form:"status,omitempty" json:"status,omitempty"`
+
+	// RoleId Only accounts holding this role
+	RoleId *externalRef0.ID `form:"role_id,omitempty" json:"role_id,omitempty"`
 }
 
 // LoginParams defines parameters for Login.
@@ -294,6 +331,9 @@ type ForgotPasswordJSONRequestBody = ForgotPasswordRequest
 // SetPasswordJSONRequestBody defines body for SetPassword for application/json ContentType.
 type SetPasswordJSONRequestBody = SetPasswordRequest
 
+// UpdateMeJSONRequestBody defines body for UpdateMe for application/json ContentType.
+type UpdateMeJSONRequestBody = UpdateMeRequest
+
 // CreateRoleJSONRequestBody defines body for CreateRole for application/json ContentType.
 type CreateRoleJSONRequestBody = CreateRoleRequest
 
@@ -332,6 +372,9 @@ type ServerInterface interface {
 	// AssignRoles Replace the account's roles (identity.account.manage)
 	// (PUT /accounts/{accountID}/roles)
 	AssignRoles(w http.ResponseWriter, r *http.Request, accountID AccountID)
+	// SignOutAccount Sign an account out of every device (identity.account.manage)
+	// (POST /accounts/{accountID}/sign-out)
+	SignOutAccount(w http.ResponseWriter, r *http.Request, accountID AccountID)
 	// Login Sign in with email and password
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request, params LoginParams)
@@ -353,6 +396,9 @@ type ServerInterface interface {
 	// GetMe The signed-in account with its roles and permissions
 	// (GET /me)
 	GetMe(w http.ResponseWriter, r *http.Request)
+	// UpdateMe Change your own display name (any signed-in account)
+	// (PATCH /me)
+	UpdateMe(w http.ResponseWriter, r *http.Request)
 	// ListPermissions The permission catalogue (identity.role.read)
 	// (GET /permissions)
 	ListPermissions(w http.ResponseWriter, r *http.Request)
@@ -434,6 +480,12 @@ func (_ Unimplemented) AssignRoles(w http.ResponseWriter, r *http.Request, accou
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// SignOutAccount Sign an account out of every device (identity.account.manage)
+// (POST /accounts/{accountID}/sign-out)
+func (_ Unimplemented) SignOutAccount(w http.ResponseWriter, r *http.Request, accountID AccountID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Login Sign in with email and password
 // (POST /auth/login)
 func (_ Unimplemented) Login(w http.ResponseWriter, r *http.Request, params LoginParams) {
@@ -473,6 +525,12 @@ func (_ Unimplemented) Refresh(w http.ResponseWriter, r *http.Request, params Re
 // GetMe The signed-in account with its roles and permissions
 // (GET /me)
 func (_ Unimplemented) GetMe(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateMe Change your own display name (any signed-in account)
+// (PATCH /me)
+func (_ Unimplemented) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -584,6 +642,32 @@ func (siw *ServerInterfaceWrapper) ListAccounts(w http.ResponseWriter, r *http.R
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "active"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "active", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "role_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "role_id", r.URL.Query(), &params.RoleId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "role_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role_id", Err: err})
 		}
 		return
 	}
@@ -795,6 +879,32 @@ func (siw *ServerInterfaceWrapper) AssignRoles(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// SignOutAccount operation middleware
+func (siw *ServerInterfaceWrapper) SignOutAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "accountID" -------------
+	var accountID AccountID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "accountID", chi.URLParam(r, "accountID"), &accountID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "accountID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SignOutAccount(w, r, accountID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // Login operation middleware
 func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
 
@@ -974,6 +1084,20 @@ func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMe operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMe(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMe(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1264,6 +1388,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/me", wrapper.GetMe)
 	})
 	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/me", wrapper.UpdateMe)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/accounts", wrapper.ListAccounts)
 	})
 	r.Group(func(r chi.Router) {
@@ -1277,6 +1404,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/accounts/{accountID}/disable", wrapper.DisableAccount)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/accounts/{accountID}/sign-out", wrapper.SignOutAccount)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/accounts/{accountID}/enable", wrapper.EnableAccount)
@@ -1658,6 +1788,48 @@ func (response AssignRolesdefaultApplicationProblemPlusJSONResponse) VisitAssign
 	return err
 }
 
+type SignOutAccountRequestObject struct {
+	AccountID AccountID `json:"accountID"`
+}
+
+type SignOutAccountResponseObject interface {
+	VisitSignOutAccountResponse(w http.ResponseWriter) error
+}
+
+type SignOutAccount200JSONResponse struct {
+	// Revoked Number of sessions that were still live
+	Revoked int64 `json:"revoked"`
+}
+
+func (response SignOutAccount200JSONResponse) VisitSignOutAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignOutAccountdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response SignOutAccountdefaultApplicationProblemPlusJSONResponse) VisitSignOutAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type LoginRequestObject struct {
 	Params LoginParams
 	Body   *LoginJSONRequestBody
@@ -1949,6 +2121,45 @@ type GetMedefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetMedefaultApplicationProblemPlusJSONResponse) VisitGetMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMeRequestObject struct {
+	Body *UpdateMeJSONRequestBody
+}
+
+type UpdateMeResponseObject interface {
+	VisitUpdateMeResponse(w http.ResponseWriter) error
+}
+
+type UpdateMe200JSONResponse Me
+
+func (response UpdateMe200JSONResponse) VisitUpdateMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMedefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response UpdateMedefaultApplicationProblemPlusJSONResponse) VisitUpdateMeResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -2256,6 +2467,9 @@ type StrictServerInterface interface {
 	// AssignRoles Replace the account's roles (identity.account.manage)
 	// (PUT /accounts/{accountID}/roles)
 	AssignRoles(ctx context.Context, request AssignRolesRequestObject) (AssignRolesResponseObject, error)
+	// SignOutAccount Sign an account out of every device (identity.account.manage)
+	// (POST /accounts/{accountID}/sign-out)
+	SignOutAccount(ctx context.Context, request SignOutAccountRequestObject) (SignOutAccountResponseObject, error)
 	// Login Sign in with email and password
 	// (POST /auth/login)
 	Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error)
@@ -2277,6 +2491,9 @@ type StrictServerInterface interface {
 	// GetMe The signed-in account with its roles and permissions
 	// (GET /me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
+	// UpdateMe Change your own display name (any signed-in account)
+	// (PATCH /me)
+	UpdateMe(ctx context.Context, request UpdateMeRequestObject) (UpdateMeResponseObject, error)
 	// ListPermissions The permission catalogue (identity.role.read)
 	// (GET /permissions)
 	ListPermissions(ctx context.Context, request ListPermissionsRequestObject) (ListPermissionsResponseObject, error)
@@ -2592,6 +2809,32 @@ func (sh *strictHandler) AssignRoles(w http.ResponseWriter, r *http.Request, acc
 	}
 }
 
+// SignOutAccount operation middleware
+func (sh *strictHandler) SignOutAccount(w http.ResponseWriter, r *http.Request, accountID AccountID) {
+	var request SignOutAccountRequestObject
+
+	request.AccountID = accountID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SignOutAccount(ctx, request.(SignOutAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SignOutAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SignOutAccountResponseObject); ok {
+		if err := validResponse.VisitSignOutAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Login operation middleware
 func (sh *strictHandler) Login(w http.ResponseWriter, r *http.Request, params LoginParams) {
 	var request LoginRequestObject
@@ -2789,6 +3032,37 @@ func (sh *strictHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetMeResponseObject); ok {
 		if err := validResponse.VisitGetMeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateMe operation middleware
+func (sh *strictHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	var request UpdateMeRequestObject
+
+	var body UpdateMeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateMe(ctx, request.(UpdateMeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateMe")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateMeResponseObject); ok {
+		if err := validResponse.VisitUpdateMeResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -2998,55 +3272,62 @@ func (sh *strictHandler) UpdateRolePermissions(w http.ResponseWriter, r *http.Re
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"1Fxbb9zG9f8qA/7/QGSU0q7WctOskQfHtyqwY0NyEBSGsBiRZ5cTkzP0zFDy1thPUBRoHoo+FUiahzwU",
+	"RdtX6dFBv4e+STEX3od7kbiqo6fdJTlzLr9z5tyo917AkpRRoFJ44/deBDgErj8eg3zI2BsC6ksIIuAk",
+	"lYRRb+y9igBxmHIQ0a5kb4CiQN+Jdn4rZfqCxnMfHeMEjomEz48lJ4H00Usso88HOCWDs/0BzmR0x/M9",
+	"EUSQYLWDnKfgjT0hOaEzb7FY+F6KOU5AWnoeBAHLqDx8pL4QRUaKZeT5HsWJehIX132Pw9uMcAi9seQZ",
+	"VLf5fw5Tb+z936Dke2CuCkXbJGBJwujk8JGnKDgyTJZy0PsaZsudhWQciJxYkdTYSvC7Z0BnMvLG+6Pf",
+	"+C02fe+IxdDJFDcX++PoawH8wQyoLDY0Ki+3VHfsmluW6cf3Kou/xLNSPG8z4PNyvVRdq64UwhRnsfTG",
+	"+74SD0myxBvvD9Wf7yWE2h8KWREqYQbctecx+f3SfSdC3eDc/N6wsvto5dYLpQKRMipAo/ElZ6cxJOpj",
+	"wKi0AsVpGpMAKzMZpOaOX30rlM2831xj+RZ687oBPuaccbRz9OQh+uzg3qfI7oVCkJjE4o6WlV2yYjvq",
+	"Y8pZClwSwwYOJDmDin5PGYsBU2/hewEHLCGcYP3clPFEffJCLGFXkkTJtQEK34MEk9gBF98j4YZg9b0Y",
+	"CzkRZEYnhFoq6mJ4hoVEihQkI0DWASD1BISIULRjLZLQGcJIgBCEURQyEPQTifTdygmtx1oCySnwyTX4",
+	"MIB0yERILDOxaj2rvGNz88L3sjTcWDFnwAUxQCweIFTeHXlOOyvdzWuluVyxlhc/x03BQrlBDTc1Wk+K",
+	"ndjptxBIRZbl7ZHGrQZkHL+YeuPXa4nEW/huQE+srkUbM8f2ChKSxDHKBD6N4T5iNJ4jRtHTx6/QwCJJ",
+	"DN4Xh8qiihNC5a8PHILzPULPiIQJvEsJB+EE7TcRUI3XFGiokKmf0T4DxYS+QUKyVKBzxt8QOtuQsqUY",
+	"UIeJlgiRkKyEnTqXjrMkwXyuHrarYc7xvAURs3JbwSelip8RIddXcMPPhw5NF0ysxU2FikOpnGqToxzK",
+	"EyPgjYzyoXmkZTiasObCK6Wk6evBFHrHItoxS4a5qxV3fhnYOy78bJ39nJ3PUYQFokwiARJhlGIhzhkP",
+	"0RyUDwOqooLX+e1V9xcS7T/Cyv4lzy6MtGiwNwmUAkcGKWjKuNaKwAmgtwjTECkuJyT0EZlRxvWBpmnQ",
+	"Fwsn3HW4r+G5Ck7Wuz2XxTp3N81iLTFWzgihTnQFCXEEbzMQjjjGimd9hLUO6QS/OzQPqshwJeL0Zi5q",
+	"H0aYzuClRVAnwUHGOVA5yaHWzBWGowMdkRY/OPBF4bzr+U9H9adHrsyjylOLnsbyTlb1QW8BXOG0nSwW",
+	"oZnEXApkEXBfgzwTCvggRdXwppwl+qqOOyDU3qgF8CLarHA+ulcX3N2thHLVDW3usExTtwrPWqjWrTdl",
+	"UJ3wrKmwxu694dAFxbZc9teQSwo8IWWkVoimrbGC/dFwFf+dfD9hfMbkStPsRNVyCzKPufZ9xmaE3ng7",
+	"37u+r+hAyFLrfg6udLHII9eLSdbXcDMa217AkDOR71En0iWKl8V1hyNnoTu5a5jQCverVqk/4yJEsbnS",
+	"WPtIvYmYiLmwgWi7NGAdaAGGjpBGRliiiMWhduVK2jpcwRx0sJWf+veL9EYrRN9Tfh28N0WwNTOwzmT7",
+	"mkh0JcM2Ca5yXRXZakApPZag6g5rtuIf1yEut6UWRf2VPzoF66LJZu1HtgTn9EwgxERXo50S2tx11ROn",
+	"9dIcvf/E/Py+SBy+AMyBO3KEtmcqmagtVqOmZMYtqtVH3I0iR0uYq7q9ySGUc7kyzPxal5DaYWbDD8eA",
+	"+aQW2dW90hEk7MxUCs1deUzZ6d5uLz6sVOfawbO9iOYsQzEWEnHA4X2EEYVz4IhRQBxkxqlAB8PPGl5y",
+	"nQJfvnu38J93R4q/SI6tA1/N+P8+SF44aKvA7gmBONTtABd9sqsaP1WPtYX/85/+86+ry7/SGQqvLv5O",
+	"0ZfHL75CwdXlTxjpJ3x0FiIchhyE2AuInHurrNxs5Oe0nCznxvTBCm1mmT4V2r68WR1ssS6ZxLGzOFF0",
+	"eYYrUWIWWUFypRHUJf26jJ+Sq4sfCZLRh38EEQoihuKri58oend18eMccYzoh+/nzt6K0rKjgqQhgAQm",
+	"PnoTkbyGFH/4Hh2MlC1smnBWINVZJa2AqhJ7SSJjR7v44Ye/ZYjOri7+SX00I1eX39EZohHOUHJ1+UfS",
+	"4N95rNoDtYnWq8s/0AiFmEYoZlcXP6i1Lv9CfHR1+WeKfv5OX/dREBOgEgmGxIcfaIROry7+TWcG0rm4",
+	"4R1OUkW9NzCCHmAhQO5SJnfxGSaxClVXwt0e1kYQhbDaEFKChCDjRM6PlQYMZE51nPAgU54g//YkB/CX",
+	"37zKO5n6uDIxRbFyJGVqWoWETpnWj9GGdxgClUTO0YOXhxWnN/b294Z7QyVelgLFKfHG3t294d5dnRnK",
+	"SJNUdBzUlxloL6hQrmvEh6E39p4RIfOI36s37TtK1+UtzTq/rmJv9ohuAavHmm0ezIMInc6R8rqIcZQn",
+	"va5e8duunv3I4cjVZq5Fyp5Ys2lehBZtOl/QeF6U09E5kRGSERFlSde1U3FxvZ5yo4G4igiVsBE6M3So",
+	"3KuDClvU8q47jHDSaKmPhsMl7fTN2ujVppOjf66Ag9i04Nnk63YywL1yQeqg7Mv7nsjzJG0GpQx3iDW6",
+	"PfvTngph7ug8lAmHFdVqqXbeA4T8goXz3oTirNcu6i5M8gwWLcXs960Y2/B1qMYQGfagEbMSwrQoP7e1",
+	"kmCKZ2DmJdzN1S639xRkVVvbxXG3uCr56g3F9RRkVVbaFRFpPMByQG/k8csxLuUAUiyDqC3cWsq3JWtw",
+	"ppVrWcMtqtcQWTRce1CzWbE4FSup8HXMY2BreDr8vQkOnE7xkVn8Y7AzS0qfmrBLVo1ON3PJjCKWSYTj",
+	"WBtgCGckcJrgavUA3Z52HtOPRTmGkj51Y1ZEuKhR3+QMGZRTFdvRxBEIoOFhuUtLGaN29lTejt5mkPVy",
+	"5D5WMbap0zRHSUyzN+VwRlgmdA2nOVyyuWDzuuEuB2EO6f6Feww0LAuqAuRa0n2mHGrvci3645pfLVdf",
+	"efGWxMm0NhJpxltqcy3XknfRlLuRmDOHlCtDHls67x1jJB/baf+gGXsprRqZ3xxDR5DGOKiNyn7SHd2t",
+	"xoKS5i7LtmV1ZEZfZH2F2I1hIThjb8BR/vwq08EQm+azwraFeQ4c7LxobFL8TWee8i0dlaAWCooJVaBh",
+	"L95DybIaZajggk0RnAGf2+hiJQIyGQ1iNiPmBHOqTI85bFwBKl9IMAWB/g2/Nn5xyybf7Fu61J2Pq5sT",
+	"0o6sI/NeDRFmJFEo/eUv16DiBZT66zq75XsqLprszYPyxR5LzXXAZYuX3vj1SQtqhBoPBubUomFx8NTB",
+	"lDuPLjSp65vCqf7GjqPGdOAYCTcaYJk0KrAvMxGBdFNRjyp+nJJWlqzLdMaKK+KtdnedB259TrEXOW+h",
+	"YuUcplzLhh16ztdBgV62lxqTXgnNWcYRO6cF0O/rNE5oBZmLMgKep3IOPQ2mejit2x7qw2tbipHcE3Jr",
+	"yVvHwNgUEoiK73UAc47n3phmcdz0eofTcrwTnULM6EwgycwxZQabb5rMdRjOklga7eD4HM8FGg1HPjqP",
+	"QCuNcT2tVJIbGXdsCbzj0maejXRkFNvWo2MG5MZGI0AaVBf+nfSvnOP6/L3th4A9DfVUMKbVRIdxqz/T",
+	"3ilVkb+M2amFo+JtzZ5PmFuNHr6Cc2TGhoyMaidYxOJQ6B8ovJP10KKnM+1gaW9gm+9APidCEDrzFRpw",
+	"TEIfmRGp0Ec22jbgyASEddZ/Qaf8EZNYQi0wtHSrsGqmrYU2IGCMwIyadLUunsM2C3bPnVB9aF4x6LFK",
+	"9yoC+7bnLunsXOj4szLyuFjRdbCi2VbDoRyluuVUxK2U36ngpCg/TyWYN49MhLSFACkkIo2x7crvYDpv",
+	"K9AeqI3Z187Zg8oc7U0xvdakTGUYvD0s3C7pxHETfT2AvlwRBVjimM2yagqvgJ/355Qoi7JdpxDLwtu2",
+	"xadH2NcUXG+lL+0I8mCC8KpGOsS2vE9/ZKYittekr84d3nKH3ijoNhrz5o2AhvxrZafGCwA6OI1BgqNV",
+	"qH8v9LIqqjW398GMWUlFpRnFwv7vgSATkiXL+fM7D2c3F8Otazg3zT4GCZy8X3NkwP6HlJXzAlu0yvY0",
+	"8C2f3l06ywcEeD+6O4J8MMBsc5qb6X1kXm6xQVWAqcqJT1VYqp4INzDj5sl+fTC46lqlppqBQf+o6HiN",
+	"5yOBhvq93krqNxCpNpSUaj8Ry87VEhD1dKc+9fr6RClWAD/L4ZDx2Bt79v9GeYuTxX8DAAD//w==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

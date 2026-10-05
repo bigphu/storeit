@@ -99,6 +99,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/asset-types/{typeID}/attributes/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put the type's active attributes in a new order, in one change (inventory.type.manage) */
+        put: operations["reorderAttributes"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/asset-types/{typeID}/attributes/{attributeID}/options/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put a select attribute's active options in a new order, in one change (inventory.type.manage) */
+        put: operations["reorderOptions"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/asset-types/{typeID}/attributes/{attributeID}": {
         parameters: {
             query?: never;
@@ -183,6 +217,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/asset-statuses/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put every active status in a new order, in one change (inventory.status.manage) */
+        put: operations["reorderStatuses"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/asset-statuses/{statusID}": {
         parameters: {
             query?: never;
@@ -215,6 +266,25 @@ export interface paths {
         put?: never;
         /** Stop offering a status (inventory.status.manage) */
         post: operations["archiveStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/asset-statuses/{statusID}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                statusID: components["parameters"]["StatusID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Offer an archived status again (inventory.status.manage) */
+        post: operations["restoreStatus"];
         delete?: never;
         options?: never;
         head?: never;
@@ -256,6 +326,40 @@ export interface paths {
          */
         put: operations["updateAsset"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/bulk-retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retire several assets; each succeeds or fails on its own (inventory.asset.manage) */
+        post: operations["retireAssets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/bulk-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change the status of several assets; each succeeds or fails on its own (inventory.asset.manage) */
+        post: operations["setAssetsStatus"];
         delete?: never;
         options?: never;
         head?: never;
@@ -322,6 +426,28 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            /**
+             * Format: int64
+             * @description Assets of this type that are not retired; only with `with_counts=true`
+             */
+            asset_count?: number;
+            kind_counts?: components["schemas"]["KindCounts"];
+            /**
+             * Format: int32
+             * @description Active attributes; only with `with_counts=true`
+             */
+            attribute_count?: number;
+            /** @description Labels of the active attributes in display order; only with `with_counts=true` */
+            attribute_labels?: string[];
+        };
+        /** @description Assets not retired by the kind of their status; only with `with_counts=true` */
+        KindCounts: {
+            /** Format: int64 */
+            available: number;
+            /** Format: int64 */
+            in_use: number;
+            /** Format: int64 */
+            unavailable: number;
         };
         AssetTypeDetail: components["schemas"]["AssetType"] & {
             /** @description All attributes in display order, including removed ones (removed = true) */
@@ -378,6 +504,10 @@ export interface components {
             /** Format: int32 */
             position?: number;
         };
+        OrderRequest: {
+            /** @description Every active attribute (or option) exactly once, in the new order */
+            ids: components["schemas"]["ID"][];
+        };
         OptionRequest: {
             label: string;
             /** Format: int32 */
@@ -398,6 +528,11 @@ export interface components {
             position: number;
             /** Format: date-time */
             archived_at?: string;
+            /**
+             * Format: int64
+             * @description Assets with this status, retired ones included; only with `with_counts=true`
+             */
+            asset_count?: number;
         };
         CreateStatusRequest: {
             name: string;
@@ -509,6 +644,31 @@ export interface components {
         AttributeValues: {
             [key: string]: unknown;
         };
+        BulkItem: {
+            id: components["schemas"]["ID"];
+            /**
+             * Format: int32
+             * @description The version you last read; a newer one fails that asset with asset-changed
+             */
+            version: number;
+        };
+        BulkItems: components["schemas"]["BulkItem"][];
+        BulkRetireRequest: {
+            items: components["schemas"]["BulkItems"];
+            reason?: string;
+        };
+        BulkStatusRequest: {
+            items: components["schemas"]["BulkItems"];
+            status_id: components["schemas"]["ID"];
+        };
+        BulkResult: {
+            succeeded: components["schemas"]["ID"][];
+            failed: components["schemas"]["BulkFailure"][];
+        };
+        BulkFailure: {
+            id: components["schemas"]["ID"];
+            problem: components["schemas"]["Problem"];
+        };
         RetireAssetRequest: {
             reason?: string;
             /** Format: int32 */
@@ -575,6 +735,8 @@ export interface operations {
         parameters: {
             query?: {
                 include_archived?: components["parameters"]["IncludeArchived"];
+                /** @description Add `asset_count` and `kind_counts` (assets not retired), `attribute_count` and `attribute_labels` (active attributes in display order) to each type. */
+                with_counts?: boolean;
             };
             header?: never;
             path?: never;
@@ -744,6 +906,61 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    reorderAttributes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                typeID: components["parameters"]["TypeID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderRequest"];
+            };
+        };
+        responses: {
+            /** @description The type with its attributes in the new order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetTypeDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    reorderOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                typeID: components["parameters"]["TypeID"];
+                attributeID: components["parameters"]["AttributeID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderRequest"];
+            };
+        };
+        responses: {
+            /** @description The attribute with its options in the new order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attribute"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     removeAttribute: {
         parameters: {
             query?: never;
@@ -878,6 +1095,8 @@ export interface operations {
         parameters: {
             query?: {
                 include_archived?: components["parameters"]["IncludeArchived"];
+                /** @description Add `asset_count` (assets with this status, retired ones included) to each status. */
+                with_counts?: boolean;
             };
             header?: never;
             path?: never;
@@ -924,6 +1143,33 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    reorderStatuses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderRequest"];
+            };
+        };
+        responses: {
+            /** @description Active statuses in the new order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Status"][];
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     updateStatus: {
         parameters: {
             query?: never;
@@ -963,6 +1209,29 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Archived */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Status"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    restoreStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                statusID: components["parameters"]["StatusID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1092,6 +1361,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    retireAssets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkRetireRequest"];
+            };
+        };
+        responses: {
+            /** @description Which assets were retired and which were not, with the reason */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkResult"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    setAssetsStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Which assets changed and which did not, with the reason */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkResult"];
                 };
             };
             default: components["responses"]["Problem"];

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"slices"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -51,15 +52,86 @@ func (s *Service) GetAccount(ctx context.Context, id uuid.UUID) (AccountView, er
 	if err != nil {
 		return AccountView{}, err
 	}
-	return s.view(ctx, a)
+	v, err := s.view(ctx, a)
+	if err != nil {
+		return AccountView{}, err
+	}
+	// trang chi tiết: số phiên còn sống và hạn link mời
+	n, err := s.accounts.LiveSessions(ctx, id)
+	if err != nil {
+		return AccountView{}, err
+	}
+	v.Sessions = &n
+	exp, err := s.accounts.InviteExpiries(ctx, []uuid.UUID{id})
+	if err != nil {
+		return AccountView{}, err
+	}
+	if t, ok := exp[id]; ok {
+		v.InviteExpiresAt = &t
+	}
+	return v, nil
 }
 
-// ListAccounts trả account không kèm role (tránh N+1); chi tiết dùng GetAccount
-func (s *Service) ListAccounts(ctx context.Context, f domain.AccountFilter) ([]domain.Account, int64, error) {
+// AccountListItem: account trong danh sách, kèm role và hạn link mời đang chờ
+type AccountListItem struct {
+	domain.Account
+	Roles           []domain.Role
+	InviteExpiresAt *time.Time
+}
+
+// AccountPage: một trang account, tổng theo bộ lọc và số account theo trạng thái
+// (cùng tìm kiếm và role, bỏ qua lọc trạng thái) cho các nút lọc
+type AccountPage struct {
+	Items        []AccountListItem
+	Total        int64
+	StatusCounts map[domain.AccountStatus]int64
+}
+
+func (s *Service) ListAccounts(ctx context.Context, f domain.AccountFilter) (AccountPage, error) {
 	if _, err := auth.Require(ctx, domain.PermAccountRead); err != nil {
-		return nil, 0, err
+		return AccountPage{}, err
 	}
-	return s.accounts.List(ctx, f)
+	accounts, total, err := s.accounts.List(ctx, f)
+	if err != nil {
+		return AccountPage{}, err
+	}
+	counts, err := s.accounts.StatusCounts(ctx, f)
+	if err != nil {
+		return AccountPage{}, err
+	}
+	ids := make([]uuid.UUID, len(accounts))
+	for i, a := range accounts {
+		ids[i] = a.ID
+	}
+	roles, err := s.accounts.RolesOf(ctx, ids)
+	if err != nil {
+		return AccountPage{}, err
+	}
+	exp, err := s.accounts.InviteExpiries(ctx, ids)
+	if err != nil {
+		return AccountPage{}, err
+	}
+	page := AccountPage{Items: make([]AccountListItem, len(accounts)), Total: total, StatusCounts: counts}
+	for i, a := range accounts {
+		page.Items[i] = AccountListItem{Account: a, Roles: roles[a.ID]}
+		if t, ok := exp[a.ID]; ok && a.Status() == domain.StatusInvited {
+			page.Items[i].InviteExpiresAt = &t
+		}
+	}
+	return page, nil
+}
+
+// SignOutEverywhere thu hồi mọi phiên của account. Như khoá account, người làm phải
+// có đủ quyền của account đó. Trả số phiên đã thu hồi.
+func (s *Service) SignOutEverywhere(ctx context.Context, id uuid.UUID) (int64, error) {
+	actor, err := auth.Require(ctx, domain.PermAccountManage)
+	if err != nil {
+		return 0, err
+	}
+	if err := s.requireHoldsAccount(ctx, actor, id); err != nil {
+		return 0, err
+	}
+	return s.accounts.SignOutEverywhere(ctx, id)
 }
 
 func (s *Service) UpdateAccount(ctx context.Context, id uuid.UUID, ch domain.ProfileChange) (AccountView, error) {

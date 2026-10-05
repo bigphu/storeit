@@ -1,10 +1,11 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 import { inventoryApi } from '@/lib/api/client'
 import { unwrap } from '@/lib/errors'
+import { typeKeys } from '@/features/asset-types/api'
 import type { toApiParams } from './listQuery'
 
-type ListParams = ReturnType<typeof toApiParams>
+export type ListParams = ReturnType<typeof toApiParams>
 
 export const assetKeys = {
   all: ['assets'] as const,
@@ -17,6 +18,15 @@ export function useAssetList(params: MaybeRefOrGetter<ListParams>) {
     queryKey: computed(() => assetKeys.list(toValue(params))),
     queryFn: () => unwrap(inventoryApi.GET('/assets', { params: { query: toValue(params) } })),
     placeholderData: keepPreviousData,
+  })
+}
+
+// fetchAssetPage: tải một trang của danh sách (dùng cache nếu có), khi bước qua tài sản
+// sang trang bên cạnh
+export function fetchAssetPage(qc: QueryClient, params: ListParams) {
+  return qc.fetchQuery({
+    queryKey: assetKeys.list(params),
+    queryFn: () => unwrap(inventoryApi.GET('/assets', { params: { query: params } })),
   })
 }
 
@@ -44,7 +54,8 @@ function useAssetMutation<V, R>(fn: (v: V) => Promise<R>, toast = true) {
   return useMutation({
     mutationFn: fn,
     meta: { toast },
-    onSuccess: () => qc.invalidateQueries({ queryKey: assetKeys.all }),
+    // số tài sản theo loại (sidebar) cũng đổi
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: assetKeys.all }), qc.invalidateQueries({ queryKey: typeKeys.all })]),
   })
 }
 
@@ -75,5 +86,23 @@ export function useRetireAsset() {
 export function useRestoreAsset() {
   return useAssetMutation(({ id, version }: { id: string; version: number }) =>
     unwrap(inventoryApi.POST('/assets/{assetID}/restore', { ...path(id), body: { version } })),
+  )
+}
+
+// Hàng loạt: mỗi tài sản thành công hay thất bại riêng; kết quả liệt kê từng cái
+export interface BulkItemRef {
+  id: string
+  version: number
+}
+
+export function useBulkRetire() {
+  return useAssetMutation(({ items, reason }: { items: BulkItemRef[]; reason: string }) =>
+    unwrap(inventoryApi.POST('/assets/bulk-retire', { body: { items, reason: reason || undefined } })),
+  )
+}
+
+export function useBulkStatus() {
+  return useAssetMutation(({ items, statusId }: { items: BulkItemRef[]; statusId: string }) =>
+    unwrap(inventoryApi.POST('/assets/bulk-status', { body: { items, status_id: statusId } })),
   )
 }

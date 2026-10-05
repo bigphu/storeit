@@ -47,10 +47,18 @@ type TypeRepository interface {
 	// bỏ kiểu select thì xoá option của nó
 	UpdateAttribute(ctx context.Context, typeID, attrID uuid.UUID, ch AttributeChange) (Attribute, error)
 	RemoveAttribute(ctx context.Context, typeID, attrID uuid.UUID) error
+	// ReorderAttributes: ids là mọi thuộc tính đang hoạt động theo thứ tự mới (vị trí
+	// 1..n), không thì ErrInvalidOrder; một event cho cả lần sắp xếp
+	ReorderAttributes(ctx context.Context, typeID uuid.UUID, ids []uuid.UUID) (AssetType, error)
+	// ReorderOptions: như trên cho option đang hoạt động của một thuộc tính select
+	ReorderOptions(ctx context.Context, typeID, attrID uuid.UUID, ids []uuid.UUID) (Attribute, error)
 	// AddOption: thuộc tính không phải select là ErrNotSelectAttribute
 	AddOption(ctx context.Context, typeID, attrID uuid.UUID, label string, position int32) (Option, error)
 	UpdateOption(ctx context.Context, typeID, attrID, optID uuid.UUID, label *string, position *int32) (Option, error)
 	RemoveOption(ctx context.Context, typeID, attrID, optID uuid.UUID) error
+	// AttributeLabels: nhãn thuộc tính đang dùng của mỗi loại theo thứ tự hiển thị;
+	// loại không có thuộc tính thì không có trong map
+	AttributeLabels(ctx context.Context) (map[uuid.UUID][]string, error)
 }
 
 type NewStatus struct {
@@ -75,6 +83,23 @@ type StatusRepository interface {
 	Update(ctx context.Context, id uuid.UUID, ch StatusChange) (Status, error)
 	// Archive: ErrSystemStatus, ErrStatusIsDefault
 	Archive(ctx context.Context, id uuid.UUID) (Status, error)
+	// Restore: status chưa archive thì trả nguyên; event status_restored
+	Restore(ctx context.Context, id uuid.UUID) (Status, error)
+	// Reorder: ids là mọi status đang dùng theo thứ tự mới (vị trí 1..n), không thì
+	// ErrInvalidOrder; mỗi status đổi vị trí có một event status_updated
+	Reorder(ctx context.Context, ids []uuid.UUID) ([]Status, error)
+}
+
+// TypeCounts: tài sản chưa retire của một loại; ByKind không có retired
+type TypeCounts struct {
+	Total  int64
+	ByKind map[StatusKind]int64
+}
+
+// TypeSummary: TypeCounts và nhãn thuộc tính đang dùng của một loại (trang danh sách loại)
+type TypeSummary struct {
+	Counts          TypeCounts
+	AttributeLabels []string
 }
 
 // AssetFields là mọi trường sửa được của tài sản (PUT thay toàn bộ)
@@ -140,6 +165,11 @@ type AssetRepository interface {
 	// Get: kèm giá trị thuộc tính; ErrAssetNotFound
 	Get(ctx context.Context, id uuid.UUID) (Asset, error)
 	List(ctx context.Context, f AssetFilter) ([]AssetListItem, int64, error)
+	// CountByType: tài sản chưa retire của mỗi loại, tổng và theo kind; loại không có
+	// tài sản thì không có trong map
+	CountByType(ctx context.Context) (map[uuid.UUID]TypeCounts, error)
+	// CountByStatus: số tài sản (kể cả đã retire) của mỗi status
+	CountByStatus(ctx context.Context) (map[uuid.UUID]int64, error)
 	// Replace thay toàn bộ trường và giá trị: ErrAssetRetired, ErrAssetChanged;
 	// đổi loại thì xoá giá trị cũ trước; event asset_updated
 	Replace(ctx context.Context, id uuid.UUID, f AssetFields, version int32) (Asset, error)

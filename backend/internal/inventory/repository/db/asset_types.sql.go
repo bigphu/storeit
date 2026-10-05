@@ -244,6 +244,38 @@ func (q *Queries) GetOptionForUpdate(ctx context.Context, arg GetOptionForUpdate
 	return i, err
 }
 
+const listActiveAttributeLabels = `-- name: ListActiveAttributeLabels :many
+SELECT asset_type_id, label FROM inventory.asset_type_attributes
+WHERE removed_at IS NULL
+ORDER BY asset_type_id, position, lower(label), id
+`
+
+type ListActiveAttributeLabelsRow struct {
+	AssetTypeID uuid.UUID
+	Label       string
+}
+
+// Nhãn thuộc tính đang dùng của mọi loại, theo thứ tự hiển thị (thẻ ở trang loại)
+func (q *Queries) ListActiveAttributeLabels(ctx context.Context) ([]ListActiveAttributeLabelsRow, error) {
+	rows, err := q.db.Query(ctx, listActiveAttributeLabels)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListActiveAttributeLabelsRow{}
+	for rows.Next() {
+		var i ListActiveAttributeLabelsRow
+		if err := rows.Scan(&i.AssetTypeID, &i.Label); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAssetTypes = `-- name: ListAssetTypes :many
 SELECT id, code, name, description, is_system, archived_at, version, created_at, updated_at FROM inventory.asset_types
 WHERE $1::boolean OR archived_at IS NULL
@@ -420,6 +452,35 @@ func (q *Queries) SetAssetTypeArchived(ctx context.Context, arg SetAssetTypeArch
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const setAttributePosition = `-- name: SetAttributePosition :exec
+UPDATE inventory.asset_type_attributes SET position = $1, updated_at = now() WHERE id = $2
+`
+
+type SetAttributePositionParams struct {
+	Position int32
+	ID       uuid.UUID
+}
+
+// Sắp xếp lại (kéo thả): chỉ đổi vị trí
+func (q *Queries) SetAttributePosition(ctx context.Context, arg SetAttributePositionParams) error {
+	_, err := q.db.Exec(ctx, setAttributePosition, arg.Position, arg.ID)
+	return err
+}
+
+const setOptionPosition = `-- name: SetOptionPosition :exec
+UPDATE inventory.asset_attribute_options SET position = $1, updated_at = now() WHERE id = $2
+`
+
+type SetOptionPositionParams struct {
+	Position int32
+	ID       uuid.UUID
+}
+
+func (q *Queries) SetOptionPosition(ctx context.Context, arg SetOptionPositionParams) error {
+	_, err := q.db.Exec(ctx, setOptionPosition, arg.Position, arg.ID)
+	return err
 }
 
 const updateAssetType = `-- name: UpdateAssetType :one

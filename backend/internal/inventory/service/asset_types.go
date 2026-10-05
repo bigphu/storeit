@@ -16,6 +16,32 @@ func (s *Service) ListAssetTypes(ctx context.Context, includeArchived bool) ([]d
 	return s.types.List(ctx, includeArchived)
 }
 
+// TypeSummaries: số tài sản chưa retire (tổng, theo kind) và nhãn thuộc tính đang dùng
+// của mỗi loại; loại không có cả hai thì không có trong map
+func (s *Service) TypeSummaries(ctx context.Context) (map[uuid.UUID]domain.TypeSummary, error) {
+	if _, err := auth.Require(ctx, domain.PermAssetRead); err != nil {
+		return nil, err
+	}
+	counts, err := s.assets.CountByType(ctx)
+	if err != nil {
+		return nil, err
+	}
+	labels, err := s.types.AttributeLabels(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[uuid.UUID]domain.TypeSummary, len(counts)+len(labels))
+	for id, c := range counts {
+		out[id] = domain.TypeSummary{Counts: c}
+	}
+	for id, l := range labels {
+		sum := out[id]
+		sum.AttributeLabels = l
+		out[id] = sum
+	}
+	return out, nil
+}
+
 func (s *Service) GetAssetType(ctx context.Context, id uuid.UUID) (domain.AssetType, error) {
 	if _, err := auth.Require(ctx, domain.PermAssetRead); err != nil {
 		return domain.AssetType{}, err
@@ -150,6 +176,21 @@ func (s *Service) RemoveAttribute(ctx context.Context, typeID, attrID uuid.UUID)
 		return err
 	}
 	return s.types.RemoveAttribute(ctx, typeID, attrID)
+}
+
+// ReorderAttributes, ReorderOptions: kéo thả trong trang cài đặt loại
+func (s *Service) ReorderAttributes(ctx context.Context, typeID uuid.UUID, ids []uuid.UUID) (domain.AssetType, error) {
+	if _, err := auth.Require(ctx, domain.PermTypeManage); err != nil {
+		return domain.AssetType{}, err
+	}
+	return s.types.ReorderAttributes(ctx, typeID, ids)
+}
+
+func (s *Service) ReorderOptions(ctx context.Context, typeID, attrID uuid.UUID, ids []uuid.UUID) (domain.Attribute, error) {
+	if _, err := auth.Require(ctx, domain.PermTypeManage); err != nil {
+		return domain.Attribute{}, err
+	}
+	return s.types.ReorderOptions(ctx, typeID, attrID, ids)
 }
 
 func (s *Service) AddOption(ctx context.Context, typeID, attrID uuid.UUID, label string, position int32) (domain.Option, error) {

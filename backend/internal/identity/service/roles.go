@@ -16,6 +16,14 @@ func (s *Service) ListRoles(ctx context.Context) ([]domain.Role, error) {
 	return s.roles.List(ctx)
 }
 
+// RoleMemberCounts: số account chưa bị khoá giữ mỗi role
+func (s *Service) RoleMemberCounts(ctx context.Context) (map[uuid.UUID]int64, error) {
+	if _, err := auth.Require(ctx, domain.PermRoleRead); err != nil {
+		return nil, err
+	}
+	return s.roles.MemberCounts(ctx)
+}
+
 func (s *Service) GetRole(ctx context.Context, id uuid.UUID) (domain.Role, error) {
 	if _, err := auth.Require(ctx, domain.PermRoleRead); err != nil {
 		return domain.Role{}, err

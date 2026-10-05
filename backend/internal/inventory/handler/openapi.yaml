@@ -18,6 +18,12 @@ paths:
       summary: List asset types (inventory.asset.read)
       parameters:
         - $ref: '#/components/parameters/IncludeArchived'
+        - name: with_counts
+          in: query
+          description: >
+            Add `asset_count` and `kind_counts` (assets not retired), `attribute_count` and
+            `attribute_labels` (active attributes in display order) to each type.
+          schema: { type: boolean }
       responses:
         "200":
           description: Asset types without attributes
@@ -123,6 +129,45 @@ paths:
               schema: { $ref: '#/components/schemas/Attribute' }
         default: { $ref: '#/components/responses/Problem' }
 
+  /asset-types/{typeID}/attributes/order:
+    put:
+      operationId: reorderAttributes
+      summary: Put the type's active attributes in a new order, in one change (inventory.type.manage)
+      parameters:
+        - $ref: '#/components/parameters/TypeID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrderRequest' }
+      responses:
+        "200":
+          description: The type with its attributes in the new order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetTypeDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /asset-types/{typeID}/attributes/{attributeID}/options/order:
+    put:
+      operationId: reorderOptions
+      summary: Put a select attribute's active options in a new order, in one change (inventory.type.manage)
+      parameters:
+        - $ref: '#/components/parameters/TypeID'
+        - $ref: '#/components/parameters/AttributeID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrderRequest' }
+      responses:
+        "200":
+          description: The attribute with its options in the new order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attribute' }
+        default: { $ref: '#/components/responses/Problem' }
+
   /asset-types/{typeID}/attributes/{attributeID}:
     parameters:
       - $ref: '#/components/parameters/TypeID'
@@ -203,6 +248,10 @@ paths:
       summary: List asset statuses (inventory.asset.read)
       parameters:
         - $ref: '#/components/parameters/IncludeArchived'
+        - name: with_counts
+          in: query
+          description: Add `asset_count` (assets with this status, retired ones included) to each status.
+          schema: { type: boolean }
       responses:
         "200":
           description: Statuses
@@ -230,6 +279,29 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Status' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /asset-statuses/order:
+    put:
+      operationId: reorderStatuses
+      summary: Put every active status in a new order, in one change (inventory.status.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrderRequest' }
+      responses:
+        "200":
+          description: Active statuses in the new order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Status' }
         default: { $ref: '#/components/responses/Problem' }
 
   /asset-statuses/{statusID}:
@@ -260,6 +332,20 @@ paths:
       responses:
         "200":
           description: Archived
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Status' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /asset-statuses/{statusID}/restore:
+    parameters:
+      - $ref: '#/components/parameters/StatusID'
+    post:
+      operationId: restoreStatus
+      summary: Offer an archived status again (inventory.status.manage)
+      responses:
+        "200":
+          description: Restored
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Status' }
@@ -372,6 +458,41 @@ paths:
               schema: { $ref: '#/components/schemas/AssetDetail' }
         default: { $ref: '#/components/responses/Problem' }
 
+  # Hàng loạt: mỗi tài sản thành công hay thất bại riêng; luôn 200 với kết quả từng cái
+  /assets/bulk-retire:
+    post:
+      operationId: retireAssets
+      summary: Retire several assets; each succeeds or fails on its own (inventory.asset.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BulkRetireRequest' }
+      responses:
+        "200":
+          description: Which assets were retired and which were not, with the reason
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BulkResult' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /assets/bulk-status:
+    post:
+      operationId: setAssetsStatus
+      summary: Change the status of several assets; each succeeds or fails on its own (inventory.asset.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BulkStatusRequest' }
+      responses:
+        "200":
+          description: Which assets changed and which did not, with the reason
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BulkResult' }
+        default: { $ref: '#/components/responses/Problem' }
+
   /assets/{assetID}/retire:
     parameters:
       - $ref: '#/components/parameters/AssetID'
@@ -477,6 +598,28 @@ components:
         version: { type: integer, format: int32 }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        asset_count:
+          type: integer
+          format: int64
+          description: Assets of this type that are not retired; only with `with_counts=true`
+        kind_counts: { $ref: '#/components/schemas/KindCounts' }
+        attribute_count:
+          type: integer
+          format: int32
+          description: Active attributes; only with `with_counts=true`
+        attribute_labels:
+          type: array
+          description: Labels of the active attributes in display order; only with `with_counts=true`
+          items: { type: string }
+
+    KindCounts:
+      type: object
+      description: Assets not retired by the kind of their status; only with `with_counts=true`
+      required: [available, in_use, unavailable]
+      properties:
+        available: { type: integer, format: int64 }
+        in_use: { type: integer, format: int64 }
+        unavailable: { type: integer, format: int64 }
 
     AssetTypeDetail:
       allOf:
@@ -558,6 +701,16 @@ components:
         is_required: { type: boolean }
         position: { type: integer, format: int32, minimum: 0, maximum: 10000 }
 
+    OrderRequest:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          description: Every active attribute (or option) exactly once, in the new order
+          type: array
+          maxItems: 500
+          items: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+
     OptionRequest:
       type: object
       required: [label]
@@ -582,6 +735,10 @@ components:
         is_system: { type: boolean }
         position: { type: integer, format: int32 }
         archived_at: { type: string, format: date-time }
+        asset_count:
+          type: integer
+          format: int64
+          description: Assets with this status, retired ones included; only with `with_counts=true`
 
     CreateStatusRequest:
       type: object
@@ -719,6 +876,54 @@ components:
       description: Attribute key -> value (string, number, boolean; select = option id; date = YYYY-MM-DD)
       maxProperties: 100
       additionalProperties: true
+
+    BulkItem:
+      type: object
+      required: [id, version]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        version:
+          type: integer
+          format: int32
+          description: The version you last read; a newer one fails that asset with asset-changed
+
+    BulkItems:
+      type: array
+      minItems: 1
+      maxItems: 200
+      items: { $ref: '#/components/schemas/BulkItem' }
+
+    BulkRetireRequest:
+      type: object
+      required: [items]
+      properties:
+        items: { $ref: '#/components/schemas/BulkItems' }
+        reason: { type: string, maxLength: 500 }
+
+    BulkStatusRequest:
+      type: object
+      required: [items, status_id]
+      properties:
+        items: { $ref: '#/components/schemas/BulkItems' }
+        status_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+
+    BulkResult:
+      type: object
+      required: [succeeded, failed]
+      properties:
+        succeeded:
+          type: array
+          items: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        failed:
+          type: array
+          items: { $ref: '#/components/schemas/BulkFailure' }
+
+    BulkFailure:
+      type: object
+      required: [id, problem]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        problem: { $ref: '../../../api/common.yaml#/components/schemas/Problem' }
 
     RetireAssetRequest:
       type: object

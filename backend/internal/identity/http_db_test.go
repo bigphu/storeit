@@ -456,3 +456,117 @@ func TestListAccountsPageBounds(t *testing.T) {
 		t.Errorf("last allowed page: %d %s, want 200 with no items", rec.Code, rec.Body)
 	}
 }
+
+func TestUpdateMeOverHTTP(t *testing.T) {
+	a := newApp(t)
+	id := a.seed(domain.EmployeeRoleID)
+	token, _ := a.login(id)
+
+	rec := a.do(call{method: "GET", path: "/api/v1/me", token: token})
+	var me struct {
+		Account struct {
+			Name    string `json:"name"`
+			Version int32  `json:"version"`
+		} `json:"account"`
+	}
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &me) != nil {
+		t.Fatalf("me: %d %s", rec.Code, rec.Body)
+	}
+
+	rec = a.do(call{method: "PATCH", path: "/api/v1/me", token: token, body: map[string]any{"name": "Renamed Self", "version": me.Account.Version}})
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &me) != nil || me.Account.Name != "Renamed Self" {
+		t.Fatalf("patch me: %d %s", rec.Code, rec.Body)
+	}
+	rec = a.do(call{method: "PATCH", path: "/api/v1/me", token: token, body: map[string]any{"name": "Again", "version": me.Account.Version - 1}})
+	if rec.Code != 409 {
+		t.Errorf("stale version: %d %s", rec.Code, rec.Body)
+	}
+	if rec := a.do(call{method: "PATCH", path: "/api/v1/me", body: map[string]any{"name": "X", "version": 1}}); rec.Code != 401 {
+		t.Errorf("without token: %d", rec.Code)
+	}
+	if rec := a.do(call{method: "PATCH", path: "/api/v1/me", token: token, body: map[string]any{"version": me.Account.Version}}); rec.Code != 422 {
+		t.Errorf("missing name: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// Danh sách có role, đếm theo trạng thái, lọc trạng thái/role; chi tiết có phiên và
+// lần đăng nhập; đăng xuất mọi nơi
+func TestAccountListExtrasAndSignOut(t *testing.T) {
+	a := newApp(t)
+	admin, _ := a.login(a.seed(domain.AdministratorRoleID))
+	email := a.seed(domain.InventoryOfficerRoleID)
+	a.login(email)
+	a.login(email)
+
+	type item struct {
+		ID       string                  `json:"id"`
+		Email    string                  `json:"email"`
+		Status   string                  `json:"status"`
+		Roles    []struct{ Name string } `json:"roles"`
+		LastSign *string                 `json:"last_sign_in_at"`
+	}
+	var list struct {
+		Items        []item           `json:"items"`
+		StatusCounts map[string]int64 `json:"status_counts"`
+	}
+	rec := a.do(call{method: "GET", path: "/api/v1/accounts?status=active&role_id=" + domain.InventoryOfficerRoleID.String() + "&q=" + email, token: admin})
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &list) != nil || len(list.Items) != 1 {
+		t.Fatalf("list: %d %s", rec.Code, rec.Body)
+	}
+	got := list.Items[0]
+	if got.Email != email || len(got.Roles) != 1 || got.Roles[0].Name != "Inventory Officer" || got.LastSign == nil {
+		t.Errorf("item = %+v", got)
+	}
+	if list.StatusCounts["active"] != 1 || list.StatusCounts["invited"] != 0 {
+		t.Errorf("status_counts = %v", list.StatusCounts)
+	}
+	if rec := a.do(call{method: "GET", path: "/api/v1/accounts?status=gone", token: admin}); rec.Code != 400 {
+		t.Errorf("unknown status: %d", rec.Code)
+	}
+
+	var detail struct {
+		ActiveSessions *int64 `json:"active_sessions"`
+	}
+	rec = a.do(call{method: "GET", path: "/api/v1/accounts/" + got.ID, token: admin})
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &detail) != nil || detail.ActiveSessions == nil || *detail.ActiveSessions != 2 {
+		t.Fatalf("detail: %d %s", rec.Code, rec.Body)
+	}
+
+	var out struct{ Revoked int64 }
+	rec = a.do(call{method: "POST", path: "/api/v1/accounts/" + got.ID + "/sign-out", token: admin})
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &out) != nil || out.Revoked != 2 {
+		t.Errorf("sign out: %d %s", rec.Code, rec.Body)
+	}
+	officer, _ := a.login(a.seed(domain.InventoryOfficerRoleID))
+	if rec := a.do(call{method: "POST", path: "/api/v1/accounts/" + got.ID + "/sign-out", token: officer}); rec.Code != 403 {
+		t.Errorf("sign out without account.manage: %d", rec.Code)
+	}
+}
+
+func TestRolesHaveMemberCounts(t *testing.T) {
+	a := newApp(t)
+	admin, _ := a.login(a.seed(domain.AdministratorRoleID))
+	var roles []struct {
+		ID          string `json:"id"`
+		MemberCount *int64 `json:"member_count"`
+	}
+	rec := a.do(call{method: "GET", path: "/api/v1/roles", token: admin})
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &roles) != nil {
+		t.Fatalf("roles: %d %s", rec.Code, rec.Body)
+	}
+	for _, r := range roles {
+		if r.MemberCount == nil {
+			t.Errorf("role %s without member_count", r.ID)
+		}
+		if r.ID == domain.AdministratorRoleID.String() && *r.MemberCount < 1 {
+			t.Errorf("Administrator members = %d, want at least the seeded admin", *r.MemberCount)
+		}
+	}
+	var one struct {
+		MemberCount *int64 `json:"member_count"`
+	}
+	rec = a.do(call{method: "GET", path: "/api/v1/roles/" + domain.AdministratorRoleID.String(), token: admin})
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &one) != nil || one.MemberCount == nil || *one.MemberCount < 1 {
+		t.Errorf("role detail: %d %s", rec.Code, rec.Body)
+	}
+}

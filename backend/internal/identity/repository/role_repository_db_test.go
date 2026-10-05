@@ -85,3 +85,26 @@ func TestRole_ListAndCatalogue(t *testing.T) {
 		t.Errorf("assignments = %d, %v (account %v)", n, err, a.ID)
 	}
 }
+
+// Thành viên: account chưa bị khoá (kể cả đang được mời) giữ role
+func TestRole_MemberCounts(t *testing.T) {
+	r := newRepos(t)
+	ctx := context.Background()
+	role, err := r.roles.Create(ctx, domain.Role{Name: "Members " + uuid.NewString()[:8]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	newAccount(t, r, role.ID)
+	newAccount(t, r, role.ID)
+	gone := newAccount(t, r, role.ID)
+	if _, err := r.accounts.SetActive(ctx, gone.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	counts, err := r.roles.MemberCounts(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if counts[role.ID] != 2 {
+		t.Errorf("members = %d, want 2 (disabled account left out)", counts[role.ID])
+	}
+}

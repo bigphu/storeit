@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/google/uuid"
@@ -135,6 +136,14 @@ func (f *fakeTypes) UpdateAttribute(_ context.Context, typeID, attrID uuid.UUID,
 	return domain.Attribute{}, domain.ErrAttributeNotFound
 }
 
+func (f *fakeTypes) ReorderAttributes(_ context.Context, typeID uuid.UUID, _ []uuid.UUID) (domain.AssetType, error) {
+	return f.Get(context.Background(), typeID)
+}
+
+func (f *fakeTypes) ReorderOptions(context.Context, uuid.UUID, uuid.UUID, []uuid.UUID) (domain.Attribute, error) {
+	return domain.Attribute{}, nil
+}
+
 func (f *fakeTypes) RemoveAttribute(_ context.Context, typeID, attrID uuid.UUID) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -171,6 +180,20 @@ func (f *fakeTypes) UpdateOption(_ context.Context, _, _, optID uuid.UUID, label
 }
 
 func (f *fakeTypes) RemoveOption(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error { return nil }
+
+func (f *fakeTypes) AttributeLabels(context.Context) (map[uuid.UUID][]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[uuid.UUID][]string{}
+	for id, t := range f.types {
+		for _, a := range t.Attributes {
+			if a.RemovedAt == nil {
+				out[id] = append(out[id], a.Label)
+			}
+		}
+	}
+	return out, nil
+}
 
 type fakeStatuses struct {
 	mu       sync.Mutex
@@ -249,7 +272,38 @@ func (f *fakeStatuses) Archive(_ context.Context, id uuid.UUID) (domain.Status, 
 	return s, nil
 }
 
+func (f *fakeStatuses) Restore(_ context.Context, id uuid.UUID) (domain.Status, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	s := f.statuses[id]
+	s.ArchivedAt = nil
+	f.statuses[id] = s
+	return s, nil
+}
+
+func (f *fakeStatuses) Reorder(_ context.Context, ids []uuid.UUID) ([]domain.Status, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]domain.Status, len(ids))
+	for i, id := range ids {
+		s := f.statuses[id]
+		s.Position = int32(i + 1)
+		f.statuses[id], out[i] = s, s
+	}
+	return out, nil
+}
+
 // archive đánh dấu archived trực tiếp (để test luật "đã archive")
+// byKind: status mặc định của kind (cho test)
+func (f *fakeStatuses) byKind(t *testing.T, k domain.StatusKind) domain.Status {
+	t.Helper()
+	s, err := f.Default(context.Background(), k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
 func (f *fakeStatuses) archive(id uuid.UUID) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -296,6 +350,31 @@ func (f *fakeAssets) Get(_ context.Context, id uuid.UUID) (domain.Asset, error) 
 	return a, nil
 }
 
+// CountByType: fake không biết kind của status nên chỉ đếm tổng
+func (f *fakeAssets) CountByType(context.Context) (map[uuid.UUID]domain.TypeCounts, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[uuid.UUID]domain.TypeCounts{}
+	for _, a := range f.assets {
+		if a.RetiredAt == nil {
+			c := out[a.TypeID]
+			c.Total++
+			out[a.TypeID] = c
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeAssets) CountByStatus(context.Context) (map[uuid.UUID]int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[uuid.UUID]int64{}
+	for _, a := range f.assets {
+		out[a.StatusID]++
+	}
+	return out, nil
+}
+
 func (f *fakeAssets) List(_ context.Context, filter domain.AssetFilter) ([]domain.AssetListItem, int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -306,7 +385,10 @@ func (f *fakeAssets) List(_ context.Context, filter domain.AssetFilter) ([]domai
 func (f *fakeAssets) Replace(_ context.Context, id uuid.UUID, in domain.AssetFields, version int32) (domain.Asset, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	a := f.assets[id]
+	a, ok := f.assets[id]
+	if !ok {
+		return domain.Asset{}, domain.ErrAssetNotFound
+	}
 	if a.Retired() {
 		return domain.Asset{}, domain.ErrAssetRetired
 	}
@@ -322,7 +404,15 @@ func (f *fakeAssets) Replace(_ context.Context, id uuid.UUID, in domain.AssetFie
 func (f *fakeAssets) Retire(_ context.Context, id uuid.UUID, reason string, status uuid.UUID, version int32) (domain.Asset, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	a := f.assets[id]
+	a, ok := f.assets[id]
+	switch {
+	case !ok:
+		return domain.Asset{}, domain.ErrAssetNotFound
+	case a.Retired():
+		return domain.Asset{}, domain.ErrAssetRetired
+	case a.Version != version:
+		return domain.Asset{}, domain.ErrAssetChanged
+	}
 	now := time.Now()
 	a.RetiredAt, a.RetiredReason, a.StatusID = &now, reason, status
 	a.Version++

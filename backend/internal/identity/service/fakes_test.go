@@ -89,6 +89,10 @@ func (f *fakeRoles) Permissions(context.Context) ([]domain.Permission, error) {
 	return []domain.Permission{{Code: domain.PermAccountRead, Description: "View accounts"}}, nil
 }
 
+func (f *fakeRoles) MemberCounts(context.Context) (map[uuid.UUID]int64, error) {
+	return map[uuid.UUID]int64{}, nil
+}
+
 type passwordCall struct {
 	id   uuid.UUID
 	keep *uuid.UUID
@@ -247,6 +251,41 @@ func (f *fakeAccounts) Count(context.Context) (int64, error) {
 		return 0, nil
 	}
 	return int64(len(f.accounts)), nil
+}
+
+func (f *fakeAccounts) StatusCounts(context.Context, domain.AccountFilter) (map[domain.AccountStatus]int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[domain.AccountStatus]int64{}
+	for _, a := range f.accounts {
+		out[a.Status()]++
+	}
+	return out, nil
+}
+
+func (f *fakeAccounts) RolesOf(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID][]domain.Role, error) {
+	out := map[uuid.UUID][]domain.Role{}
+	for _, id := range ids {
+		if r, _ := f.Roles(ctx, id); len(r) > 0 {
+			out[id] = r
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeAccounts) InviteExpiries(context.Context, []uuid.UUID) (map[uuid.UUID]time.Time, error) {
+	return map[uuid.UUID]time.Time{}, nil
+}
+
+func (f *fakeAccounts) LiveSessions(context.Context, uuid.UUID) (int64, error) { return 0, nil }
+
+func (f *fakeAccounts) SignOutEverywhere(_ context.Context, id uuid.UUID) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.accounts[id]; !ok {
+		return 0, domain.ErrAccountNotFound
+	}
+	return 1, nil
 }
 
 type fakeSessions struct {

@@ -5,6 +5,7 @@ import { useToast } from 'primevue/usetoast'
 import { onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSession } from '@/lib/auth/session'
+import { usePreferences } from '@/lib/preferences'
 import { onNotice } from '@/lib/notify'
 
 const toast = useToast()
@@ -13,6 +14,8 @@ onUnmounted(off)
 
 // Phiên hết hạn (refresh hỏng hoặc tab khác đăng xuất): về trang đăng nhập
 const router = useRouter()
+// nạp tuỳ chọn ngay từ đầu để theme áp cả trang đăng nhập
+usePreferences()
 useSession().setOnExpired(() => {
   const current = router.currentRoute.value
   if (!current.matched.some((r) => r.meta.public)) {

@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
+import Column from 'primevue/column'
+import DataTable, { type DataTableRowReorderEvent } from 'primevue/datatable'
 import Dialog from 'primevue/dialog'
-import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import { useConfirm } from 'primevue/useconfirm'
-import { computed, reactive, ref, watch } from 'vue'
-import type { Attribute } from '@/lib/api/types'
+import { reactive, ref, watch } from 'vue'
+import type { Attribute, Option } from '@/lib/api/types'
+import IconAction from '@/components/IconAction.vue'
 import { notify } from '@/lib/notify'
-import { useAddOption, useRemoveOption, useUpdateOption } from '../api'
+import { useAddOption, useRemoveOption, useReorderOptions, useUpdateOption } from '../api'
 
-// Sửa option của một thuộc tính select; attribute lấy từ query chi tiết loại nên tự cập nhật
+// Option của một thuộc tính select: kéo để đổi thứ tự (thứ tự trong form và khi sắp
+// theo cột), sửa nhãn, thêm, gỡ. attribute lấy từ query chi tiết loại nên tự cập nhật
 const props = defineProps<{ typeId: string; attribute: Attribute | null; canManage: boolean }>()
 const visible = defineModel<boolean>('visible', { required: true })
 
@@ -17,50 +20,54 @@ const confirm = useConfirm()
 const add = useAddOption()
 const update = useUpdateOption()
 const remove = useRemoveOption()
+const reorder = useReorderOptions()
 
-const active = computed(() => (props.attribute?.options ?? []).filter((o) => !o.removed))
-// bản nháp nhãn và vị trí theo id option
-const drafts = reactive<Record<string, { label: string; position: number }>>({})
+// thứ tự đang hiện: đổi ngay khi thả, không đợi tải lại
+const rows = ref<Option[]>([])
+const labels = reactive<Record<string, string>>({})
 watch(
-  active,
+  () => props.attribute?.options,
   (opts) => {
-    for (const o of opts) drafts[o.id] = { label: o.label, position: o.position }
+    rows.value = (opts ?? []).filter((o) => !o.removed).sort((a, b) => a.position - b.position)
+    for (const o of rows.value) labels[o.id] = o.label
   },
   { immediate: true },
 )
 
 const newLabel = ref('')
+const ids = () => ({ typeId: props.typeId, attrId: props.attribute!.id })
 
-function ids() {
-  return { typeId: props.typeId, attrId: props.attribute!.id }
+function onReorder(e: DataTableRowReorderEvent) {
+  rows.value = e.value as Option[]
+  reorder.mutate({ ...ids(), ids: rows.value.map((o) => o.id) })
 }
 
-async function save(optionId: string) {
-  const d = drafts[optionId]
-  await update
-    .mutateAsync({ ...ids(), optionId, label: d.label, position: d.position })
+function save(o: Option) {
+  update
+    .mutateAsync({ ...ids(), optionId: o.id, label: labels[o.id] })
     .then(() => notify.success('Option saved.'))
     .catch(() => {})
 }
 
-async function addOption() {
+function addOption() {
   if (!newLabel.value.trim()) return
-  const position = Math.max(0, ...active.value.map((o) => o.position)) + 1
-  await add
+  // option mới đứng cuối
+  const position = Math.max(0, ...rows.value.map((o) => o.position)) + 1
+  add
     .mutateAsync({ ...ids(), label: newLabel.value.trim(), position })
     .then(() => (newLabel.value = ''))
     .catch(() => {})
 }
 
-function askRemove(optionId: string, label: string) {
+function askRemove(o: Option) {
   confirm.require({
-    message: `Remove the option ${label}? Assets that have it keep it, shown as removed.`,
+    message: `Remove the option ${o.label}? Assets that have it keep it, shown as removed.`,
     header: 'Confirm',
     acceptLabel: 'Remove',
     rejectLabel: 'Cancel',
     accept: () =>
       remove
-        .mutateAsync({ ...ids(), optionId })
+        .mutateAsync({ ...ids(), optionId: o.id })
         .then(() => notify.success('Option removed.'))
         .catch(() => {}),
   })
@@ -68,34 +75,24 @@ function askRemove(optionId: string, label: string) {
 </script>
 
 <template>
-  <Dialog v-model:visible="visible" modal :header="`Options of ${attribute?.label ?? ''}`" :style="{ width: '36rem' }">
-    <table class="options">
-      <thead>
-        <tr>
-          <th>Label</th>
-          <th>Position</th>
-          <th v-if="canManage"></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="o in active" :key="o.id">
-          <td><InputText v-model="drafts[o.id].label" :disabled="!canManage" aria-label="Label" /></td>
-          <td>
-            <InputNumber
-              v-model="drafts[o.id].position"
-              :disabled="!canManage"
-              :use-grouping="false"
-              aria-label="Position"
-              input-class="narrow"
-            />
-          </td>
-          <td v-if="canManage" class="actions">
-            <Button label="Save" size="small" text @click="save(o.id)" />
-            <Button label="Remove" size="small" text severity="danger" @click="askRemove(o.id, o.label)" />
-          </td>
-        </tr>
-      </tbody>
-    </table>
+  <Dialog v-model:visible="visible" modal :header="`Options of ${attribute?.label ?? ''}`" :style="{ width: 'min(92vw, 34rem)' }">
+    <p v-if="canManage" class="hint">Drag the handle to change the order.</p>
+    <DataTable :value="rows" data-key="id" size="small" row-hover @row-reorder="onReorder">
+      <Column v-if="canManage" row-reorder header-style="width: 2.5rem" />
+      <Column header="Label">
+        <template #body="{ data: o }: { data: Option }">
+          <InputText v-if="canManage" v-model="labels[o.id]" aria-label="Label" fluid @keydown.enter="save(o)" />
+          <span v-else>{{ o.label }}</span>
+        </template>
+      </Column>
+      <Column v-if="canManage" header="" body-class="actions-cell">
+        <template #body="{ data: o }: { data: Option }">
+          <IconAction icon="pi pi-check" label="Save" :disabled="labels[o.id] === o.label" reason="No changes to save" @click="save(o)" />
+          <IconAction icon="pi pi-trash" label="Remove" danger @click="askRemove(o)" />
+        </template>
+      </Column>
+      <template #empty>No options yet.</template>
+    </DataTable>
     <form v-if="canManage" class="actions add" @submit.prevent="addOption">
       <InputText v-model="newLabel" placeholder="New option" aria-label="New option" />
       <Button type="submit" label="Add" :loading="add.isPending.value" />
@@ -104,20 +101,16 @@ function askRemove(optionId: string, label: string) {
 </template>
 
 <style scoped>
-.options {
-  width: 100%;
-  border-collapse: collapse;
-}
-.options th {
-  text-align: left;
-}
-.options td {
-  padding: 0.25rem;
+.hint {
+  margin: 0 0 0.5rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.875rem;
 }
 .add {
   margin-top: 1rem;
 }
-:deep(.narrow) {
-  width: 5rem;
+:deep(.actions-cell) {
+  white-space: nowrap;
+  text-align: right;
 }
 </style>

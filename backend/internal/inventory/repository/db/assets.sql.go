@@ -13,6 +13,41 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countActiveAssetsByTypeAndKind = `-- name: CountActiveAssetsByTypeAndKind :many
+SELECT a.asset_type_id, s.kind, count(*)::bigint AS n
+FROM inventory.assets a
+JOIN inventory.asset_statuses s ON s.id = a.status_id
+WHERE a.retired_at IS NULL
+GROUP BY a.asset_type_id, s.kind
+`
+
+type CountActiveAssetsByTypeAndKindRow struct {
+	AssetTypeID uuid.UUID
+	Kind        string
+	N           int64
+}
+
+// Số tài sản chưa retire của mỗi loại, tách theo kind của status (sidebar, trang loại)
+func (q *Queries) CountActiveAssetsByTypeAndKind(ctx context.Context) ([]CountActiveAssetsByTypeAndKindRow, error) {
+	rows, err := q.db.Query(ctx, countActiveAssetsByTypeAndKind)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountActiveAssetsByTypeAndKindRow{}
+	for rows.Next() {
+		var i CountActiveAssetsByTypeAndKindRow
+		if err := rows.Scan(&i.AssetTypeID, &i.Kind, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countAssets = `-- name: CountAssets :one
 SELECT count(*)
 FROM inventory.assets a
@@ -80,6 +115,38 @@ func (q *Queries) CountAssets(ctx context.Context, arg CountAssetsParams) (int64
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const countAssetsByStatus = `-- name: CountAssetsByStatus :many
+SELECT status_id, count(*)::bigint AS n
+FROM inventory.assets
+GROUP BY status_id
+`
+
+type CountAssetsByStatusRow struct {
+	StatusID uuid.UUID
+	N        int64
+}
+
+// Số tài sản (kể cả đã retire) đang dùng mỗi status
+func (q *Queries) CountAssetsByStatus(ctx context.Context) ([]CountAssetsByStatusRow, error) {
+	rows, err := q.db.Query(ctx, countAssetsByStatus)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountAssetsByStatusRow{}
+	for rows.Next() {
+		var i CountAssetsByStatusRow
+		if err := rows.Scan(&i.StatusID, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const createAsset = `-- name: CreateAsset :one

@@ -99,6 +99,34 @@ type Me struct {
 	Permissions []string
 }
 
+// UpdateMe: người dùng tự đổi tên hiển thị của mình, không cần identity.account.manage.
+// Email, vai trò và member do quản trị đổi. version cũ là ErrAccountChanged.
+func (s *Service) UpdateMe(ctx context.Context, name string, version int32) (Me, error) {
+	actor, err := currentActor(ctx)
+	if err != nil {
+		return Me{}, err
+	}
+	n, err := cleanName(name)
+	if err != nil {
+		return Me{}, err
+	}
+	a, err := s.accounts.Get(ctx, actor.AccountID)
+	if errors.Is(err, domain.ErrAccountNotFound) {
+		return Me{}, domain.ErrBadCredentials
+	}
+	if err != nil {
+		return Me{}, err
+	}
+	// access token của account vừa bị khoá còn sống tới 15 phút: không cho sửa
+	if !a.Active {
+		return Me{}, domain.ErrAccountDisabled
+	}
+	if _, err := s.accounts.UpdateProfile(ctx, a.ID, domain.ProfileChange{Name: &n, Version: version}); err != nil {
+		return Me{}, err
+	}
+	return s.Me(ctx)
+}
+
 func (s *Service) Me(ctx context.Context) (Me, error) {
 	actor, err := currentActor(ctx)
 	if err != nil {

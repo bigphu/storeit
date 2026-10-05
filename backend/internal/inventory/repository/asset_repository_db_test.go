@@ -438,3 +438,39 @@ func TestAssets_SortByTypeAndStatus(t *testing.T) {
 		}
 	}
 }
+
+func TestAssets_CountByType(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	a, b := laptop(t, r), laptop(t, r)
+	mk := func(typ domain.AssetType, vals []domain.Value) domain.Asset {
+		t.Helper()
+		x, err := r.assets.Create(ctx, "CT-"+uniq(), domain.AssetFields{Name: "x", TypeID: typ.ID, StatusID: domain.AvailableStatusID, Values: vals})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return x
+	}
+	mk(a, fullValues(t, a)[:1])
+	inUse := mk(a, fullValues(t, a)[:1])
+	if _, err := r.assets.Replace(ctx, inUse.ID, domain.AssetFields{Name: "x", TypeID: a.ID, StatusID: domain.InUseStatusID, Values: fullValues(t, a)[:1]}, inUse.Version); err != nil {
+		t.Fatal(err)
+	}
+	gone := mk(b, fullValues(t, b)[:1])
+	if _, err := r.assets.Retire(ctx, gone.ID, "lost", domain.RetiredStatusID, gone.Version); err != nil {
+		t.Fatal(err)
+	}
+
+	counts, err := r.assets.CountByType(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// tài sản đã retire không tính; loại không còn tài sản nào không có trong map
+	ca := counts[a.ID]
+	if ca.Total != 2 || ca.ByKind[domain.KindAvailable] != 1 || ca.ByKind[domain.KindInUse] != 1 {
+		t.Errorf("counts[a] = %+v, want total 2: 1 available, 1 in use", ca)
+	}
+	if _, ok := counts[b.ID]; ok {
+		t.Errorf("type with only retired assets is in the map")
+	}
+}

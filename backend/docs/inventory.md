@@ -56,12 +56,19 @@ Seeded IDs are in `domain/permissions.go` (`GeneralTypeID`, `AvailableStatusID`,
   only by retire. Archived types/statuses stay on assets that already use them.
 - Retire: default retired status, hidden from the list unless `include_retired`, not
   editable (409 `/errors/asset-retired`) until restored to the default available status.
+- Order: `PUT …/attributes/order` and `PUT …/options/order` take every active attribute
+  (option) id once in the new order and set positions 1..n in one transaction with one
+  `asset_type_updated` event (only changed positions); a different set is 422
+  `/errors/invalid-order`. `PUT /asset-statuses/order` does the same for every active
+  status (the list order, which lanes per kind follow), with one `status_updated` event per
+  status whose position changed.
 - Attributes: removing one hides it and keeps its values; changing data type or unit
   while values exist is 409 `/errors/attribute-in-use`; leaving `select` drops its options;
   `"unit": ""` removes the unit.
 - Statuses: a status that is the default of its kind cannot be archived (409
   `/errors/status-is-default`); make another one default first. System statuses and the
-  `GENERAL` type cannot be archived.
+  `GENERAL` type cannot be archived. `POST …/restore` offers an archived status again
+  (no-op when it is active); names stay unique across archived ones, so it cannot clash.
 - Search: `q` matches tag or name as a literal substring, case-insensitive; filters by
   type, status, status kind, location, holder; sort by `tag` (default), `name`,
   `purchase_date`, `updated_at`, `asset_type` (type name), `status` (status position then
@@ -83,10 +90,10 @@ Seeded IDs are in `domain/permissions.go` (`GeneralTypeID`, `AvailableStatusID`,
 
 | Endpoints | Needs |
 |---|---|
-| `GET /asset-types`, `GET /asset-types/{typeID}`, `GET /asset-statuses`, `GET /assets`, `GET /assets/{assetID}` | `inventory.asset.read` |
-| `POST /assets`, `PUT /assets/{assetID}`, `POST …/retire`, `POST …/restore` | `inventory.asset.manage` |
-| `POST /asset-types`, `PATCH /asset-types/{typeID}`, `POST …/archive`, `POST …/restore`, attributes (`POST`, `PATCH`, `DELETE`), options (`POST`, `PATCH`, `DELETE`) | `inventory.type.manage` |
-| `POST /asset-statuses`, `PATCH /asset-statuses/{statusID}`, `POST …/archive` | `inventory.status.manage` |
+| `GET /asset-types` (`with_counts=true` adds `asset_count` and `kind_counts` for assets not retired, `attribute_count` and `attribute_labels` for active attributes), `GET /asset-types/{typeID}`, `GET /asset-statuses` (`with_counts=true` adds `asset_count`, retired assets included), `GET /assets`, `GET /assets/{assetID}` | `inventory.asset.read` |
+| `POST /assets`, `PUT /assets/{assetID}`, `POST …/retire`, `POST …/restore`, `POST /assets/bulk-retire`, `POST /assets/bulk-status` | `inventory.asset.manage` |
+| `POST /asset-types`, `PATCH /asset-types/{typeID}`, `POST …/archive`, `POST …/restore`, attributes (`POST`, `PATCH`, `DELETE`, `PUT …/attributes/order`), options (`POST`, `PATCH`, `DELETE`, `PUT …/options/order`) | `inventory.type.manage` |
+| `POST /asset-statuses`, `PATCH /asset-statuses/{statusID}`, `POST …/archive`, `POST …/restore`, `PUT /asset-statuses/order` | `inventory.status.manage` |
 
 Grants (migration): Administrator all four; Authorized Manager read + type.manage +
 status.manage; Inventory Officer read + asset.manage; Employee read.
@@ -99,9 +106,21 @@ attribute in display order with `value` (null when empty), `unit`, and for selec
 loaded in one extra query), so a client can render a per-type table. Without `type_id`
 the field is absent.
 
+## Bulk actions
+
+`POST /assets/bulk-retire` (`items`, optional `reason`) and `POST /assets/bulk-status`
+(`items`, `status_id`) take 1–200 `{id, version}` items (duplicates processed once). Each
+asset goes through the single-asset rules and its own transaction, with one event per
+asset, and succeeds or fails on its own: the response is always 200 with `succeeded` ids
+and `failed` entries carrying the problem a single call would return (`asset-changed`,
+`asset-retired`, `asset-not-found`). Request-level errors are 422 (`invalid-bulk`,
+`retired-status`, `status-archived`). An unexpected error (database) stops the batch with
+a 500; assets already done stay done. Setting the status an asset already has writes
+nothing. Code: `service/bulk.go`.
+
 ## Events (`contract/events.go`)
 
 `inventory.asset_created`, `asset_updated` (field and `attributes.<key>` changes),
 `asset_retired`, `asset_restored`; `inventory.asset_type_created`, `asset_type_updated`
 (including attribute and option changes), `asset_type_archived`, `asset_type_restored`;
-`inventory.status_created`, `status_updated`, `status_archived`.
+`inventory.status_created`, `status_updated`, `status_archived`, `status_restored`.

@@ -3,6 +3,17 @@ SELECT * FROM inventory.asset_statuses
 WHERE @include_archived::boolean OR archived_at IS NULL
 ORDER BY position, lower(name), id;
 
+-- Khoá mọi status đang dùng khi đổi thứ tự
+-- name: ListActiveStatusesForUpdate :many
+SELECT * FROM inventory.asset_statuses
+WHERE archived_at IS NULL
+ORDER BY position, lower(name), id
+FOR NO KEY UPDATE;
+
+-- name: SetStatusPosition :exec
+UPDATE inventory.asset_statuses SET position = @position, updated_at = now()
+WHERE id = @id;
+
 -- name: GetStatus :one
 SELECT * FROM inventory.asset_statuses WHERE id = @id;
 
@@ -35,5 +46,10 @@ RETURNING *;
 
 -- name: ArchiveStatus :one
 UPDATE inventory.asset_statuses SET archived_at = now(), updated_at = now()
+WHERE id = @id
+RETURNING *;
+
+-- name: RestoreStatus :one
+UPDATE inventory.asset_statuses SET archived_at = NULL, updated_at = now()
 WHERE id = @id
 RETURNING *;

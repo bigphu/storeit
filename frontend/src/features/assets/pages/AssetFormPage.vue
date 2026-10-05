@@ -5,8 +5,12 @@ import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Select from 'primevue/select'
 import Textarea from 'primevue/textarea'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
+import { useTabs } from '@/app/tabs/useTabs'
+import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
+import PageHeader from '@/components/PageHeader.vue'
 import { fromDateString, toDateString } from '@/lib/dates'
 import { isApiError } from '@/lib/errors'
 import { useFormErrors } from '@/lib/forms'
@@ -15,12 +19,16 @@ import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
 import { useStatuses } from '@/features/statuses/api'
 import { useAsset, useCreateAsset, useReplaceAsset } from '../api'
 import AttributeInput from '../components/AttributeInput.vue'
+import { useListContext } from '../listContext'
+import { typeListLocation } from '../listQuery'
 import { type FormValues, fromApiValues, toApiValues } from '../values'
 
 // Không có id là tạo mới; có id là sửa (PUT thay toàn bộ)
-const props = defineProps<{ id?: string }>()
+// typeId (từ /types/:typeId/assets/new): chọn sẵn loại cho tài sản mới
+const props = defineProps<{ id?: string; typeId?: string }>()
 
 const router = useRouter()
+const listContext = useListContext()
 const errors = useFormErrors()
 const isEdit = computed(() => !!props.id)
 const { data: asset, refetch } = useAsset(() => props.id)
@@ -28,7 +36,7 @@ const { data: asset, refetch } = useAsset(() => props.id)
 const tag = ref('')
 const name = ref('')
 const description = ref('')
-const typeId = ref<string | null>(null)
+const typeId = ref<string | null>(props.typeId ?? null)
 // null: tạo mới thì backend chọn status mặc định, sửa thì giữ nguyên
 const statusId = ref<string | null>(null)
 const purchaseDate = ref<Date | null>(null)
@@ -58,6 +66,23 @@ const typeChanged = computed(() => isEdit.value && !!asset.value && typeId.value
 // valuesFor: loại mà values đang dựng theo; null là cần dựng lại
 let valuesFor: string | null = null
 
+// Chưa lưu: so form với lúc vừa nạp xong (chấm trên tab, hỏi lại khi đóng tab)
+const formState = computed(() =>
+  JSON.stringify({
+    tag: tag.value,
+    name: name.value,
+    description: description.value,
+    typeId: typeId.value,
+    statusId: statusId.value,
+    purchase: toDateString(purchaseDate.value),
+    values: values.value,
+  }),
+)
+const clean = ref<string | null>(null)
+const markClean = () => nextTick(() => (clean.value = formState.value))
+const isDirty = computed(() => clean.value !== null && formState.value !== clean.value)
+useTabDirty(() => isDirty.value)
+
 // Đổ dữ liệu tài sản vào form khi tải xong, và sau khi tải lại (409)
 watch(
   () => asset.value?.version,
@@ -71,6 +96,7 @@ watch(
     statusId.value = a.status.id
     purchaseDate.value = fromDateString(a.purchase_date)
     valuesFor = null
+    clean.value = null
   },
   { immediate: true },
 )
@@ -83,8 +109,23 @@ watch(
     valuesFor = t
     const saved = asset.value && asset.value.asset_type.id === t ? asset.value.attributes : []
     values.value = fromApiValues(attrs, saved)
+    // lần dựng đầu (vừa nạp tài sản, hay loại chọn sẵn của tài sản mới) là mốc "đã lưu"
+    if (clean.value === null) markClean()
   },
   { immediate: true },
+)
+
+// tài sản mới chưa chọn loại: mốc là form trống
+onMounted(() => {
+  if (!isEdit.value && !typeId.value) markClean()
+})
+
+useTabTitle(() =>
+  isEdit.value
+    ? asset.value && `Edit ${asset.value.tag}`
+    : selectedType.value
+      ? `New ${selectedType.value.name.toLowerCase()}`
+      : 'New asset',
 )
 
 const create = useCreateAsset()
@@ -110,8 +151,11 @@ async function submit() {
       isEdit.value && asset.value
         ? await replace.mutateAsync({ id: asset.value.id, version: asset.value.version, ...body })
         : await create.mutateAsync({ tag: tag.value, ...body })
+    clean.value = formState.value
     notify.success('Asset saved.')
-    await router.push(`/assets/${saved.id}`)
+    // tài sản mới: mở trang của nó thay cho form; sửa: quay về nơi đã mở form
+    if (isEdit.value) leave(`/assets/${saved.id}`)
+    else await router.replace(`/assets/${saved.id}`)
   } catch (err) {
     if (isApiError(err, '/errors/asset-changed')) {
       notify.info('Someone else changed this asset. Reloaded the latest version; please re-apply your edits.')
@@ -121,11 +165,30 @@ async function submit() {
     }
   }
 }
+
+// leave: quay về trang trước trong tab (danh sách hay trang tài sản) để form không ở
+// lại trong lịch sử của tab; tab mở thẳng vào form thì sang trang dự phòng
+const tabs = useTabs()
+async function leave(fallback: string) {
+  if (!(await tabs.goBack())) await router.replace(fallback)
+}
+
+const crumbs = computed<Crumb[]>(() => {
+  const t = (types.value ?? []).find((x) => x.id === (asset.value?.asset_type.id ?? typeId.value))
+  const items: Crumb[] = [{ label: 'Assets', to: '/assets' }]
+  if (t) items.push({ label: t.name, to: typeListLocation(t.id, listContext.views) })
+  if (isEdit.value && asset.value) items.push({ label: asset.value.tag, to: `/assets/${asset.value.id}` }, { label: 'Edit' })
+  else if (!isEdit.value) items.push({ label: 'New asset' })
+  return items
+})
 </script>
 
 <template>
   <section>
-    <h1>{{ isEdit ? `Edit ${asset?.tag ?? ''}` : 'New asset' }}</h1>
+    <AppBreadcrumb :items="crumbs" />
+    <PageHeader :title="isEdit ? `Edit ${asset?.tag ?? ''}` : selectedType ? `New ${selectedType.name.toLowerCase()}` : 'New asset'">
+      <span v-if="isDirty" class="dirty-note"><i class="pi pi-circle-fill" /> Unsaved changes, kept if you switch tabs</span>
+    </PageHeader>
     <form v-if="!isEdit || asset" class="form" @submit.prevent="submit">
       <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
 
@@ -194,14 +257,26 @@ async function submit() {
 
       <div class="actions">
         <Button type="submit" label="Save" :loading="busy" :disabled="!typeId" />
-        <Button
-          as="router-link"
-          :to="isEdit ? `/assets/${id}` : '/assets'"
-          label="Cancel"
-          severity="secondary"
-          text
-        />
+        <Button label="Cancel" severity="secondary" text @click="leave(isEdit ? `/assets/${id}` : props.typeId ? `/types/${props.typeId}/assets` : '/assets')" />
+        <small class="hint">Save and Cancel return to where you came from.</small>
       </div>
     </form>
   </section>
 </template>
+
+<style scoped>
+.dirty-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color);
+}
+.dirty-note .pi {
+  font-size: 0.5rem;
+  color: var(--p-primary-color);
+}
+.hint {
+  color: var(--p-text-muted-color);
+}
+</style>

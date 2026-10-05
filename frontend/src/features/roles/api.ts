@@ -38,9 +38,11 @@ function useRoleMutation<V, R>(fn: (v: V) => Promise<R>, toast = true) {
   })
 }
 
+// permissions: bắt đầu từ quyền của một role khác ("Copy …"); không có là role trống
 export function useCreateRole() {
   return useRoleMutation(
-    (body: { name: string; description?: string }) => unwrap(identityApi.POST('/roles', { body })),
+    (body: { name: string; description?: string; permissions?: string[] }) =>
+      unwrap(identityApi.POST('/roles', { body })),
     false,
   )
 }

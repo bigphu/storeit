@@ -133,18 +133,31 @@ username `resend`) with the API key in `deploy/app/secrets/smtp_password.txt`
 | Endpoint | Permission |
 |---|---|
 | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/password/forgot` (202), `POST /auth/password/set` (204) | public |
-| `PUT /auth/password`, `GET /me` | signed in |
+| `PUT /auth/password`, `GET /me`, `PATCH /me` | signed in |
 | `GET /accounts`, `GET /accounts/{accountID}` | `identity.account.read` |
-| `POST /accounts`, `PATCH /accounts/{accountID}`, `POST …/disable`, `POST …/enable`, `POST …/invitation` (202), `POST …/password-reset` (202), `PUT …/roles` | `identity.account.manage` |
+| `POST /accounts`, `PATCH /accounts/{accountID}`, `POST …/disable`, `POST …/enable`, `POST …/sign-out`, `POST …/invitation` (202), `POST …/password-reset` (202), `PUT …/roles` | `identity.account.manage` |
 | `GET /roles`, `GET /roles/{roleID}`, `GET /permissions` | `identity.role.read` |
 | `POST /roles`, `PATCH /roles/{roleID}`, `PUT /roles/{roleID}/permissions`, `DELETE /roles/{roleID}` | `identity.role.manage` |
 
+`GET /roles` and `GET /roles/{id}` include `member_count`: accounts holding the role that are
+not disabled (invited ones count); list them with `GET /accounts?role_id=`.
 `PATCH /accounts/{id}` takes `version` (409 when stale) and `clear_member_id` to unlink a member.
+`PATCH /me` lets any signed-in account change its own display name (`name`, `version`; 409 when
+stale, 403 `/errors/account-disabled` once disabled); email, roles and member stay admin-only.
 `POST /accounts` takes no password. Errors for links: 422 `/errors/invalid-password-token`
 (field `token`) for every unusable link, 409 `/errors/not-invited` when resending to an
 account that has a password, 409 `/errors/account-inactive` for a disabled account.
 `GET /accounts` defaults to page 1, size 50 (applied in the handler); `page` ≤ 100000.
 `q` matches name or email as a literal substring (`%`, `_` and `\` are not wildcards).
+`status` (`invited`/`active`/`disabled`) and `role_id` filter the list. Each item carries its
+roles and, while invited, `invite_expires_at`; `status_counts` counts accounts per status for
+the same `q` and `role_id` (ignoring `active` and `status`), for the filter buttons.
+`GET /accounts/{id}` adds `active_sessions` (not revoked, not past the absolute limit, tip
+unexpired) and `invite_expires_at`. Every account has `last_sign_in_at`, written at login into
+`identity.account_sign_ins` (not a column of `accounts`, so login never waits on the account
+row lock admin operations hold; refresh doesn't update it).
+`POST /accounts/{id}/sign-out` revokes every live session (reason `admin`) and returns how many;
+like disable, you must hold all of that account's permissions (403 otherwise).
 `PATCH /accounts/{id}` with both `member_id` and `clear_member_id` is 422
 `/errors/member-conflict`. Names (accounts, roles) may not contain control characters.
 
@@ -178,7 +191,8 @@ account that has a password, 409 `/errors/account-inactive` for a disabled accou
 `identity.account_created`, `account_updated` (field changes), `account_disabled`,
 `account_enabled`, `invitation_resent`, `invitation_accepted` (actor: the account
 itself), `password_reset_sent` (admin), `roles_assigned` (from/to), `role_created`,
-`role_updated`, `role_permissions_updated` (from/to), `role_deleted`. No events for
+`role_updated`, `role_permissions_updated` (from/to), `role_deleted`, `account_signed_out`
+(admin sign-out that ended at least one session). No events for
 sign-in, refresh, logout, the public forgot request, completing a reset, or changing
 your own password. Payloads never carry hashes or tokens.
 

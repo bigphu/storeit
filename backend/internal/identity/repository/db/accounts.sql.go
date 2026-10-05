@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -69,18 +70,74 @@ WHERE ($1::text IS NULL
        OR name ILIKE '%' || $1::text || '%'
        OR email ILIKE '%' || $1::text || '%')
   AND ($2::boolean IS NULL OR active = $2::boolean)
+  AND ($3::text IS NULL OR (CASE WHEN NOT active THEN 'disabled' WHEN password_hash IS NULL THEN 'invited' ELSE 'active' END) = $3::text)
+  AND ($4::uuid IS NULL OR EXISTS (
+        SELECT 1 FROM identity.account_roles ar
+        WHERE ar.account_id = accounts.id AND ar.role_id = $4::uuid))
 `
 
 type CountAccountsParams struct {
 	Q      *string
 	Active *bool
+	Status *string
+	RoleID *uuid.UUID
 }
 
 func (q *Queries) CountAccounts(ctx context.Context, arg CountAccountsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countAccounts, arg.Q, arg.Active)
+	row := q.db.QueryRow(ctx, countAccounts,
+		arg.Q,
+		arg.Active,
+		arg.Status,
+		arg.RoleID,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const countAccountsByStatus = `-- name: CountAccountsByStatus :many
+SELECT (CASE WHEN NOT active THEN 'disabled' WHEN password_hash IS NULL THEN 'invited' ELSE 'active' END)::text AS status, count(*)::bigint AS n
+FROM identity.accounts
+WHERE ($1::text IS NULL
+       OR name ILIKE '%' || $1::text || '%'
+       OR email ILIKE '%' || $1::text || '%')
+  AND ($2::uuid IS NULL OR EXISTS (
+        SELECT 1 FROM identity.account_roles ar
+        WHERE ar.account_id = accounts.id AND ar.role_id = $2::uuid))
+GROUP BY 1
+`
+
+type CountAccountsByStatusParams struct {
+	Q      *string
+	RoleID *uuid.UUID
+}
+
+type CountAccountsByStatusRow struct {
+	Status string
+	N      int64
+}
+
+// Số account theo trạng thái với cùng tìm kiếm và lọc role, bỏ qua lọc trạng thái
+// (đếm cho các nút lọc)
+// trạng thái suy ra như domain.Account.Status
+func (q *Queries) CountAccountsByStatus(ctx context.Context, arg CountAccountsByStatusParams) ([]CountAccountsByStatusRow, error) {
+	rows, err := q.db.Query(ctx, countAccountsByStatus, arg.Q, arg.RoleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountAccountsByStatusRow{}
+	for rows.Next() {
+		var i CountAccountsByStatusRow
+		if err := rows.Scan(&i.Status, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const countActiveAccountsWithRole = `-- name: CountActiveAccountsWithRole :one
@@ -273,13 +330,19 @@ WHERE ($1::text IS NULL
        OR name ILIKE '%' || $1::text || '%'
        OR email ILIKE '%' || $1::text || '%')
   AND ($2::boolean IS NULL OR active = $2::boolean)
+  AND ($3::text IS NULL OR (CASE WHEN NOT active THEN 'disabled' WHEN password_hash IS NULL THEN 'invited' ELSE 'active' END) = $3::text)
+  AND ($4::uuid IS NULL OR EXISTS (
+        SELECT 1 FROM identity.account_roles ar
+        WHERE ar.account_id = accounts.id AND ar.role_id = $4::uuid))
 ORDER BY name, id
-LIMIT $4 OFFSET $3
+LIMIT $6 OFFSET $5
 `
 
 type ListAccountsParams struct {
 	Q      *string
 	Active *bool
+	Status *string
+	RoleID *uuid.UUID
 	Off    int32
 	Lim    int32
 }
@@ -288,6 +351,8 @@ func (q *Queries) ListAccounts(ctx context.Context, arg ListAccountsParams) ([]I
 	rows, err := q.db.Query(ctx, listAccounts,
 		arg.Q,
 		arg.Active,
+		arg.Status,
+		arg.RoleID,
 		arg.Off,
 		arg.Lim,
 	)
@@ -319,6 +384,96 @@ func (q *Queries) ListAccounts(ctx context.Context, arg ListAccountsParams) ([]I
 	return items, nil
 }
 
+const listInviteExpiries = `-- name: ListInviteExpiries :many
+SELECT account_id, expires_at FROM identity.password_tokens
+WHERE purpose = 'invite' AND account_id = ANY($1::uuid[])
+`
+
+type ListInviteExpiriesRow struct {
+	AccountID uuid.UUID
+	ExpiresAt time.Time
+}
+
+// Hạn link mời còn hiệu lực của nhiều account
+func (q *Queries) ListInviteExpiries(ctx context.Context, ids []uuid.UUID) ([]ListInviteExpiriesRow, error) {
+	rows, err := q.db.Query(ctx, listInviteExpiries, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInviteExpiriesRow{}
+	for rows.Next() {
+		var i ListInviteExpiriesRow
+		if err := rows.Scan(&i.AccountID, &i.ExpiresAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLastSignIns = `-- name: ListLastSignIns :many
+SELECT account_id, last_at FROM identity.account_sign_ins WHERE account_id = ANY($1::uuid[])
+`
+
+func (q *Queries) ListLastSignIns(ctx context.Context, ids []uuid.UUID) ([]IdentityAccountSignIn, error) {
+	rows, err := q.db.Query(ctx, listLastSignIns, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []IdentityAccountSignIn{}
+	for rows.Next() {
+		var i IdentityAccountSignIn
+		if err := rows.Scan(&i.AccountID, &i.LastAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRolesOfAccounts = `-- name: ListRolesOfAccounts :many
+SELECT ar.account_id, r.id, r.name
+FROM identity.account_roles ar
+JOIN identity.roles r ON r.id = ar.role_id
+WHERE ar.account_id = ANY($1::uuid[])
+ORDER BY ar.account_id, r.name, r.id
+`
+
+type ListRolesOfAccountsRow struct {
+	AccountID uuid.UUID
+	ID        uuid.UUID
+	Name      string
+}
+
+// Role của nhiều account một lần (danh sách account)
+func (q *Queries) ListRolesOfAccounts(ctx context.Context, ids []uuid.UUID) ([]ListRolesOfAccountsRow, error) {
+	rows, err := q.db.Query(ctx, listRolesOfAccounts, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRolesOfAccountsRow{}
+	for rows.Next() {
+		var i ListRolesOfAccountsRow
+		if err := rows.Scan(&i.AccountID, &i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockRole = `-- name: LockRole :one
 SELECT id FROM identity.roles WHERE id = $1 FOR NO KEY UPDATE
 `
@@ -331,6 +486,16 @@ func (q *Queries) LockRole(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	var id_2 uuid.UUID
 	err := row.Scan(&id_2)
 	return id_2, err
+}
+
+const recordSignIn = `-- name: RecordSignIn :exec
+INSERT INTO identity.account_sign_ins (account_id, last_at) VALUES ($1, now())
+ON CONFLICT (account_id) DO UPDATE SET last_at = excluded.last_at
+`
+
+func (q *Queries) RecordSignIn(ctx context.Context, accountID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, recordSignIn, accountID)
+	return err
 }
 
 const setAccountActive = `-- name: SetAccountActive :one

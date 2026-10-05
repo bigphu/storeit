@@ -2,7 +2,6 @@
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import Dialog from 'primevue/dialog'
-import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Select from 'primevue/select'
@@ -24,6 +23,7 @@ const label = ref('')
 const dataType = ref<DataType>('text')
 const unit = ref('')
 const required = ref(false)
+// thuộc tính mới đứng cuối; đổi thứ tự bằng kéo thả trong bảng
 const position = ref(0)
 // option của thuộc tính select mới: mỗi dòng một nhãn
 const optionsText = ref('')
@@ -72,7 +72,6 @@ async function submit() {
         attrId: a.id,
         label: label.value,
         is_required: required.value,
-        position: position.value,
         data_type: dataType.value !== a.data_type ? dataType.value : undefined,
         unit: unit.value !== (a.unit ?? '') ? unit.value : undefined,
       })
@@ -118,10 +117,6 @@ async function submit() {
       <div class="actions">
         <Checkbox v-model="required" input-id="attr-required" binary />
         <label for="attr-required">Required</label>
-      </div>
-      <div class="field">
-        <label for="attr-position">Position</label>
-        <InputNumber v-model="position" input-id="attr-position" :use-grouping="false" />
       </div>
       <div class="actions">
         <Button type="submit" label="Save" :loading="add.isPending.value || update.isPending.value" />

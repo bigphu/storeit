@@ -120,7 +120,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Change your own display name (any signed-in account) */
+        patch: operations["updateMe"];
         trace?: never;
     };
     "/accounts": {
@@ -174,6 +175,25 @@ export interface paths {
         put?: never;
         /** Disable an account and sign out all its devices (identity.account.manage) */
         post: operations["disableAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{accountID}/sign-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountID: components["parameters"]["AccountID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign an account out of every device (identity.account.manage) */
+        post: operations["signOutAccount"];
         delete?: never;
         options?: never;
         head?: never;
@@ -347,6 +367,14 @@ export interface components {
             expires_at: string;
             account: components["schemas"]["Account"];
         };
+        UpdateMeRequest: {
+            name: string;
+            /**
+             * Format: int32
+             * @description The version you last read; a newer one returns 409
+             */
+            version: number;
+        };
         ChangePasswordRequest: {
             current_password: string;
             new_password: string;
@@ -357,13 +385,14 @@ export interface components {
             name: string;
             member_id?: components["schemas"]["ID"];
             active: boolean;
-            /**
-             * @description invited = has not set a password yet
-             * @enum {string}
-             */
-            status: "invited" | "active" | "disabled";
+            status: components["schemas"]["AccountStatus"];
             /** Format: int32 */
             version: number;
+            /**
+             * Format: date-time
+             * @description Last time the account signed in (refreshing a session doesn't count)
+             */
+            last_sign_in_at?: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -375,9 +404,42 @@ export interface components {
         };
         AccountDetail: components["schemas"]["Account"] & {
             roles: components["schemas"]["RoleSummary"][];
+            /**
+             * Format: int64
+             * @description Sessions still usable; only on GET /accounts/{accountID}
+             */
+            active_sessions?: number;
+            /**
+             * Format: date-time
+             * @description When the pending invitation link stops working; only on GET /accounts/{accountID}
+             */
+            invite_expires_at?: string;
+        };
+        AccountListItem: components["schemas"]["Account"] & {
+            roles: components["schemas"]["RoleSummary"][];
+            /**
+             * Format: date-time
+             * @description When the pending invitation link stops working (invited accounts)
+             */
+            invite_expires_at?: string;
+        };
+        /**
+         * @description invited = has not set a password yet
+         * @enum {string}
+         */
+        AccountStatus: "invited" | "active" | "disabled";
+        /** @description Accounts per status for the same q and role_id, ignoring active and status */
+        AccountStatusCounts: {
+            /** Format: int64 */
+            invited: number;
+            /** Format: int64 */
+            active: number;
+            /** Format: int64 */
+            disabled: number;
         };
         AccountList: components["schemas"]["Paged"] & {
-            items: components["schemas"]["Account"][];
+            items: components["schemas"]["AccountListItem"][];
+            status_counts: components["schemas"]["AccountStatusCounts"];
         };
         Me: {
             account: components["schemas"]["Account"];
@@ -418,6 +480,11 @@ export interface components {
             description: string;
             is_system: boolean;
             permissions: string[];
+            /**
+             * Format: int64
+             * @description Accounts that hold the role and are not disabled; on GET /roles and GET /roles/{roleID}
+             */
+            member_count?: number;
         };
         CreateRoleRequest: {
             name: string;
@@ -665,6 +732,31 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    updateMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMeRequest"];
+            };
+        };
+        responses: {
+            /** @description Your account after the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     listAccounts: {
         parameters: {
             query?: {
@@ -673,6 +765,10 @@ export interface operations {
                 /** @description Search by name or email */
                 q?: string;
                 active?: boolean;
+                /** @description Only accounts with this status */
+                status?: components["schemas"]["AccountStatus"];
+                /** @description Only accounts holding this role */
+                role_id?: components["schemas"]["ID"];
             };
             header?: never;
             path?: never;
@@ -785,6 +881,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccountDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    signOutAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountID: components["parameters"]["AccountID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions ended */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description Number of sessions that were still live
+                         */
+                        revoked: number;
+                    };
                 };
             };
             default: components["responses"]["Problem"];

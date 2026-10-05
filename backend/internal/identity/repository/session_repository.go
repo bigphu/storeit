@@ -52,6 +52,10 @@ func (r *SessionRepository) Start(ctx context.Context, s domain.NewSession) (uui
 		}); err != nil {
 			return fmt.Errorf("identity: create refresh token: %w", err)
 		}
+		// bảng riêng: chỉ lấy KEY SHARE trên account (FK), không chờ khoá hàng account
+		if err := q.RecordSignIn(ctx, s.AccountID); err != nil {
+			return fmt.Errorf("identity: record sign-in: %w", err)
+		}
 		return nil
 	})
 	return famID, err

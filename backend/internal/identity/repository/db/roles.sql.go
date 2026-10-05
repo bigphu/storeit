@@ -11,6 +11,40 @@ import (
 	"github.com/google/uuid"
 )
 
+const countActiveMembersByRole = `-- name: CountActiveMembersByRole :many
+SELECT ar.role_id, count(*)::bigint AS n
+FROM identity.account_roles ar
+JOIN identity.accounts a ON a.id = ar.account_id
+WHERE a.active
+GROUP BY ar.role_id
+`
+
+type CountActiveMembersByRoleRow struct {
+	RoleID uuid.UUID
+	N      int64
+}
+
+// Số account chưa bị khoá (kể cả đang được mời) giữ mỗi role (trang vai trò)
+func (q *Queries) CountActiveMembersByRole(ctx context.Context) ([]CountActiveMembersByRoleRow, error) {
+	rows, err := q.db.Query(ctx, countActiveMembersByRole)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountActiveMembersByRoleRow{}
+	for rows.Next() {
+		var i CountActiveMembersByRoleRow
+		if err := rows.Scan(&i.RoleID, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countRoleAssignments = `-- name: CountRoleAssignments :one
 SELECT count(*) FROM identity.account_roles WHERE role_id = $1
 `

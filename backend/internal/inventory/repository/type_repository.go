@@ -236,6 +236,119 @@ func (r *TypeRepository) RemoveAttribute(ctx context.Context, typeID, attrID uui
 	})
 }
 
+func (r *TypeRepository) ReorderAttributes(ctx context.Context, typeID uuid.UUID, ids []uuid.UUID) (domain.AssetType, error) {
+	var out domain.AssetType
+	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
+		q := r.q.WithTx(tx)
+		// khoá loại: thêm/gỡ thuộc tính cùng lúc phải đợi
+		if _, err := lockType(ctx, q, typeID); err != nil {
+			return err
+		}
+		rows, err := q.ListAttributes(ctx, typeID)
+		if err != nil {
+			return fmt.Errorf("inventory: list attributes: %w", err)
+		}
+		cur := make(map[uuid.UUID]db.InventoryAssetTypeAttribute, len(rows))
+		for _, row := range rows {
+			if row.RemovedAt == nil {
+				cur[row.ID] = row
+			}
+		}
+		if !sameIDs(ids, cur) {
+			return domain.ErrInvalidOrder
+		}
+		var changes []contract.FieldChange
+		for i, id := range ids {
+			row, pos := cur[id], int32(i+1)
+			if row.Position == pos {
+				continue
+			}
+			if err := q.SetAttributePosition(ctx, db.SetAttributePositionParams{ID: id, Position: pos}); err != nil {
+				return fmt.Errorf("inventory: set attribute position: %w", err)
+			}
+			changes = append(changes, change("attributes."+row.Key+".position", row.Position, pos))
+		}
+		if err := r.updated(ctx, tx, typeID, changes); err != nil {
+			return err
+		}
+		out, err = loadType(ctx, q, typeID)
+		return err
+	})
+	return out, err
+}
+
+func (r *TypeRepository) ReorderOptions(ctx context.Context, typeID, attrID uuid.UUID, ids []uuid.UUID) (domain.Attribute, error) {
+	var out domain.Attribute
+	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
+		q := r.q.WithTx(tx)
+		a, err := lockAttribute(ctx, q, typeID, attrID)
+		if err != nil {
+			return err
+		}
+		if a.DataType != domain.TypeSelect {
+			return domain.ErrNotSelectAttribute
+		}
+		opts, err := attributeOptions(ctx, q, typeID, attrID)
+		if err != nil {
+			return err
+		}
+		cur := make(map[uuid.UUID]domain.Option, len(opts))
+		for _, o := range opts {
+			if o.RemovedAt == nil {
+				cur[o.ID] = o
+			}
+		}
+		if !sameIDs(ids, cur) {
+			return domain.ErrInvalidOrder
+		}
+		var changes []contract.FieldChange
+		for i, id := range ids {
+			o, pos := cur[id], int32(i+1)
+			if o.Position == pos {
+				continue
+			}
+			if err := q.SetOptionPosition(ctx, db.SetOptionPositionParams{ID: id, Position: pos}); err != nil {
+				return fmt.Errorf("inventory: set option position: %w", err)
+			}
+			changes = append(changes, change("attributes."+a.Key+".options."+o.Label+".position", o.Position, pos))
+		}
+		if err := r.updated(ctx, tx, typeID, changes); err != nil {
+			return err
+		}
+		out = a
+		out.Options, err = attributeOptions(ctx, q, typeID, attrID)
+		return err
+	})
+	return out, err
+}
+
+// sameIDs: ids gồm đúng các khoá của cur, mỗi khoá một lần
+func (r *TypeRepository) AttributeLabels(ctx context.Context) (map[uuid.UUID][]string, error) {
+	rows, err := r.q.ListActiveAttributeLabels(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("inventory: list attribute labels: %w", err)
+	}
+	out := make(map[uuid.UUID][]string)
+	for _, row := range rows {
+		out[row.AssetTypeID] = append(out[row.AssetTypeID], row.Label)
+	}
+	return out, nil
+}
+
+func sameIDs[T any](ids []uuid.UUID, cur map[uuid.UUID]T) bool {
+	if len(ids) != len(cur) {
+		return false
+	}
+	seen := make(map[uuid.UUID]bool, len(ids))
+	for _, id := range ids {
+		if _, ok := cur[id]; !ok || seen[id] {
+			return false
+		}
+		seen[id] = true
+	}
+	return true
+}
+
 func (r *TypeRepository) AddOption(ctx context.Context, typeID, attrID uuid.UUID, label string, position int32) (domain.Option, error) {
 	var out domain.Option
 	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {

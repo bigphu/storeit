@@ -10,13 +10,16 @@ export const typeKeys = {
   one: (id: string) => ['asset-types', id] as const,
 }
 
-export function useAssetTypes(includeArchived: MaybeRefOrGetter<boolean> = false) {
+// withCounts: kèm asset_count (tài sản chưa retire) cho sidebar và bộ chọn loại
+export function useAssetTypes(includeArchived: MaybeRefOrGetter<boolean> = false, withCounts = false) {
   return useQuery({
-    queryKey: computed(() => typeKeys.list(toValue(includeArchived))),
+    queryKey: computed(() => [...typeKeys.list(toValue(includeArchived)), withCounts] as const),
     queryFn: async () =>
       (
         await unwrap(
-          inventoryApi.GET('/asset-types', { params: { query: { include_archived: toValue(includeArchived) } } }),
+          inventoryApi.GET('/asset-types', {
+            params: { query: { include_archived: toValue(includeArchived), with_counts: withCounts || undefined } },
+          }),
         )
       ).items,
   })
@@ -140,6 +143,24 @@ export function useRemoveOption() {
     unwrap(
       inventoryApi.DELETE('/asset-types/{typeID}/attributes/{attributeID}/options/{optionID}', {
         params: { path: { typeID: typeId, attributeID: attrId, optionID: optionId } },
+      }),
+    ),
+  )
+}
+
+// Kéo thả: gửi mọi id đang hoạt động theo thứ tự mới, một lần
+export function useReorderAttributes() {
+  return useTypeMutation(({ typeId, ids }: { typeId: string; ids: string[] }) =>
+    unwrap(inventoryApi.PUT('/asset-types/{typeID}/attributes/order', { ...typePath(typeId), body: { ids } })),
+  )
+}
+
+export function useReorderOptions() {
+  return useTypeMutation(({ typeId, attrId, ids }: { typeId: string; attrId: string; ids: string[] }) =>
+    unwrap(
+      inventoryApi.PUT('/asset-types/{typeID}/attributes/{attributeID}/options/order', {
+        ...attrPath(typeId, attrId),
+        body: { ids },
       }),
     ),
   )

@@ -40,6 +40,12 @@ SELECT * FROM inventory.asset_type_attributes
 WHERE asset_type_id = @asset_type_id
 ORDER BY position, lower(label), id;
 
+-- Nhãn thuộc tính đang dùng của mọi loại, theo thứ tự hiển thị (thẻ ở trang loại)
+-- name: ListActiveAttributeLabels :many
+SELECT asset_type_id, label FROM inventory.asset_type_attributes
+WHERE removed_at IS NULL
+ORDER BY asset_type_id, position, lower(label), id;
+
 -- name: GetAttributeForUpdate :one
 SELECT * FROM inventory.asset_type_attributes
 WHERE id = @id AND asset_type_id = @asset_type_id
@@ -77,6 +83,13 @@ ORDER BY o.position, lower(o.label), o.id;
 SELECT * FROM inventory.asset_attribute_options
 WHERE id = @id AND attribute_id = @attribute_id
 FOR NO KEY UPDATE;
+
+-- Sắp xếp lại (kéo thả): chỉ đổi vị trí
+-- name: SetAttributePosition :exec
+UPDATE inventory.asset_type_attributes SET position = @position, updated_at = now() WHERE id = @id;
+
+-- name: SetOptionPosition :exec
+UPDATE inventory.asset_attribute_options SET position = @position, updated_at = now() WHERE id = @id;
 
 -- name: UpdateOption :one
 UPDATE inventory.asset_attribute_options

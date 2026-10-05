@@ -199,7 +199,7 @@ func TestPermissionChecks(t *testing.T) {
 	id := target.ID
 	calls := map[string]func(ctx context.Context) error{
 		"ListAccounts": func(ctx context.Context) error {
-			_, _, err := e.svc.ListAccounts(ctx, domain.AccountFilter{})
+			_, err := e.svc.ListAccounts(ctx, domain.AccountFilter{})
 			return err
 		},
 		"GetAccount": func(ctx context.Context) error { _, err := e.svc.GetAccount(ctx, id); return err },
@@ -213,6 +213,7 @@ func TestPermissionChecks(t *testing.T) {
 		},
 		"DisableAccount":    func(ctx context.Context) error { _, err := e.svc.DisableAccount(ctx, id); return err },
 		"EnableAccount":     func(ctx context.Context) error { _, err := e.svc.EnableAccount(ctx, id); return err },
+		"SignOutEverywhere": func(ctx context.Context) error { _, err := e.svc.SignOutEverywhere(ctx, id); return err },
 		"ResendInvitation":  func(ctx context.Context) error { return e.svc.ResendInvitation(ctx, id) },
 		"SendPasswordReset": func(ctx context.Context) error { return e.svc.SendPasswordReset(ctx, id) },
 		"AssignRoles":       func(ctx context.Context) error { _, err := e.svc.AssignRoles(ctx, id, nil); return err },
@@ -227,8 +228,9 @@ func TestPermissionChecks(t *testing.T) {
 			_, err := e.svc.UpdateRolePermissions(ctx, domain.EmployeeRoleID, nil)
 			return err
 		},
-		"DeleteRole":      func(ctx context.Context) error { return e.svc.DeleteRole(ctx, domain.EmployeeRoleID) },
-		"ListPermissions": func(ctx context.Context) error { _, err := e.svc.ListPermissions(ctx); return err },
+		"DeleteRole":       func(ctx context.Context) error { return e.svc.DeleteRole(ctx, domain.EmployeeRoleID) },
+		"ListPermissions":  func(ctx context.Context) error { _, err := e.svc.ListPermissions(ctx); return err },
+		"RoleMemberCounts": func(ctx context.Context) error { _, err := e.svc.RoleMemberCounts(ctx); return err },
 	}
 	for name, call := range calls {
 		if err := call(context.Background()); status(err) != 401 {
@@ -412,5 +414,32 @@ func TestBootstrap_ConcurrentStart(t *testing.T) {
 	created, err := e.svc.Bootstrap(context.Background(), "root@storeit.test", goodPassword)
 	if err != nil || created {
 		t.Errorf("second replica bootstrap = %v, %v, want no-op", created, err)
+	}
+}
+
+func TestUpdateMe(t *testing.T) {
+	e := newEnv(t)
+	a := e.seed(t, "lan@storeit.test", true, domain.EmployeeRoleID)
+	ctx := as(a.ID) // không cần identity.account.manage: chỉ sửa chính mình
+
+	me, err := e.svc.UpdateMe(ctx, "  Lan Tran ", a.Version)
+	if err != nil || me.Account.Name != "Lan Tran" || me.Account.ID != a.ID {
+		t.Fatalf("update me = %+v, %v", me.Account, err)
+	}
+	if _, err := e.svc.UpdateMe(ctx, "Lan T", a.Version); !errors.Is(err, domain.ErrAccountChanged) {
+		t.Errorf("stale version: %v, want ErrAccountChanged", err)
+	}
+	for _, bad := range []string{"", "   ", "Lan\nBcc: x@y"} {
+		if _, err := e.svc.UpdateMe(ctx, bad, me.Account.Version); !errors.Is(err, domain.ErrInvalidName) {
+			t.Errorf("name %q: %v, want ErrInvalidName", bad, err)
+		}
+	}
+	if _, err := e.svc.UpdateMe(context.Background(), "X", 1); status(err) != 401 {
+		t.Errorf("without actor: %v", err)
+	}
+
+	off := e.seed(t, "off@storeit.test", false)
+	if _, err := e.svc.UpdateMe(as(off.ID), "Off", off.Version); !errors.Is(err, domain.ErrAccountDisabled) {
+		t.Errorf("disabled account renames itself: %v, want ErrAccountDisabled", err)
 	}
 }

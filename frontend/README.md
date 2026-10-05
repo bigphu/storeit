@@ -51,6 +51,25 @@ TLS is the job of the reverse proxy in front. The build puts bundles under `/sta
 | `src/lib/auth` | Token handling (`tokens.ts`: bearer, one shared refresh, retry once), session store (`session.ts`: `/me`, sign in/out, `can(perm)`), permission codes |
 | `src/lib` | `errors.ts` (`ApiError`, `unwrap`, `describeError`), `forms.ts` (field errors), `query.ts` (Vue Query client, default error toasts), `urlState.ts`, `dates.ts`, `notify.ts` |
 | `src/features/<feature>` | `api.ts` (Vue Query hooks), `pages/`, `components/` |
+| `src/components` | Shared building blocks over PrimeVue (below) |
+
+## Shared components
+
+Build pages from these instead of restyling PrimeVue per page, so the same thing looks and
+behaves the same everywhere.
+
+| Component | Use it for |
+|---|---|
+| `PageHeader` | List page title, one-line subtitle, primary action (default slot) |
+| `DetailHeader` | Detail page header card: `#media`, title + `#tags`, details (default slot), `#actions` |
+| `CardGrid`, `EntityCard`, `AddCard` | Card grids (asset types, roles). `EntityCard` opens `to` on click/Enter, Ctrl/middle-click opens a new tab, emits `menu` on right-click; `AddCard` is the dashed "New …" tile and stretches to the row height |
+| `SegmentedFilter` | One-of-few switches (status filters with `count`, Cards/Table with `icon-only`) |
+| `IconAction` | Every icon-only action: tooltip and `aria-label` from `label`, `danger`, `to` for real links, `disabled` + `reason` shows why in the tooltip |
+| `PersonCell` | Avatar + name + email in tables (`muted` for disabled, `you`) |
+| `SaveBar` | Sticky unsaved-changes bar with Discard/Save; `blocked` when a rule (lock-out) forbids saving |
+| `AppBreadcrumb` | Breadcrumb with the per-tab back button |
+
+Selection styling lives in `app/theme.ts` (token preset over Aura) and `app/base.css`.
 
 ## Rules worth knowing
 
@@ -65,6 +84,40 @@ TLS is the job of the reverse proxy in front. The build puts bundles under `/sta
   `holder_member_id` even though it doesn't show them.
 - Asset list state (filters, attribute filters, sort, page) lives in the URL using the API
   parameter names (`features/assets/listQuery.ts`).
+- Navigation: the sidebar (`app/layouts/AppSidebar.vue`) has a workspace level (All assets
+  expanding to every type with counts from `GET /asset-types?with_counts=true`,
+  Configuration, Administration) and a type level for routes under `/types/:typeId`
+  and an asset's own pages (Assets, Settings). `Ctrl K` or the switcher opens
+  `TypeSwitcher.vue`; choosing a type keeps the section (`app/useTypeNav.ts`).
+  Old `/asset-types…` and `/assets?type_id=` links redirect.
+- Account settings live at `/account/(profile|password|preferences)`; preferences (theme,
+  density, default rows per page, tables with their own size, recent types) are per
+  account on the device (`lib/preferences.ts`). The theme toggles `app-dark` on `<html>`,
+  PrimeVue's `darkModeSelector`; compact density overrides the DataTable padding tokens.
+- Single-key shortcuts of a page go through `usePageKeys` (`lib/pageKeys.ts`): it listens
+  only while the page is shown, so cached pages in background tabs don't react. `?` shows
+  every shortcut.
+- Build UI from PrimeVue v4 components (Breadcrumb, DataTable paginator, ContextMenu,
+  Dialog, ConfirmDialog…) before writing custom markup.
+- Tabs inside the app (`app/tabs/`): every place opened with Ctrl/⌘-click or middle-click
+  (any internal link, or `openLocation(…, e)` from code) becomes a background tab;
+  opening a page that already has a tab focuses it (lists may open more than once).
+  The URL is always the active tab's location (`useTabs().sync`). Pages are kept alive
+  per tab (`KeepAlive` keyed by tab and route), so:
+  - read the URL query through `useTabQuery()` (or `useUrlState`), never `useRoute().query`
+    directly in a page, or a page in a background tab follows another tab's URL;
+  - name the tab with `useTabTitle(() => …)`, mark unsaved forms with `useTabDirty`;
+  - go back within a tab with `useTabs().goBack()`, not `router.back()` (browser history
+    mixes all tabs).
+  Open and pinned tabs are saved per account on the device; the "Reopen my tabs"
+  preference decides whether unpinned tabs come back after signing in. `Alt 1–9` jumps.
+- Each type's asset list remembers its attribute filters, sort and page (`switchType`,
+  kept per browser tab in `features/assets/listContext.ts`); search, status and
+  “include retired” carry across types. The same store remembers the last list viewed,
+  so the asset page can return to it and step through it (`J`/`K`).
+- Rows per page: every paged table passes `rowsPerPageOptions` and keeps its own size
+  through `usePageSize(tableKey)` (`lib/preferences.ts`, per account in localStorage);
+  tables without a size use the default.
 - **Stay on PrimeVue 4.x, `@primeuix/themes` 2.x and `primeicons` 7.x (MIT).** From
   PrimeVue 5 / primeicons 8 (July 2026) PrimeTek ships them under a commercial "PrimeUI"
   license that needs a license key (a free Community key exists for eligible users);
