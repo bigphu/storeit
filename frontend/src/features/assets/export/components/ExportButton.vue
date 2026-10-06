@@ -19,12 +19,13 @@ function dataExport() {
   run({ mode: 'data', filters: props.scope.filters }, 'storeit-assets.xlsx')
 }
 const items = computed<MenuItem[]>(() => [
-  { label: 'Export report…', icon: 'pi pi-file-edit', command: () => emit('report') },
-  { label: 'Data export (.xlsx)', icon: 'pi pi-table', command: dataExport },
+  { label: 'Export report…', icon: 'pi pi-file-edit', disabled: running.value, command: () => emit('report') },
+  { label: 'Data export (.xlsx)', icon: 'pi pi-table', disabled: running.value, command: dataExport },
   ...(profiles.value?.length ? [{ separator: true }] : []),
   ...(profiles.value ?? []).slice(0, 3).map((p) => ({
     label: p.name,
     icon: 'pi pi-bolt',
+    disabled: running.value,
     command: () => run({ mode: 'report', filters: props.scope.filters, profile_id: p.id }, `${p.name}.xlsx`),
   })),
   { separator: true },

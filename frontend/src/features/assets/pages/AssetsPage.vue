@@ -183,7 +183,7 @@ function openReport(selection: boolean, profileId?: string) {
   reportProfile.value = profileId
   reportOpen.value = true
 }
-const { run: runExport } = useExport()
+const { run: runExport, running: exporting } = useExport()
 
 const tableSort = computed(() => toTableSort(state.value.sort))
 
@@ -344,17 +344,19 @@ function cell(row: AssetListItem, key: string) {
 
     <div v-if="selected.length" class="selection-bar" role="region" aria-label="Selected assets">
       <span class="selection-count">{{ selected.length }} selected</span>
-      <Button label="Change status" icon="pi pi-tag" size="small" @click="openBulk('status')" />
-      <Button label="Retire" icon="pi pi-ban" size="small" severity="danger" outlined @click="openBulk('retire')" />
+      <Button v-if="canManage" label="Change status" icon="pi pi-tag" size="small" @click="openBulk('status')" />
+      <Button v-if="canManage" label="Retire" icon="pi pi-ban" size="small" severity="danger" outlined @click="openBulk('retire')" />
       <Button
         v-if="canExport"
         label="Export selected"
         icon="pi pi-download"
         size="small"
         outlined
+        :loading="exporting"
+        :disabled="exporting"
         @click="runExport({ mode: 'data', filters: selectionScope.filters }, 'storeit-assets.xlsx')"
       />
-      <Button v-if="canExport" label="Report from selected…" icon="pi pi-file-edit" size="small" outlined @click="openReport(true)" />
+      <Button v-if="canExport" label="Report from selected…" icon="pi pi-file-edit" size="small" outlined :disabled="exporting" @click="openReport(true)" />
       <Button label="Clear selection" size="small" text severity="secondary" @click="selected = []" />
     </div>
     <BulkActionDialog v-model:visible="bulkOpen" :mode="bulkMode" :rows="selected" @done="selected = []" />
@@ -385,7 +387,7 @@ function cell(row: AssetListItem, key: string) {
       @row-click="onRowClick"
       @row-contextmenu="onRowContextMenu"
     >
-      <Column v-if="canManage" selection-mode="multiple" header-style="width: 3rem" body-class="select-cell" />
+      <Column v-if="canManage || canExport" selection-mode="multiple" header-style="width: 3rem" body-class="select-cell" />
       <Column header="Tag" sort-field="tag" sortable body-class="tag-cell">
         <template #body="{ data: a }: { data: AssetListItem }">
           <RouterLink :to="`/assets/${a.id}`">{{ a.tag }}</RouterLink>

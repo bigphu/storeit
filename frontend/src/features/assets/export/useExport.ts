@@ -9,6 +9,8 @@ export function useExport() {
   const running = ref(false)
   // trả true khi tải xong, false khi lỗi (đã báo)
   async function run(body: ExportRequest, fallbackName: string): Promise<boolean> {
+    // đang chạy thì bỏ qua lần bấm thêm, tránh tải hai file cùng lúc
+    if (running.value) return false
     running.value = true
     try {
       const { name, skipped } = await exportAssets(body, fallbackName)
