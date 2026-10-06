@@ -39,6 +39,11 @@ var (
 	ErrNotSelectAttribute = errs.Unprocessable("/errors/not-select-attribute", "Not a choice attribute",
 		errs.WithDetail("Only select attributes have options."))
 
+	ErrInvalidExportLayout = errs.Unprocessable("/errors/invalid-export-layout", "Invalid export layout")
+	ErrExportTooLarge      = errs.Unprocessable("/errors/export-too-large", "Too many rows to export")
+	ErrInvalidExportIDs    = errs.Unprocessable("/errors/invalid-export-selection", "Invalid selection",
+		errs.WithFields(errs.FieldError{Field: "filters.ids", Detail: "choose between 1 and 200 assets"}))
+
 	ErrTagTaken            = errs.Conflict("/errors/tag-taken", "Asset tag already in use")
 	ErrTypeCodeTaken       = errs.Conflict("/errors/type-code-taken", "Asset type code already in use")
 	ErrTypeNameTaken       = errs.Conflict("/errors/type-name-taken", "Asset type name already in use")
@@ -60,10 +65,16 @@ var (
 		errs.WithDetail("Built-in statuses cannot be archived or change kind."))
 	ErrStatusIsDefault = errs.Conflict("/errors/status-is-default", "Default status",
 		errs.WithDetail("Make another status the default of this kind before archiving it."))
+	ErrExportProfileNameTaken = errs.Conflict("/errors/export-profile-name-taken", "You already have a profile with this name")
+	ErrExportProfileChanged   = errs.Conflict("/errors/export-profile-changed", "Profile changed",
+		errs.WithDetail("The profile was changed by someone else. Reload it and try again."))
+	ErrExportProfileForbidden = errs.Forbidden("/errors/export-profile-forbidden", "Can't change this profile",
+		errs.WithDetail("Only its owner, or someone who can manage export profiles, can change a shared profile."))
 
 	ErrAssetNotFound     = errs.NotFound("/errors/asset-not-found", "Asset not found")
 	ErrTypeNotFound      = errs.NotFound("/errors/asset-type-not-found", "Asset type not found")
 	ErrAttributeNotFound = errs.NotFound("/errors/attribute-not-found", "Attribute not found")
 	ErrOptionNotFound    = errs.NotFound("/errors/option-not-found", "Option not found")
 	ErrStatusNotFound    = errs.NotFound("/errors/status-not-found", "Status not found")
+	ErrExportProfileNotFound = errs.NotFound("/errors/export-profile-not-found", "Export profile not found")
 )

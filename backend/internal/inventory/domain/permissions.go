@@ -9,6 +9,9 @@ const (
 	PermAssetManage  = "inventory.asset.manage"
 	PermTypeManage   = "inventory.type.manage"
 	PermStatusManage = "inventory.status.manage"
+
+	PermAssetExport         = "inventory.asset.export"          // tải danh sách tài sản dạng Excel, lưu profile của mình
+	PermExportProfileManage = "inventory.export_profile.manage" // sửa, xoá profile người khác chia sẻ
 )
 
 // ID cố định của dữ liệu seed
