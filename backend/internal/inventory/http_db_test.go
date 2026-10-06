@@ -683,6 +683,27 @@ func TestExportOverHTTP(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("report export: %d %s", rec.Code, rec.Body)
 	}
+	rep, err := excelize.OpenReader(rec.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repRows, _ := rep.GetRows("Báo cáo")
+	if len(repRows) < 4 {
+		t.Fatalf("report rows = %q", repRows)
+	}
+	hdr, data := repRows[len(repRows)-3], repRows[len(repRows)-2:]
+	if len(hdr) != 1 || hdr[0] != "Tag" {
+		t.Errorf("header = %q", hdr)
+	}
+	wantTags := []string{strings.ToUpper(fmt.Sprintf("%s-%d", code, 0)), strings.ToUpper(fmt.Sprintf("%s-%d", code, 1))}
+	var gotTags []string
+	for _, r := range data {
+		gotTags = append(gotTags, r[0])
+	}
+	slices.Sort(gotTags)
+	if !slices.Equal(gotTags, wantTags) {
+		t.Errorf("selected tags = %v, want %v", gotTags, wantTags)
+	}
 	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, "filename*=utf-8''") {
 		t.Errorf("content-disposition = %q", cd)
 	}
