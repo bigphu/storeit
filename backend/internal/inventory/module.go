@@ -71,5 +71,5 @@ func (m *Module) APIDoc() (web.APIDoc, error) {
 	return web.APIDoc{Name: "inventory", Spec: spec}, nil
 }
 
-// Service cho test
+// Service cho test và cmd/seed (dữ liệu demo)
 func (m *Module) Service() *service.Service { return m.svc }
