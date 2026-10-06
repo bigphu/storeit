@@ -30,6 +30,10 @@ import AttributeFilterPopover from '../components/AttributeFilterPopover.vue'
 import BulkActionDialog from '../components/BulkActionDialog.vue'
 import RetireDialog from '../components/RetireDialog.vue'
 import { attrFilterLabel, type FilterChip, filterChips, removeChip } from '../filterChips'
+import ExportButton from '../export/components/ExportButton.vue'
+import ReportDialog from '../export/components/ReportDialog.vue'
+import type { ExportScope } from '../export/usePreviewData'
+import { useExport } from '../export/useExport'
 import { useListContext } from '../listContext'
 import {
   type AssetListState,
@@ -137,6 +141,49 @@ usePageKeys((e) => {
     router.push(newPath.value)
   }
 })
+
+// Phạm vi export: bộ lọc của danh sách (không phân trang), hay các dòng đang chọn.
+// Tên khoá của toApiParams trùng ExportFilters nên chỉ cần bỏ page/page_size
+const canExport = computed(() => session.can(Perm.AssetExport))
+const reportOpen = ref(false)
+const reportProfile = ref<string | undefined>()
+const reportSelection = ref(false)
+const listFilters = computed(() => {
+  const { page: _p, page_size: _s, ...filters } = toApiParams(state.value, pageSize.value)
+  return filters
+})
+const listLabel = computed(() => {
+  const name = selectedType.value?.name ?? 'All assets'
+  return chips.value.length ? [name, ...chips.value.map((c) => c.label)].join(' · ') : name
+})
+const listScope = computed<ExportScope>(() => ({
+  filters: listFilters.value,
+  label: listLabel.value,
+  count: data.value?.total ?? 0,
+  typeIds: state.value.typeId
+    ? [state.value.typeId]
+    : (typeCounts.value ?? []).filter((t) => (t.asset_count ?? 0) > 0).map((t) => t.id),
+  rows: data.value?.items ?? [],
+  selection: false,
+}))
+const selectionScope = computed<ExportScope>(() => {
+  const ids = selected.value.map((a) => a.id)
+  return {
+    filters: { ...listFilters.value, ids },
+    label: `${ids.length} selected assets`,
+    count: ids.length,
+    typeIds: [...new Set(selected.value.map((a) => a.asset_type_id))],
+    rows: selected.value,
+    selection: true,
+  }
+})
+const exportScope = computed(() => (reportSelection.value ? selectionScope.value : listScope.value))
+function openReport(selection: boolean, profileId?: string) {
+  reportSelection.value = selection
+  reportProfile.value = profileId
+  reportOpen.value = true
+}
+const { run: runExport } = useExport()
 
 const tableSort = computed(() => toTableSort(state.value.sort))
 
@@ -267,6 +314,7 @@ function cell(row: AssetListItem, key: string) {
         @update:model-value="(v: boolean) => update({ includeRetired: v, page: 1 })"
       />
       <label for="include-retired">Include retired</label>
+      <ExportButton v-if="canExport" class="export-btn" :scope="listScope" @report="(id) => openReport(false, id)" />
     </div>
 
     <div class="chips">
@@ -298,9 +346,19 @@ function cell(row: AssetListItem, key: string) {
       <span class="selection-count">{{ selected.length }} selected</span>
       <Button label="Change status" icon="pi pi-tag" size="small" @click="openBulk('status')" />
       <Button label="Retire" icon="pi pi-ban" size="small" severity="danger" outlined @click="openBulk('retire')" />
+      <Button
+        v-if="canExport"
+        label="Export selected"
+        icon="pi pi-download"
+        size="small"
+        outlined
+        @click="runExport({ mode: 'data', filters: selectionScope.filters }, 'storeit-assets.xlsx')"
+      />
+      <Button v-if="canExport" label="Report from selected…" icon="pi pi-file-edit" size="small" outlined @click="openReport(true)" />
       <Button label="Clear selection" size="small" text severity="secondary" @click="selected = []" />
     </div>
     <BulkActionDialog v-model:visible="bulkOpen" :mode="bulkMode" :rows="selected" @done="selected = []" />
+    <ReportDialog v-if="canExport" v-model:visible="reportOpen" :scope="exportScope" :profile-id="reportProfile" />
 
     <ContextMenu ref="menu" :model="menuItems" @hide="menuRow = null" />
     <DataTable
@@ -414,6 +472,9 @@ function cell(row: AssetListItem, key: string) {
 .selection-count {
   font-weight: 600;
   margin-right: 0.5rem;
+}
+.export-btn {
+  margin-left: auto;
 }
 .chips {
   display: flex;
