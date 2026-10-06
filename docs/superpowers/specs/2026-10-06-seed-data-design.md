@@ -43,7 +43,7 @@ Out of scope:
 
 ## Identity
 
-- New `identity.Module.SeedAccount(ctx, email, name, password string, roleIDs []uuid.UUID) error`.
+- New `identity.Module.SeedAccount(ctx, email, name, password string, roleIDs []uuid.UUID) (uuid.UUID, error)`; it returns the account ID, which export profile owners need.
   It follows the bootstrap path: normalize the email, validate and hash the
   password, then create the account with those roles, with the system actor as the
   event actor. An existing email is not an error, which keeps reruns safe. Its
