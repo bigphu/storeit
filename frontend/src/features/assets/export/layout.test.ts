@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AssetListItem } from '@/lib/api/types'
-import { cleanSheetName, defaultHeader, defaultReportLayout, editorColumns, fieldOptions, normalizeLayout, previewSheets, sheetNameInput, skippedKeys, type TypeInfo, withColumns } from './layout'
+import { cleanSheetName, dataPreviewSheets, defaultHeader, exportFileName, defaultReportLayout, editorColumns, fieldOptions, normalizeLayout, previewSheets, sheetNameInput, skippedKeys, type TypeInfo, withColumns } from './layout'
 
 const laptop: TypeInfo = { id: 'L', name: 'Laptop', code: 'LAPTOP', attributes: [{ key: 'ram_gb', label: 'RAM', data_type: 'number', unit: 'GB' }, { key: 'cpu', label: 'CPU', data_type: 'text' }] }
 const phone: TypeInfo = { id: 'P', name: 'Phone', code: 'PHONE', attributes: [{ key: 'imei', label: 'IMEI', data_type: 'text' }] }
@@ -67,5 +67,23 @@ describe('sheet names', () => {
   it('drops leading and trailing apostrophes before saving', () => {
     expect(cleanSheetName("'Quoted'")).toBe('Quoted')
     expect(cleanSheetName("  it's: ok'")).toBe("it's- ok")
+  })
+})
+
+describe('data export preview', () => {
+  it('has one sheet per type named by code, with field keys as headers', () => {
+    const sheets = dataPreviewSheets([row('P1', 'P'), row('L1', 'L')], [phone, laptop])
+    expect(sheets.map((s) => s.name)).toEqual(['LAPTOP', 'PHONE'])
+    expect(sheets[0].columns.map((c) => c.header)).toEqual(['tag', 'name', 'description', 'status', 'purchase_date', 'attr:ram_gb', 'attr:cpu'])
+    expect(sheets[0].rows.map((r) => r.tag)).toEqual(['L1'])
+  })
+})
+
+describe('exportFileName', () => {
+  it('names files like the server', () => {
+    expect(exportFileName('data', undefined, '2026-10-06')).toBe('storeit-assets-2026-10-06.xlsx')
+    expect(exportFileName('report', undefined, '2026-10-06')).toBe('storeit-report-2026-10-06.xlsx')
+    expect(exportFileName('report', 'Kiểm kê quý 3', '2026-10-06')).toBe('kiểm-kê-quý-3-2026-10-06.xlsx')
+    expect(exportFileName('report', '!!!', '2026-10-06')).toBe('storeit-report-2026-10-06.xlsx')
   })
 })

@@ -3,6 +3,7 @@ import Checkbox from 'primevue/checkbox'
 import Column from 'primevue/column'
 import DataTable, { type DataTableRowReorderEvent } from 'primevue/datatable'
 import InputText from 'primevue/inputtext'
+import Tag from 'primevue/tag'
 import type { ExportLayout } from '@/lib/api/types'
 import { defaultHeader, type EditorColumn, type FieldOption } from '../layout'
 
@@ -37,7 +38,10 @@ function set(i: number, patch: Partial<EditorColumn>) {
     <Column>
       <template #body="{ data: c, index: i }: { data: EditorColumn; index: number }">
         <div class="label" :class="{ off: !c.include }" tabindex="0" @keydown.alt.up.prevent="move(i, -1)" @keydown.alt.down.prevent="move(i, 1)">
-          <span>{{ option(c.field)?.label ?? c.field }}</span>
+          <span>
+            {{ option(c.field)?.label ?? c.field }}
+            <Tag v-if="!option(c.field)" v-tooltip="'No asset type in this export has this attribute, so the column is skipped'" value="Not available" severity="warn" class="na" />
+          </span>
           <small>{{ c.field }}<template v-if="option(c.field)?.types.length"> · {{ option(c.field)!.types.join(', ') }}</template></small>
         </div>
       </template>
@@ -73,6 +77,11 @@ function set(i: number, patch: Partial<EditorColumn>) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.na {
+  margin-left: 0.35rem;
+  padding: 0 0.35rem;
+  font-size: 0.68rem;
 }
 .label.off {
   opacity: 0.5;

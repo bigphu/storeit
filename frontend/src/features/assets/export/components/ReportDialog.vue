@@ -22,6 +22,7 @@ import {
   cleanSheetName,
   defaultReportLayout,
   editorColumns,
+  exportFileName,
   fieldOptions,
   normalizeLayout,
   previewSheets,
@@ -97,6 +98,19 @@ const title = computed(() =>
   current.value.title_row ? [profile.value?.name ?? 'Asset report', `Generated ${new Date().toLocaleDateString('en-GB')} by ${session.me?.account.name ?? ''} · ${props.scope.label}`] : [],
 )
 
+// Vì sao Save tắt (tooltip); rỗng khi bấm được
+const saveHint = computed(() => {
+  const p = profile.value
+  if (!p) return 'Pick a profile to save changes to it, or use Save as…'
+  if (!p.can_edit) return `Only ${p.owner.name} or a profile manager can change it; use Save as…`
+  return dirty.value ? '' : 'No changes to save'
+})
+// Có cột nào để xuất không (mỗi loại một sheet có thể chỉ dùng thuộc tính riêng của loại)
+const hasColumns = computed(() => current.value.columns.length > 0 || (current.value.sheets === 'per_type' && !!current.value.each_type_attrs))
+// Dòng dưới bản xem trước: số sheet, số dòng, tên file như server đặt
+const sheetCount = computed(() => sheets.value.length + (current.value.summary ? 1 : 0))
+const fileName = computed(() => exportFileName('report', profile.value?.name, new Date().toISOString().slice(0, 10)))
+
 // Tab cấu hình đang mở (cột, bố cục, định dạng); giữ nguyên khi đóng mở lại hộp thoại
 const tab = ref<'columns' | 'layout' | 'format'>('columns')
 
@@ -139,7 +153,9 @@ async function submitSaveAs() {
 const { run, running } = useExport()
 async function download() {
   // lỗi (vd quá số dòng) thì giữ hộp thoại để không mất phần đã sửa
-  const ok = await run({ mode: 'report', filters: props.scope.filters, layout: current.value, profile_id: profileId.value ?? undefined }, 'storeit-report.xlsx')
+  const ok = await run({ mode: 'report', filters: props.scope.filters, layout: current.value, profile_id: profileId.value ?? undefined }, 'storeit-report.xlsx', {
+    rows: props.scope.count,
+  })
   if (ok) visible.value = false
 }
 
@@ -186,7 +202,9 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
         <Tag v-if="profile && !profile.can_edit" :value="`Shared by ${profile.owner.name}`" icon="pi pi-lock" severity="secondary" />
         <Tag v-else-if="profile" :value="profile.shared ? 'Shared' : 'Only you'" severity="secondary" />
         <Tag v-if="dirty" value="Unsaved changes" severity="warn" />
-        <Button label="Save" size="small" severity="secondary" outlined :disabled="!profile?.can_edit || !dirty" :loading="update.isPending.value" @click="save" />
+        <span v-tooltip.bottom="saveHint">
+          <Button label="Save" size="small" severity="secondary" outlined :disabled="!profile?.can_edit || !dirty" :loading="update.isPending.value" @click="save" />
+        </span>
         <Button label="Save as…" size="small" severity="secondary" outlined @click="openSaveAs" />
       </div>
       <form v-if="saveAs" class="sub" @submit.prevent="submitSaveAs">
@@ -201,7 +219,9 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
         <Message v-if="errors.general.value || errors.fields.value.name" severity="error" size="small" variant="simple">{{ errors.fields.value.name ?? errors.general.value }}</Message>
       </form>
       <div v-else class="sub">
-        <i class="pi pi-table" /> Exporting <b>{{ scope.count }}</b> {{ scope.count === 1 ? 'asset' : 'assets' }} · {{ scope.label }}
+        <i class="pi pi-table" aria-hidden="true" />
+        <span>Exporting <b>{{ scope.count }}</b> {{ scope.count === 1 ? 'asset' : 'assets' }} · {{ scope.label }}</span>
+        <span class="muted">{{ scope.selection ? 'Only the selected assets.' : 'The file uses the list’s current filters.' }}</span>
       </div>
 
       <div class="body">
@@ -253,7 +273,13 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
           <Message v-if="skipped.length" severity="warn" :closable="false">
             Not available for the asset types in this export: <b>{{ skipped.join(', ') }}</b>. Those columns are skipped.
           </Message>
-          <SheetPreview class="fill" :sheets="sheets" :layout="current" :types="types" :title="title" />
+          <SheetPreview v-if="hasColumns" class="fill" :sheets="sheets" :layout="current" :types="types" :title="title" />
+          <p v-else class="fill empty">Tick at least one column.</p>
+          <div class="preview-meta">
+            <span>{{ sheetCount }} {{ sheetCount === 1 ? 'sheet' : 'sheets' }}</span>
+            <span>{{ scope.count }} {{ scope.count === 1 ? 'row' : 'rows' }}</span>
+            <span>File: {{ fileName }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -347,6 +373,20 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
 .preview > .fill {
   flex: 1 1 auto;
   min-height: 0;
+}
+.empty {
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--app-line);
+  border-radius: 8px;
+  color: var(--p-text-muted-color);
+}
+.preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  font-size: 0.82rem;
+  color: var(--p-text-muted-color);
 }
 .field {
   display: flex;

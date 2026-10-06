@@ -3,12 +3,11 @@ import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
 import Tabs from 'primevue/tabs'
 import { computed, ref, watch } from 'vue'
-import type { ExportLayout } from '@/lib/api/types'
 import { formatCell } from '../format'
-import type { PreviewSheet, TypeInfo } from '../layout'
+import type { PreviewLayout, PreviewSheet, TypeInfo } from '../layout'
 
 // Bản xem trước như Excel: chữ cột, số dòng, tab sheet; 20 dòng đầu mỗi sheet
-const props = defineProps<{ sheets: PreviewSheet[]; layout: ExportLayout; types: TypeInfo[]; title: string[] }>()
+const props = defineProps<{ sheets: PreviewSheet[]; layout: PreviewLayout; types: TypeInfo[]; title: string[] }>()
 const active = ref(0)
 const tabs = computed(() => [...props.sheets.map((s) => s.name), ...(props.layout.summary ? ['Summary'] : [])])
 watch(tabs, (t) => {

@@ -30,6 +30,7 @@ import AttributeFilterPopover from '../components/AttributeFilterPopover.vue'
 import BulkActionDialog from '../components/BulkActionDialog.vue'
 import RetireDialog from '../components/RetireDialog.vue'
 import { attrFilterLabel, type FilterChip, filterChips, removeChip } from '../filterChips'
+import DataExportDialog from '../export/components/DataExportDialog.vue'
 import ExportButton from '../export/components/ExportButton.vue'
 import ReportDialog from '../export/components/ReportDialog.vue'
 import type { ExportScope } from '../export/usePreviewData'
@@ -184,6 +185,18 @@ function openReport(selection: boolean, profileId?: string) {
   reportOpen.value = true
 }
 const { run: runExport, running: exporting } = useExport()
+// Export selected: phạm vi chụp lúc bấm, để "What’s inside" vẫn đúng khi đã bỏ chọn
+const insideScope = ref<ExportScope | null>(null)
+const insideOpen = computed({
+  get: () => insideScope.value !== null,
+  set: (open) => {
+    if (!open) insideScope.value = null
+  },
+})
+function exportSelected() {
+  const scope = selectionScope.value
+  runExport({ mode: 'data', filters: scope.filters }, 'storeit-assets.xlsx', { rows: scope.count, inside: () => (insideScope.value = scope) })
+}
 
 const tableSort = computed(() => toTableSort(state.value.sort))
 
@@ -354,13 +367,14 @@ function cell(row: AssetListItem, key: string) {
         outlined
         :loading="exporting"
         :disabled="exporting"
-        @click="runExport({ mode: 'data', filters: selectionScope.filters }, 'storeit-assets.xlsx')"
+        @click="exportSelected"
       />
       <Button v-if="canExport" label="Report from selected…" icon="pi pi-file-edit" size="small" outlined :disabled="exporting" @click="openReport(true)" />
       <Button label="Clear selection" size="small" text severity="secondary" @click="selected = []" />
     </div>
     <BulkActionDialog v-model:visible="bulkOpen" :mode="bulkMode" :rows="selected" @done="selected = []" />
     <ReportDialog v-if="canExport" v-model:visible="reportOpen" :scope="exportScope" :profile-id="reportProfile" />
+    <DataExportDialog v-if="insideScope" v-model:visible="insideOpen" :scope="insideScope" />
 
     <ContextMenu ref="menu" :model="menuItems" @hide="menuRow = null" />
     <DataTable

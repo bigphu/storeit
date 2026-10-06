@@ -127,6 +127,48 @@ function sheetColumns(layout: ExportLayout, types: TypeInfo[], options: FieldOpt
   return out
 }
 
+// exportFileName: tên file như server đặt (service/export.go exportFileName); day là YYYY-MM-DD
+export function exportFileName(mode: 'data' | 'report', profileName: string | undefined, day: string): string {
+  if (mode === 'data') return `storeit-assets-${day}.xlsx`
+  const slug = (profileName ?? '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '')
+  return `${slug || 'storeit-report'}-${day}.xlsx`
+}
+
+// Bố cục của bản xem trước: thêm kiểu boolean TRUE/FALSE mà chỉ export dữ liệu dùng
+export type PreviewLayout = Omit<ExportLayout, 'bool_style'> & { bool_style: ExportLayout['bool_style'] | 'true_false' }
+
+// Cột chung của export dữ liệu (khớp DataLayout ở backend); sau đó là thuộc tính của loại
+const DATA_FIELDS = ['tag', 'name', 'description', 'status', 'purchase_date']
+
+// dataPreviewLayout: định dạng của export dữ liệu (ngày ISO, TRUE/FALSE, header trơn)
+export function dataPreviewLayout(): PreviewLayout {
+  return {
+    ...defaultReportLayout(),
+    columns: DATA_FIELDS.map((field) => ({ field })),
+    sheets: 'per_type',
+    each_type_attrs: true,
+    header: 'plain',
+    filter: false,
+    date_format: 'yyyy-mm-dd',
+    bool_style: 'true_false',
+  }
+}
+
+// dataPreviewSheets: mỗi loại một sheet đặt tên theo code, tiêu đề cột là khoá trường
+export function dataPreviewSheets(rows: AssetListItem[], types: TypeInfo[]): PreviewSheet[] {
+  return [...types]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((t) => ({
+      name: t.code,
+      columns: [...DATA_FIELDS, ...t.attributes.map((a) => `attr:${a.key}`)].map((field) => ({ field, header: field })),
+      rows: rows.filter((r) => r.asset_type_id === t.id),
+    }))
+    .filter((s) => s.rows.length)
+}
+
 export function previewSheets(layout: ExportLayout, rows: AssetListItem[], types: TypeInfo[]): PreviewSheet[] {
   const options = fieldOptions(types)
   if (layout.sheets === 'single') {
