@@ -59,7 +59,7 @@ watch([profileId, () => profile.value?.id], load)
 // khi biết thêm loại: giữ cột đang sửa, chỉ thêm trường mới (chưa chọn) và bỏ trường không còn
 watch(options, (opts) => {
   const keep = columns.value.filter((c) => c.include || opts.some((o) => o.field === c.field))
-  const missing = opts.filter((o) => !keep.some((c) => c.field === o.field)).map((o) => ({ field: o.field, header: '', include: false }))
+  const missing = opts.filter((o) => !keep.some((c) => c.field === o.field)).map((o) => ({ field: o.field, header: '', width: 0, include: false }))
   columns.value = [...keep, ...missing]
 })
 
@@ -108,8 +108,9 @@ async function submitSaveAs() {
 
 const { run, running } = useExport()
 async function download() {
-  await run({ mode: 'report', filters: props.scope.filters, layout: current.value, profile_id: profileId.value ?? undefined }, 'storeit-report.xlsx')
-  visible.value = false
+  // lỗi (vd quá số dòng) thì giữ hộp thoại để không mất phần đã sửa
+  const ok = await run({ mode: 'report', filters: props.scope.filters, layout: current.value, profile_id: profileId.value ?? undefined }, 'storeit-report.xlsx')
+  if (ok) visible.value = false
 }
 
 const headerOptions = [

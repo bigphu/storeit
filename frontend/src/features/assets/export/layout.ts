@@ -23,6 +23,7 @@ export interface FieldOption {
 export interface EditorColumn {
   field: string
   header: string
+  width: number // 0: tự động
   include: boolean
 }
 export interface PreviewColumn {
@@ -92,14 +93,14 @@ export function defaultHeader(field: string, layout: ExportLayout, options: Fiel
 
 // editorColumns: cột của bố cục (đã chọn, đúng thứ tự) rồi các trường còn lại (chưa chọn)
 export function editorColumns(layout: ExportLayout, options: FieldOption[]): EditorColumn[] {
-  const chosen = layout.columns.map((c) => ({ field: c.field, header: c.header ?? '', include: true }))
-  const rest = options.filter((o) => !chosen.some((c) => c.field === o.field)).map((o) => ({ field: o.field, header: '', include: false }))
+  const chosen = layout.columns.map((c) => ({ field: c.field, header: c.header ?? '', width: c.width ?? 0, include: true }))
+  const rest = options.filter((o) => !chosen.some((c) => c.field === o.field)).map((o) => ({ field: o.field, header: '', width: 0, include: false }))
   return [...chosen, ...rest]
 }
 
 // withColumns: bố cục với các cột đang chọn của trình sửa cột
 export function withColumns(layout: ExportLayout, cols: EditorColumn[]): ExportLayout {
-  return { ...layout, columns: cols.filter((c) => c.include).map((c) => ({ field: c.field, header: c.header.trim() || undefined })) }
+  return { ...layout, columns: cols.filter((c) => c.include).map((c) => ({ field: c.field, header: c.header.trim() || undefined, width: c.width })) }
 }
 
 function sheetColumns(layout: ExportLayout, types: TypeInfo[], options: FieldOption[]): PreviewColumn[] {
@@ -142,7 +143,7 @@ export function skippedKeys(layout: ExportLayout, types: TypeInfo[]): string[] {
 // với thứ tự khoá cố định nên bố cục từ server và bố cục dựng lại ở máy so sánh đúng
 export function normalizeLayout(l: ExportLayout): string {
   return JSON.stringify({
-    columns: l.columns.map((c) => ({ field: c.field, header: c.header?.trim() || '', width: c.width })),
+    columns: l.columns.map((c) => ({ field: c.field, header: c.header?.trim() || '', width: c.width ?? 0 })),
     sheets: l.sheets,
     each_type_attrs: !!l.each_type_attrs,
     sheet_name: l.sheet_name,

@@ -7,14 +7,17 @@ import { exportAssets } from './api'
 
 export function useExport() {
   const running = ref(false)
-  async function run(body: ExportRequest, fallbackName: string) {
+  // trả true khi tải xong, false khi lỗi (đã báo)
+  async function run(body: ExportRequest, fallbackName: string): Promise<boolean> {
     running.value = true
     try {
       const { name, skipped } = await exportAssets(body, fallbackName)
       notify.success(`Downloaded ${name}.`)
       if (skipped.length) notify.info(`Skipped columns not available for the exported asset types: ${skipped.join(', ')}.`)
+      return true
     } catch (err) {
       notify.error(describeError(err))
+      return false
     } finally {
       running.value = false
     }

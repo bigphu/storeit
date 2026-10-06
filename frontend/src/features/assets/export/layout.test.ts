@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AssetListItem } from '@/lib/api/types'
-import { defaultHeader, defaultReportLayout, fieldOptions, normalizeLayout, previewSheets, skippedKeys, type TypeInfo } from './layout'
+import { defaultHeader, defaultReportLayout, editorColumns, fieldOptions, normalizeLayout, previewSheets, skippedKeys, type TypeInfo, withColumns } from './layout'
 
 const laptop: TypeInfo = { id: 'L', name: 'Laptop', code: 'LAPTOP', attributes: [{ key: 'ram_gb', label: 'RAM', data_type: 'number', unit: 'GB' }, { key: 'cpu', label: 'CPU', data_type: 'text' }] }
 const phone: TypeInfo = { id: 'P', name: 'Phone', code: 'PHONE', attributes: [{ key: 'imei', label: 'IMEI', data_type: 'text' }] }
@@ -43,5 +43,16 @@ describe('layout', () => {
     const sameHeader = { ...a, columns: [{ field: 'tag', header: 'Asset tag' }, ...a.columns.slice(1)] }
     expect(normalizeLayout(withHeader)).toBe(normalizeLayout(sameHeader))
     expect(normalizeLayout(withHeader)).not.toBe(normalizeLayout(a))
+  })
+
+  it('round-trips a server-shaped layout through the editor columns', () => {
+    const a = defaultReportLayout()
+    const server = { ...a, columns: a.columns.map((c) => ({ field: c.field, header: '', width: 0 })) }
+    const opts = fieldOptions([laptop])
+    expect(normalizeLayout(withColumns(server, editorColumns(server, opts)))).toBe(normalizeLayout(server))
+    const wide = { ...server, columns: server.columns.map((c, i) => (i === 1 ? { ...c, width: 20 } : c)) }
+    const back = withColumns(wide, editorColumns(wide, opts))
+    expect(back.columns[1].width).toBe(20)
+    expect(normalizeLayout(back)).toBe(normalizeLayout(wide))
   })
 })
