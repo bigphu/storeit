@@ -459,3 +459,22 @@ func TestReorderNeedsTypeManage(t *testing.T) {
 		t.Errorf("manager: %v", err)
 	}
 }
+
+// mustAsset tạo một tài sản của loại typ với giá trị bắt buộc
+func (e *env) mustAsset(t *testing.T, typ domain.AssetType, tag string) domain.Asset {
+	t.Helper()
+	v, err := e.svc.CreateAsset(manager, tag, AssetInput{Name: tag, TypeID: typ.ID, Attributes: map[string]any{"serial": "SN-" + tag}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v.Asset
+}
+
+func (e *env) generalAsset(t *testing.T, tag string) domain.Asset {
+	t.Helper()
+	v, err := e.svc.CreateAsset(manager, tag, AssetInput{Name: tag, TypeID: domain.GeneralTypeID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v.Asset
+}
