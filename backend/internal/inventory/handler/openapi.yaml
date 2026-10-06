@@ -1090,6 +1090,10 @@ components:
         filters: { $ref: '#/components/schemas/ExportFilters' }
         profile_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
         layout: { $ref: '#/components/schemas/ExportLayout' }
+        tz:
+          type: string
+          maxLength: 64
+          description: IANA time zone of the user (Asia/Ho_Chi_Minh); empty means UTC. Used for updated_at cells, the report title date and the file name.
 
     ExportProfile:
       type: object

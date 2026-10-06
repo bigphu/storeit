@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	_ "time/tzdata" // múi giờ IANA cho export, kể cả khi image không có zoneinfo
 
 	"storeit/internal/identity"
 	"storeit/internal/inventory"

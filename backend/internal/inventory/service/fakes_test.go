@@ -332,7 +332,7 @@ func (f *fakeAssets) Create(_ context.Context, tag string, in domain.AssetFields
 			return domain.Asset{}, domain.ErrTagTaken
 		}
 	}
-	a := apply(domain.Asset{ID: uuid.New(), Tag: tag, Version: 1}, in)
+	a := apply(domain.Asset{ID: uuid.New(), Tag: tag, Version: 1, UpdatedAt: time.Now()}, in)
 	f.assets[a.ID] = a
 	return a, nil
 }

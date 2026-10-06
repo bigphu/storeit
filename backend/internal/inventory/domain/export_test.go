@@ -3,6 +3,7 @@ package domain
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -138,3 +139,44 @@ func headers(cols []SheetColumn) []string {
 }
 
 func ptrNow() *time.Time { t := time.Now(); return &t }
+
+func TestExportLayout_Validate_SheetNameQuotesAndUTF16(t *testing.T) {
+	l := DefaultReportLayout()
+	for _, name := range []string{"'Quoted'", "'lead", "trail'"} {
+		l.SheetName = name
+		if !exportFieldsOf(l.Validate())["layout.sheet_name"] {
+			t.Errorf("sheet name %q must be rejected", name)
+		}
+	}
+	l.SheetName = "it's fine"
+	if err := l.Validate(); err != nil {
+		t.Errorf("inner apostrophe: %v", err)
+	}
+	// 16 emoji = 16 rune nhưng 32 đơn vị UTF-16: Excel từ chối
+	l.SheetName = strings.Repeat("😀", 16)
+	if !exportFieldsOf(l.Validate())["layout.sheet_name"] {
+		t.Error("32 UTF-16 units must be rejected")
+	}
+	l.SheetName = strings.Repeat("😀", 15)
+	if err := l.Validate(); err != nil {
+		t.Errorf("30 UTF-16 units: %v", err)
+	}
+}
+
+func TestExportLayout_Validate_ErrorCarriesDetail(t *testing.T) {
+	l := DefaultReportLayout()
+	l.SheetName = "a/b"
+	var e *errs.Error
+	if err := l.Validate(); !errors.As(err, &e) || !strings.Contains(e.Detail(), "layout.sheet_name") {
+		t.Errorf("detail = %v, want it to name the first bad field", err)
+	}
+}
+
+func TestDateFormat_GoLayout(t *testing.T) {
+	d := time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC)
+	for f, want := range map[DateFormat]string{DateDMY: "06/10/2026", DateISO: "2026-10-06", DateDMonY: "6 Oct 2026"} {
+		if got := d.Format(f.GoLayout()); got != want {
+			t.Errorf("%s = %q, want %q", f, got, want)
+		}
+	}
+}

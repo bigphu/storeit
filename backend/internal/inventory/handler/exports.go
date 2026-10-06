@@ -16,7 +16,7 @@ import (
 // ExportAssets tải .xlsx; quyền kiểm tra trong service
 func (h *Handler) ExportAssets(ctx context.Context, req api.ExportAssetsRequestObject) (api.ExportAssetsResponseObject, error) {
 	b := req.Body
-	in := service.ExportRequest{Mode: service.ExportMode(b.Mode), ProfileID: b.ProfileId}
+	in := service.ExportRequest{Mode: service.ExportMode(b.Mode), ProfileID: b.ProfileId, TZ: deref(b.Tz)}
 	if b.Filters != nil {
 		p := b.Filters
 		in.Filter = domain.AssetFilter{

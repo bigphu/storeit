@@ -41,7 +41,10 @@ var (
 
 	ErrInvalidExportLayout = errs.Unprocessable("/errors/invalid-export-layout", "Invalid export layout")
 	ErrExportTooLarge      = errs.Unprocessable("/errors/export-too-large", "Too many rows to export")
-	ErrInvalidExportIDs    = errs.Unprocessable("/errors/invalid-export-selection", "Invalid selection",
+	ErrInvalidTimeZone     = errs.Unprocessable("/errors/invalid-time-zone", "Unknown time zone",
+		errs.WithFields(errs.FieldError{Field: "tz", Detail: "must be an IANA time zone name such as Asia/Ho_Chi_Minh"}))
+	ErrInvalidExportIDs = errs.Unprocessable("/errors/invalid-export-selection", "Invalid selection",
+		errs.WithDetail("Choose between 1 and 200 assets to export."),
 		errs.WithFields(errs.FieldError{Field: "filters.ids", Detail: "choose between 1 and 200 assets"}))
 
 	ErrTagTaken            = errs.Conflict("/errors/tag-taken", "Asset tag already in use")

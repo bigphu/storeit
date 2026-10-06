@@ -32,6 +32,7 @@ type ExportRequest struct {
 	IDs       []uuid.UUID        // "Export selected": 1..200; nil là không lọc
 	ProfileID *uuid.UUID
 	Layout    *domain.ExportLayout // gửi kèm thì thắng profile
+	TZ        string               // tên múi giờ IANA của người dùng; "" là UTC
 }
 
 type ExportFile struct {
@@ -56,6 +57,11 @@ func (s *Service) Export(ctx context.Context, req ExportRequest) (ExportFile, er
 	if _, err := auth.Require(ctx, domain.PermAssetRead); err != nil {
 		return ExportFile{}, err
 	}
+	loc, err := exportLocation(req.TZ)
+	if err != nil {
+		return ExportFile{}, err
+	}
+	now := time.Now().In(loc)
 	layout, profile, err := s.exportLayout(ctx, actor, req)
 	if err != nil {
 		return ExportFile{}, err
@@ -101,8 +107,8 @@ func (s *Service) Export(ctx context.Context, req ExportRequest) (ExportFile, er
 	for _, t := range types {
 		byID[t.ID] = t
 	}
-	fm := spreadsheet.Formatter{Layout: layout, Types: byID, Loc: time.Local}
-	title, err := s.exportTitle(ctx, actor, req, layout, profile, f, types)
+	fm := spreadsheet.Formatter{Layout: layout, Types: byID, Loc: loc}
+	title, err := s.exportTitle(ctx, actor, req, layout, profile, f, types, now)
 	if err != nil {
 		return ExportFile{}, err
 	}
@@ -193,7 +199,20 @@ func (s *Service) Export(ctx context.Context, req ExportRequest) (ExportFile, er
 		// file đã dựng xong; mất một dòng lịch sử không đáng làm hỏng lần tải
 		slog.ErrorContext(ctx, "inventory: record export", "error", err)
 	}
-	return ExportFile{Name: exportFileName(req.Mode, profile), Data: buf.Bytes(), Skipped: skipped, Rows: rows}, nil
+	return ExportFile{Name: exportFileName(req.Mode, profile, now), Data: buf.Bytes(), Skipped: skipped, Rows: rows}, nil
+}
+
+// exportLocation: múi giờ của người dùng; "" là UTC, tên lạ là 422. Server chạy TZ=UTC nên
+// không dùng time.Local.
+func exportLocation(name string) (*time.Location, error) {
+	if name == "" {
+		return time.UTC, nil
+	}
+	loc, err := time.LoadLocation(name)
+	if err != nil || name == "Local" {
+		return nil, domain.ErrInvalidTimeZone
+	}
+	return loc, nil
 }
 
 // sheetSortFilter áp sort theo thuộc tính của bố cục lên bộ lọc của một sheet. Chỉ giải được
@@ -277,7 +296,7 @@ func (s *Service) exportTypes(ctx context.Context, f domain.AssetFilter) ([]doma
 }
 
 // exportTitle: hai dòng tiêu đề của báo cáo (tên báo cáo; ngày, người export, bộ lọc)
-func (s *Service) exportTitle(ctx context.Context, actor auth.Actor, req ExportRequest, l domain.ExportLayout, p *domain.ExportProfile, f domain.AssetFilter, types []domain.AssetType) ([]string, error) {
+func (s *Service) exportTitle(ctx context.Context, actor auth.Actor, req ExportRequest, l domain.ExportLayout, p *domain.ExportProfile, f domain.AssetFilter, types []domain.AssetType, now time.Time) ([]string, error) {
 	if req.Mode != ExportReport || !l.TitleRow {
 		return nil, nil
 	}
@@ -294,7 +313,7 @@ func (s *Service) exportTitle(ctx context.Context, actor auth.Actor, req ExportR
 	if err != nil {
 		return nil, err
 	}
-	date := time.Now().Format("02/01/2006")
+	date := now.Format(l.DateFormat.GoLayout())
 	return []string{name, fmt.Sprintf("Generated %s by %s · %s", date, by, summary)}, nil
 }
 
@@ -341,11 +360,27 @@ func attrFilterText(types []domain.AssetType, af domain.AttrFilter) string {
 	for _, t := range types {
 		for _, a := range t.Attributes {
 			if a.ID == af.AttributeID {
-				return fmt.Sprintf("%s %s %s", a.Label, opSymbols[af.Op], af.Value)
+				return fmt.Sprintf("%s %s %s", a.Label, opSymbols[af.Op], filterValueText(a, af.Value))
 			}
 		}
 	}
 	return "attribute filter"
+}
+
+// filterValueText: select lưu id option (một hay nhiều, cách nhau dấu phẩy); hiện nhãn
+func filterValueText(a domain.Attribute, value string) string {
+	if a.DataType != domain.TypeSelect {
+		return value
+	}
+	parts := strings.Split(value, ",")
+	for i, p := range parts {
+		for _, o := range a.Options {
+			if o.ID.String() == strings.TrimSpace(p) {
+				parts[i] = o.Label
+			}
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 func filterRecord(f domain.AssetFilter) map[string]any {
@@ -417,11 +452,11 @@ func writeSummary(w *spreadsheet.Writer, types []domain.AssetType, counts map[uu
 	return sh.Close()
 }
 
-var slugBad = regexp.MustCompile(`[^\p{L}\p{N}]+`)
+var slugBad = regexp.MustCompile(`[^\p{L}\p{M}\p{N}]+`)
 
 // exportFileName: storeit-assets-<ngày>.xlsx; báo cáo theo tên profile
-func exportFileName(mode ExportMode, p *domain.ExportProfile) string {
-	date := time.Now().Format("2006-01-02")
+func exportFileName(mode ExportMode, p *domain.ExportProfile, now time.Time) string {
+	date := now.Format("2006-01-02")
 	switch {
 	case mode == ExportData:
 		return "storeit-assets-" + date + ".xlsx"

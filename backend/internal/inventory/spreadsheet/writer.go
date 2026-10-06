@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 	"time"
+	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/xuri/excelize/v2"
@@ -81,6 +82,7 @@ type Sheet struct {
 	sw        *excelize.StreamWriter
 	opts      SheetOptions
 	cols      int
+	hasCols   bool // có ít nhất một tên cột; không thì không dựng được bảng
 	headerRow int
 	row       int
 }
@@ -100,7 +102,7 @@ func (w *Writer) Sheet(o SheetOptions, headers []string) (*Sheet, error) {
 	if err != nil {
 		return nil, fmt.Errorf("spreadsheet: stream %s: %w", name, err)
 	}
-	s := &Sheet{w: w, sw: sw, opts: o, cols: max(len(headers), 1), headerRow: len(o.Title) + 1}
+	s := &Sheet{w: w, sw: sw, opts: o, cols: max(len(headers), 1), hasCols: len(headers) > 0, headerRow: len(o.Title) + 1}
 	headers = uniqueHeaders(headers)
 	// độ rộng và khung cố định phải đặt trước dòng đầu tiên
 	for i, h := range headers {
@@ -179,7 +181,7 @@ func (s *Sheet) Row(cells []Cell) error {
 
 // Close thêm bảng (nút lọc) nếu cần và kết thúc sheet
 func (s *Sheet) Close() error {
-	if s.opts.Filter && s.row > s.headerRow {
+	if s.opts.Filter && s.hasCols && s.row > s.headerRow {
 		s.w.tables++
 		last, _ := excelize.CoordinatesToCellName(s.cols, s.row)
 		noStripes := false
@@ -229,7 +231,8 @@ func (w *Writer) style(k styleKey) (int, error) {
 	return id, nil
 }
 
-// uniqueName: tên sheet hợp lệ với Excel (≤ 31 ký tự, không [ ] : * ? / \) và không trùng
+// uniqueName: tên sheet hợp lệ với Excel (≤ 31 đơn vị UTF-16, không [ ] : * ? / \, không
+// dấu nháy đơn ở đầu/cuối) và không trùng
 func (w *Writer) uniqueName(name string) string {
 	clean := strings.Map(func(r rune) rune {
 		if strings.ContainsRune(`[]:*?/\`, r) {
@@ -237,24 +240,32 @@ func (w *Writer) uniqueName(name string) string {
 		}
 		return r
 	}, strings.TrimSpace(name))
+	clean = strings.Trim(truncate(strings.Trim(clean, "'"), maxSheetNameUnits), "'")
 	if clean == "" {
 		clean = "Sheet"
 	}
-	clean = truncate(clean, 31)
 	out := clean
 	for n := 2; w.names[strings.ToLower(out)]; n++ {
 		suffix := fmt.Sprintf(" (%d)", n)
-		out = truncate(clean, 31-len(suffix)) + suffix
+		out = strings.TrimRight(truncate(clean, maxSheetNameUnits-len(suffix)), "'") + suffix
 	}
 	w.names[strings.ToLower(out)] = true
 	return out
 }
 
+// maxSheetNameUnits: Excel (và excelize) đếm độ dài tên sheet theo đơn vị UTF-16
+const maxSheetNameUnits = 31
+
+// truncate cắt s còn tối đa n đơn vị UTF-16, không cắt giữa một ký tự
 func truncate(s string, n int) string {
-	if utf8.RuneCountInString(s) <= n {
-		return s
+	units := 0
+	for i, r := range s {
+		units += utf16.RuneLen(r)
+		if units > n {
+			return s[:i]
+		}
 	}
-	return string([]rune(s)[:n])
+	return s
 }
 
 // uniqueHeaders: bảng Excel cần tên cột khác nhau (không phân biệt hoa thường); trùng thì

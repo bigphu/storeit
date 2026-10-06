@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf16"
 
 	"github.com/xuri/excelize/v2"
 
@@ -194,5 +195,55 @@ func TestWriter_TitleMerge(t *testing.T) {
 	}
 	if merges, _ := f.GetMergeCells("One"); len(merges) != 0 {
 		t.Errorf("single column must not merge: %v", merges)
+	}
+}
+
+func TestWriter_SheetNamesExcelRejects(t *testing.T) {
+	long := strings.Repeat("😀", 20) // 40 đơn vị UTF-16
+	f := build(t, func(w *Writer) {
+		for _, n := range []string{"'Quoted'", "'", long, long} {
+			s, err := w.Sheet(SheetOptions{Name: n}, []string{"x"})
+			must(t, err)
+			must(t, s.Close())
+		}
+	})
+	got := f.GetSheetList()
+	if got[0] != "Quoted" || got[1] != "Sheet" {
+		t.Errorf("sheets = %q", got)
+	}
+	for i, n := range got {
+		if u := len(utf16.Encode([]rune(n))); u > 31 {
+			t.Errorf("sheet %d %q has %d UTF-16 units", i, n, u)
+		}
+	}
+	if got[2] == got[3] {
+		t.Errorf("duplicate names must stay unique: %q", got)
+	}
+}
+
+func TestWriter_NoHeadersNoTable(t *testing.T) {
+	f := build(t, func(w *Writer) {
+		s, err := w.Sheet(SheetOptions{Name: "Empty", Filter: true}, nil)
+		must(t, err)
+		must(t, s.Row([]Cell{TextCell("x")}))
+		must(t, s.Close())
+	})
+	if tables, _ := f.GetTables("Empty"); len(tables) != 0 {
+		t.Errorf("no headers must not get a table: %+v", tables)
+	}
+}
+
+func TestWriter_TextCellNeverFormula(t *testing.T) {
+	f := build(t, func(w *Writer) {
+		s, err := w.Sheet(SheetOptions{Name: "S"}, []string{"x"})
+		must(t, err)
+		must(t, s.Row([]Cell{TextCell("=1+1")}))
+		must(t, s.Close())
+	})
+	if v, _ := f.GetCellValue("S", "A2"); v != "=1+1" {
+		t.Errorf("value = %q", v)
+	}
+	if fm, _ := f.GetCellFormula("S", "A2"); fm != "" {
+		t.Errorf("formula = %q, want none", fm)
 	}
 }

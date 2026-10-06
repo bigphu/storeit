@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf16"
 	"unicode/utf8"
 
 	"storeit/internal/platform/errs"
@@ -36,6 +37,17 @@ const (
 	DateISO   DateFormat = "yyyy-mm-dd"
 	DateDMonY DateFormat = "d mmm yyyy"
 )
+
+// GoLayout: dạng tương ứng cho time.Format (tiêu đề báo cáo, tên file)
+func (f DateFormat) GoLayout() string {
+	switch f {
+	case DateISO:
+		return "2006-01-02"
+	case DateDMonY:
+		return "2 Jan 2006"
+	}
+	return "02/01/2006"
+}
 
 type BoolStyle string
 
@@ -193,8 +205,10 @@ func (l ExportLayout) Validate() error {
 			add(p+".width", fmt.Sprintf("0 (automatic) or between %d and %d", minColumnWidth, maxColumnWidth))
 		}
 	}
-	if n := utf8.RuneCountInString(l.SheetName); n < 1 || n > maxSheetNameLen || strings.ContainsAny(l.SheetName, `[]:*?/\`) {
-		add("layout.sheet_name", "1-31 characters, without [ ] : * ? / \\")
+	// Excel đếm tên sheet theo đơn vị UTF-16 và không cho dấu nháy đơn ở đầu/cuối
+	if n := len(utf16.Encode([]rune(l.SheetName))); n < 1 || n > maxSheetNameLen || strings.ContainsAny(l.SheetName, `[]:*?/\`) ||
+		strings.HasPrefix(l.SheetName, "'") || strings.HasSuffix(l.SheetName, "'") {
+		add("layout.sheet_name", "1-31 characters, without [ ] : * ? / \\ and not starting or ending with '")
 	}
 	enum := func(field string, v string, allowed ...string) {
 		if !slices.Contains(allowed, v) {
@@ -217,7 +231,8 @@ func (l ExportLayout) Validate() error {
 		}
 	}
 	if len(fe) > 0 {
-		return ErrInvalidExportLayout.With(errs.WithFields(fe...))
+		// detail để thông báo lỗi ở client nói được trường sai đầu tiên
+		return ErrInvalidExportLayout.With(errs.WithFields(fe...), errs.WithDetail(fe[0].Field+": "+fe[0].Detail))
 	}
 	return nil
 }

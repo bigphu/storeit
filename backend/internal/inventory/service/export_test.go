@@ -3,14 +3,18 @@ package service
 import (
 	"bytes"
 	"errors"
+	"math"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
 
 	"storeit/internal/inventory/domain"
+	"storeit/internal/platform/errs"
 )
 
 func open(t *testing.T, f ExportFile) *excelize.File {
@@ -186,5 +190,74 @@ func TestExport_RequestAttributeSortStaysStrict(t *testing.T) {
 	_, err := e.svc.Export(exporter, ExportRequest{Mode: ExportData, Filter: domain.AssetFilter{Sort: "attributes.serial"}})
 	if status(err) != 422 {
 		t.Errorf("request attribute sort without type_id: %v", err)
+	}
+}
+
+func updatedCell(t *testing.T, e *env, tz string) float64 {
+	t.Helper()
+	l := domain.DefaultReportLayout()
+	l.Columns = []domain.ExportColumn{{Field: "updated_at"}}
+	f, err := e.svc.Export(exporter, ExportRequest{Mode: ExportReport, Layout: &l, TZ: tz})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := open(t, f).GetCellValue("Assets", "A2", excelize.Options{RawCellValue: true})
+	n, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		t.Fatalf("raw %q: %v", raw, err)
+	}
+	return n
+}
+
+func TestExport_TimeZoneShiftsUpdatedAt(t *testing.T) {
+	e := newEnv()
+	e.mustAsset(t, e.laptop(t), "LAP-1")
+	utc, empty, hcm := updatedCell(t, e, "UTC"), updatedCell(t, e, ""), updatedCell(t, e, "Asia/Ho_Chi_Minh")
+	if utc != empty {
+		t.Errorf("empty tz = %v, want UTC %v", empty, utc)
+	}
+	if h := (hcm - utc) * 24; math.Abs(h-7) > 0.02 {
+		t.Errorf("Ho Chi Minh is %.3f hours after UTC, want 7", h)
+	}
+}
+
+func TestExport_InvalidTimeZone(t *testing.T) {
+	e := newEnv()
+	_, err := e.svc.Export(exporter, ExportRequest{Mode: ExportData, TZ: "Mars/Olympus"})
+	var pe *errs.Error
+	if !errors.Is(err, domain.ErrInvalidTimeZone) || status(err) != 422 || !errors.As(err, &pe) || pe.Fields()[0].Field != "tz" {
+		t.Errorf("err = %v, want invalid-time-zone with field tz", err)
+	}
+}
+
+func TestExport_InvalidIDsHasDetail(t *testing.T) {
+	e := newEnv()
+	_, err := e.svc.Export(exporter, ExportRequest{Mode: ExportData, IDs: []uuid.UUID{}})
+	var pe *errs.Error
+	if !errors.As(err, &pe) || pe.Detail() == "" {
+		t.Errorf("err = %v, want a readable detail", err)
+	}
+}
+
+func TestExportFileName(t *testing.T) {
+	now := time.Date(2026, 10, 6, 1, 0, 0, 0, time.UTC)
+	nfd := &domain.ExportProfile{Name: "Kiểm kê"}
+	if got := exportFileName(ExportReport, nfd, now); got != "kiểm-kê-2026-10-06.xlsx" {
+		t.Errorf("NFD name = %q", got)
+	}
+	if got := exportFileName(ExportData, nil, now); got != "storeit-assets-2026-10-06.xlsx" {
+		t.Errorf("data = %q", got)
+	}
+}
+
+func TestAttrFilterText_SelectLabels(t *testing.T) {
+	win, mac := uuid.New(), uuid.New()
+	attr := domain.Attribute{ID: uuid.New(), Label: "OS", DataType: domain.TypeSelect,
+		Options: []domain.Option{{ID: win, Label: "Windows"}, {ID: mac, Label: "macOS"}}}
+	types := []domain.AssetType{{Attributes: []domain.Attribute{attr}}}
+	eq := attrFilterText(types, domain.AttrFilter{AttributeID: attr.ID, DataType: domain.TypeSelect, Op: domain.OpEq, Value: win.String()})
+	in := attrFilterText(types, domain.AttrFilter{AttributeID: attr.ID, DataType: domain.TypeSelect, Op: domain.OpIn, Value: win.String() + "," + mac.String()})
+	if eq != "OS = Windows" || in != "OS in Windows, macOS" {
+		t.Errorf("eq = %q, in = %q", eq, in)
 	}
 }

@@ -152,7 +152,7 @@ response; nothing is stored. Code: `service/export.go`, `service/export_profiles
 Permissions are in the table above. `inventory.asset.export` goes to all four roles,
 `inventory.export_profile.manage` to Administrator and Authorized Manager.
 
-**`POST /assets/export`:** body `{filters, mode, profile_id?, layout?}`. `filters` takes the
+**`POST /assets/export`:** body `{filters, mode, profile_id?, layout?, tz?}`. `filters` takes the
 same fields and rules as `GET /assets` (attribute filters and attribute sorts need
 `type_id`) plus `ids` (1 to 200, else 422 `/errors/invalid-export-selection`) for "Export
 selected". The filters become the same `domain.AssetFilter` the list uses; paging is ignored.
@@ -163,6 +163,13 @@ applies no defaults), then validated. The response is 200 with the spreadsheetml
 `Content-Disposition: attachment` (`storeit-assets-YYYY-MM-DD.xlsx` for data,
 `<profile-name-slug>-YYYY-MM-DD.xlsx` or `storeit-report-YYYY-MM-DD.xlsx` for reports) and,
 when anything was skipped, `X-Export-Skipped-Columns: key1,key2`.
+
+`tz` is the user's IANA time zone (`Asia/Ho_Chi_Minh`, max 64 characters; the web client sends
+`Intl.DateTimeFormat().resolvedOptions().timeZone` on every export). Empty means UTC; the
+server runs with `TZ=UTC` and never uses `time.Local` (`cmd/server` imports `time/tzdata`, so
+names resolve in minimal images). The zone applies to `updated_at` cells, the "Generated"
+date of the title row (formatted with the layout's `date_format`) and the date in the file
+name. An unknown name is 422 `/errors/invalid-time-zone` with a field error on `tz`.
 
 **Data export** (`domain.DataLayout()`, fixed so the future import can read it back): one
 sheet per asset type present in the rows, ordered by type name and named by the type
@@ -193,8 +200,9 @@ a file with one sheet of headers.
 Validation (`layout.Validate()`, 422 `/errors/invalid-export-layout` with all field errors
 at once, paths like `layout.columns[3].field`): 1 to 60 columns (0 allowed when `per_type` with
 `each_type_attrs`); no field twice; `attr:` keys match `^[a-z][a-z0-9_]{0,31}$`; `header` up to 100
-characters, no control characters; `width` 0 or 4 to 80; `sheet_name` 1 to 31 characters
-without `[ ] : * ? / \`; enums must hold one of their values; `sort` must be valid.
+characters, no control characters; `width` 0 or 4 to 80; `sheet_name` 1 to 31 UTF-16 units
+(Excel's count, so an emoji is 2) without `[ ] : * ? / \` and not starting or ending with
+`'`; the problem's `detail` names the first bad field (`layout.sheet_name: ...`); enums must hold one of their values; `sort` must be valid.
 
 **Attributes and skipped columns:** an `attr:<key>` column is resolved per sheet. In
 `per_type` mode it appears only on sheets whose type has an active attribute with that key;
