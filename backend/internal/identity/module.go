@@ -123,6 +123,12 @@ func (m *Module) Bootstrap(ctx context.Context) error {
 	return nil
 }
 
+// SeedAccount tạo account demo có mật khẩu (chỉ cmd/seed dùng); email đã có thì
+// trả id account đó
+func (m *Module) SeedAccount(ctx context.Context, email, name, password string, roleIDs []uuid.UUID) (uuid.UUID, error) {
+	return m.svc.SeedAccount(ctx, email, name, password, roleIDs)
+}
+
 // LoadActor là jobs.ActorLoader cho events.RegisterWorker và job của module khác
 func (m *Module) LoadActor(ctx context.Context, id uuid.UUID) (auth.Actor, error) {
 	return m.svc.LoadActor(ctx, id)

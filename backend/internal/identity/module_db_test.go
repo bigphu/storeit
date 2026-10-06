@@ -14,7 +14,9 @@ import (
 	"github.com/riverqueue/river"
 
 	"storeit/internal/identity"
+	"storeit/internal/identity/domain"
 	"storeit/internal/identity/job"
+	"storeit/internal/identity/service"
 	"storeit/internal/identity/worker"
 	"storeit/internal/platform/database/dbtest"
 	"storeit/internal/platform/events"
@@ -122,5 +124,32 @@ func TestModule_APIDoc(t *testing.T) {
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/docs/identity.json", nil))
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"bearerAuth"`) || !strings.Contains(rec.Body.String(), `"Problem"`) {
 		t.Errorf("identity.json: %d, want the spec with bearerAuth and the shared Problem schema", rec.Code)
+	}
+}
+
+// SeedAccount (chỉ cmd/seed dùng): tạo account có mật khẩu và role; email đã có
+// thì trả id cũ, không lỗi; mật khẩu yếu thì lỗi
+func TestModule_SeedAccount(t *testing.T) {
+	m := newModule(t, identity.Config{})
+	ctx := context.Background()
+	email := "seed-" + uuid.NewString()[:8] + "@storeit.test"
+
+	id, err := m.SeedAccount(ctx, email, "Phạm Thu Hà", "correct-horse-battery", []uuid.UUID{domain.EmployeeRoleID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := m.SeedAccount(ctx, strings.ToUpper(email), "Khác", "correct-horse-battery", nil)
+	if err != nil || again != id {
+		t.Fatalf("second call = %s, %v; want the same id %s", again, err, id)
+	}
+	sess, err := m.Service().Login(ctx, email, "correct-horse-battery", service.Device{})
+	if err != nil {
+		t.Fatalf("login with the seeded password: %v", err)
+	}
+	if sess.Account.Name != "Phạm Thu Hà" {
+		t.Errorf("name = %q", sess.Account.Name)
+	}
+	if _, err := m.SeedAccount(ctx, "weak-"+email, "X", "short", nil); err == nil {
+		t.Error("weak password accepted")
 	}
 }
