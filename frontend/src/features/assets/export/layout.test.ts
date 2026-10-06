@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { reactive, readonly } from 'vue'
 import type { AssetListItem, ExportLayout } from '@/lib/api/types'
-import { cleanSheetName, cloneLayout, excludeFields, includeAttributes, dataPreviewSheets, defaultHeader, exportFileName, defaultReportLayout, editorColumns, fieldOptions, normalizeLayout, previewSheets, sheetNameInput, skippedKeys, type TypeInfo, withColumns } from './layout'
+import { cleanSheetName, cloneLayout, excludeFields, includeAttributes, profilePatch, dataPreviewSheets, defaultHeader, exportFileName, defaultReportLayout, editorColumns, fieldOptions, normalizeLayout, previewSheets, sheetNameInput, skippedKeys, type TypeInfo, withColumns } from './layout'
 
 const laptop: TypeInfo = { id: 'L', name: 'Laptop', code: 'LAPTOP', attributes: [{ key: 'ram_gb', label: 'RAM', data_type: 'number', unit: 'GB' }, { key: 'cpu', label: 'CPU', data_type: 'text' }] }
 const phone: TypeInfo = { id: 'P', name: 'Phone', code: 'PHONE', attributes: [{ key: 'imei', label: 'IMEI', data_type: 'text' }] }
@@ -122,5 +122,24 @@ describe('each type attributes in the column editor', () => {
     const { columns, added } = includeAttributes(cols, opts)
     const back = excludeFields(columns, added)
     expect(back.filter((c) => c.include).map((c) => c.field)).toEqual(['tag', 'attr:ram_gb'])
+  })
+})
+
+describe('profilePatch', () => {
+  const p = { name: 'Laptop chi tiết', shared: false }
+  const l = defaultReportLayout()
+
+  it('is null when nothing changed (Save stays off)', () => {
+    expect(profilePatch(p, { name: ' Laptop chi tiết ', shared: false }, null)).toBeNull()
+  })
+
+  it('sends only what changed', () => {
+    expect(profilePatch(p, { name: 'Laptop 2026', shared: false }, null)).toEqual({ name: 'Laptop 2026' })
+    expect(profilePatch(p, { name: 'Laptop chi tiết', shared: true }, null)).toEqual({ shared: true })
+    expect(profilePatch(p, { name: 'Laptop chi tiết', shared: false }, l)).toEqual({ layout: l })
+  })
+
+  it('treats a blank name as no rename', () => {
+    expect(profilePatch(p, { name: '   ', shared: false }, null)).toBeNull()
   })
 })

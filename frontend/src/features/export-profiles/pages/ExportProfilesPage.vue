@@ -3,9 +3,10 @@ import Button from 'primevue/button'
 import Column from 'primevue/column'
 import ContextMenu from 'primevue/contextmenu'
 import DataTable from 'primevue/datatable'
+import InputText from 'primevue/inputtext'
 import Tag from 'primevue/tag'
 import { useConfirm } from 'primevue/useconfirm'
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import IconAction from '@/components/IconAction.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
@@ -60,6 +61,32 @@ const remove = useDeleteExportProfile()
 function exportAll(p: ExportProfile) {
   run({ mode: 'report', filters: {}, profile_id: p.id }, `${p.name}.xlsx`)
 }
+// Đổi tên ngay trên dòng: ô tên thành ô nhập, Enter lưu, Escape huỷ
+const renaming = ref<string | null>(null)
+const newName = ref('')
+function startRename(p: ExportProfile) {
+  renaming.value = p.id
+  newName.value = p.name
+  nextTick(() => (document.getElementById(`rename-${p.id}`) as HTMLInputElement | null)?.select())
+}
+function cancelRename() {
+  renaming.value = null
+}
+async function saveRename(p: ExportProfile) {
+  const name = newName.value.trim()
+  if (!name || name === p.name) {
+    cancelRename()
+    return
+  }
+  try {
+    await update.mutateAsync({ id: p.id, version: p.version, name })
+    renaming.value = null
+    notify.success(`Renamed ${p.name} to ${name}.`)
+  } catch {
+    // lỗi (trùng tên, đã bị sửa) đã báo bằng thông báo chung; giữ ô nhập để sửa tiếp
+  }
+}
+
 function toggleShare(p: ExportProfile) {
   update.mutateAsync({ id: p.id, version: p.version, shared: !p.shared }).then(
     () => notify.success(p.shared ? `${p.name} is private again.` : `${p.name} is shared with everyone who can export.`),
@@ -93,7 +120,8 @@ function summary(p: ExportProfile) {
 const rowClick = onRowClick<ExportProfile>((p) => open(p))
 const menu = ref<InstanceType<typeof ContextMenu>>()
 const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<ExportProfile>(menu, (p) => [
-  { label: p.can_edit ? 'Edit' : 'Open (save as a copy)', icon: 'pi pi-pencil', command: () => open(p) },
+  { label: p.can_edit ? 'Edit layout' : 'Open (save as a copy)', icon: 'pi pi-sliders-h', command: () => open(p) },
+  { label: 'Rename…', icon: 'pi pi-pencil', disabled: !p.can_edit, command: () => startRename(p) },
   { label: 'Export all assets', icon: 'pi pi-download', command: () => exportAll(p) },
   { separator: true },
   {
@@ -128,7 +156,12 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Export
     >
       <Column header="Name">
         <template #body="{ data: p }: { data: ExportProfile }">
-          <span class="name">{{ p.name }}</span>
+          <form v-if="renaming === p.id" class="rename" @submit.prevent="saveRename(p)" @keydown.esc.prevent="cancelRename">
+            <InputText :id="`rename-${p.id}`" v-model="newName" size="small" maxlength="100" required :aria-label="`New name for ${p.name}`" />
+            <Button type="submit" label="Save" size="small" :loading="update.isPending.value" />
+            <Button label="Cancel" size="small" text severity="secondary" @click="cancelRename" />
+          </form>
+          <span v-else class="name">{{ p.name }}</span>
         </template>
       </Column>
       <Column header="Owner">
@@ -145,11 +178,12 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Export
       <Column header="Updated">
         <template #body="{ data: p }: { data: ExportProfile }">{{ formatDay(p.updated_at) }}</template>
       </Column>
-      <Column header="" header-style="width: 10rem">
+      <Column header="" header-style="width: 12rem">
         <template #body="{ data: p }: { data: ExportProfile }">
           <div class="row-actions">
             <IconAction icon="pi pi-download" label="Export all assets with this profile" @click="exportAll(p)" />
-            <IconAction icon="pi pi-pencil" :label="p.can_edit ? 'Edit' : 'Open (save as a copy)'" @click="open(p)" />
+            <IconAction icon="pi pi-sliders-h" :label="p.can_edit ? 'Edit layout' : 'Open (save as a copy)'" @click="open(p)" />
+            <IconAction icon="pi pi-pencil" label="Rename" :disabled="!p.can_edit" :reason="why(p)" @click="startRename(p)" />
             <IconAction
               :icon="p.shared ? 'pi pi-lock' : 'pi pi-share-alt'"
               :label="p.shared ? 'Stop sharing' : 'Share'"
@@ -170,6 +204,15 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Export
 <style scoped>
 .name {
   font-weight: 600;
+}
+.rename {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+.rename :deep(.p-inputtext) {
+  min-width: 12rem;
 }
 .muted {
   color: var(--p-text-muted-color);

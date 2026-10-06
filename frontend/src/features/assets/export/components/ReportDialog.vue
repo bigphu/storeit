@@ -29,6 +29,7 @@ import {
   fieldOptions,
   includeAttributes,
   normalizeLayout,
+  profilePatch,
   previewSheets,
   sheetNameInput,
   skippedKeys,
@@ -109,13 +110,6 @@ const title = computed(() =>
   current.value.title_row ? [profile.value?.name ?? 'Asset report', `Generated ${new Date().toLocaleDateString('en-GB')} by ${session.me?.account.name ?? ''} · ${props.scope.label}`] : [],
 )
 
-// Vì sao Save tắt (tooltip); rỗng khi bấm được
-const saveHint = computed(() => {
-  const p = profile.value
-  if (!p) return 'Pick a profile to save changes to it, or use Save as…'
-  if (!p.can_edit) return `Only ${p.owner.name} or a profile manager can change it; use Save as…`
-  return dirty.value ? '' : 'No changes to save'
-})
 // Luôn hiện ở tab Columns; chỉ có nghĩa khi mỗi loại một sheet, nên tick lúc đang một
 // sheet thì chuyển sang mỗi loại một sheet
 // Tick: các cột thuộc tính cũng được tick trong danh sách (thấy trước cái sẽ có trong file);
@@ -150,41 +144,75 @@ const sheetsOptions = [
 ]
 const sheetMode = computed({ get: () => layout.value.sheets, set: (v) => (layout.value = { ...layout.value, sheets: v }) })
 
-// Lưu: sửa profile của mình (hay có quyền quản lý); "Save as…" tạo bản mới
-const update = useUpdateExportProfile()
+// Save…: một popover cho cả lưu vào profile này (tên, chia sẻ, cột và định dạng trong một
+// PATCH) và lưu bản mới. Profile không sửa được, hay chưa chọn profile: chỉ Save as new.
+const update = useUpdateExportProfile(false)
 const create = useCreateExportProfile()
 const errors = useFormErrors()
-const saveAs = ref<{ name: string; shared: boolean } | null>(null)
-async function save() {
+const saveForm = ref<{ name: string; shared: boolean; hint: string } | null>(null)
+const savePop = ref<InstanceType<typeof Popover>>()
+const canSaveHere = computed(() => !!profile.value?.can_edit)
+// thay đổi Save sẽ gửi; null thì nút Save tắt
+const patch = computed(() => {
   const p = profile.value
-  if (!p || loadedVersion.value === null) return
-  const next = await update.mutateAsync({ id: p.id, version: loadedVersion.value, layout: current.value })
-  saved.value = normalizeLayout(next.layout)
-  loadedVersion.value = next.version
-  notify.success(`Saved ${p.name}.`)
-}
-// "Save as…" mở popover nhỏ cạnh nút (không chiếm thêm một hàng của hộp thoại)
-const saveAsPop = ref<InstanceType<typeof Popover>>()
-function openSaveAs(e: Event) {
+  if (!p || !saveForm.value) return null
+  return profilePatch(p, saveForm.value, dirty.value ? current.value : null)
+})
+const saveLead = computed(() => {
+  const p = profile.value
+  if (!p) return 'Save these settings as a new profile.'
+  if (!p.can_edit) return `Shared by ${p.owner.name}. You can save your own copy.`
+  return 'Rename, share, or save the current columns and format.'
+})
+function openSave(e: Event) {
   errors.clear()
-  saveAs.value = { name: profile.value ? `${profile.value.name} (copy)` : 'New report', shared: false }
-  saveAsPop.value?.show(e)
+  const p = profile.value
+  saveForm.value = p?.can_edit ? { name: p.name, shared: p.shared, hint: '' } : { name: p ? `${p.name} (copy)` : 'New report', shared: false, hint: '' }
+  savePop.value?.toggle(e)
 }
-function closeSaveAs() {
-  saveAsPop.value?.hide()
-  saveAs.value = null
+function closeSave() {
+  savePop.value?.hide()
+  saveForm.value = null
 }
-async function submitSaveAs() {
-  if (!saveAs.value) return
+async function saveHere() {
+  const p = profile.value
+  const ch = patch.value
+  if (!p || !ch || loadedVersion.value === null) return
   errors.clear()
   try {
-    const p = await create.mutateAsync({ name: saveAs.value.name, shared: saveAs.value.shared, layout: current.value })
-    closeSaveAs()
-    profileId.value = p.id
-    notify.success(`Saved ${p.name}.`)
+    const next = await update.mutateAsync({ id: p.id, version: loadedVersion.value, ...ch })
+    saved.value = normalizeLayout(next.layout)
+    loadedVersion.value = next.version
+    closeSave()
+    notify.success(ch.name ? `Saved ${next.name} (renamed).` : `Saved ${next.name}.`)
   } catch (err) {
     errors.set(err)
   }
+}
+async function saveNew() {
+  const f = saveForm.value
+  if (!f) return
+  const p = profile.value
+  // tên chưa đổi trên profile của mình: gợi ý "(copy)" thay vì báo trùng tên
+  if (p && p.owner.id === session.me?.account.id && f.name.trim() === p.name) {
+    f.name = `${p.name} (copy)`
+    f.hint = 'Pick a name for the copy, then Save as new again.'
+    return
+  }
+  errors.clear()
+  try {
+    const np = await create.mutateAsync({ name: f.name, shared: f.shared, layout: current.value })
+    closeSave()
+    profileId.value = np.id
+    notify.success(`Saved ${np.name}.`)
+  } catch (err) {
+    errors.set(err)
+  }
+}
+// Enter trong ô tên: Save khi lưu được vào profile này, không thì Save as new
+function submitSave() {
+  if (canSaveHere.value && patch.value) saveHere()
+  else saveNew()
 }
 
 const { run, running } = useExport()
@@ -251,24 +279,24 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
         <i v-if="profile && !profile.can_edit" v-tooltip.bottom="`Shared by ${profile.owner.name}`" class="pi pi-lock state" aria-label="Shared by someone else" />
         <i v-else-if="profile?.shared" v-tooltip.bottom="'Shared with everyone who can export'" class="pi pi-users state" aria-label="Shared" />
         <Tag v-if="dirty" value="Unsaved" severity="warn" class="unsaved" />
-        <span v-tooltip.bottom="saveHint">
-          <Button label="Save" size="small" text :disabled="!profile?.can_edit || !dirty" :loading="update.isPending.value" @click="save" />
-        </span>
-        <Button label="Save as…" size="small" text @click="openSaveAs" />
+        <Button label="Save…" size="small" text aria-haspopup="dialog" @click="openSave" />
       </div>
     </template>
-    <Popover ref="saveAsPop" @hide="saveAs = null">
-      <form v-if="saveAs" class="save-as" @submit.prevent="submitSaveAs">
-        <label for="save-as-name">Profile name</label>
-        <InputText id="save-as-name" v-model="saveAs.name" required maxlength="100" autofocus fluid :invalid="!!errors.fields.value.name" />
+    <Popover ref="savePop" @hide="saveForm = null">
+      <form v-if="saveForm" class="save-as" @submit.prevent="submitSave">
+        <p class="save-lead">{{ saveLead }}</p>
+        <label for="save-name">Name</label>
+        <InputText id="save-name" v-model="saveForm.name" required maxlength="100" autofocus fluid :invalid="!!errors.fields.value.name" @update:model-value="saveForm.hint = ''" />
         <span class="check">
-          <Checkbox v-model="saveAs.shared" input-id="save-as-shared" binary />
-          <label for="save-as-shared">Share with everyone who can export</label>
+          <Checkbox v-model="saveForm.shared" input-id="save-shared" binary />
+          <label for="save-shared">Share with everyone who can export</label>
         </span>
         <Message v-if="errors.general.value || errors.fields.value.name" severity="error" size="small" variant="simple">{{ errors.fields.value.name ?? errors.general.value }}</Message>
+        <small v-if="saveForm.hint" class="save-hint">{{ saveForm.hint }}</small>
         <div class="save-as-actions">
-          <Button label="Cancel" size="small" text severity="secondary" @click="closeSaveAs" />
-          <Button type="submit" label="Save profile" size="small" :loading="create.isPending.value" />
+          <Button label="Cancel" size="small" text severity="secondary" @click="closeSave" />
+          <Button label="Save as new" size="small" :severity="canSaveHere ? 'secondary' : undefined" :outlined="canSaveHere" :loading="create.isPending.value" @click="saveNew" />
+          <Button v-if="canSaveHere" label="Save" size="small" :disabled="!patch" :loading="update.isPending.value" @click="saveHere" />
         </div>
       </form>
     </Popover>
@@ -371,6 +399,13 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
   flex-direction: column;
   gap: 0.6rem;
   width: min(20rem, 80vw);
+}
+.save-lead {
+  font-size: 0.84rem;
+  color: var(--p-text-muted-color);
+}
+.save-hint {
+  color: var(--p-primary-color);
 }
 .save-as-actions {
   display: flex;

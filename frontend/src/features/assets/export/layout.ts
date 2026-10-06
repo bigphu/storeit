@@ -150,6 +150,22 @@ export function cloneLayout(l: ExportLayout): ExportLayout {
   return JSON.parse(JSON.stringify(l)) as ExportLayout
 }
 
+// profilePatch: phần đổi của profile để Save gửi trong một PATCH (tên, chia sẻ, bố cục).
+// layout là bố cục mới khi đã sửa, null khi chưa; tên trống coi như không đổi. null: không
+// có gì đổi, nút Save tắt
+export function profilePatch(
+  p: { name: string; shared: boolean },
+  form: { name: string; shared: boolean },
+  layout: ExportLayout | null,
+): { name?: string; shared?: boolean; layout?: ExportLayout } | null {
+  const out: { name?: string; shared?: boolean; layout?: ExportLayout } = {}
+  const name = form.name.trim()
+  if (name && name !== p.name) out.name = name
+  if (form.shared !== p.shared) out.shared = form.shared
+  if (layout) out.layout = layout
+  return Object.keys(out).length ? out : null
+}
+
 // exportFileName: tên file như server đặt (service/export.go exportFileName); day là YYYY-MM-DD
 export function exportFileName(mode: 'data' | 'report', profileName: string | undefined, day: string): string {
   if (mode === 'data') return `storeit-assets-${day}.xlsx`

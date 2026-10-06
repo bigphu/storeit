@@ -27,9 +27,12 @@ export function useCreateExportProfile() {
   )
 }
 
-export function useUpdateExportProfile() {
-  return useProfileMutation(({ id, ...body }: { id: string; version: number; name?: string; shared?: boolean; layout?: ExportLayout }) =>
-    unwrap(inventoryApi.PATCH('/export-profiles/{profileID}', { params: { path: { profileID: id } }, body })),
+// toast: false khi form tự hiện lỗi (popover Save… của hộp thoại báo cáo)
+export function useUpdateExportProfile(toast = true) {
+  return useProfileMutation(
+    ({ id, ...body }: { id: string; version: number; name?: string; shared?: boolean; layout?: ExportLayout }) =>
+      unwrap(inventoryApi.PATCH('/export-profiles/{profileID}', { params: { path: { profileID: id } }, body })),
+    toast,
   )
 }
 
