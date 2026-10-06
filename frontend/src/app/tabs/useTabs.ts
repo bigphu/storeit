@@ -112,6 +112,13 @@ export const useTabs = defineStore('tabs', () => {
     const tab = byId(id)
     if (!tab || id === activeId.value) return Promise.resolve()
     activeId.value = id
+    // URL của tab đã đang mở (tab nhân đôi, hai tab cùng trang): router không điều hướng
+    // nên sync không chạy. Tự giao trang cho tab này, không thì trang (tiêu đề, lịch sử,
+    // bộ lọc) vẫn thuộc tab cũ dù thanh tab tô tab mới
+    if (router.currentRoute.value.fullPath === tab.path) {
+      routeTabId.value = id
+      return Promise.resolve()
+    }
     return router.replace(tab.path)
   }
 
