@@ -53,6 +53,18 @@ services:
       postgres: { condition: service_healthy }
     restart: "no"
 
+  # Dữ liệu demo cho dev: make seed (không chạy khi `docker compose up`)
+  seed:
+    <<: *go-dev
+    command: ["go", "run", "./cmd/seed"]
+    environment:
+      <<: *go-env
+      SEED_PASSWORD: ${SEED_PASSWORD:-}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: "no"
+    profiles: ["tools"]
+
   app:
     <<: *go-dev
     environment:

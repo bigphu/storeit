@@ -44,6 +44,7 @@ the default" (configs built by hand in tests); negative values are rejected.
 | `jobs.Config` | `JOBS_DEFAULT_MAX_WORKERS` (10), `JOBS_EVENTS_MAX_WORKERS` (10). Worker only |
 | `mail.Config` | `MAIL_TRANSPORT` (required: smtp \| resend \| log), `MAIL_FROM` (required, `Name <addr>`), `MAIL_REPLY_TO`, `MAIL_SMTP_HOST`, `MAIL_SMTP_PORT` (587), `MAIL_SMTP_USERNAME`, `MAIL_SMTP_PASSWORD_FILE`, `MAIL_SMTP_TLS` (starttls \| tls \| none), `MAIL_RESEND_API_KEY_FILE`. Worker only |
 | `inventory.Config` | `INVENTORY_EXPORT_MAX_ROWS` (50000; 0 means 50000, otherwise 1 to 1000000). Server only |
+| `seed.Config` | `SEED_PASSWORD` (required, 12-72 bytes; every demo account uses it). `cmd/seed` only (`make seed`, dev) |
 
 Compose files (repo root) set `HTTP_ADDR`, `LOG_*`, `JWT_*` and `PG*`. `compose.prod.yml`
 pins the compose network to `APP_NET_SUBNET` (172.30.0.0/24) and trusts it as

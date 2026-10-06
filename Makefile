@@ -37,14 +37,14 @@ REGISTRY ?= storeit
 .DEFAULT_GOAL := help
 .PHONY: help init dev \
         up down restart build logs logs-app logs-web logs-db ps shell \
-        psql psql-admin db-reset pgadmin \
+        psql psql-admin db-reset seed pgadmin \
         generate check images
 
 help:
 	@echo Prerequisite: init
 	@echo Dev         : dev = up + logs   "(web http://localhost:$(WEB_PORT), API http://localhost:8080/api/docs)"
 	@echo Docker      : up down restart build logs logs-app logs-web logs-db ps shell
-	@echo DB          : psql psql-admin pgadmin db-reset CONFIRM=yes
+	@echo DB          : psql psql-admin pgadmin seed db-reset CONFIRM=yes
 	@echo Code        : generate check
 	@echo Release     : images TAG=1.0.0 REGISTRY=registry.example.com
 	@echo Go only     : make -C backend help
@@ -112,6 +112,10 @@ endif
 	$(COMPOSE) down
 	docker volume rm -f storeit_pgdata storeit_pgadmin
 	$(COMPOSE) up -d
+
+# Dữ liệu demo (account mỗi role, ~300 tài sản); DB đã có dữ liệu thì bỏ qua. Cần SEED_PASSWORD trong .env
+seed:
+	$(COMPOSE) run --rm seed
 
 # --- Code ---
 # Sinh code backend (sqlc, oapi-codegen) rồi type của frontend từ OpenAPI
