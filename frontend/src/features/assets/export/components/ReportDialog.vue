@@ -434,10 +434,12 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
   flex-direction: column;
   gap: 0.25rem;
   margin-top: 0.6rem;
+  min-width: 0;
 }
+/* minmax(0, 1fr): cột không nở theo nhãn dài của Select (vd "Purchase date") */
 .grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0 0.75rem;
 }
 .checks {
@@ -455,8 +457,14 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
   color: var(--p-text-muted-color);
 }
 .foot-note {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
   margin-right: auto;
-  font-size: 0.85rem;
+  text-align: left;
+  font-size: 0.88rem;
+  line-height: 1.2;
 }
 /* Màn hẹp: xếp chồng, cả hộp thoại cuộn như cũ */
 @media (max-width: 900px) {
