@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -46,6 +47,138 @@ func (e DataType) Valid() bool {
 	case Select:
 		return true
 	case Text:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExportLayoutBoolStyle.
+const (
+	Check ExportLayoutBoolStyle = "check"
+	YesNo ExportLayoutBoolStyle = "yes_no"
+)
+
+// Valid indicates whether the value is a known member of the ExportLayoutBoolStyle enum.
+func (e ExportLayoutBoolStyle) Valid() bool {
+	switch e {
+	case Check:
+		return true
+	case YesNo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExportLayoutDateFormat.
+const (
+	DMmmYyyy ExportLayoutDateFormat = "d mmm yyyy"
+	Ddmmyyyy ExportLayoutDateFormat = "dd/mm/yyyy"
+	YyyyMmDd ExportLayoutDateFormat = "yyyy-mm-dd"
+)
+
+// Valid indicates whether the value is a known member of the ExportLayoutDateFormat enum.
+func (e ExportLayoutDateFormat) Valid() bool {
+	switch e {
+	case DMmmYyyy:
+		return true
+	case Ddmmyyyy:
+		return true
+	case YyyyMmDd:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExportLayoutHeader.
+const (
+	Bold     ExportLayoutHeader = "bold"
+	BoldFill ExportLayoutHeader = "bold_fill"
+	Plain    ExportLayoutHeader = "plain"
+)
+
+// Valid indicates whether the value is a known member of the ExportLayoutHeader enum.
+func (e ExportLayoutHeader) Valid() bool {
+	switch e {
+	case Bold:
+		return true
+	case BoldFill:
+		return true
+	case Plain:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExportLayoutSheets.
+const (
+	PerType ExportLayoutSheets = "per_type"
+	Single  ExportLayoutSheets = "single"
+)
+
+// Valid indicates whether the value is a known member of the ExportLayoutSheets enum.
+func (e ExportLayoutSheets) Valid() bool {
+	switch e {
+	case PerType:
+		return true
+	case Single:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExportLayoutStatusAs.
+const (
+	Kind ExportLayoutStatusAs = "kind"
+	Name ExportLayoutStatusAs = "name"
+)
+
+// Valid indicates whether the value is a known member of the ExportLayoutStatusAs enum.
+func (e ExportLayoutStatusAs) Valid() bool {
+	switch e {
+	case Kind:
+		return true
+	case Name:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExportLayoutUnitIn.
+const (
+	Cell   ExportLayoutUnitIn = "cell"
+	Header ExportLayoutUnitIn = "header"
+)
+
+// Valid indicates whether the value is a known member of the ExportLayoutUnitIn enum.
+func (e ExportLayoutUnitIn) Valid() bool {
+	switch e {
+	case Cell:
+		return true
+	case Header:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExportRequestMode.
+const (
+	Data   ExportRequestMode = "data"
+	Report ExportRequestMode = "report"
+)
+
+// Valid indicates whether the value is a known member of the ExportRequestMode enum.
+func (e ExportRequestMode) Valid() bool {
+	switch e {
+	case Data:
+		return true
+	case Report:
 		return true
 	default:
 		return false
@@ -266,6 +399,13 @@ type CreateAssetTypeRequest struct {
 	Name        string          `json:"name"`
 }
 
+// CreateExportProfileRequest defines model for CreateExportProfileRequest.
+type CreateExportProfileRequest struct {
+	Layout ExportLayout `json:"layout"`
+	Name   string       `json:"name"`
+	Shared *bool        `json:"shared,omitempty"`
+}
+
 // CreateStatusRequest defines model for CreateStatusRequest.
 type CreateStatusRequest struct {
 	Kind     StatusKind `json:"kind"`
@@ -275,6 +415,93 @@ type CreateStatusRequest struct {
 
 // DataType defines model for DataType.
 type DataType string
+
+// ExportColumn defines model for ExportColumn.
+type ExportColumn struct {
+	// Field tag, name, description, type, status, purchase_date, updated_at or attr:<key>
+	Field  string   `json:"field"`
+	Header *string  `json:"header,omitempty"`
+	Width  *float32 `json:"width,omitempty"`
+}
+
+// ExportFilters Same filters and rules as GET /assets, plus ids for "Export selected"
+type ExportFilters struct {
+	Attr           *[]string          `json:"attr,omitempty"`
+	Ids            *[]externalRef0.ID `json:"ids,omitempty"`
+	IncludeRetired *bool              `json:"include_retired,omitempty"`
+	Q              *string            `json:"q,omitempty"`
+	Sort           *string            `json:"sort,omitempty"`
+	StatusId       *externalRef0.ID   `json:"status_id,omitempty"`
+	StatusKind     *StatusKind        `json:"status_kind,omitempty"`
+	TypeId         *externalRef0.ID   `json:"type_id,omitempty"`
+}
+
+// ExportLayout defines model for ExportLayout.
+type ExportLayout struct {
+	BoolStyle     ExportLayoutBoolStyle  `json:"bool_style"`
+	Columns       []ExportColumn         `json:"columns"`
+	DateFormat    ExportLayoutDateFormat `json:"date_format"`
+	EachTypeAttrs *bool                  `json:"each_type_attrs,omitempty"`
+	Filter        bool                   `json:"filter"`
+	Freeze        bool                   `json:"freeze"`
+	Header        ExportLayoutHeader     `json:"header"`
+	SheetName     string                 `json:"sheet_name"`
+	Sheets        ExportLayoutSheets     `json:"sheets"`
+
+	// Sort Empty: the request sort
+	Sort     *string              `json:"sort,omitempty"`
+	StatusAs ExportLayoutStatusAs `json:"status_as"`
+	Stripes  bool                 `json:"stripes"`
+	Summary  bool                 `json:"summary"`
+	TitleRow bool                 `json:"title_row"`
+	UnitIn   ExportLayoutUnitIn   `json:"unit_in"`
+}
+
+// ExportLayoutBoolStyle defines model for ExportLayout.BoolStyle.
+type ExportLayoutBoolStyle string
+
+// ExportLayoutDateFormat defines model for ExportLayout.DateFormat.
+type ExportLayoutDateFormat string
+
+// ExportLayoutHeader defines model for ExportLayout.Header.
+type ExportLayoutHeader string
+
+// ExportLayoutSheets defines model for ExportLayout.Sheets.
+type ExportLayoutSheets string
+
+// ExportLayoutStatusAs defines model for ExportLayout.StatusAs.
+type ExportLayoutStatusAs string
+
+// ExportLayoutUnitIn defines model for ExportLayout.UnitIn.
+type ExportLayoutUnitIn string
+
+// ExportProfile defines model for ExportProfile.
+type ExportProfile struct {
+	CanEdit   bool            `json:"can_edit"`
+	CreatedAt time.Time       `json:"created_at"`
+	Id        externalRef0.ID `json:"id"`
+	Layout    ExportLayout    `json:"layout"`
+	Name      string          `json:"name"`
+	Owner     struct {
+		Id   externalRef0.ID `json:"id"`
+		Name string          `json:"name"`
+	} `json:"owner"`
+	Shared    bool      `json:"shared"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Version   int32     `json:"version"`
+}
+
+// ExportRequest defines model for ExportRequest.
+type ExportRequest struct {
+	// Filters Same filters and rules as GET /assets, plus ids for "Export selected"
+	Filters   *ExportFilters    `json:"filters,omitempty"`
+	Layout    *ExportLayout     `json:"layout,omitempty"`
+	Mode      ExportRequestMode `json:"mode"`
+	ProfileId *externalRef0.ID  `json:"profile_id,omitempty"`
+}
+
+// ExportRequestMode defines model for ExportRequest.Mode.
+type ExportRequestMode string
 
 // KindCounts Assets not retired by the kind of their status; only with `with_counts=true`
 type KindCounts struct {
@@ -382,6 +609,14 @@ type UpdateAttributeRequest struct {
 
 	// Unit "" removes the unit
 	Unit *string `json:"unit,omitempty"`
+}
+
+// UpdateExportProfileRequest defines model for UpdateExportProfileRequest.
+type UpdateExportProfileRequest struct {
+	Layout  *ExportLayout `json:"layout,omitempty"`
+	Name    *string       `json:"name,omitempty"`
+	Shared  *bool         `json:"shared,omitempty"`
+	Version int32         `json:"version"`
 }
 
 // UpdateOptionRequest defines model for UpdateOptionRequest.
@@ -511,6 +746,9 @@ type RetireAssetsJSONRequestBody = BulkRetireRequest
 // SetAssetsStatusJSONRequestBody defines body for SetAssetsStatus for application/json ContentType.
 type SetAssetsStatusJSONRequestBody = BulkStatusRequest
 
+// ExportAssetsJSONRequestBody defines body for ExportAssets for application/json ContentType.
+type ExportAssetsJSONRequestBody = ExportRequest
+
 // UpdateAssetJSONRequestBody defines body for UpdateAsset for application/json ContentType.
 type UpdateAssetJSONRequestBody = UpdateAssetRequest
 
@@ -519,6 +757,12 @@ type RestoreAssetJSONRequestBody = VersionRequest
 
 // RetireAssetJSONRequestBody defines body for RetireAsset for application/json ContentType.
 type RetireAssetJSONRequestBody = RetireAssetRequest
+
+// CreateExportProfileJSONRequestBody defines body for CreateExportProfile for application/json ContentType.
+type CreateExportProfileJSONRequestBody = CreateExportProfileRequest
+
+// UpdateExportProfileJSONRequestBody defines body for UpdateExportProfile for application/json ContentType.
+type UpdateExportProfileJSONRequestBody = UpdateExportProfileRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -594,6 +838,9 @@ type ServerInterface interface {
 	// SetAssetsStatus Change the status of several assets; each succeeds or fails on its own (inventory.asset.manage)
 	// (POST /assets/bulk-status)
 	SetAssetsStatus(w http.ResponseWriter, r *http.Request)
+	// ExportAssets Download assets as .xlsx (inventory.asset.read and inventory.asset.export)
+	// (POST /assets/export)
+	ExportAssets(w http.ResponseWriter, r *http.Request)
 	// GetAsset Get an asset with its custom attributes (inventory.asset.read)
 	// (GET /assets/{assetID})
 	GetAsset(w http.ResponseWriter, r *http.Request, assetID AssetID)
@@ -606,6 +853,21 @@ type ServerInterface interface {
 	// RetireAsset Retire an asset; it keeps its tag (inventory.asset.manage)
 	// (POST /assets/{assetID}/retire)
 	RetireAsset(w http.ResponseWriter, r *http.Request, assetID AssetID)
+	// ListExportProfiles Your export profiles and every shared one (inventory.asset.export)
+	// (GET /export-profiles)
+	ListExportProfiles(w http.ResponseWriter, r *http.Request)
+	// CreateExportProfile Save a report layout (inventory.asset.export)
+	// (POST /export-profiles)
+	CreateExportProfile(w http.ResponseWriter, r *http.Request)
+	// DeleteExportProfile Delete a profile (owner; shared ones also inventory.export_profile.manage)
+	// (DELETE /export-profiles/{profileID})
+	DeleteExportProfile(w http.ResponseWriter, r *http.Request, profileID externalRef0.ID)
+	// GetExportProfile One profile (yours or shared)
+	// (GET /export-profiles/{profileID})
+	GetExportProfile(w http.ResponseWriter, r *http.Request, profileID externalRef0.ID)
+	// UpdateExportProfile Rename, share or change the layout (owner; shared ones also inventory.export_profile.manage)
+	// (PATCH /export-profiles/{profileID})
+	UpdateExportProfile(w http.ResponseWriter, r *http.Request, profileID externalRef0.ID)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -756,6 +1018,12 @@ func (_ Unimplemented) SetAssetsStatus(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ExportAssets Download assets as .xlsx (inventory.asset.read and inventory.asset.export)
+// (POST /assets/export)
+func (_ Unimplemented) ExportAssets(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // GetAsset Get an asset with its custom attributes (inventory.asset.read)
 // (GET /assets/{assetID})
 func (_ Unimplemented) GetAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
@@ -777,6 +1045,36 @@ func (_ Unimplemented) RestoreAsset(w http.ResponseWriter, r *http.Request, asse
 // RetireAsset Retire an asset; it keeps its tag (inventory.asset.manage)
 // (POST /assets/{assetID}/retire)
 func (_ Unimplemented) RetireAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListExportProfiles Your export profiles and every shared one (inventory.asset.export)
+// (GET /export-profiles)
+func (_ Unimplemented) ListExportProfiles(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateExportProfile Save a report layout (inventory.asset.export)
+// (POST /export-profiles)
+func (_ Unimplemented) CreateExportProfile(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteExportProfile Delete a profile (owner; shared ones also inventory.export_profile.manage)
+// (DELETE /export-profiles/{profileID})
+func (_ Unimplemented) DeleteExportProfile(w http.ResponseWriter, r *http.Request, profileID externalRef0.ID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetExportProfile One profile (yours or shared)
+// (GET /export-profiles/{profileID})
+func (_ Unimplemented) GetExportProfile(w http.ResponseWriter, r *http.Request, profileID externalRef0.ID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateExportProfile Rename, share or change the layout (owner; shared ones also inventory.export_profile.manage)
+// (PATCH /export-profiles/{profileID})
+func (_ Unimplemented) UpdateExportProfile(w http.ResponseWriter, r *http.Request, profileID externalRef0.ID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1590,6 +1888,20 @@ func (siw *ServerInterfaceWrapper) SetAssetsStatus(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ExportAssets operation middleware
+func (siw *ServerInterfaceWrapper) ExportAssets(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportAssets(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetAsset operation middleware
 func (siw *ServerInterfaceWrapper) GetAsset(w http.ResponseWriter, r *http.Request) {
 
@@ -1685,6 +1997,112 @@ func (siw *ServerInterfaceWrapper) RetireAsset(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RetireAsset(w, r, assetID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListExportProfiles operation middleware
+func (siw *ServerInterfaceWrapper) ListExportProfiles(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListExportProfiles(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateExportProfile operation middleware
+func (siw *ServerInterfaceWrapper) CreateExportProfile(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateExportProfile(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteExportProfile operation middleware
+func (siw *ServerInterfaceWrapper) DeleteExportProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "profileID" -------------
+	var profileID externalRef0.ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "profileID", chi.URLParam(r, "profileID"), &profileID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profileID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteExportProfile(w, r, profileID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetExportProfile operation middleware
+func (siw *ServerInterfaceWrapper) GetExportProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "profileID" -------------
+	var profileID externalRef0.ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "profileID", chi.URLParam(r, "profileID"), &profileID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profileID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetExportProfile(w, r, profileID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateExportProfile operation middleware
+func (siw *ServerInterfaceWrapper) UpdateExportProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "profileID" -------------
+	var profileID externalRef0.ID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "profileID", chi.URLParam(r, "profileID"), &profileID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profileID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateExportProfile(w, r, profileID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1872,6 +2290,24 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/assets", wrapper.CreateAsset)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/assets/export", wrapper.ExportAssets)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/export-profiles", wrapper.ListExportProfiles)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/export-profiles", wrapper.CreateExportProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/export-profiles/{profileID}", wrapper.DeleteExportProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/export-profiles/{profileID}", wrapper.GetExportProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/export-profiles/{profileID}", wrapper.UpdateExportProfile)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/assets/{assetID}", wrapper.GetAsset)
@@ -2843,6 +3279,63 @@ func (response SetAssetsStatusdefaultApplicationProblemPlusJSONResponse) VisitSe
 	return err
 }
 
+type ExportAssetsRequestObject struct {
+	Body *ExportAssetsJSONRequestBody
+}
+
+type ExportAssetsResponseObject interface {
+	VisitExportAssetsResponse(w http.ResponseWriter) error
+}
+
+type ExportAssets200ResponseHeaders struct {
+	ContentDisposition    *string
+	XExportSkippedColumns *string
+}
+
+type ExportAssets200ApplicationvndOpenxmlformatsOfficedocumentSpreadsheetmlSheetResponse struct {
+	Body          io.Reader
+	Headers       ExportAssets200ResponseHeaders
+	ContentLength int64
+}
+
+func (response ExportAssets200ApplicationvndOpenxmlformatsOfficedocumentSpreadsheetmlSheetResponse) VisitExportAssetsResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	if response.Headers.XExportSkippedColumns != nil {
+		w.Header().Set("X-Export-Skipped-Columns", fmt.Sprint(*response.Headers.XExportSkippedColumns))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type ExportAssetsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ExportAssetsdefaultApplicationProblemPlusJSONResponse) VisitExportAssetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetAssetRequestObject struct {
 	AssetID AssetID `json:"assetID"`
 }
@@ -3002,6 +3495,197 @@ func (response RetireAssetdefaultApplicationProblemPlusJSONResponse) VisitRetire
 	return err
 }
 
+type ListExportProfilesRequestObject struct {
+}
+
+type ListExportProfilesResponseObject interface {
+	VisitListExportProfilesResponse(w http.ResponseWriter) error
+}
+
+type ListExportProfiles200JSONResponse struct {
+	Items []ExportProfile `json:"items"`
+}
+
+func (response ListExportProfiles200JSONResponse) VisitListExportProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListExportProfilesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ListExportProfilesdefaultApplicationProblemPlusJSONResponse) VisitListExportProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateExportProfileRequestObject struct {
+	Body *CreateExportProfileJSONRequestBody
+}
+
+type CreateExportProfileResponseObject interface {
+	VisitCreateExportProfileResponse(w http.ResponseWriter) error
+}
+
+type CreateExportProfile201JSONResponse ExportProfile
+
+func (response CreateExportProfile201JSONResponse) VisitCreateExportProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateExportProfiledefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response CreateExportProfiledefaultApplicationProblemPlusJSONResponse) VisitCreateExportProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteExportProfileRequestObject struct {
+	ProfileID externalRef0.ID `json:"profileID"`
+}
+
+type DeleteExportProfileResponseObject interface {
+	VisitDeleteExportProfileResponse(w http.ResponseWriter) error
+}
+
+type DeleteExportProfile204Response struct {
+}
+
+func (response DeleteExportProfile204Response) VisitDeleteExportProfileResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteExportProfiledefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response DeleteExportProfiledefaultApplicationProblemPlusJSONResponse) VisitDeleteExportProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExportProfileRequestObject struct {
+	ProfileID externalRef0.ID `json:"profileID"`
+}
+
+type GetExportProfileResponseObject interface {
+	VisitGetExportProfileResponse(w http.ResponseWriter) error
+}
+
+type GetExportProfile200JSONResponse ExportProfile
+
+func (response GetExportProfile200JSONResponse) VisitGetExportProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExportProfiledefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response GetExportProfiledefaultApplicationProblemPlusJSONResponse) VisitGetExportProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateExportProfileRequestObject struct {
+	ProfileID externalRef0.ID `json:"profileID"`
+	Body      *UpdateExportProfileJSONRequestBody
+}
+
+type UpdateExportProfileResponseObject interface {
+	VisitUpdateExportProfileResponse(w http.ResponseWriter) error
+}
+
+type UpdateExportProfile200JSONResponse ExportProfile
+
+func (response UpdateExportProfile200JSONResponse) VisitUpdateExportProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateExportProfiledefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response UpdateExportProfiledefaultApplicationProblemPlusJSONResponse) VisitUpdateExportProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// ListStatuses List asset statuses (inventory.asset.read)
@@ -3076,6 +3760,9 @@ type StrictServerInterface interface {
 	// SetAssetsStatus Change the status of several assets; each succeeds or fails on its own (inventory.asset.manage)
 	// (POST /assets/bulk-status)
 	SetAssetsStatus(ctx context.Context, request SetAssetsStatusRequestObject) (SetAssetsStatusResponseObject, error)
+	// ExportAssets Download assets as .xlsx (inventory.asset.read and inventory.asset.export)
+	// (POST /assets/export)
+	ExportAssets(ctx context.Context, request ExportAssetsRequestObject) (ExportAssetsResponseObject, error)
 	// GetAsset Get an asset with its custom attributes (inventory.asset.read)
 	// (GET /assets/{assetID})
 	GetAsset(ctx context.Context, request GetAssetRequestObject) (GetAssetResponseObject, error)
@@ -3088,6 +3775,21 @@ type StrictServerInterface interface {
 	// RetireAsset Retire an asset; it keeps its tag (inventory.asset.manage)
 	// (POST /assets/{assetID}/retire)
 	RetireAsset(ctx context.Context, request RetireAssetRequestObject) (RetireAssetResponseObject, error)
+	// ListExportProfiles Your export profiles and every shared one (inventory.asset.export)
+	// (GET /export-profiles)
+	ListExportProfiles(ctx context.Context, request ListExportProfilesRequestObject) (ListExportProfilesResponseObject, error)
+	// CreateExportProfile Save a report layout (inventory.asset.export)
+	// (POST /export-profiles)
+	CreateExportProfile(ctx context.Context, request CreateExportProfileRequestObject) (CreateExportProfileResponseObject, error)
+	// DeleteExportProfile Delete a profile (owner; shared ones also inventory.export_profile.manage)
+	// (DELETE /export-profiles/{profileID})
+	DeleteExportProfile(ctx context.Context, request DeleteExportProfileRequestObject) (DeleteExportProfileResponseObject, error)
+	// GetExportProfile One profile (yours or shared)
+	// (GET /export-profiles/{profileID})
+	GetExportProfile(ctx context.Context, request GetExportProfileRequestObject) (GetExportProfileResponseObject, error)
+	// UpdateExportProfile Rename, share or change the layout (owner; shared ones also inventory.export_profile.manage)
+	// (PATCH /export-profiles/{profileID})
+	UpdateExportProfile(ctx context.Context, request UpdateExportProfileRequestObject) (UpdateExportProfileResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -3847,6 +4549,37 @@ func (sh *strictHandler) SetAssetsStatus(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+// ExportAssets operation middleware
+func (sh *strictHandler) ExportAssets(w http.ResponseWriter, r *http.Request) {
+	var request ExportAssetsRequestObject
+
+	var body ExportAssetsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportAssets(ctx, request.(ExportAssetsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportAssets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportAssetsResponseObject); ok {
+		if err := validResponse.VisitExportAssetsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetAsset operation middleware
 func (sh *strictHandler) GetAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
 	var request GetAssetRequestObject
@@ -3972,89 +4705,245 @@ func (sh *strictHandler) RetireAsset(w http.ResponseWriter, r *http.Request, ass
 	}
 }
 
+// ListExportProfiles operation middleware
+func (sh *strictHandler) ListExportProfiles(w http.ResponseWriter, r *http.Request) {
+	var request ListExportProfilesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListExportProfiles(ctx, request.(ListExportProfilesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListExportProfiles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListExportProfilesResponseObject); ok {
+		if err := validResponse.VisitListExportProfilesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateExportProfile operation middleware
+func (sh *strictHandler) CreateExportProfile(w http.ResponseWriter, r *http.Request) {
+	var request CreateExportProfileRequestObject
+
+	var body CreateExportProfileJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateExportProfile(ctx, request.(CreateExportProfileRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateExportProfile")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateExportProfileResponseObject); ok {
+		if err := validResponse.VisitCreateExportProfileResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteExportProfile operation middleware
+func (sh *strictHandler) DeleteExportProfile(w http.ResponseWriter, r *http.Request, profileID externalRef0.ID) {
+	var request DeleteExportProfileRequestObject
+
+	request.ProfileID = profileID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteExportProfile(ctx, request.(DeleteExportProfileRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteExportProfile")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteExportProfileResponseObject); ok {
+		if err := validResponse.VisitDeleteExportProfileResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetExportProfile operation middleware
+func (sh *strictHandler) GetExportProfile(w http.ResponseWriter, r *http.Request, profileID externalRef0.ID) {
+	var request GetExportProfileRequestObject
+
+	request.ProfileID = profileID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetExportProfile(ctx, request.(GetExportProfileRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetExportProfile")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetExportProfileResponseObject); ok {
+		if err := validResponse.VisitGetExportProfileResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateExportProfile operation middleware
+func (sh *strictHandler) UpdateExportProfile(w http.ResponseWriter, r *http.Request, profileID externalRef0.ID) {
+	var request UpdateExportProfileRequestObject
+
+	request.ProfileID = profileID
+
+	var body UpdateExportProfileJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateExportProfile(ctx, request.(UpdateExportProfileRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateExportProfile")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateExportProfileResponseObject); ok {
+		if err := validResponse.VisitUpdateExportProfileResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"FwAA//8=",
+	"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",
+	"X17+TwAAAP//",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -4,7 +4,7 @@
 //
 // main dựng module một lần:
 //
-//	m, err := inventory.New(inventory.Deps{Pool: pool, Outbox: outbox})
+//	m, err := inventory.New(inventory.Deps{Pool: pool, Outbox: outbox, Accounts: identityMod.AccountReader(), Config: cfg.Inventory})
 //	err = m.Mount(srv.Router(), tokens)   // cmd/server: route /api/v1/...
 //	doc, err := m.APIDoc()                // cmd/server, HTTP_API_DOCS: web.MountDocs
 //
@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	idcontract "storeit/internal/identity/contract"
 	"storeit/internal/inventory/handler"
 	"storeit/internal/inventory/repository"
 	"storeit/internal/inventory/service"
@@ -26,8 +27,10 @@ import (
 )
 
 type Deps struct {
-	Pool   *pgxpool.Pool
-	Outbox *events.Outbox
+	Pool     *pgxpool.Pool
+	Outbox   *events.Outbox
+	Accounts idcontract.AccountReader // tên chủ profile export
+	Config   Config
 }
 
 type Module struct {
@@ -36,13 +39,17 @@ type Module struct {
 }
 
 func New(d Deps) (*Module, error) {
-	if d.Pool == nil || d.Outbox == nil {
-		return nil, fmt.Errorf("inventory: Pool and Outbox are required")
+	if d.Pool == nil || d.Outbox == nil || d.Accounts == nil {
+		return nil, fmt.Errorf("inventory: Pool, Outbox and Accounts are required")
 	}
 	svc := service.New(service.Deps{
 		Types:    repository.NewTypeRepository(d.Pool, d.Outbox),
 		Statuses: repository.NewStatusRepository(d.Pool, d.Outbox),
 		Assets:   repository.NewAssetRepository(d.Pool, d.Outbox),
+
+		Profiles:      repository.NewExportProfileRepository(d.Pool, d.Outbox),
+		Accounts:      d.Accounts,
+		ExportMaxRows: d.Config.ExportMaxRows,
 	})
 	return &Module{svc: svc, handler: handler.New(svc)}, nil
 }

@@ -1,3 +1,3 @@
 package handler
 
-// TODO(M5): import, file mẫu và export
+// TODO(M5): import và file mẫu (spec riêng)

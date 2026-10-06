@@ -34,7 +34,7 @@ func newModuleApp(t *testing.T) (*app, *inventory.Module) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, err := inventory.New(inventory.Deps{Pool: pool, Outbox: events.NewOutbox(events.NewRegistry(), client)})
+	m, err := inventory.New(inventory.Deps{Pool: pool, Outbox: events.NewOutbox(events.NewRegistry(), client), Accounts: stubAccounts{}})
 	if err != nil {
 		t.Fatal(err)
 	}

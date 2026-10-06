@@ -16,7 +16,7 @@ import (
 func build(t *testing.T, fn func(w *Writer)) *excelize.File {
 	t.Helper()
 	w := NewWriter()
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 	fn(w)
 	var buf bytes.Buffer
 	if _, err := w.WriteTo(&buf); err != nil {

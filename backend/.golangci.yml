@@ -151,6 +151,7 @@ linters:
             - storeit/internal/inventory/domain
             - storeit/internal/inventory/contract
             - storeit/internal/inventory/job
+            - storeit/internal/inventory/spreadsheet
             - storeit/internal/activity/domain
             - storeit/internal/activity/contract
             - storeit/internal/activity/job
@@ -248,7 +249,7 @@ linters:
             - storeit/internal/activity/contract
             - storeit/internal/activity/job
 
-        # spreadsheet: chỉ biết dòng và ô, không biết asset
+        # spreadsheet: chỉ biết bố cục (domain.ExportLayout) và ô, không biết asset
         spreadsheet:
           list-mode: lax
           files: ["**/internal/*/spreadsheet/**"]
@@ -257,3 +258,4 @@ linters:
               desc: spreadsheet không được biết tới nghiệp vụ
           allow:
             - storeit/internal/platform/errs
+            - storeit/internal/inventory/domain

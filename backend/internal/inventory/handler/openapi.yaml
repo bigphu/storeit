@@ -428,6 +428,100 @@ paths:
               schema: { $ref: '#/components/schemas/AssetDetail' }
         default: { $ref: '#/components/responses/Problem' }
 
+  /assets/export:
+    post:
+      operationId: exportAssets
+      summary: Download assets as .xlsx (inventory.asset.read and inventory.asset.export)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExportRequest' }
+      responses:
+        "200":
+          description: The workbook
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+            X-Export-Skipped-Columns:
+              description: Attribute keys in the layout that no exported type has, comma-separated
+              schema: { type: string }
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /export-profiles:
+    get:
+      operationId: listExportProfiles
+      summary: Your export profiles and every shared one (inventory.asset.export)
+      responses:
+        "200":
+          description: Profiles by name
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ExportProfile' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createExportProfile
+      summary: Save a report layout (inventory.asset.export)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateExportProfileRequest' }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExportProfile' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /export-profiles/{profileID}:
+    parameters:
+      - name: profileID
+        in: path
+        required: true
+        schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+    get:
+      operationId: getExportProfile
+      summary: One profile (yours or shared)
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExportProfile' }
+        default: { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateExportProfile
+      summary: Rename, share or change the layout (owner; shared ones also inventory.export_profile.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateExportProfileRequest' }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExportProfile' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: deleteExportProfile
+      summary: Delete a profile (owner; shared ones also inventory.export_profile.manage)
+      responses:
+        "204": { description: Deleted }
+        default: { $ref: '#/components/responses/Problem' }
+
   /assets/{assetID}:
     parameters:
       - $ref: '#/components/parameters/AssetID'
@@ -936,4 +1030,99 @@ components:
       type: object
       required: [version]
       properties:
+        version: { type: integer, format: int32 }
+
+    ExportColumn:
+      type: object
+      required: [field]
+      properties:
+        field: { type: string, maxLength: 40, description: 'tag, name, description, type, status, purchase_date, updated_at or attr:<key>' }
+        header: { type: string, maxLength: 100 }
+        width: { type: number, minimum: 0, maximum: 80 }
+
+    ExportLayout:
+      type: object
+      required: [columns, sheets, sheet_name, title_row, summary, header, freeze, filter, stripes, date_format, bool_style, status_as, unit_in]
+      properties:
+        columns:
+          type: array
+          maxItems: 60
+          items: { $ref: '#/components/schemas/ExportColumn' }
+        sheets: { type: string, enum: [single, per_type] }
+        each_type_attrs: { type: boolean }
+        sheet_name: { type: string, maxLength: 31 }
+        title_row: { type: boolean }
+        summary: { type: boolean }
+        header: { type: string, enum: [plain, bold, bold_fill] }
+        freeze: { type: boolean }
+        filter: { type: boolean }
+        stripes: { type: boolean }
+        date_format: { type: string, enum: ['dd/mm/yyyy', 'yyyy-mm-dd', 'd mmm yyyy'] }
+        bool_style: { type: string, enum: [yes_no, check] }
+        status_as: { type: string, enum: [name, kind] }
+        unit_in: { type: string, enum: [header, cell] }
+        sort: { type: string, maxLength: 60, description: 'Empty: the request sort' }
+
+    ExportFilters:
+      type: object
+      description: Same filters and rules as GET /assets, plus ids for "Export selected"
+      properties:
+        q: { type: string, maxLength: 200 }
+        type_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        status_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        status_kind: { $ref: '#/components/schemas/StatusKind' }
+        include_retired: { type: boolean }
+        attr:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 300 }
+        sort: { type: string, maxLength: 60 }
+        ids:
+          type: array
+          maxItems: 200
+          items: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+
+    ExportRequest:
+      type: object
+      required: [mode]
+      properties:
+        mode: { type: string, enum: [data, report] }
+        filters: { $ref: '#/components/schemas/ExportFilters' }
+        profile_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        layout: { $ref: '#/components/schemas/ExportLayout' }
+
+    ExportProfile:
+      type: object
+      required: [id, name, shared, layout, owner, can_edit, version, created_at, updated_at]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        name: { type: string }
+        shared: { type: boolean }
+        layout: { $ref: '#/components/schemas/ExportLayout' }
+        owner:
+          type: object
+          required: [id, name]
+          properties:
+            id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+            name: { type: string }
+        can_edit: { type: boolean }
+        version: { type: integer, format: int32 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CreateExportProfileRequest:
+      type: object
+      required: [name, layout]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        shared: { type: boolean }
+        layout: { $ref: '#/components/schemas/ExportLayout' }
+
+    UpdateExportProfileRequest:
+      type: object
+      required: [version]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        shared: { type: boolean }
+        layout: { $ref: '#/components/schemas/ExportLayout' }
         version: { type: integer, format: int32 }

@@ -170,7 +170,7 @@ func (l ExportLayout) Validate() error {
 	switch {
 	case len(l.Columns) > MaxExportColumns:
 		add("layout.columns", fmt.Sprintf("at most %d columns", MaxExportColumns))
-	case len(l.Columns) == 0 && !(l.Sheets == SheetPerType && l.EachTypeAttrs):
+	case len(l.Columns) == 0 && (l.Sheets != SheetPerType || !l.EachTypeAttrs):
 		add("layout.columns", "choose at least one column")
 	}
 	seen := map[string]bool{}

@@ -2,8 +2,10 @@ package inventory_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -15,7 +17,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/xuri/excelize/v2"
 
+	idcontract "storeit/internal/identity/contract"
 	"storeit/internal/inventory/domain"
 	"storeit/internal/inventory/handler"
 	"storeit/internal/inventory/repository"
@@ -33,7 +37,10 @@ type app struct {
 	tokens *jwt.Provider
 }
 
-func newApp(t *testing.T) *app {
+func newApp(t *testing.T) *app { return newAppWith(t, 0) }
+
+// newAppWith dựng app với trần số dòng export (0 là mặc định của service)
+func newAppWith(t *testing.T, maxRows int) *app {
 	t.Helper()
 	pool := dbtest.Pool(t)
 	client, err := jobs.NewInsertClient(pool, nil)
@@ -52,6 +59,10 @@ func newApp(t *testing.T) *app {
 		Types:    repository.NewTypeRepository(pool, outbox),
 		Statuses: repository.NewStatusRepository(pool, outbox),
 		Assets:   repository.NewAssetRepository(pool, outbox),
+
+		Profiles:      repository.NewExportProfileRepository(pool, outbox),
+		Accounts:      stubAccounts{},
+		ExportMaxRows: maxRows,
 	})
 	srv := server.New(server.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err := handler.New(svc).Mount(srv.Router(), tokens); err != nil {
@@ -118,7 +129,8 @@ func problem(t *testing.T, rec *httptest.ResponseRecorder) (typ string, fields [
 	return p.Type, fields
 }
 
-var allPerms = []string{domain.PermAssetRead, domain.PermAssetManage, domain.PermTypeManage, domain.PermStatusManage}
+var allPerms = []string{domain.PermAssetRead, domain.PermAssetManage, domain.PermTypeManage, domain.PermStatusManage,
+	domain.PermAssetExport, domain.PermExportProfileManage}
 
 type typeDetail struct {
 	ID         string
@@ -610,5 +622,93 @@ func TestReorderOverHTTP(t *testing.T) {
 	// các route của từng thuộc tính vẫn chạy bên cạnh
 	if rec := a.do("PATCH", "/api/v1/asset-types/"+typ.ID+"/attributes/"+first, tok, map[string]any{"label": "Renamed"}); rec.Code != 200 {
 		t.Errorf("patch attribute: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// stubAccounts trả tên cố định, thay cho identity trong test
+type stubAccounts struct{}
+
+func (stubAccounts) GetAccount(_ context.Context, id uuid.UUID) (idcontract.Account, error) {
+	return idcontract.Account{ID: id, Name: "Người dùng", Active: true}, nil
+}
+
+func (stubAccounts) GetAccounts(_ context.Context, ids []uuid.UUID) ([]idcontract.Account, error) {
+	out := make([]idcontract.Account, len(ids))
+	for i, id := range ids {
+		out[i] = idcontract.Account{ID: id, Name: "Người dùng", Active: true}
+	}
+	return out, nil
+}
+
+func TestExportOverHTTP(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	exp := a.token(domain.PermAssetRead, domain.PermAssetExport)
+	code := "EX" + strings.ToUpper(uuid.NewString()[:6])
+	typ := decode[typeDetail](t, a.do("POST", "/api/v1/asset-types", tok, map[string]any{
+		"code": code, "name": "Export " + code,
+		"attributes": []map[string]any{{"key": "ram_gb", "label": "RAM", "data_type": "number", "unit": "GB", "position": 1}},
+	}), 201)
+	var ids []string
+	for i := range 3 {
+		x := decode[assetDetail](t, a.do("POST", "/api/v1/assets", tok, map[string]any{
+			"tag": fmt.Sprintf("%s-%d", code, i), "name": "x", "asset_type_id": typ.ID, "attributes": map[string]any{"ram_gb": 16},
+		}), 201)
+		ids = append(ids, x.ID)
+	}
+
+	rec := a.do("POST", "/api/v1/assets/export", exp, map[string]any{"mode": "data", "filters": map[string]any{"type_id": typ.ID}})
+	if rec.Code != 200 || !strings.Contains(rec.Header().Get("Content-Type"), "spreadsheetml") {
+		t.Fatalf("data export: %d %s", rec.Code, rec.Header())
+	}
+	x, err := excelize.OpenReader(rec.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := x.GetRows(code)
+	if len(rows) != 4 || rows[0][0] != "tag" || rows[0][len(rows[0])-1] != "attr:ram_gb" {
+		t.Errorf("data sheet = %v", rows)
+	}
+
+	// selection + report with a non-ASCII profile name and a removed attribute
+	layout := map[string]any{
+		"columns": []map[string]any{{"field": "tag"}, {"field": "attr:gone"}}, "sheets": "single", "sheet_name": "Báo cáo",
+		"title_row": true, "summary": false, "header": "bold", "freeze": true, "filter": true, "stripes": false,
+		"date_format": "dd/mm/yyyy", "bool_style": "yes_no", "status_as": "name", "unit_in": "header",
+	}
+	p := decode[struct{ ID string }](t, a.do("POST", "/api/v1/export-profiles", exp, map[string]any{"name": "Kiểm kê quý 3", "layout": layout}), 201)
+	rec = a.do("POST", "/api/v1/assets/export", exp, map[string]any{
+		"mode": "report", "profile_id": p.ID, "filters": map[string]any{"ids": ids[:2]},
+	})
+	if rec.Code != 200 {
+		t.Fatalf("report export: %d %s", rec.Code, rec.Body)
+	}
+	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, "filename*=utf-8''") {
+		t.Errorf("content-disposition = %q", cd)
+	}
+	if got := rec.Header().Get("X-Export-Skipped-Columns"); got != "gone" {
+		t.Errorf("skipped = %q", got)
+	}
+
+	if rec := a.do("POST", "/api/v1/assets/export", a.token(domain.PermAssetRead), map[string]any{"mode": "data"}); rec.Code != 403 {
+		t.Errorf("without export permission: %d", rec.Code)
+	}
+	other := a.token(domain.PermAssetRead, domain.PermAssetExport)
+	if rec := a.do("GET", "/api/v1/export-profiles/"+p.ID, other, nil); rec.Code != 404 {
+		t.Errorf("someone else's private profile: %d", rec.Code)
+	}
+	if rec := a.do("PATCH", "/api/v1/export-profiles/"+p.ID, exp, map[string]any{"shared": true, "version": 1}); rec.Code != 200 {
+		t.Errorf("share: %d %s", rec.Code, rec.Body)
+	}
+	if rec := a.do("DELETE", "/api/v1/export-profiles/"+p.ID, other, nil); rec.Code != 403 {
+		t.Errorf("non-manager deletes shared profile: %d", rec.Code)
+	}
+
+	small := newAppWith(t, 1)
+	stok := small.token(allPerms...)
+	if rec := small.do("POST", "/api/v1/assets/export", stok, map[string]any{"mode": "data"}); rec.Code != 422 {
+		t.Errorf("over the cap: %d", rec.Code)
+	} else if typ, _ := problem(t, rec); typ != "/errors/export-too-large" {
+		t.Errorf("problem type = %s", typ)
 	}
 }
