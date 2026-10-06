@@ -94,7 +94,11 @@ const summary = computed(() =>
 </template>
 
 <style scoped>
+/* Cao theo chỗ cha cho: bảng tự cuộn hai chiều, tab sheet luôn ở dưới như Excel */
 .sheet {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   border: 1px solid var(--app-line);
   border-radius: 8px;
   background: var(--p-content-background);
@@ -102,8 +106,9 @@ const summary = computed(() =>
   font: 13px/1.3 Calibri, Carlito, 'Segoe UI', sans-serif;
 }
 .sheet-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
-  max-height: 26rem;
 }
 table.xl {
   border-collapse: collapse;
@@ -181,6 +186,7 @@ td.center {
   font-size: 8px;
 }
 .sheet-tabs {
+  flex: none;
   border-top: 1px solid var(--app-line);
   background: var(--app-soft);
 }

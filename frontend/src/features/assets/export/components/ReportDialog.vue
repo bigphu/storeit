@@ -5,6 +5,11 @@ import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Select from 'primevue/select'
+import Tab from 'primevue/tab'
+import TabList from 'primevue/tablist'
+import TabPanel from 'primevue/tabpanel'
+import TabPanels from 'primevue/tabpanels'
+import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
 import { computed, ref, watch } from 'vue'
 import SegmentedFilter from '@/components/SegmentedFilter.vue'
@@ -92,6 +97,9 @@ const title = computed(() =>
   current.value.title_row ? [profile.value?.name ?? 'Asset report', `Generated ${new Date().toLocaleDateString('en-GB')} by ${session.me?.account.name ?? ''} · ${props.scope.label}`] : [],
 )
 
+// Tab cấu hình đang mở (cột, bố cục, định dạng); giữ nguyên khi đóng mở lại hộp thoại
+const tab = ref<'columns' | 'layout' | 'format'>('columns')
+
 const sheetsOptions = [
   { label: 'One sheet', value: 'single' as const },
   { label: 'Sheet per type', value: 'per_type' as const },
@@ -171,75 +179,82 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
 
 <template>
   <Dialog v-model:visible="visible" modal header="Export report" :style="{ width: 'min(72rem, 96vw)' }" :content-style="{ padding: 0 }">
-    <div class="head">
-      <label for="report-profile" class="muted">Profile</label>
-      <Select v-model="profileId" input-id="report-profile" :options="profiles ?? []" option-label="name" option-value="id" placeholder="No profile" show-clear class="profile-select" />
-      <Tag v-if="profile && !profile.can_edit" :value="`Shared by ${profile.owner.name}`" icon="pi pi-lock" severity="secondary" />
-      <Tag v-else-if="profile" :value="profile.shared ? 'Shared' : 'Only you'" severity="secondary" />
-      <Tag v-if="dirty" value="Unsaved changes" severity="warn" />
-      <Button label="Save" size="small" severity="secondary" outlined :disabled="!profile?.can_edit || !dirty" :loading="update.isPending.value" @click="save" />
-      <Button label="Save as…" size="small" severity="secondary" outlined @click="openSaveAs" />
-    </div>
-    <form v-if="saveAs" class="sub" @submit.prevent="submitSaveAs">
-      <label for="save-as-name">Name</label>
-      <InputText id="save-as-name" v-model="saveAs.name" required maxlength="100" autofocus :invalid="!!errors.fields.value.name" />
-      <span class="check">
-        <Checkbox v-model="saveAs.shared" input-id="save-as-shared" binary />
-        <label for="save-as-shared">Share with everyone who can export</label>
-      </span>
-      <Button type="submit" label="Save profile" size="small" :loading="create.isPending.value" />
-      <Button label="Cancel" size="small" text severity="secondary" @click="saveAs = null" />
-      <Message v-if="errors.general.value || errors.fields.value.name" severity="error" size="small" variant="simple">{{ errors.fields.value.name ?? errors.general.value }}</Message>
-    </form>
-    <div v-else class="sub">
-      <i class="pi pi-table" /> Exporting <b>{{ scope.count }}</b> {{ scope.count === 1 ? 'asset' : 'assets' }} · {{ scope.label }}
-    </div>
-
-    <div class="body">
-      <div class="config">
-        <section>
-          <h3>Columns</h3>
-          <ColumnEditor v-model="columns" :options="options" :layout="layout" />
-          <div v-if="layout.sheets === 'per_type'" class="check">
-            <Checkbox v-model="layout.each_type_attrs" input-id="each-type" binary />
-            <label for="each-type">Add each type's own attributes</label>
-          </div>
-        </section>
-        <section>
-          <h3>Layout</h3>
-          <SegmentedFilter v-model="sheetMode" :options="sheetsOptions" label="Sheets" />
-          <div v-if="layout.sheets === 'single'" class="field">
-            <label for="sheet-name">Sheet name</label>
-            <InputText id="sheet-name" v-model="sheetName" maxlength="31" fluid />
-          </div>
-          <div class="checks">
-            <span class="check"><Checkbox v-model="layout.title_row" input-id="title-row" binary /><label for="title-row">Title row</label></span>
-            <span class="check"><Checkbox v-model="layout.summary" input-id="summary" binary /><label for="summary">Summary sheet</label></span>
-          </div>
-        </section>
-        <section>
-          <h3>Formatting</h3>
-          <div class="grid">
-            <div class="field"><label for="f-header">Header style</label><Select v-model="layout.header" input-id="f-header" :options="headerOptions" option-label="label" option-value="value" fluid /></div>
-            <div class="field"><label for="f-date">Dates</label><Select v-model="layout.date_format" input-id="f-date" :options="dateOptions" option-label="label" option-value="value" fluid /></div>
-            <div class="field"><label for="f-unit">Units</label><Select v-model="layout.unit_in" input-id="f-unit" :options="unitOptions" option-label="label" option-value="value" fluid /></div>
-            <div class="field"><label for="f-bool">Yes/no fields</label><Select v-model="layout.bool_style" input-id="f-bool" :options="boolOptions" option-label="label" option-value="value" fluid /></div>
-            <div class="field"><label for="f-status">Status shows</label><Select v-model="layout.status_as" input-id="f-status" :options="statusOptions" option-label="label" option-value="value" fluid /></div>
-            <div class="field"><label for="f-sort">Sort</label><Select v-model="sortModel" input-id="f-sort" :options="sortOptions" option-label="label" option-value="value" fluid /></div>
-          </div>
-          <div class="checks">
-            <span class="check"><Checkbox v-model="layout.freeze" input-id="f-freeze" binary /><label for="f-freeze">Freeze header</label></span>
-            <span class="check"><Checkbox v-model="layout.filter" input-id="f-filter" binary /><label for="f-filter">Filter buttons</label></span>
-            <span class="check"><Checkbox v-model="layout.stripes" input-id="f-stripes" binary /><label for="f-stripes">Striped rows</label></span>
-          </div>
-        </section>
+    <div class="report">
+      <div class="head">
+        <label for="report-profile" class="muted">Profile</label>
+        <Select v-model="profileId" input-id="report-profile" :options="profiles ?? []" option-label="name" option-value="id" placeholder="No profile" show-clear class="profile-select" />
+        <Tag v-if="profile && !profile.can_edit" :value="`Shared by ${profile.owner.name}`" icon="pi pi-lock" severity="secondary" />
+        <Tag v-else-if="profile" :value="profile.shared ? 'Shared' : 'Only you'" severity="secondary" />
+        <Tag v-if="dirty" value="Unsaved changes" severity="warn" />
+        <Button label="Save" size="small" severity="secondary" outlined :disabled="!profile?.can_edit || !dirty" :loading="update.isPending.value" @click="save" />
+        <Button label="Save as…" size="small" severity="secondary" outlined @click="openSaveAs" />
       </div>
-      <div class="preview">
-        <h3>Preview <small class="muted">first 20 rows of each sheet</small></h3>
-        <Message v-if="skipped.length" severity="warn" :closable="false">
-          Not available for the asset types in this export: <b>{{ skipped.join(', ') }}</b>. Those columns are skipped.
-        </Message>
-        <SheetPreview :sheets="sheets" :layout="current" :types="types" :title="title" />
+      <form v-if="saveAs" class="sub" @submit.prevent="submitSaveAs">
+        <label for="save-as-name">Name</label>
+        <InputText id="save-as-name" v-model="saveAs.name" required maxlength="100" autofocus :invalid="!!errors.fields.value.name" />
+        <span class="check">
+          <Checkbox v-model="saveAs.shared" input-id="save-as-shared" binary />
+          <label for="save-as-shared">Share with everyone who can export</label>
+        </span>
+        <Button type="submit" label="Save profile" size="small" :loading="create.isPending.value" />
+        <Button label="Cancel" size="small" text severity="secondary" @click="saveAs = null" />
+        <Message v-if="errors.general.value || errors.fields.value.name" severity="error" size="small" variant="simple">{{ errors.fields.value.name ?? errors.general.value }}</Message>
+      </form>
+      <div v-else class="sub">
+        <i class="pi pi-table" /> Exporting <b>{{ scope.count }}</b> {{ scope.count === 1 ? 'asset' : 'assets' }} · {{ scope.label }}
+      </div>
+
+      <div class="body">
+        <Tabs v-model:value="tab" class="config">
+          <TabList>
+            <Tab value="columns">Columns <span class="count">{{ current.columns.length }}</span></Tab>
+            <Tab value="layout">Layout</Tab>
+            <Tab value="format">Format</Tab>
+          </TabList>
+          <TabPanels>
+            <TabPanel value="columns">
+              <ColumnEditor v-model="columns" :options="options" :layout="layout" />
+              <div v-if="layout.sheets === 'per_type'" class="check">
+                <Checkbox v-model="layout.each_type_attrs" input-id="each-type" binary />
+                <label for="each-type">Add each type's own attributes</label>
+              </div>
+              <p class="hint">Drag or press Alt+↑/↓ to reorder. Leave a header empty to use the default.</p>
+            </TabPanel>
+            <TabPanel value="layout">
+              <SegmentedFilter v-model="sheetMode" :options="sheetsOptions" label="Sheets" />
+              <div v-if="layout.sheets === 'single'" class="field">
+                <label for="sheet-name">Sheet name</label>
+                <InputText id="sheet-name" v-model="sheetName" maxlength="31" fluid />
+              </div>
+              <div class="checks">
+                <span class="check"><Checkbox v-model="layout.title_row" input-id="title-row" binary /><label for="title-row">Title row</label></span>
+                <span class="check"><Checkbox v-model="layout.summary" input-id="summary" binary /><label for="summary">Summary sheet</label></span>
+              </div>
+            </TabPanel>
+            <TabPanel value="format">
+              <div class="grid">
+                <div class="field"><label for="f-header">Header style</label><Select v-model="layout.header" input-id="f-header" :options="headerOptions" option-label="label" option-value="value" fluid /></div>
+                <div class="field"><label for="f-date">Dates</label><Select v-model="layout.date_format" input-id="f-date" :options="dateOptions" option-label="label" option-value="value" fluid /></div>
+                <div class="field"><label for="f-unit">Units</label><Select v-model="layout.unit_in" input-id="f-unit" :options="unitOptions" option-label="label" option-value="value" fluid /></div>
+                <div class="field"><label for="f-bool">Yes/no fields</label><Select v-model="layout.bool_style" input-id="f-bool" :options="boolOptions" option-label="label" option-value="value" fluid /></div>
+                <div class="field"><label for="f-status">Status shows</label><Select v-model="layout.status_as" input-id="f-status" :options="statusOptions" option-label="label" option-value="value" fluid /></div>
+                <div class="field"><label for="f-sort">Sort</label><Select v-model="sortModel" input-id="f-sort" :options="sortOptions" option-label="label" option-value="value" fluid /></div>
+              </div>
+              <div class="checks">
+                <span class="check"><Checkbox v-model="layout.freeze" input-id="f-freeze" binary /><label for="f-freeze">Freeze header</label></span>
+                <span class="check"><Checkbox v-model="layout.filter" input-id="f-filter" binary /><label for="f-filter">Filter buttons</label></span>
+                <span class="check"><Checkbox v-model="layout.stripes" input-id="f-stripes" binary /><label for="f-stripes">Striped rows</label></span>
+              </div>
+            </TabPanel>
+          </TabPanels>
+        </Tabs>
+        <div class="preview">
+          <h3>Preview <small class="muted">first 20 rows of each sheet</small></h3>
+          <Message v-if="skipped.length" severity="warn" :closable="false">
+            Not available for the asset types in this export: <b>{{ skipped.join(', ') }}</b>. Those columns are skipped.
+          </Message>
+          <SheetPreview class="fill" :sheets="sheets" :layout="current" :types="types" :title="title" />
+        </div>
       </div>
     </div>
     <template #footer>
@@ -267,31 +282,71 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
 .profile-select {
   min-width: 13rem;
 }
-.body {
-  display: grid;
-  grid-template-columns: minmax(0, 23rem) minmax(0, 1fr);
-  max-height: 70vh;
-}
-.config {
-  overflow-y: auto;
-  padding: 0.9rem 1.1rem;
-  border-right: 1px solid var(--app-line);
+/* Chiều cao cố định: thanh profile và dòng phạm vi đứng yên, cột cấu hình và
+   bản xem trước mỗi bên tự cuộn */
+.report {
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  height: min(46rem, 78vh);
 }
-.config h3,
+.body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 23rem) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.config {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--app-line);
+}
+.config :deep(.p-tablist) {
+  flex: none;
+}
+.config :deep(.p-tabpanels) {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.9rem 1.1rem 1.2rem;
+}
+.config :deep(.p-tabpanel) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.count {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: var(--app-soft);
+  color: var(--p-text-muted-color);
+  font: 0.72rem var(--app-mono);
+}
+.hint {
+  font-size: 0.82rem;
+  color: var(--p-text-muted-color);
+}
 .preview h3 {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.1rem;
 }
 .preview {
-  overflow: auto;
+  overflow: hidden;
   padding: 0.9rem 1.1rem;
   background: var(--app-ground);
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
   min-width: 0;
+  min-height: 0;
+}
+.preview > * {
+  flex: none;
+}
+.preview > .fill {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .field {
   display: flex;
@@ -322,14 +377,25 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
   margin-right: auto;
   font-size: 0.85rem;
 }
+/* Màn hẹp: xếp chồng, cả hộp thoại cuộn như cũ */
 @media (max-width: 900px) {
+  .report {
+    height: auto;
+  }
   .body {
     grid-template-columns: minmax(0, 1fr);
-    max-height: none;
+    grid-template-rows: auto;
   }
   .config {
     border-right: 0;
     border-bottom: 1px solid var(--app-line);
+  }
+  .config :deep(.p-tabpanels),
+  .preview {
+    overflow: visible;
+  }
+  .preview :deep(.sheet-scroll) {
+    max-height: 26rem;
   }
 }
 </style>
