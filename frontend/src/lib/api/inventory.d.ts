@@ -309,6 +309,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Download assets as .xlsx (inventory.asset.read and inventory.asset.export) */
+        post: operations["exportAssets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/export-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your export profiles and every shared one (inventory.asset.export) */
+        get: operations["listExportProfiles"];
+        put?: never;
+        /** Save a report layout (inventory.asset.export) */
+        post: operations["createExportProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/export-profiles/{profileID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profileID: components["schemas"]["ID"];
+            };
+            cookie?: never;
+        };
+        /** One profile (yours or shared) */
+        get: operations["getExportProfile"];
+        put?: never;
+        post?: never;
+        /** Delete a profile (owner; shared ones also inventory.export_profile.manage) */
+        delete: operations["deleteExportProfile"];
+        options?: never;
+        head?: never;
+        /** Rename, share or change the layout (owner; shared ones also inventory.export_profile.manage) */
+        patch: operations["updateExportProfile"];
+        trace?: never;
+    };
     "/assets/{assetID}": {
         parameters: {
             query?: never;
@@ -675,6 +731,83 @@ export interface components {
             version: number;
         };
         VersionRequest: {
+            /** Format: int32 */
+            version: number;
+        };
+        ExportColumn: {
+            /** @description tag, name, description, type, status, purchase_date, updated_at or attr:<key> */
+            field: string;
+            header?: string;
+            width?: number;
+        };
+        ExportLayout: {
+            columns: components["schemas"]["ExportColumn"][];
+            /** @enum {string} */
+            sheets: "single" | "per_type";
+            each_type_attrs?: boolean;
+            sheet_name: string;
+            title_row: boolean;
+            summary: boolean;
+            /** @enum {string} */
+            header: "plain" | "bold" | "bold_fill";
+            freeze: boolean;
+            filter: boolean;
+            stripes: boolean;
+            /** @enum {string} */
+            date_format: "dd/mm/yyyy" | "yyyy-mm-dd" | "d mmm yyyy";
+            /** @enum {string} */
+            bool_style: "yes_no" | "check";
+            /** @enum {string} */
+            status_as: "name" | "kind";
+            /** @enum {string} */
+            unit_in: "header" | "cell";
+            /** @description Empty: the request sort */
+            sort?: string;
+        };
+        /** @description Same filters and rules as GET /assets, plus ids for "Export selected" */
+        ExportFilters: {
+            q?: string;
+            type_id?: components["schemas"]["ID"];
+            status_id?: components["schemas"]["ID"];
+            status_kind?: components["schemas"]["StatusKind"];
+            include_retired?: boolean;
+            attr?: string[];
+            sort?: string;
+            ids?: components["schemas"]["ID"][];
+        };
+        ExportRequest: {
+            /** @enum {string} */
+            mode: "data" | "report";
+            filters?: components["schemas"]["ExportFilters"];
+            profile_id?: components["schemas"]["ID"];
+            layout?: components["schemas"]["ExportLayout"];
+        };
+        ExportProfile: {
+            id: components["schemas"]["ID"];
+            name: string;
+            shared: boolean;
+            layout: components["schemas"]["ExportLayout"];
+            owner: {
+                id: components["schemas"]["ID"];
+                name: string;
+            };
+            can_edit: boolean;
+            /** Format: int32 */
+            version: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CreateExportProfileRequest: {
+            name: string;
+            shared?: boolean;
+            layout: components["schemas"]["ExportLayout"];
+        };
+        UpdateExportProfileRequest: {
+            name?: string;
+            shared?: boolean;
+            layout?: components["schemas"]["ExportLayout"];
             /** Format: int32 */
             version: number;
         };
@@ -1311,6 +1444,153 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    exportAssets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description The workbook */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    /** @description Attribute keys in the layout that no exported type has, comma-separated */
+                    "X-Export-Skipped-Columns"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listExportProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Profiles by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ExportProfile"][];
+                    };
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createExportProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExportProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportProfile"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getExportProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profileID: components["schemas"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportProfile"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteExportProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profileID: components["schemas"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateExportProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profileID: components["schemas"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateExportProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportProfile"];
                 };
             };
             default: components["responses"]["Problem"];

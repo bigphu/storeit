@@ -11,6 +11,8 @@ export const PERM_LABEL: Record<PermCode, string> = {
   [Perm.AssetManage]: 'Manage assets',
   [Perm.TypeManage]: 'Manage asset types',
   [Perm.StatusManage]: 'Manage statuses',
+  [Perm.AssetExport]: 'Export assets to Excel',
+  [Perm.ExportProfileManage]: 'Manage shared export profiles',
 }
 
 // Role hệ thống có ID cố định (backend identity/domain/permissions.go)

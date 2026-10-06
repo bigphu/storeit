@@ -1,0 +1,36 @@
+import { describe, expect, it } from 'vitest'
+import type { AssetListItem } from '@/lib/api/types'
+import { defaultHeader, defaultReportLayout, fieldOptions, previewSheets, skippedKeys, type TypeInfo } from './layout'
+
+const laptop: TypeInfo = { id: 'L', name: 'Laptop', code: 'LAPTOP', attributes: [{ key: 'ram_gb', label: 'RAM', data_type: 'number', unit: 'GB' }, { key: 'cpu', label: 'CPU', data_type: 'text' }] }
+const phone: TypeInfo = { id: 'P', name: 'Phone', code: 'PHONE', attributes: [{ key: 'imei', label: 'IMEI', data_type: 'text' }] }
+const row = (tag: string, typeId: string) => ({ id: tag, tag, name: tag, asset_type_id: typeId, asset_type_name: typeId, status_id: 's', status_name: 'Available', status_kind: 'available', version: 1, updated_at: '2026-10-06T00:00:00Z' }) as AssetListItem
+
+describe('layout', () => {
+  it('lists common fields then attributes once', () => {
+    const opts = fieldOptions([laptop, phone])
+    expect(opts.map((o) => o.field)).toEqual(['tag', 'name', 'description', 'type', 'status', 'purchase_date', 'updated_at', 'attr:ram_gb', 'attr:cpu', 'attr:imei'])
+  })
+
+  it('puts the unit in the default header when asked', () => {
+    const l = defaultReportLayout()
+    const opts = fieldOptions([laptop])
+    expect(defaultHeader('attr:ram_gb', l, opts)).toBe('RAM (GB)')
+    expect(defaultHeader('attr:ram_gb', { ...l, unit_in: 'cell' }, opts)).toBe('RAM')
+  })
+
+  it('builds per-type sheets with only that type’s attribute columns', () => {
+    const l = { ...defaultReportLayout(), sheets: 'per_type' as const, columns: [{ field: 'tag' }, { field: 'attr:imei' }] }
+    const sheets = previewSheets(l, [row('L1', 'L'), row('P1', 'P')], [laptop, phone])
+    expect(sheets.map((s) => s.name)).toEqual(['Laptop', 'Phone'])
+    expect(sheets[0].columns.map((c) => c.field)).toEqual(['tag'])
+    expect(sheets[1].columns.map((c) => c.field)).toEqual(['tag', 'attr:imei'])
+    const each = previewSheets({ ...l, each_type_attrs: true }, [row('L1', 'L')], [laptop])
+    expect(each[0].columns.map((c) => c.field)).toEqual(['tag', 'attr:ram_gb', 'attr:cpu'])
+  })
+
+  it('reports attribute keys no type has', () => {
+    const l = { ...defaultReportLayout(), columns: [{ field: 'tag' }, { field: 'attr:gone' }] }
+    expect(skippedKeys(l, [laptop])).toEqual(['gone'])
+  })
+})
