@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AssetListItem } from '@/lib/api/types'
-import { defaultHeader, defaultReportLayout, fieldOptions, previewSheets, skippedKeys, type TypeInfo } from './layout'
+import { defaultHeader, defaultReportLayout, fieldOptions, normalizeLayout, previewSheets, skippedKeys, type TypeInfo } from './layout'
 
 const laptop: TypeInfo = { id: 'L', name: 'Laptop', code: 'LAPTOP', attributes: [{ key: 'ram_gb', label: 'RAM', data_type: 'number', unit: 'GB' }, { key: 'cpu', label: 'CPU', data_type: 'text' }] }
 const phone: TypeInfo = { id: 'P', name: 'Phone', code: 'PHONE', attributes: [{ key: 'imei', label: 'IMEI', data_type: 'text' }] }
@@ -32,5 +32,16 @@ describe('layout', () => {
   it('reports attribute keys no type has', () => {
     const l = { ...defaultReportLayout(), columns: [{ field: 'tag' }, { field: 'attr:gone' }] }
     expect(skippedKeys(l, [laptop])).toEqual(['gone'])
+  })
+
+  it('normalizes layouts independent of key order', () => {
+    const a = defaultReportLayout()
+    const reversed = Object.fromEntries(Object.entries(a).reverse()) as typeof a
+    expect(Object.keys(reversed)).not.toEqual(Object.keys(a))
+    expect(normalizeLayout(reversed)).toBe(normalizeLayout(a))
+    const withHeader = { ...a, columns: [{ header: ' Asset tag ', field: 'tag' }, ...a.columns.slice(1)] }
+    const sameHeader = { ...a, columns: [{ field: 'tag', header: 'Asset tag' }, ...a.columns.slice(1)] }
+    expect(normalizeLayout(withHeader)).toBe(normalizeLayout(sameHeader))
+    expect(normalizeLayout(withHeader)).not.toBe(normalizeLayout(a))
   })
 })

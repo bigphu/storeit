@@ -138,7 +138,24 @@ export function skippedKeys(layout: ExportLayout, types: TypeInfo[]): string[] {
     .filter((k): k is string => !!k && !types.some((t) => t.attributes.some((a) => a.key === k)))
 }
 
-// normalizeLayout: chuỗi so sánh để biết bố cục đã đổi so với profile chưa
+// normalizeLayout: chuỗi so sánh để biết bố cục đã đổi so với profile chưa. Dựng object
+// với thứ tự khoá cố định nên bố cục từ server và bố cục dựng lại ở máy so sánh đúng
 export function normalizeLayout(l: ExportLayout): string {
-  return JSON.stringify({ ...l, columns: l.columns.map((c) => ({ field: c.field, header: c.header?.trim() || '' })), sort: l.sort ?? '', each_type_attrs: !!l.each_type_attrs })
+  return JSON.stringify({
+    columns: l.columns.map((c) => ({ field: c.field, header: c.header?.trim() || '', width: c.width })),
+    sheets: l.sheets,
+    each_type_attrs: !!l.each_type_attrs,
+    sheet_name: l.sheet_name,
+    title_row: l.title_row,
+    summary: l.summary,
+    header: l.header,
+    freeze: l.freeze,
+    filter: l.filter,
+    stripes: l.stripes,
+    date_format: l.date_format,
+    bool_style: l.bool_style,
+    status_as: l.status_as,
+    unit_in: l.unit_in,
+    sort: l.sort ?? '',
+  })
 }
