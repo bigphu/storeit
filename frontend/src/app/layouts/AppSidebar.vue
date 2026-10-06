@@ -65,6 +65,9 @@ const workspace = computed<NavItem[]>(() => {
       items: [
         { label: 'Asset types', icon: 'pi pi-sitemap', route: '/types', active: name.value === 'types' },
         { label: 'Statuses', icon: 'pi pi-tag', route: '/statuses', active: name.value === 'statuses' },
+        ...(session.can(Perm.AssetExport)
+          ? [{ label: 'Export profiles', icon: 'pi pi-file-export', route: '/export-profiles', active: name.value === 'export-profiles' }]
+          : []),
       ],
     })
   }

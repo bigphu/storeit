@@ -125,3 +125,14 @@ Selection styling lives in `app/theme.ts` (token preset over Aura) and `app/base
   keep `npm update` on the MIT majors.
 - `openapi-typescript` declares a TypeScript 5 peer; `package.json` overrides it to the
   project's TypeScript 6 (it only generates types).
+
+## Excel export
+
+- `src/features/assets/export/`: `layout` (report layout and columns), `format` (cell
+  formatting for the preview), `api` (profiles and export requests), `useExport` (run and
+  download, one at a time), `usePreviewData` (sheet preview data) and `components/`
+  (report dialog, column editor).
+- `src/lib/download.ts` saves the returned file.
+- The preview formatting must match `backend/internal/inventory/spreadsheet/format.go`,
+  or the preview and the downloaded file will differ.
+- The Export profiles page (`src/features/export-profiles/`) lists saved layouts.
