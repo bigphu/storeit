@@ -4,6 +4,7 @@ import Checkbox from 'primevue/checkbox'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
+import Popover from 'primevue/popover'
 import Select from 'primevue/select'
 import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
@@ -133,16 +134,23 @@ async function save() {
   loadedVersion.value = next.version
   notify.success(`Saved ${p.name}.`)
 }
-function openSaveAs() {
+// "Save as…" mở popover nhỏ cạnh nút (không chiếm thêm một hàng của hộp thoại)
+const saveAsPop = ref<InstanceType<typeof Popover>>()
+function openSaveAs(e: Event) {
   errors.clear()
   saveAs.value = { name: profile.value ? `${profile.value.name} (copy)` : 'New report', shared: false }
+  saveAsPop.value?.show(e)
+}
+function closeSaveAs() {
+  saveAsPop.value?.hide()
+  saveAs.value = null
 }
 async function submitSaveAs() {
   if (!saveAs.value) return
   errors.clear()
   try {
     const p = await create.mutateAsync({ name: saveAs.value.name, shared: saveAs.value.shared, layout: current.value })
-    saveAs.value = null
+    closeSaveAs()
     profileId.value = p.id
     notify.success(`Saved ${p.name}.`)
   } catch (err) {
@@ -194,36 +202,49 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
 </script>
 
 <template>
-  <Dialog v-model:visible="visible" modal header="Export report" :style="{ width: 'min(72rem, 96vw)' }" :content-style="{ padding: 0 }">
-    <div class="report">
-      <div class="head">
-        <label for="report-profile" class="muted">Profile</label>
-        <Select v-model="profileId" input-id="report-profile" :options="profiles ?? []" option-label="name" option-value="id" placeholder="No profile" show-clear class="profile-select" />
-        <Tag v-if="profile && !profile.can_edit" :value="`Shared by ${profile.owner.name}`" icon="pi pi-lock" severity="secondary" />
-        <Tag v-else-if="profile" :value="profile.shared ? 'Shared' : 'Only you'" severity="secondary" />
-        <Tag v-if="dirty" value="Unsaved changes" severity="warn" />
+  <Dialog
+    v-model:visible="visible"
+    modal
+    class="report-dialog"
+    :style="{ width: 'min(72rem, 96vw)' }"
+    :content-style="{ padding: 0 }"
+    :pt="{
+      footer: {
+        style: 'padding: 0.75rem 1.1rem; border-top: 1px solid var(--app-line); align-items: center;'
+      }
+    }"
+  >
+    <!-- Thanh tiêu đề gọn: profile, trạng thái, lưu; không thêm hàng nào trên vùng cuộn -->
+    <template #header>
+      <div class="title-bar">
+        <span class="p-dialog-title">Export report</span>
+        <Select v-model="profileId" aria-label="Export profile" :options="profiles ?? []" option-label="name" option-value="id" placeholder="No profile" show-clear size="small" class="profile-select" />
+        <i v-if="profile && !profile.can_edit" v-tooltip.bottom="`Shared by ${profile.owner.name}`" class="pi pi-lock state" aria-label="Shared by someone else" />
+        <i v-else-if="profile?.shared" v-tooltip.bottom="'Shared with everyone who can export'" class="pi pi-users state" aria-label="Shared" />
+        <Tag v-if="dirty" value="Unsaved" severity="warn" class="unsaved" />
         <span v-tooltip.bottom="saveHint">
-          <Button label="Save" size="small" severity="secondary" outlined :disabled="!profile?.can_edit || !dirty" :loading="update.isPending.value" @click="save" />
+          <Button label="Save" size="small" text :disabled="!profile?.can_edit || !dirty" :loading="update.isPending.value" @click="save" />
         </span>
-        <Button label="Save as…" size="small" severity="secondary" outlined @click="openSaveAs" />
+        <Button label="Save as…" size="small" text @click="openSaveAs" />
       </div>
-      <form v-if="saveAs" class="sub" @submit.prevent="submitSaveAs">
-        <label for="save-as-name">Name</label>
-        <InputText id="save-as-name" v-model="saveAs.name" required maxlength="100" autofocus :invalid="!!errors.fields.value.name" />
+    </template>
+    <Popover ref="saveAsPop" @hide="saveAs = null">
+      <form v-if="saveAs" class="save-as" @submit.prevent="submitSaveAs">
+        <label for="save-as-name">Profile name</label>
+        <InputText id="save-as-name" v-model="saveAs.name" required maxlength="100" autofocus fluid :invalid="!!errors.fields.value.name" />
         <span class="check">
           <Checkbox v-model="saveAs.shared" input-id="save-as-shared" binary />
           <label for="save-as-shared">Share with everyone who can export</label>
         </span>
-        <Button type="submit" label="Save profile" size="small" :loading="create.isPending.value" />
-        <Button label="Cancel" size="small" text severity="secondary" @click="saveAs = null" />
         <Message v-if="errors.general.value || errors.fields.value.name" severity="error" size="small" variant="simple">{{ errors.fields.value.name ?? errors.general.value }}</Message>
+        <div class="save-as-actions">
+          <Button label="Cancel" size="small" text severity="secondary" @click="closeSaveAs" />
+          <Button type="submit" label="Save profile" size="small" :loading="create.isPending.value" />
+        </div>
       </form>
-      <div v-else class="sub">
-        <i class="pi pi-table" aria-hidden="true" />
-        <span>Exporting <b>{{ scope.count }}</b> {{ scope.count === 1 ? 'asset' : 'assets' }} · {{ scope.label }}</span>
-        <span class="muted">{{ scope.selection ? 'Only the selected assets.' : 'The file uses the list’s current filters.' }}</span>
-      </div>
+    </Popover>
 
+    <div class="report">
       <div class="body">
         <Tabs v-model:value="tab" class="config">
           <TabList>
@@ -284,7 +305,11 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
       </div>
     </div>
     <template #footer>
-      <span class="muted foot-note">Built on the server with the same filters as the list. Up to 50,000 rows.</span>
+      <span v-tooltip.top="'Built on the server with the same filters as the list. Up to 50,000 rows.'" class="foot-note">
+        <i class="pi pi-table" aria-hidden="true" />
+        <span><b>{{ scope.count }}</b> {{ scope.count === 1 ? 'asset' : 'assets' }} · {{ scope.label }}</span>
+        <span class="muted">· {{ scope.selection ? 'only the selected assets' : 'uses the list’s current filters' }}</span>
+      </span>
       <Button label="Cancel" text severity="secondary" @click="visible = false" />
       <Button label="Download .xlsx" icon="pi pi-download" :loading="running" :disabled="!current.columns.length && !(current.sheets === 'per_type' && current.each_type_attrs)" @click="download" />
     </template>
@@ -292,18 +317,33 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
 </template>
 
 <style scoped>
-.head,
-.sub {
+.title-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.7rem 1.1rem;
-  border-bottom: 1px solid var(--app-line);
+  gap: 0.4rem 0.6rem;
+  flex: 1;
+  min-width: 0;
 }
-.sub {
-  background: var(--app-ground);
-  font-size: 0.88rem;
+.title-bar .p-dialog-title {
+  margin-right: 0.4rem;
+}
+.state {
+  color: var(--p-text-muted-color);
+}
+.unsaved {
+  font-size: 0.72rem;
+}
+.save-as {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(20rem, 80vw);
+}
+.save-as-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
 }
 .profile-select {
   min-width: 13rem;
@@ -311,9 +351,10 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
 /* Chiều cao cố định: thanh profile và dòng phạm vi đứng yên, cột cấu hình và
    bản xem trước mỗi bên tự cuộn */
 .report {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  height: min(46rem, 78vh);
 }
 .body {
   flex: 1;
@@ -436,6 +477,29 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
   }
   .preview :deep(.sheet-scroll) {
     max-height: 26rem;
+  }
+}
+</style>
+
+<style>
+/* Hộp thoại cao cố định, nội dung không cuộn: chỉ cột cấu hình và bản xem trước cuộn.
+   Dialog teleport ra body nên khối này không scoped. Màn hẹp: cả hộp thoại cuộn như cũ. */
+.p-dialog.report-dialog {
+  height: min(50rem, 94vh);
+}
+.p-dialog.report-dialog .p-dialog-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+@media (max-width: 900px) {
+  .p-dialog.report-dialog {
+    height: auto;
+  }
+  .p-dialog.report-dialog .p-dialog-content {
+    overflow: auto;
   }
 }
 </style>
