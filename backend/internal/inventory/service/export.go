@@ -68,8 +68,14 @@ func (s *Service) Export(ctx context.Context, req ExportRequest) (ExportFile, er
 		}
 		f.IDs = req.IDs
 	}
-	if layout.Sort != "" {
-		f.Sort = domain.AssetSort(layout.Sort)
+	// sort của bố cục không theo thuộc tính ghi đè sort của yêu cầu; sort theo thuộc tính
+	// được giải riêng cho từng sheet (key chỉ có nghĩa trong một loại)
+	layoutAttrSort := domain.AssetSort(layout.Sort)
+	if _, _, byAttr := layoutAttrSort.Attribute(); !byAttr {
+		layoutAttrSort = ""
+		if layout.Sort != "" {
+			f.Sort = domain.AssetSort(layout.Sort)
+		}
 	}
 	if _, _, byAttr := f.Sort.Attribute(); byAttr || len(f.Attrs) > 0 {
 		if err := s.resolveAttrQuery(ctx, &f); err != nil {
@@ -127,7 +133,12 @@ func (s *Service) Export(ctx context.Context, req ExportRequest) (ExportFile, er
 
 	summary := map[uuid.UUID]map[domain.StatusKind]int64{}
 	var rows int64
+	skipped := layout.SkippedKeys(types)
 	for _, g := range groups {
+		gf, skippedKey := sheetSortFilter(g.filter, g.types, layoutAttrSort)
+		if skippedKey != "" && !slices.Contains(skipped, skippedKey) {
+			skipped = append(skipped, skippedKey)
+		}
 		cols := layout.SheetColumns(g.types)
 		headers, widths := make([]string, len(cols)), make([]float64, len(cols))
 		for i, c := range cols {
@@ -140,7 +151,7 @@ func (s *Service) Export(ctx context.Context, req ExportRequest) (ExportFile, er
 		if err != nil {
 			return ExportFile{}, err
 		}
-		err = s.assets.Stream(ctx, g.filter, exportPageSize, func(items []domain.AssetListItem) error {
+		err = s.assets.Stream(ctx, gf, exportPageSize, func(items []domain.AssetListItem) error {
 			for _, a := range items {
 				cells := make([]spreadsheet.Cell, len(cols))
 				for i, c := range cols {
@@ -182,7 +193,25 @@ func (s *Service) Export(ctx context.Context, req ExportRequest) (ExportFile, er
 		// file đã dựng xong; mất một dòng lịch sử không đáng làm hỏng lần tải
 		slog.ErrorContext(ctx, "inventory: record export", "error", err)
 	}
-	return ExportFile{Name: exportFileName(req.Mode, profile), Data: buf.Bytes(), Skipped: layout.SkippedKeys(types), Rows: rows}, nil
+	return ExportFile{Name: exportFileName(req.Mode, profile), Data: buf.Bytes(), Skipped: skipped, Rows: rows}, nil
+}
+
+// sheetSortFilter áp sort theo thuộc tính của bố cục lên bộ lọc của một sheet. Chỉ giải được
+// khi sheet có đúng một loại và loại đó còn thuộc tính; không thì giữ sort cũ và trả key bị bỏ.
+func sheetSortFilter(f domain.AssetFilter, types []domain.AssetType, sort domain.AssetSort) (domain.AssetFilter, string) {
+	key, _, ok := sort.Attribute()
+	if !ok {
+		return f, ""
+	}
+	if len(types) != 1 {
+		return f, key
+	}
+	_, order, err := domain.ResolveAttrQuery(types[0], nil, sort)
+	if err != nil {
+		return f, key
+	}
+	f.Sort, f.AttrOrder = sort, order
+	return f, ""
 }
 
 // exportLayout: dữ liệu dùng DataLayout; báo cáo dùng bố cục gửi kèm, của profile, hay mặc định

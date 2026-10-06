@@ -133,3 +133,58 @@ func TestExport_SkipsRemovedAttribute(t *testing.T) {
 		t.Errorf("someone else's private profile: %v", err)
 	}
 }
+
+func sortLayout(sort string, mode domain.SheetMode) domain.ExportLayout {
+	l := domain.DefaultReportLayout()
+	l.Sheets, l.Sort = mode, sort
+	l.Columns = []domain.ExportColumn{{Field: "tag"}}
+	return l
+}
+
+func TestExport_LayoutAttributeSort(t *testing.T) {
+	e := newEnv()
+	lap := e.laptop(t)
+	a := e.mustAsset(t, lap, "LAP-1")
+	e.generalAsset(t, "GEN-1")
+
+	// per_type, không type_id: loại laptop giải được sort theo serial (chọn riêng laptop
+	// vì loại General không có serial và đúng ra bị bỏ ở sheet của nó)
+	l := sortLayout("-attributes.serial", domain.SheetPerType)
+	f, err := e.svc.Export(exporter, ExportRequest{Mode: ExportReport, Layout: &l, IDs: []uuid.UUID{a.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(f.Skipped, "serial") {
+		t.Errorf("per-type sort must resolve: skipped %v", f.Skipped)
+	}
+
+	// single, không type_id: không có một loại duy nhất nên bỏ qua sort, không lỗi
+	l = sortLayout("-attributes.serial", domain.SheetSingle)
+	f, err = e.svc.Export(exporter, ExportRequest{Mode: ExportReport, Layout: &l})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(f.Skipped, "serial") {
+		t.Errorf("single sheet without type must skip the sort: %v", f.Skipped)
+	}
+
+	// key không còn tồn tại trên loại
+	l = sortLayout("attributes.gone", domain.SheetSingle)
+	f, err = e.svc.Export(exporter, ExportRequest{Mode: ExportReport, Layout: &l, Filter: domain.AssetFilter{TypeID: &lap.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(f.Skipped, "gone") || f.Rows != 1 {
+		t.Errorf("missing attribute: skipped %v rows %d", f.Skipped, f.Rows)
+	}
+}
+
+func TestExport_RequestAttributeSortStaysStrict(t *testing.T) {
+	e := newEnv()
+	lap := e.laptop(t)
+	e.mustAsset(t, lap, "LAP-1")
+	_, err := e.svc.Export(exporter, ExportRequest{Mode: ExportData, Filter: domain.AssetFilter{Sort: "attributes.serial"}})
+	if status(err) != 422 {
+		t.Errorf("request attribute sort without type_id: %v", err)
+	}
+}
