@@ -43,6 +43,7 @@ var uniqueErrors = map[string]error{
 	"asset_type_attributes_label_lower":   domain.ErrAttributeLabelTaken,
 	"asset_attribute_options_label_lower": domain.ErrOptionLabelTaken,
 	"asset_statuses_name_lower":           domain.ErrStatusNameTaken,
+	"export_profiles_owner_name":          domain.ErrExportProfileNameTaken,
 }
 
 // mapWriteErr đổi lỗi trùng của Postgres sang lỗi domain; lỗi khác bọc kèm what

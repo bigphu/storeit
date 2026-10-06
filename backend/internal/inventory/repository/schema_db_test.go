@@ -105,10 +105,10 @@ func TestSchema_Seeds(t *testing.T) {
 		return out
 	}
 	for role, want := range map[string][]string{
-		"Administrator":      {"inventory.asset.manage", "inventory.asset.read", "inventory.status.manage", "inventory.type.manage"},
-		"Authorized Manager": {"inventory.asset.read", "inventory.status.manage", "inventory.type.manage"},
-		"Inventory Officer":  {"inventory.asset.manage", "inventory.asset.read"},
-		"Employee":           {"inventory.asset.read"},
+		"Administrator":      {"inventory.asset.export", "inventory.asset.manage", "inventory.asset.read", "inventory.export_profile.manage", "inventory.status.manage", "inventory.type.manage"},
+		"Authorized Manager": {"inventory.asset.export", "inventory.asset.read", "inventory.export_profile.manage", "inventory.status.manage", "inventory.type.manage"},
+		"Inventory Officer":  {"inventory.asset.export", "inventory.asset.manage", "inventory.asset.read"},
+		"Employee":           {"inventory.asset.export", "inventory.asset.read"},
 	} {
 		if got := grants(role); !slices.Equal(got, want) {
 			t.Errorf("%s inventory permissions = %v, want %v", role, got, want)
@@ -176,5 +176,23 @@ func TestSchema_Guarantees(t *testing.T) {
 	_, err = pool.Exec(ctx, `UPDATE inventory.assets SET asset_type_id = $2 WHERE id = $1`, f.assetID, f.otherTypeID)
 	if pgCode(err) != "23503" {
 		t.Errorf("change asset type with values: %v, want FK violation", err)
+	}
+}
+
+func TestSchema_ExportGrants(t *testing.T) {
+	r := newRepos(t)
+	for _, g := range []struct{ role, perm string }{
+		{"00000000-0000-7000-8000-000000000004", "inventory.asset.export"},
+		{"00000000-0000-7000-8000-000000000001", "inventory.export_profile.manage"},
+		{"00000000-0000-7000-8000-000000000002", "inventory.export_profile.manage"},
+	} {
+		var n int
+		if err := r.pool.QueryRow(context.Background(),
+			`SELECT count(*) FROM identity.role_permissions WHERE role_id = $1 AND permission = $2`, g.role, g.perm).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		if n != 1 {
+			t.Errorf("role %s lacks %s", g.role, g.perm)
+		}
 	}
 }

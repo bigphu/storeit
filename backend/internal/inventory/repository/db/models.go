@@ -161,6 +161,17 @@ type InventoryAssetTypeAttribute struct {
 	UpdatedAt   time.Time
 }
 
+type InventoryExportProfile struct {
+	ID        uuid.UUID
+	OwnerID   uuid.UUID
+	Name      string
+	Shared    bool
+	Layout    json.RawMessage
+	Version   int32
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type PlatformEvent struct {
 	ID            uuid.UUID
 	Type          string

@@ -23,10 +23,12 @@ type Querier interface {
 	CreateAsset(ctx context.Context, arg CreateAssetParams) (InventoryAsset, error)
 	CreateAssetType(ctx context.Context, arg CreateAssetTypeParams) (InventoryAssetType, error)
 	CreateAttribute(ctx context.Context, arg CreateAttributeParams) (InventoryAssetTypeAttribute, error)
+	CreateExportProfile(ctx context.Context, arg CreateExportProfileParams) (InventoryExportProfile, error)
 	CreateOption(ctx context.Context, arg CreateOptionParams) (InventoryAssetAttributeOption, error)
 	CreateStatus(ctx context.Context, arg CreateStatusParams) (InventoryAssetStatus, error)
 	DeleteAssetValues(ctx context.Context, assetID uuid.UUID) error
 	DeleteAttributeOptions(ctx context.Context, attributeID uuid.UUID) error
+	DeleteExportProfile(ctx context.Context, id uuid.UUID) (int64, error)
 	GetAsset(ctx context.Context, id uuid.UUID) (InventoryAsset, error)
 	// NO KEY UPDATE: không chặn insert tham chiếu tài sản (giá trị thuộc tính, sau này là phiếu mượn)
 	GetAssetForUpdate(ctx context.Context, id uuid.UUID) (InventoryAsset, error)
@@ -34,6 +36,8 @@ type Querier interface {
 	GetAssetTypeForUpdate(ctx context.Context, id uuid.UUID) (InventoryAssetType, error)
 	GetAttributeForUpdate(ctx context.Context, arg GetAttributeForUpdateParams) (InventoryAssetTypeAttribute, error)
 	GetDefaultStatus(ctx context.Context, kind string) (InventoryAssetStatus, error)
+	GetExportProfile(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error)
+	GetExportProfileForUpdate(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error)
 	GetOptionForUpdate(ctx context.Context, arg GetOptionForUpdateParams) (InventoryAssetAttributeOption, error)
 	GetStatus(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
 	GetStatusForUpdate(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
@@ -50,6 +54,8 @@ type Querier interface {
 	ListAssets(ctx context.Context, arg ListAssetsParams) ([]ListAssetsRow, error)
 	// Mọi thuộc tính của loại, kể cả đã gỡ, theo thứ tự hiển thị
 	ListAttributes(ctx context.Context, assetTypeID uuid.UUID) ([]InventoryAssetTypeAttribute, error)
+	// Của mình và mọi profile được chia sẻ
+	ListExportProfiles(ctx context.Context, ownerID uuid.UUID) ([]InventoryExportProfile, error)
 	ListOptionsForType(ctx context.Context, assetTypeID uuid.UUID) ([]InventoryAssetAttributeOption, error)
 	ListStatuses(ctx context.Context, includeArchived bool) ([]InventoryAssetStatus, error)
 	// Giá trị của nhiều tài sản một lần (các dòng của một trang danh sách)
@@ -69,6 +75,8 @@ type Querier interface {
 	// Optimistic locking: 0 hàng là version đã đổi
 	UpdateAssetType(ctx context.Context, arg UpdateAssetTypeParams) (InventoryAssetType, error)
 	UpdateAttribute(ctx context.Context, arg UpdateAttributeParams) (InventoryAssetTypeAttribute, error)
+	// Optimistic locking: 0 hàng là version đã đổi
+	UpdateExportProfile(ctx context.Context, arg UpdateExportProfileParams) (InventoryExportProfile, error)
 	UpdateOption(ctx context.Context, arg UpdateOptionParams) (InventoryAssetAttributeOption, error)
 	UpdateStatus(ctx context.Context, arg UpdateStatusParams) (InventoryAssetStatus, error)
 }

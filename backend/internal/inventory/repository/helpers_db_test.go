@@ -21,6 +21,7 @@ type repos struct {
 	types    *repository.TypeRepository
 	statuses *repository.StatusRepository
 	assets   *repository.AssetRepository
+	profiles *repository.ExportProfileRepository
 }
 
 func newRepos(t *testing.T) repos {
@@ -36,6 +37,7 @@ func newRepos(t *testing.T) repos {
 		types:    repository.NewTypeRepository(pool, outbox),
 		statuses: repository.NewStatusRepository(pool, outbox),
 		assets:   repository.NewAssetRepository(pool, outbox),
+		profiles: repository.NewExportProfileRepository(pool, outbox),
 	}
 }
 

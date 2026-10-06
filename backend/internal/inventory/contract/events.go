@@ -19,6 +19,11 @@ const (
 	EventStatusUpdated  = "inventory.status_updated"
 	EventStatusArchived = "inventory.status_archived"
 	EventStatusRestored = "inventory.status_restored"
+
+	EventExportProfileCreated = "inventory.export_profile_created"
+	EventExportProfileUpdated = "inventory.export_profile_updated"
+	EventExportProfileDeleted = "inventory.export_profile_deleted"
+	EventAssetsExported       = "inventory.assets_exported"
 )
 
 // Loại aggregate trong platform.events
@@ -26,6 +31,9 @@ const (
 	AggregateAsset     = "asset"
 	AggregateAssetType = "asset_type"
 	AggregateStatus    = "asset_status"
+
+	AggregateExportProfile = "export_profile"
+	AggregateAssetExport   = "asset_export"
 )
 
 // FieldChange là giá trị trước và sau của một field. Thuộc tính riêng dùng
@@ -96,4 +104,29 @@ type StatusArchived struct {
 
 type StatusRestored struct {
 	StatusID uuid.UUID `json:"status_id"`
+}
+
+type ExportProfileCreated struct {
+	ProfileID uuid.UUID `json:"profile_id"`
+	Name      string    `json:"name"`
+	Shared    bool      `json:"shared"`
+}
+
+// ExportProfileUpdated: bố cục đổi thì một FieldChange "layout" không kèm giá trị
+type ExportProfileUpdated struct {
+	ProfileID uuid.UUID     `json:"profile_id"`
+	Changes   []FieldChange `json:"changes"`
+}
+
+type ExportProfileDeleted struct {
+	ProfileID uuid.UUID `json:"profile_id"`
+}
+
+// AssetsExported: ai export gì (người làm là actor của event)
+type AssetsExported struct {
+	Mode      string         `json:"mode"`
+	ProfileID *uuid.UUID     `json:"profile_id,omitempty"`
+	Rows      int64          `json:"rows"`
+	Sheets    int            `json:"sheets"`
+	Filters   map[string]any `json:"filters"`
 }
