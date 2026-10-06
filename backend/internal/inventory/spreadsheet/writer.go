@@ -257,17 +257,26 @@ func truncate(s string, n int) string {
 	return string([]rune(s)[:n])
 }
 
-// uniqueHeaders: bảng Excel cần tên cột khác nhau; trùng thì thêm " (2)", " (3)"
+// uniqueHeaders: bảng Excel cần tên cột khác nhau (không phân biệt hoa thường); trùng thì
+// thêm " (2)", " (3)" cho đến khi chưa dùng, kể cả khi tiêu đề gốc đã có dạng "Tag (2)"
 func uniqueHeaders(headers []string) []string {
 	out := make([]string, len(headers))
-	seen := map[string]int{}
+	used := map[string]bool{}
+	for _, h := range headers {
+		used[strings.ToLower(h)] = false // đánh dấu tên gốc để không bị cấp lại
+	}
 	for i, h := range headers {
-		key := strings.ToLower(h)
-		seen[key]++
-		if seen[key] > 1 {
-			h = fmt.Sprintf("%s (%d)", h, seen[key])
+		name := h
+		if used[strings.ToLower(name)] {
+			for n := 2; ; n++ {
+				name = fmt.Sprintf("%s (%d)", h, n)
+				if _, taken := used[strings.ToLower(name)]; !taken {
+					break
+				}
+			}
 		}
-		out[i] = h
+		used[strings.ToLower(name)] = true
+		out[i] = name
 	}
 	return out
 }

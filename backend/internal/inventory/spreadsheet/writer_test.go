@@ -2,6 +2,8 @@ package spreadsheet
 
 import (
 	"bytes"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -57,8 +59,11 @@ func TestWriter_SheetsHeaderRowsAndTypes(t *testing.T) {
 	if v, _ := f.GetCellValue("Laptop", "B3"); v != "RAM (GB)" {
 		t.Errorf("header = %q", v)
 	}
-	if typ, _ := f.GetCellType("Laptop", "B4"); typ != excelize.CellTypeNumber && typ != excelize.CellTypeUnset {
-		t.Errorf("number cell type = %v", typ)
+	if typ, _ := f.GetCellType("Laptop", "B4"); typ == excelize.CellTypeSharedString || typ == excelize.CellTypeInlineString {
+		t.Errorf("number cell type = %v, want numeric", typ)
+	}
+	if v, _ := f.GetCellValue("Laptop", "B4", excelize.Options{RawCellValue: true}); v != "32" {
+		t.Errorf("number raw = %q, want 32", v)
 	}
 	if v, _ := f.GetCellValue("Laptop", "C4"); v != "14/03/2025" {
 		t.Errorf("formatted date = %q", v)
@@ -111,5 +116,83 @@ func TestWriter_SheetNames(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("sheet %d = %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+func TestWriter_DuplicateHeadersWithExistingSuffix(t *testing.T) {
+	for _, in := range [][]string{{"Tag", "Tag", "Tag (2)"}, {"Tag (2)", "Tag", "Tag"}, {"tag", "TAG", "Tag"}} {
+		f := build(t, func(w *Writer) {
+			s, err := w.Sheet(SheetOptions{Name: "Assets", Filter: true}, in)
+			must(t, err)
+			must(t, s.Row([]Cell{TextCell("a"), TextCell("b"), TextCell("c")}))
+			must(t, s.Close())
+		})
+		rows, _ := f.GetRows("Assets")
+		seen := map[string]bool{}
+		for _, h := range rows[0] {
+			k := strings.ToLower(h)
+			if seen[k] {
+				t.Errorf("input %v: duplicate header in %v", in, rows[0])
+			}
+			seen[k] = true
+		}
+		if len(rows[0]) != 3 {
+			t.Errorf("input %v: headers = %v", in, rows[0])
+		}
+		if tables, _ := f.GetTables("Assets"); len(tables) != 1 {
+			t.Errorf("input %v: tables = %+v", in, tables)
+		}
+	}
+}
+
+func TestWriter_StripesKeepDateFormat(t *testing.T) {
+	day := time.Date(2025, 3, 14, 0, 0, 0, 0, time.UTC)
+	f := build(t, func(w *Writer) {
+		s, err := w.Sheet(SheetOptions{Name: "S", Stripes: true}, []string{"Tag", "Bought"})
+		must(t, err)
+		for i := 0; i < 4; i++ {
+			must(t, s.Row([]Cell{TextCell("x"), {Kind: Date, Time: day, NumFmt: "dd/mm/yyyy"}}))
+		}
+		must(t, s.Close())
+	})
+	striped := func(cell string) bool {
+		id, err := f.GetCellStyle("S", cell)
+		must(t, err)
+		st, err := f.GetStyle(id)
+		must(t, err)
+		return st.Fill.Type == "pattern" && len(st.Fill.Color) > 0
+	}
+	// dòng 2..5 là dữ liệu; dòng thứ hai và thứ tư của dữ liệu (3 và 5) có nền sọc
+	for row, want := range map[int]bool{2: false, 3: true, 4: false, 5: true} {
+		for _, col := range []string{"A", "B"} {
+			if got := striped(fmt.Sprintf("%s%d", col, row)); got != want {
+				t.Errorf("%s%d striped = %v, want %v", col, row, got, want)
+			}
+		}
+		id, _ := f.GetCellStyle("S", fmt.Sprintf("B%d", row))
+		st, _ := f.GetStyle(id)
+		if st.CustomNumFmt == nil || *st.CustomNumFmt != "dd/mm/yyyy" {
+			t.Errorf("B%d lost its date format: %+v", row, st)
+		}
+	}
+}
+
+func TestWriter_TitleMerge(t *testing.T) {
+	f := build(t, func(w *Writer) {
+		s, err := w.Sheet(SheetOptions{Name: "Wide", Title: []string{"T1", "T2"}}, []string{"a", "b", "c"})
+		must(t, err)
+		must(t, s.Close())
+		s, err = w.Sheet(SheetOptions{Name: "One", Title: []string{"T1", "T2"}}, []string{"a"})
+		must(t, err)
+		must(t, s.Close())
+	})
+	merges, err := f.GetMergeCells("Wide")
+	must(t, err)
+	if len(merges) != 2 || merges[0].GetStartAxis() != "A1" || merges[0].GetEndAxis() != "C1" ||
+		merges[1].GetStartAxis() != "A2" || merges[1].GetEndAxis() != "C2" {
+		t.Errorf("merges = %v", merges)
+	}
+	if merges, _ := f.GetMergeCells("One"); len(merges) != 0 {
+		t.Errorf("single column must not merge: %v", merges)
 	}
 }
