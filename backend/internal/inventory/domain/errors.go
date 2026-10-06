@@ -71,10 +71,10 @@ var (
 	ErrExportProfileForbidden = errs.Forbidden("/errors/export-profile-forbidden", "Can't change this profile",
 		errs.WithDetail("Only its owner, or someone who can manage export profiles, can change a shared profile."))
 
-	ErrAssetNotFound     = errs.NotFound("/errors/asset-not-found", "Asset not found")
-	ErrTypeNotFound      = errs.NotFound("/errors/asset-type-not-found", "Asset type not found")
-	ErrAttributeNotFound = errs.NotFound("/errors/attribute-not-found", "Attribute not found")
-	ErrOptionNotFound    = errs.NotFound("/errors/option-not-found", "Option not found")
-	ErrStatusNotFound    = errs.NotFound("/errors/status-not-found", "Status not found")
+	ErrAssetNotFound         = errs.NotFound("/errors/asset-not-found", "Asset not found")
+	ErrTypeNotFound          = errs.NotFound("/errors/asset-type-not-found", "Asset type not found")
+	ErrAttributeNotFound     = errs.NotFound("/errors/attribute-not-found", "Attribute not found")
+	ErrOptionNotFound        = errs.NotFound("/errors/option-not-found", "Option not found")
+	ErrStatusNotFound        = errs.NotFound("/errors/status-not-found", "Status not found")
 	ErrExportProfileNotFound = errs.NotFound("/errors/export-profile-not-found", "Export profile not found")
 )
