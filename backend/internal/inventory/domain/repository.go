@@ -138,8 +138,10 @@ type AssetFilter struct {
 	LocationID     *uuid.UUID
 	HolderMemberID *uuid.UUID
 	IncludeRetired bool
-	Sort           AssetSort
-	Limit, Offset  int32
+	// IDs: chỉ các tài sản này ("Export selected"); nil là không lọc
+	IDs           []uuid.UUID
+	Sort          AssetSort
+	Limit, Offset int32
 	// Attrs: điều kiện "<key>:<op>:<value>" trên thuộc tính tuỳ chỉnh (AND), cần TypeID
 	Attrs []string
 	// Service điền từ Attrs và Sort "attributes.<key>" (ResolveAttrQuery);
@@ -165,6 +167,11 @@ type AssetRepository interface {
 	// Get: kèm giá trị thuộc tính; ErrAssetNotFound
 	Get(ctx context.Context, id uuid.UUID) (Asset, error)
 	List(ctx context.Context, f AssetFilter) ([]AssetListItem, int64, error)
+	// Count: số dòng List sẽ trả với cùng bộ lọc (bỏ qua Limit, Offset)
+	Count(ctx context.Context, f AssetFilter) (int64, error)
+	// Stream đọc mọi dòng của bộ lọc theo trang pageSize, kèm giá trị thuộc tính, trong
+	// một transaction chỉ đọc REPEATABLE READ (mọi trang cùng một ảnh dữ liệu)
+	Stream(ctx context.Context, f AssetFilter, pageSize int32, fn func([]AssetListItem) error) error
 	// CountByType: tài sản chưa retire của mỗi loại, tổng và theo kind; loại không có
 	// tài sản thì không có trong map
 	CountByType(ctx context.Context) (map[uuid.UUID]TypeCounts, error)

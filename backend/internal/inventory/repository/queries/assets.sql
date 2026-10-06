@@ -75,6 +75,7 @@ WHERE (sqlc.narg('q')::text IS NULL
   AND (sqlc.narg('location_id')::uuid IS NULL OR a.location_id = sqlc.narg('location_id')::uuid)
   AND (sqlc.narg('holder_member_id')::uuid IS NULL OR a.holder_member_id = sqlc.narg('holder_member_id')::uuid)
   AND (@include_retired::boolean OR a.retired_at IS NULL)
+  AND (sqlc.narg('ids')::uuid[] IS NULL OR a.id = ANY(sqlc.narg('ids')::uuid[]))
   AND NOT EXISTS (
     -- mọi điều kiện i (f_attrs[i], f_ops[i], f_vals[i]) phải có giá trị khớp; giá trị đã kiểm
     -- ở Go nên ép kiểu trong nhánh CASE không lỗi
@@ -154,6 +155,7 @@ WHERE (sqlc.narg('q')::text IS NULL
   AND (sqlc.narg('location_id')::uuid IS NULL OR a.location_id = sqlc.narg('location_id')::uuid)
   AND (sqlc.narg('holder_member_id')::uuid IS NULL OR a.holder_member_id = sqlc.narg('holder_member_id')::uuid)
   AND (@include_retired::boolean OR a.retired_at IS NULL)
+  AND (sqlc.narg('ids')::uuid[] IS NULL OR a.id = ANY(sqlc.narg('ids')::uuid[]))
   AND NOT EXISTS (
     -- mọi điều kiện i (f_attrs[i], f_ops[i], f_vals[i]) phải có giá trị khớp; giá trị đã kiểm
     -- ở Go nên ép kiểu trong nhánh CASE không lỗi

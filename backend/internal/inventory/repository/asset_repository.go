@@ -62,41 +62,57 @@ func (r *AssetRepository) Get(ctx context.Context, id uuid.UUID) (domain.Asset, 
 }
 
 func (r *AssetRepository) List(ctx context.Context, f domain.AssetFilter) ([]domain.AssetListItem, int64, error) {
-	var q *string
-	if f.Query != "" {
-		q = ptr(likeEscaper.Replace(f.Query))
+	items, err := r.page(ctx, r.q, f)
+	if err != nil {
+		return nil, 0, err
 	}
-	var kind *string
-	if f.StatusKind != nil {
-		kind = ptr(string(*f.StatusKind))
+	total, err := r.count(ctx, r.q, f)
+	if err != nil {
+		return nil, 0, err
 	}
-	sort := string(f.Sort)
-	var sortAttr *uuid.UUID
-	switch {
-	case f.AttrOrder != nil:
-		// khoá sắp theo kiểu dữ liệu: "attr_number", "-attr_date"...
-		sort, sortAttr = "attr_"+string(f.AttrOrder.DataType), &f.AttrOrder.AttributeID
-		if f.AttrOrder.Desc {
-			sort = "-" + sort
+	return items, total, nil
+}
+
+func (r *AssetRepository) Count(ctx context.Context, f domain.AssetFilter) (int64, error) {
+	return r.count(ctx, r.q, f)
+}
+
+func (r *AssetRepository) Stream(ctx context.Context, f domain.AssetFilter, pageSize int32, fn func([]domain.AssetListItem) error) error {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return fmt.Errorf("inventory: begin export read: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := r.q.WithTx(tx)
+	f.IncludeValues, f.Limit = true, pageSize
+	for f.Offset = 0; ; f.Offset += pageSize {
+		items, err := r.page(ctx, q, f)
+		if err != nil {
+			return err
 		}
-	case sort == "":
-		sort = string(domain.SortTag)
+		if len(items) > 0 {
+			if err := fn(items); err != nil {
+				return err
+			}
+		}
+		if int32(len(items)) < pageSize {
+			break
+		}
 	}
-	fAttrs, fOps, fVals := attrFilterArgs(f.AttrFilters)
-	rows, err := r.q.ListAssets(ctx, db.ListAssetsParams{
-		Q: q, TypeID: f.TypeID, StatusID: f.StatusID, StatusKind: kind, LocationID: f.LocationID,
-		HolderMemberID: f.HolderMemberID, IncludeRetired: f.IncludeRetired, FAttrs: fAttrs, FOps: fOps, FVals: fVals,
-		SortAttr: sortAttr, Sort: sort, Lim: f.Limit, Off: f.Offset,
+	return tx.Commit(ctx)
+}
+
+// page: một trang của danh sách (truy vấn ListAssets), kèm giá trị khi IncludeValues
+func (r *AssetRepository) page(ctx context.Context, q *db.Queries, f domain.AssetFilter) ([]domain.AssetListItem, error) {
+	args := listArgs(f)
+	rows, err := q.ListAssets(ctx, db.ListAssetsParams{
+		Q: args.q, TypeID: f.TypeID, StatusID: f.StatusID, StatusKind: args.kind, LocationID: f.LocationID,
+		HolderMemberID: f.HolderMemberID, IncludeRetired: f.IncludeRetired, Ids: f.IDs,
+		FAttrs: args.fAttrs, FOps: args.fOps, FVals: args.fVals,
+		SortAttr: args.sortAttr, Sort: args.sort, Lim: f.Limit, Off: f.Offset,
 	})
 	if err != nil {
-		return nil, 0, fmt.Errorf("inventory: list assets: %w", err)
-	}
-	total, err := r.q.CountAssets(ctx, db.CountAssetsParams{
-		Q: q, TypeID: f.TypeID, StatusID: f.StatusID, StatusKind: kind, LocationID: f.LocationID,
-		HolderMemberID: f.HolderMemberID, IncludeRetired: f.IncludeRetired, FAttrs: fAttrs, FOps: fOps, FVals: fVals,
-	})
-	if err != nil {
-		return nil, 0, fmt.Errorf("inventory: count assets: %w", err)
+		return nil, fmt.Errorf("inventory: list assets: %w", err)
 	}
 	out := make([]domain.AssetListItem, len(rows))
 	for i, row := range rows {
@@ -111,11 +127,55 @@ func (r *AssetRepository) List(ctx context.Context, f domain.AssetFilter) ([]dom
 		}
 	}
 	if f.IncludeValues && len(out) > 0 {
-		if err := r.attachValues(ctx, out); err != nil {
-			return nil, 0, err
+		if err := r.attachValues(ctx, q, out); err != nil {
+			return nil, err
 		}
 	}
-	return out, total, nil
+	return out, nil
+}
+
+func (r *AssetRepository) count(ctx context.Context, q *db.Queries, f domain.AssetFilter) (int64, error) {
+	args := listArgs(f)
+	total, err := q.CountAssets(ctx, db.CountAssetsParams{
+		Q: args.q, TypeID: f.TypeID, StatusID: f.StatusID, StatusKind: args.kind, LocationID: f.LocationID,
+		HolderMemberID: f.HolderMemberID, IncludeRetired: f.IncludeRetired, Ids: f.IDs,
+		FAttrs: args.fAttrs, FOps: args.fOps, FVals: args.fVals,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("inventory: count assets: %w", err)
+	}
+	return total, nil
+}
+
+type listArguments struct {
+	q, kind     *string
+	sort        string
+	sortAttr    *uuid.UUID
+	fAttrs      []uuid.UUID
+	fOps, fVals []string
+}
+
+// listArgs đổi bộ lọc thành tham số chung của ListAssets và CountAssets
+func listArgs(f domain.AssetFilter) listArguments {
+	a := listArguments{sort: string(f.Sort)}
+	if f.Query != "" {
+		a.q = ptr(likeEscaper.Replace(f.Query))
+	}
+	if f.StatusKind != nil {
+		a.kind = ptr(string(*f.StatusKind))
+	}
+	switch {
+	case f.AttrOrder != nil:
+		// khoá sắp theo kiểu dữ liệu: "attr_number", "-attr_date"...
+		a.sort, a.sortAttr = "attr_"+string(f.AttrOrder.DataType), &f.AttrOrder.AttributeID
+		if f.AttrOrder.Desc {
+			a.sort = "-" + a.sort
+		}
+	case a.sort == "":
+		a.sort = string(domain.SortTag)
+	}
+	a.fAttrs, a.fOps, a.fVals = attrFilterArgs(f.AttrFilters)
+	return a
 }
 
 // attrFilterArgs đổi điều kiện thành ba mảng song song cho ListAssets/CountAssets;
@@ -165,14 +225,14 @@ func (r *AssetRepository) CountByStatus(ctx context.Context) (map[uuid.UUID]int6
 }
 
 // attachValues nạp giá trị thuộc tính của mọi dòng trong một truy vấn
-func (r *AssetRepository) attachValues(ctx context.Context, items []domain.AssetListItem) error {
+func (r *AssetRepository) attachValues(ctx context.Context, q *db.Queries, items []domain.AssetListItem) error {
 	ids := make([]uuid.UUID, len(items))
 	at := make(map[uuid.UUID]int, len(items))
 	for i, it := range items {
 		ids[i] = it.ID
 		at[it.ID] = i
 	}
-	rows, err := r.q.ListValuesForAssets(ctx, ids)
+	rows, err := q.ListValuesForAssets(ctx, ids)
 	if err != nil {
 		return fmt.Errorf("inventory: list values: %w", err)
 	}

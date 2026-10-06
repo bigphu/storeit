@@ -474,3 +474,50 @@ func TestAssets_CountByType(t *testing.T) {
 		t.Errorf("type with only retired assets is in the map")
 	}
 }
+
+func TestAssets_StreamMatchesListAndIDs(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	typ := laptop(t, r)
+	var made []domain.Asset
+	for range 7 {
+		a, err := r.assets.Create(ctx, "ST-"+uniq(), domain.AssetFields{Name: "x", TypeID: typ.ID, StatusID: domain.AvailableStatusID, Values: fullValues(t, typ)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		made = append(made, a)
+	}
+	f := domain.AssetFilter{TypeID: &typ.ID, Sort: domain.SortTag}
+	want, total, err := r.assets.List(context.Background(), domain.AssetFilter{TypeID: &typ.ID, Sort: domain.SortTag, Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []domain.AssetListItem
+	pages := 0
+	err = r.assets.Stream(context.Background(), f, 3, func(items []domain.AssetListItem) error {
+		pages++
+		got = append(got, items...)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if int64(len(got)) != total || pages != 3 {
+		t.Fatalf("stream = %d rows in %d pages, want %d rows in 3 pages", len(got), pages, total)
+	}
+	for i := range got {
+		if got[i].ID != want[i].ID {
+			t.Fatalf("row %d = %s, want %s", i, got[i].Tag, want[i].Tag)
+		}
+		if len(got[i].Values) == 0 {
+			t.Fatalf("row %d has no attribute values", i)
+		}
+	}
+	if n, err := r.assets.Count(context.Background(), f); err != nil || n != total {
+		t.Errorf("count = %d, %v, want %d", n, err, total)
+	}
+	sel := domain.AssetFilter{TypeID: &typ.ID, IDs: []uuid.UUID{made[0].ID, made[3].ID}}
+	if n, _ := r.assets.Count(context.Background(), sel); n != 2 {
+		t.Errorf("count by ids = %d, want 2", n)
+	}
+}

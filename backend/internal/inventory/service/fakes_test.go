@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -436,4 +438,38 @@ func deref[T any](p *T) T {
 		return zero
 	}
 	return *p
+}
+
+func (f *fakeAssets) matching(filter domain.AssetFilter) []domain.AssetListItem {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []domain.AssetListItem
+	for _, a := range f.assets {
+		if filter.TypeID != nil && a.TypeID != *filter.TypeID {
+			continue
+		}
+		if filter.IDs != nil && !slices.Contains(filter.IDs, a.ID) {
+			continue
+		}
+		if a.Retired() && !filter.IncludeRetired {
+			continue
+		}
+		out = append(out, domain.AssetListItem{Asset: a, StatusName: "Available", StatusKind: domain.KindAvailable})
+	}
+	slices.SortFunc(out, func(x, y domain.AssetListItem) int { return strings.Compare(x.Tag, y.Tag) })
+	return out
+}
+
+func (f *fakeAssets) Count(_ context.Context, filter domain.AssetFilter) (int64, error) {
+	return int64(len(f.matching(filter))), nil
+}
+
+func (f *fakeAssets) Stream(_ context.Context, filter domain.AssetFilter, size int32, fn func([]domain.AssetListItem) error) error {
+	rows := f.matching(filter)
+	for i := 0; i < len(rows); i += int(size) {
+		if err := fn(rows[i:min(i+int(size), len(rows))]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
