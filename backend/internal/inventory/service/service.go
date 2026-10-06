@@ -8,6 +8,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	idcontract "storeit/internal/identity/contract"
 	"storeit/internal/inventory/domain"
 )
 
@@ -15,16 +16,27 @@ type Deps struct {
 	Types    domain.TypeRepository
 	Statuses domain.StatusRepository
 	Assets   domain.AssetRepository
+	Profiles domain.ExportProfileRepository
+	Accounts idcontract.AccountReader // tên chủ profile, tên người export trong tiêu đề báo cáo
+	// ExportMaxRows: số dòng tối đa một lần export; 0 là mặc định 50.000
+	ExportMaxRows int
 }
 
 type Service struct {
-	types    domain.TypeRepository
-	statuses domain.StatusRepository
-	assets   domain.AssetRepository
+	types         domain.TypeRepository
+	statuses      domain.StatusRepository
+	assets        domain.AssetRepository
+	profiles      domain.ExportProfileRepository
+	accounts      idcontract.AccountReader
+	exportMaxRows int
 }
 
 func New(d Deps) *Service {
-	return &Service{types: d.Types, statuses: d.Statuses, assets: d.Assets}
+	maxRows := d.ExportMaxRows
+	if maxRows == 0 {
+		maxRows = defaultExportMaxRows
+	}
+	return &Service{types: d.Types, statuses: d.Statuses, assets: d.Assets, profiles: d.Profiles, accounts: d.Accounts, exportMaxRows: maxRows}
 }
 
 // Độ dài tối đa (ký tự), khớp CHECK của migration và maxLength của OpenAPI

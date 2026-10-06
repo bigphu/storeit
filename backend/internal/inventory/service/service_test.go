@@ -19,11 +19,12 @@ type env struct {
 	types    *fakeTypes
 	statuses *fakeStatuses
 	assets   *fakeAssets
+	profiles *fakeProfiles
 }
 
 func newEnv() *env {
-	e := &env{types: newFakeTypes(), statuses: newFakeStatuses(), assets: newFakeAssets()}
-	e.svc = New(Deps{Types: e.types, Statuses: e.statuses, Assets: e.assets})
+	e := &env{types: newFakeTypes(), statuses: newFakeStatuses(), assets: newFakeAssets(), profiles: newFakeProfiles()}
+	e.svc = New(Deps{Types: e.types, Statuses: e.statuses, Assets: e.assets, Profiles: e.profiles, Accounts: fakeAccounts{}})
 	return e
 }
 
@@ -93,6 +94,14 @@ func TestPermissionChecks(t *testing.T) {
 		"UpdateAsset":       {domain.PermAssetManage, func(c context.Context) error { _, err := e.svc.UpdateAsset(c, id, AssetInput{}, 1); return err }},
 		"RetireAsset":       {domain.PermAssetManage, func(c context.Context) error { _, err := e.svc.RetireAsset(c, id, "", 1); return err }},
 		"RestoreAsset":      {domain.PermAssetManage, func(c context.Context) error { _, err := e.svc.RestoreAsset(c, id, 1); return err }},
+
+		"ListExportProfiles": {domain.PermAssetExport, func(c context.Context) error { _, err := e.svc.ListExportProfiles(c); return err }},
+		"CreateExportProfile": {domain.PermAssetExport, func(c context.Context) error {
+			_, err := e.svc.CreateExportProfile(c, ExportProfileInput{})
+			return err
+		}},
+		"GetExportProfile":    {domain.PermAssetExport, func(c context.Context) error { _, err := e.svc.GetExportProfile(c, id); return err }},
+		"DeleteExportProfile": {domain.PermAssetExport, func(c context.Context) error { return e.svc.DeleteExportProfile(c, id) }},
 	}
 	for name, c := range calls {
 		if err := c.call(context.Background()); status(err) != 401 {
@@ -100,7 +109,7 @@ func TestPermissionChecks(t *testing.T) {
 		}
 		// Có mọi quyền khác trừ quyền cần: 403
 		var others []string
-		for _, p := range []string{domain.PermAssetRead, domain.PermAssetManage, domain.PermTypeManage, domain.PermStatusManage} {
+		for _, p := range []string{domain.PermAssetRead, domain.PermAssetManage, domain.PermTypeManage, domain.PermStatusManage, domain.PermAssetExport, domain.PermExportProfileManage} {
 			if p != c.perm {
 				others = append(others, p)
 			}

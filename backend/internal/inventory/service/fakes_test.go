@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	idcontract "storeit/internal/identity/contract"
 	"storeit/internal/inventory/domain"
 )
 
@@ -472,4 +473,105 @@ func (f *fakeAssets) Stream(_ context.Context, filter domain.AssetFilter, size i
 		}
 	}
 	return nil
+}
+
+type fakeProfiles struct {
+	mu       sync.Mutex
+	profiles map[uuid.UUID]domain.ExportProfile
+	records  []domain.ExportRecord
+}
+
+func newFakeProfiles() *fakeProfiles {
+	return &fakeProfiles{profiles: map[uuid.UUID]domain.ExportProfile{}}
+}
+
+func (f *fakeProfiles) List(_ context.Context, owner uuid.UUID) ([]domain.ExportProfile, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []domain.ExportProfile
+	for _, p := range f.profiles {
+		if p.OwnerID == owner || p.Shared {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeProfiles) Get(_ context.Context, id uuid.UUID) (domain.ExportProfile, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	p, ok := f.profiles[id]
+	if !ok {
+		return p, domain.ErrExportProfileNotFound
+	}
+	return p, nil
+}
+
+func (f *fakeProfiles) Create(_ context.Context, in domain.NewExportProfile) (domain.ExportProfile, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, p := range f.profiles {
+		if p.OwnerID == in.OwnerID && strings.EqualFold(p.Name, in.Name) {
+			return domain.ExportProfile{}, domain.ErrExportProfileNameTaken
+		}
+	}
+	p := domain.ExportProfile{ID: uuid.New(), OwnerID: in.OwnerID, Name: in.Name, Shared: in.Shared, Layout: in.Layout, Version: 1}
+	f.profiles[p.ID] = p
+	return p, nil
+}
+
+func (f *fakeProfiles) Update(_ context.Context, id uuid.UUID, ch domain.ExportProfileChange) (domain.ExportProfile, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	p, ok := f.profiles[id]
+	if !ok {
+		return p, domain.ErrExportProfileNotFound
+	}
+	if p.Version != ch.Version {
+		return p, domain.ErrExportProfileChanged
+	}
+	if ch.Name != nil {
+		p.Name = *ch.Name
+	}
+	if ch.Shared != nil {
+		p.Shared = *ch.Shared
+	}
+	if ch.Layout != nil {
+		p.Layout = *ch.Layout
+	}
+	p.Version++
+	f.profiles[id] = p
+	return p, nil
+}
+
+func (f *fakeProfiles) Delete(_ context.Context, id uuid.UUID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.profiles[id]; !ok {
+		return domain.ErrExportProfileNotFound
+	}
+	delete(f.profiles, id)
+	return nil
+}
+
+func (f *fakeProfiles) RecordExport(_ context.Context, r domain.ExportRecord) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.records = append(f.records, r)
+	return nil
+}
+
+// fakeAccounts: mọi account có tên "Account <8 ký tự đầu của id>"
+type fakeAccounts struct{}
+
+func (fakeAccounts) GetAccount(_ context.Context, id uuid.UUID) (idcontract.Account, error) {
+	return idcontract.Account{ID: id, Name: "Account " + id.String()[:8], Active: true}, nil
+}
+
+func (a fakeAccounts) GetAccounts(ctx context.Context, ids []uuid.UUID) ([]idcontract.Account, error) {
+	out := make([]idcontract.Account, len(ids))
+	for i, id := range ids {
+		out[i], _ = a.GetAccount(ctx, id)
+	}
+	return out, nil
 }
