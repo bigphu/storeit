@@ -1,5 +1,6 @@
-// Dữ liệu cho bản xem trước: định nghĩa thuộc tính của các loại trong phạm vi và tối đa
-// 20 dòng mỗi loại (danh sách chỉ có giá trị thuộc tính khi lọc theo một loại)
+// Dữ liệu cho bản xem trước: định nghĩa thuộc tính của MỌI loại trong phạm vi (để chọn cột
+// và biết cột nào còn) và tối đa 20 dòng mỗi loại, chỉ cho vài loại đầu (danh sách chỉ có
+// giá trị thuộc tính khi lọc theo một loại)
 import { useQueries } from '@tanstack/vue-query'
 import { computed } from 'vue'
 import { typeKeys } from '@/features/asset-types/api'
@@ -17,14 +18,16 @@ export interface ExportScope {
   selection: boolean
 }
 
+// giới hạn chỉ áp cho truy vấn dòng xem trước, không áp cho định nghĩa loại
 const MAX_PREVIEW_TYPES = 8
 
 export function usePreviewData(scope: () => ExportScope, enabled: () => boolean) {
-  const ids = computed(() => scope().typeIds.slice(0, MAX_PREVIEW_TYPES))
+  const typeIds = computed(() => scope().typeIds)
+  const previewIds = computed(() => typeIds.value.slice(0, MAX_PREVIEW_TYPES))
   // cùng khoá với useAssetType nên dùng chung cache với trang loại
   const typeQueries = useQueries({
     queries: computed(() =>
-      ids.value.map((id) => ({
+      typeIds.value.map((id) => ({
         queryKey: typeKeys.one(id),
         queryFn: () => unwrap(inventoryApi.GET('/asset-types/{typeID}', { params: { path: { typeID: id } } })),
         enabled: enabled(),
@@ -33,7 +36,7 @@ export function usePreviewData(scope: () => ExportScope, enabled: () => boolean)
   })
   const rowQueries = useQueries({
     queries: computed(() =>
-      ids.value.map((id) => {
+      previewIds.value.map((id) => {
         const f = scope().filters
         return {
           queryKey: ['export-preview', id, f],

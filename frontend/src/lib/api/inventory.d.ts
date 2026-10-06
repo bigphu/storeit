@@ -781,6 +781,8 @@ export interface components {
             filters?: components["schemas"]["ExportFilters"];
             profile_id?: components["schemas"]["ID"];
             layout?: components["schemas"]["ExportLayout"];
+            /** @description IANA time zone of the user (Asia/Ho_Chi_Minh); empty means UTC. Used for updated_at cells, the report title date and the file name. */
+            tz?: string;
         };
         ExportProfile: {
             id: components["schemas"]["ID"];

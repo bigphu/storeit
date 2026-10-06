@@ -13,7 +13,18 @@ import { useSession } from '@/lib/auth/session'
 import { useFormErrors } from '@/lib/forms'
 import { notify } from '@/lib/notify'
 import { useCreateExportProfile, useExportProfiles, useUpdateExportProfile } from '../api'
-import { defaultReportLayout, editorColumns, fieldOptions, normalizeLayout, previewSheets, skippedKeys, withColumns, type EditorColumn } from '../layout'
+import {
+  cleanSheetName,
+  defaultReportLayout,
+  editorColumns,
+  fieldOptions,
+  normalizeLayout,
+  previewSheets,
+  sheetNameInput,
+  skippedKeys,
+  withColumns,
+  type EditorColumn,
+} from '../layout'
 import { useExport } from '../useExport'
 import { type ExportScope, usePreviewData } from '../usePreviewData'
 import ColumnEditor from './ColumnEditor.vue'
@@ -37,6 +48,9 @@ const layout = ref<ExportLayout>(defaultReportLayout())
 const columns = ref<EditorColumn[]>([])
 // bố cục đã lưu của profile đang mở (null khi chưa chọn profile)
 const saved = ref<string | null>(null)
+// version của profile lúc nạp vào trình sửa: Save gửi version này (không phải bản mới nhất
+// của danh sách profile) nên sửa đè lên thay đổi của người khác vẫn bị 409
+const loadedVersion = ref<number | null>(null)
 
 // load: nạp bố cục của profile (hay bố cục mặc định) và dựng lại cột của trình sửa.
 // Chọn profile mà danh sách chưa về thì chờ, watcher bên dưới gọi lại khi có.
@@ -46,8 +60,9 @@ function load() {
   if (profileId.value && !p) return
   layout.value = p
     ? structuredClone(p.layout)
-    : { ...defaultReportLayout(), sheet_name: props.scope.label.slice(0, 31).replace(/[[\]:*?/\\]/g, '-') || 'Assets' }
+    : { ...defaultReportLayout(), sheet_name: cleanSheetName(props.scope.label.slice(0, 31)) || 'Assets' }
   saved.value = p ? normalizeLayout(p.layout) : null
+  loadedVersion.value = p?.version ?? null
   columns.value = editorColumns(layout.value, options.value)
 }
 watch(visible, (open) => {
@@ -63,7 +78,13 @@ watch(options, (opts) => {
   columns.value = [...keep, ...missing]
 })
 
-const current = computed(() => withColumns(layout.value, columns.value))
+// tên sheet được làm sạch lần cuối (bỏ dấu nháy đơn ở đầu/cuối) trước khi lưu hay tải
+const current = computed(() => ({ ...withColumns(layout.value, columns.value), sheet_name: cleanSheetName(layout.value.sheet_name) }))
+// ô nhập tên sheet: thay ký tự Excel cấm bằng '-' ngay khi gõ
+const sheetName = computed({
+  get: () => layout.value.sheet_name,
+  set: (v) => (layout.value = { ...layout.value, sheet_name: sheetNameInput(v ?? '') }),
+})
 const dirty = computed(() => saved.value !== null && normalizeLayout(current.value) !== saved.value)
 const sheets = computed(() => previewSheets(current.value, rows.value, types.value))
 const skipped = computed(() => skippedKeys(current.value, types.value))
@@ -84,9 +105,10 @@ const errors = useFormErrors()
 const saveAs = ref<{ name: string; shared: boolean } | null>(null)
 async function save() {
   const p = profile.value
-  if (!p) return
-  const next = await update.mutateAsync({ id: p.id, version: p.version, layout: current.value })
+  if (!p || loadedVersion.value === null) return
+  const next = await update.mutateAsync({ id: p.id, version: loadedVersion.value, layout: current.value })
   saved.value = normalizeLayout(next.layout)
+  loadedVersion.value = next.version
   notify.success(`Saved ${p.name}.`)
 }
 function openSaveAs() {
@@ -170,7 +192,7 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
       <Message v-if="errors.general.value || errors.fields.value.name" severity="error" size="small" variant="simple">{{ errors.fields.value.name ?? errors.general.value }}</Message>
     </form>
     <div v-else class="sub">
-      <i class="pi pi-table" /> Exporting <b>{{ scope.count }}</b> assets · {{ scope.label }}
+      <i class="pi pi-table" /> Exporting <b>{{ scope.count }}</b> {{ scope.count === 1 ? 'asset' : 'assets' }} · {{ scope.label }}
     </div>
 
     <div class="body">
@@ -188,7 +210,7 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
           <SegmentedFilter v-model="sheetMode" :options="sheetsOptions" label="Sheets" />
           <div v-if="layout.sheets === 'single'" class="field">
             <label for="sheet-name">Sheet name</label>
-            <InputText id="sheet-name" v-model="layout.sheet_name" maxlength="31" fluid />
+            <InputText id="sheet-name" v-model="sheetName" maxlength="31" fluid />
           </div>
           <div class="checks">
             <span class="check"><Checkbox v-model="layout.title_row" input-id="title-row" binary /><label for="title-row">Title row</label></span>
@@ -215,7 +237,7 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
       <div class="preview">
         <h3>Preview <small class="muted">first 20 rows of each sheet</small></h3>
         <Message v-if="skipped.length" severity="warn" :closable="false">
-          This layout names attributes that no longer exist: <b>{{ skipped.join(', ') }}</b>. Those columns are skipped.
+          Not available for the asset types in this export: <b>{{ skipped.join(', ') }}</b>. Those columns are skipped.
         </Message>
         <SheetPreview :sheets="sheets" :layout="current" :types="types" :title="title" />
       </div>

@@ -40,7 +40,9 @@ export function useDeleteExportProfile() {
 // exportAssets tải file và lưu; trả tên file và các cột bị bỏ.
 // Lỗi (vd 422 quá số dòng) vẫn là problem JSON nên unwrap ném ApiError như thường.
 export async function exportAssets(body: ExportRequest, fallbackName: string): Promise<{ name: string; skipped: string[] }> {
-  const res = await inventoryApi.POST('/assets/export', { body, parseAs: 'blob' })
+  // múi giờ của trình duyệt: giờ cập nhật, ngày ở tiêu đề và tên file theo giờ của người dùng
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const res = await inventoryApi.POST('/assets/export', { body: { ...body, tz }, parseAs: 'blob' })
   const blob = (await unwrap(Promise.resolve(res))) as unknown as Blob
   const name = fileNameFrom(res.response.headers.get('Content-Disposition'), fallbackName)
   saveBlob(blob, name)

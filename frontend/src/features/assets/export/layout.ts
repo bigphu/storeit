@@ -46,6 +46,11 @@ export const COMMON_FIELDS: { field: string; label: string }[] = [
   { field: 'updated_at', label: 'Updated' },
 ]
 
+// Tên sheet: Excel cấm [ ] : * ? / \ và dấu nháy đơn ở đầu/cuối. sheetNameInput dùng khi gõ
+// (không cắt dấu nháy để còn gõ được "it's"); cleanSheetName dùng trước khi lưu hay tải.
+export const sheetNameInput = (s: string) => s.replace(/[[\]:*?/\\]/g, '-')
+export const cleanSheetName = (s: string) => sheetNameInput(s).trim().replace(/^'+|'+$/g, '')
+
 export const attrKey = (field: string) => (field.startsWith('attr:') ? field.slice(5) : null)
 
 export function defaultReportLayout(): ExportLayout {

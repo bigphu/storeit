@@ -170,7 +170,7 @@ const selectionScope = computed<ExportScope>(() => {
   const ids = selected.value.map((a) => a.id)
   return {
     filters: { ...listFilters.value, ids },
-    label: `${ids.length} selected assets`,
+    label: ids.length === 1 ? '1 selected asset' : `${ids.length} selected assets`,
     count: ids.length,
     typeIds: [...new Set(selected.value.map((a) => a.asset_type_id))],
     rows: selected.value,

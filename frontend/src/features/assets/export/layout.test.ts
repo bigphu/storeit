@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AssetListItem } from '@/lib/api/types'
-import { defaultHeader, defaultReportLayout, editorColumns, fieldOptions, normalizeLayout, previewSheets, skippedKeys, type TypeInfo, withColumns } from './layout'
+import { cleanSheetName, defaultHeader, defaultReportLayout, editorColumns, fieldOptions, normalizeLayout, previewSheets, sheetNameInput, skippedKeys, type TypeInfo, withColumns } from './layout'
 
 const laptop: TypeInfo = { id: 'L', name: 'Laptop', code: 'LAPTOP', attributes: [{ key: 'ram_gb', label: 'RAM', data_type: 'number', unit: 'GB' }, { key: 'cpu', label: 'CPU', data_type: 'text' }] }
 const phone: TypeInfo = { id: 'P', name: 'Phone', code: 'PHONE', attributes: [{ key: 'imei', label: 'IMEI', data_type: 'text' }] }
@@ -54,5 +54,18 @@ describe('layout', () => {
     const back = withColumns(wide, editorColumns(wide, opts))
     expect(back.columns[1].width).toBe(20)
     expect(normalizeLayout(back)).toBe(normalizeLayout(wide))
+  })
+})
+
+describe('sheet names', () => {
+  it('replaces characters Excel forbids while typing, keeps apostrophes', () => {
+    expect(sheetNameInput('Laptops 06/10/2026')).toBe('Laptops 06-10-2026')
+    expect(sheetNameInput('a[b]c:d*e?f\\g')).toBe('a-b-c-d-e-f-g')
+    expect(sheetNameInput("it's")).toBe("it's")
+  })
+
+  it('drops leading and trailing apostrophes before saving', () => {
+    expect(cleanSheetName("'Quoted'")).toBe('Quoted')
+    expect(cleanSheetName("  it's: ok'")).toBe("it's- ok")
   })
 })
