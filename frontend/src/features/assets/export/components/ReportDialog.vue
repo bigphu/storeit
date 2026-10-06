@@ -21,6 +21,7 @@ import { notify } from '@/lib/notify'
 import { useCreateExportProfile, useExportProfiles, useUpdateExportProfile } from '../api'
 import {
   cleanSheetName,
+  cloneLayout,
   defaultReportLayout,
   editorColumns,
   exportFileName,
@@ -66,7 +67,7 @@ function load() {
   const p = profile.value
   if (profileId.value && !p) return
   layout.value = p
-    ? structuredClone(p.layout)
+    ? cloneLayout(p.layout)
     : { ...defaultReportLayout(), sheet_name: cleanSheetName(props.scope.label.slice(0, 31)) || 'Assets' }
   saved.value = p ? normalizeLayout(p.layout) : null
   loadedVersion.value = p?.version ?? null
@@ -105,6 +106,12 @@ const saveHint = computed(() => {
   if (!p) return 'Pick a profile to save changes to it, or use Save as…'
   if (!p.can_edit) return `Only ${p.owner.name} or a profile manager can change it; use Save as…`
   return dirty.value ? '' : 'No changes to save'
+})
+// Luôn hiện ở tab Columns; chỉ có nghĩa khi mỗi loại một sheet, nên tick lúc đang một
+// sheet thì chuyển sang mỗi loại một sheet
+const eachTypeAttrs = computed({
+  get: () => layout.value.sheets === 'per_type' && !!layout.value.each_type_attrs,
+  set: (on: boolean) => (layout.value = { ...layout.value, each_type_attrs: on, sheets: on ? 'per_type' : layout.value.sheets }),
 })
 // Có cột nào để xuất không (mỗi loại một sheet có thể chỉ dùng thuộc tính riêng của loại)
 const hasColumns = computed(() => current.value.columns.length > 0 || (current.value.sheets === 'per_type' && !!current.value.each_type_attrs))
@@ -255,9 +262,12 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
           <TabPanels>
             <TabPanel value="columns">
               <ColumnEditor v-model="columns" :options="options" :layout="layout" />
-              <div v-if="layout.sheets === 'per_type'" class="check">
-                <Checkbox v-model="layout.each_type_attrs" input-id="each-type" binary />
-                <label for="each-type">Add each type's own attributes</label>
+              <div class="each-type">
+                <span class="check">
+                  <Checkbox v-model="eachTypeAttrs" input-id="each-type" binary />
+                  <label for="each-type">Add each type's own attributes</label>
+                </span>
+                <small v-if="layout.sheets === 'single'" class="hint">Ticking this switches to one sheet per type.</small>
               </div>
               <p class="hint">Drag or press Alt+↑/↓ to reorder. Leave a header empty to use the default.</p>
             </TabPanel>
@@ -390,6 +400,11 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
   background: var(--app-soft);
   color: var(--p-text-muted-color);
   font: 0.72rem var(--app-mono);
+}
+.each-type {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 .hint {
   font-size: 0.82rem;

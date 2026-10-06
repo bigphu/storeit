@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { AssetListItem } from '@/lib/api/types'
-import { cleanSheetName, dataPreviewSheets, defaultHeader, exportFileName, defaultReportLayout, editorColumns, fieldOptions, normalizeLayout, previewSheets, sheetNameInput, skippedKeys, type TypeInfo, withColumns } from './layout'
+import { reactive, readonly } from 'vue'
+import type { AssetListItem, ExportLayout } from '@/lib/api/types'
+import { cleanSheetName, cloneLayout, dataPreviewSheets, defaultHeader, exportFileName, defaultReportLayout, editorColumns, fieldOptions, normalizeLayout, previewSheets, sheetNameInput, skippedKeys, type TypeInfo, withColumns } from './layout'
 
 const laptop: TypeInfo = { id: 'L', name: 'Laptop', code: 'LAPTOP', attributes: [{ key: 'ram_gb', label: 'RAM', data_type: 'number', unit: 'GB' }, { key: 'cpu', label: 'CPU', data_type: 'text' }] }
 const phone: TypeInfo = { id: 'P', name: 'Phone', code: 'PHONE', attributes: [{ key: 'imei', label: 'IMEI', data_type: 'text' }] }
@@ -85,5 +86,18 @@ describe('exportFileName', () => {
     expect(exportFileName('report', undefined, '2026-10-06')).toBe('storeit-report-2026-10-06.xlsx')
     expect(exportFileName('report', 'Kiểm kê quý 3', '2026-10-06')).toBe('kiểm-kê-quý-3-2026-10-06.xlsx')
     expect(exportFileName('report', '!!!', '2026-10-06')).toBe('storeit-report-2026-10-06.xlsx')
+  })
+})
+
+describe('cloneLayout', () => {
+  // profile lấy từ Vue Query là proxy readonly(reactive): structuredClone ném lỗi với nó
+  it('copies a layout held in a Vue Query proxy', () => {
+    const l = { ...defaultReportLayout(), columns: [{ field: 'tag', header: 'Mã' }] }
+    // Vue Query khai kiểu dữ liệu là ExportLayout thường, dù thực tế là proxy readonly
+    const proxied = readonly(reactive({ layout: l })).layout as ExportLayout
+    const copy = cloneLayout(proxied)
+    expect(copy).toEqual(l)
+    copy.columns[0].header = 'changed'
+    expect(l.columns[0].header).toBe('Mã')
   })
 })

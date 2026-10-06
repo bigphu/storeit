@@ -127,6 +127,12 @@ function sheetColumns(layout: ExportLayout, types: TypeInfo[], options: FieldOpt
   return out
 }
 
+// cloneLayout: bản sao sâu để sửa mà không đụng profile gốc. Profile từ Vue Query là
+// proxy readonly(reactive) nên structuredClone ném DataCloneError; bố cục là JSON thuần
+export function cloneLayout(l: ExportLayout): ExportLayout {
+  return JSON.parse(JSON.stringify(l)) as ExportLayout
+}
+
 // exportFileName: tên file như server đặt (service/export.go exportFileName); day là YYYY-MM-DD
 export function exportFileName(mode: 'data' | 'report', profileName: string | undefined, day: string): string {
   if (mode === 'data') return `storeit-assets-${day}.xlsx`
