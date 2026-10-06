@@ -24,8 +24,10 @@ import {
   cloneLayout,
   defaultReportLayout,
   editorColumns,
+  excludeFields,
   exportFileName,
   fieldOptions,
+  includeAttributes,
   normalizeLayout,
   previewSheets,
   sheetNameInput,
@@ -71,6 +73,7 @@ function load() {
     : { ...defaultReportLayout(), sheet_name: cleanSheetName(props.scope.label.slice(0, 31)) || 'Assets' }
   saved.value = p ? normalizeLayout(p.layout) : null
   loadedVersion.value = p?.version ?? null
+  autoTicked.value = []
   columns.value = editorColumns(layout.value, options.value)
 }
 watch(visible, (open) => {
@@ -84,6 +87,12 @@ watch(options, (opts) => {
   const keep = columns.value.filter((c) => c.include || opts.some((o) => o.field === c.field))
   const missing = opts.filter((o) => !keep.some((c) => c.field === o.field)).map((o) => ({ field: o.field, header: '', width: 0, include: false }))
   columns.value = [...keep, ...missing]
+  // đang bật "Add each type's own attributes": thuộc tính của loại vừa nạp cũng được tick
+  if (layout.value.sheets === 'per_type' && layout.value.each_type_attrs && autoTicked.value.length) {
+    const r = includeAttributes(columns.value, opts)
+    columns.value = r.columns
+    autoTicked.value = [...autoTicked.value, ...r.added]
+  }
 })
 
 // tên sheet được làm sạch lần cuối (bỏ dấu nháy đơn ở đầu/cuối) trước khi lưu hay tải
@@ -109,9 +118,22 @@ const saveHint = computed(() => {
 })
 // Luôn hiện ở tab Columns; chỉ có nghĩa khi mỗi loại một sheet, nên tick lúc đang một
 // sheet thì chuyển sang mỗi loại một sheet
+// Tick: các cột thuộc tính cũng được tick trong danh sách (thấy trước cái sẽ có trong file);
+// bỏ tick: chỉ bỏ những cột chính nó đã tick
+const autoTicked = ref<string[]>([])
 const eachTypeAttrs = computed({
   get: () => layout.value.sheets === 'per_type' && !!layout.value.each_type_attrs,
-  set: (on: boolean) => (layout.value = { ...layout.value, each_type_attrs: on, sheets: on ? 'per_type' : layout.value.sheets }),
+  set: (on: boolean) => {
+    layout.value = { ...layout.value, each_type_attrs: on, sheets: on ? 'per_type' : layout.value.sheets }
+    if (on) {
+      const r = includeAttributes(columns.value, options.value)
+      columns.value = r.columns
+      autoTicked.value = r.added
+    } else {
+      columns.value = excludeFields(columns.value, autoTicked.value)
+      autoTicked.value = []
+    }
+  },
 })
 // Có cột nào để xuất không (mỗi loại một sheet có thể chỉ dùng thuộc tính riêng của loại)
 const hasColumns = computed(() => current.value.columns.length > 0 || (current.value.sheets === 'per_type' && !!current.value.each_type_attrs))
@@ -261,7 +283,6 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
           </TabList>
           <TabPanels>
             <TabPanel value="columns">
-              <ColumnEditor v-model="columns" :options="options" :layout="layout" />
               <div class="each-type">
                 <span class="check">
                   <Checkbox v-model="eachTypeAttrs" input-id="each-type" binary />
@@ -269,7 +290,8 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
                 </span>
                 <small v-if="layout.sheets === 'single'" class="hint">Ticking this switches to one sheet per type.</small>
               </div>
-              <p class="hint">Drag or press Alt+↑/↓ to reorder. Leave a header empty to use the default.</p>
+              <ColumnEditor v-model="columns" :options="options" :layout="layout" />
+              <span class="hint">Drag or press Alt+↑/↓ to reorder. Leave a header empty to use the default.</span>
             </TabPanel>
             <TabPanel value="layout">
               <SegmentedFilter v-model="sheetMode" :options="sheetsOptions" label="Sheets" />

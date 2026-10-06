@@ -103,6 +103,23 @@ export function editorColumns(layout: ExportLayout, options: FieldOption[]): Edi
   return [...chosen, ...rest]
 }
 
+// includeAttributes: tick mọi cột thuộc tính mà một loại trong phạm vi có ("Add each
+// type's own attributes"); trả thêm danh sách cột vừa tick để bỏ tick lại đúng chúng
+export function includeAttributes(cols: EditorColumn[], options: FieldOption[]): { columns: EditorColumn[]; added: string[] } {
+  const added: string[] = []
+  const columns = cols.map((c) => {
+    if (c.include || !attrKey(c.field) || !options.some((o) => o.field === c.field)) return c
+    added.push(c.field)
+    return { ...c, include: true }
+  })
+  return { columns, added }
+}
+
+// excludeFields: bỏ tick các cột cho trước (cột người dùng tự tick vẫn giữ)
+export function excludeFields(cols: EditorColumn[], fields: string[]): EditorColumn[] {
+  return cols.map((c) => (fields.includes(c.field) ? { ...c, include: false } : c))
+}
+
 // withColumns: bố cục với các cột đang chọn của trình sửa cột
 export function withColumns(layout: ExportLayout, cols: EditorColumn[]): ExportLayout {
   return { ...layout, columns: cols.filter((c) => c.include).map((c) => ({ field: c.field, header: c.header.trim() || undefined, width: c.width })) }

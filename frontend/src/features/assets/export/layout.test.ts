@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { reactive, readonly } from 'vue'
 import type { AssetListItem, ExportLayout } from '@/lib/api/types'
-import { cleanSheetName, cloneLayout, dataPreviewSheets, defaultHeader, exportFileName, defaultReportLayout, editorColumns, fieldOptions, normalizeLayout, previewSheets, sheetNameInput, skippedKeys, type TypeInfo, withColumns } from './layout'
+import { cleanSheetName, cloneLayout, excludeFields, includeAttributes, dataPreviewSheets, defaultHeader, exportFileName, defaultReportLayout, editorColumns, fieldOptions, normalizeLayout, previewSheets, sheetNameInput, skippedKeys, type TypeInfo, withColumns } from './layout'
 
 const laptop: TypeInfo = { id: 'L', name: 'Laptop', code: 'LAPTOP', attributes: [{ key: 'ram_gb', label: 'RAM', data_type: 'number', unit: 'GB' }, { key: 'cpu', label: 'CPU', data_type: 'text' }] }
 const phone: TypeInfo = { id: 'P', name: 'Phone', code: 'PHONE', attributes: [{ key: 'imei', label: 'IMEI', data_type: 'text' }] }
@@ -99,5 +99,28 @@ describe('cloneLayout', () => {
     expect(copy).toEqual(l)
     copy.columns[0].header = 'changed'
     expect(l.columns[0].header).toBe('Mã')
+  })
+})
+
+describe('each type attributes in the column editor', () => {
+  const cols = [
+    { field: 'tag', header: '', width: 0, include: true },
+    { field: 'attr:ram_gb', header: '', width: 0, include: true },
+    { field: 'attr:cpu', header: '', width: 0, include: false },
+    { field: 'attr:imei', header: '', width: 0, include: false },
+    { field: 'attr:gone', header: '', width: 0, include: false },
+  ]
+  const opts = fieldOptions([laptop, phone])
+
+  it('ticks every available attribute column and reports which it ticked', () => {
+    const { columns, added } = includeAttributes(cols, opts)
+    expect(columns.filter((c) => c.include).map((c) => c.field)).toEqual(['tag', 'attr:ram_gb', 'attr:cpu', 'attr:imei'])
+    expect(added).toEqual(['attr:cpu', 'attr:imei'])
+  })
+
+  it('unticks only the columns it ticked', () => {
+    const { columns, added } = includeAttributes(cols, opts)
+    const back = excludeFields(columns, added)
+    expect(back.filter((c) => c.include).map((c) => c.field)).toEqual(['tag', 'attr:ram_gb'])
   })
 })
