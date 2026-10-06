@@ -21,6 +21,9 @@ import (
 
 const password = "seed-password-123"
 
+// Administrator lấy từ ADMIN_EMAIL/ADMIN_PASSWORD như cmd/server
+const adminEmail, adminPassword = "admin@storeit.test", "admin-password-123"
+
 type env struct {
 	identity  *identity.Module
 	inventory *inventory.Module
@@ -42,7 +45,10 @@ func newEnv(t *testing.T) env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	idm, err := identity.New(identity.Deps{Pool: pool, Tokens: tokens, Outbox: outbox, Jobs: jobs.NewRiver(client)})
+	idm, err := identity.New(identity.Deps{
+		Pool: pool, Tokens: tokens, Outbox: outbox, Jobs: jobs.NewRiver(client),
+		Config: identity.Config{AdminEmail: adminEmail, AdminPassword: adminPassword},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,6 +106,11 @@ func TestRun_SeedsOnceThenSkips(t *testing.T) {
 	}
 	if sess.Account.Name != "Trần Thị Mai" {
 		t.Errorf("name = %q", sess.Account.Name)
+	}
+
+	// Seed trên DB chưa có account vẫn có Administrator (Bootstrap chạy trước)
+	if _, err := e.identity.Service().Login(ctx, adminEmail, adminPassword, idservice.Device{}); err != nil {
+		t.Errorf("bootstrap admin missing after seeding an empty DB: %v", err)
 	}
 
 	// Đúng 300 tài sản kể cả đã retire

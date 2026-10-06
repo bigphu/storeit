@@ -27,8 +27,10 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// AccountSeeder là identity.Module.SeedAccount
+// AccountSeeder là phần identity.Module mà seed dùng
 type AccountSeeder interface {
+	// Bootstrap tạo Administrator từ ADMIN_EMAIL khi DB chưa có account nào
+	Bootstrap(ctx context.Context) error
 	SeedAccount(ctx context.Context, email, name, password string, roleIDs []uuid.UUID) (uuid.UUID, error)
 }
 
@@ -50,6 +52,11 @@ type Summary struct {
 func Run(ctx context.Context, d Deps) (Summary, error) {
 	if err := iddomain.ValidatePassword(d.Password); err != nil {
 		return Summary{}, fmt.Errorf("seed: SEED_PASSWORD: %w", err)
+	}
+	// Administrator phải có trước account demo: Bootstrap chỉ tạo khi DB chưa có
+	// account nào, mà seed có thể chạy trước lần khởi động đầu của server
+	if err := d.Accounts.Bootstrap(ctx); err != nil {
+		return Summary{}, err
 	}
 	sys := auth.WithActor(ctx, auth.SystemActor)
 	existing, err := d.Inventory.ListAssetTypes(sys, true)
