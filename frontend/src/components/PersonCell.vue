@@ -47,6 +47,8 @@ defineProps<{ name: string; email: string; to?: RouteLocationRaw; muted?: boolea
   text-decoration: none;
 }
 .person-you {
+  /* nhãn nhỏ cạnh chữ: không theo bề rộng chung của tag */
+  min-width: 0;
   margin-left: 0.4rem;
   font-size: 0.7rem;
 }

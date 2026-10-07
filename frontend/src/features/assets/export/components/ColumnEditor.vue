@@ -98,6 +98,8 @@ function set(i: number, patch: Partial<EditorColumn>) {
   white-space: nowrap;
 }
 .na {
+  /* nhãn nhỏ cạnh chữ: không theo bề rộng chung của tag */
+  min-width: 0;
   margin-left: 0.35rem;
   padding: 0 0.35rem;
   font-size: 0.68rem;

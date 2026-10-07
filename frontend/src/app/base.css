@@ -300,6 +300,13 @@ section + section {
   color: var(--app-link);
   text-decoration: none;
 }
+/* Tag: cùng bề rộng, chữ ở giữa, không xuống dòng (cột trạng thái thẳng hàng); nhãn dài
+   hơn bề rộng chung thì tag dài ra thay vì bị cắt */
+.p-tag {
+  min-width: 7.5rem;
+  justify-content: center;
+  white-space: nowrap;
+}
 .p-chip {
   font-size: 0.85rem;
 }

@@ -304,6 +304,8 @@ const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: 
   min-width: 10rem;
 }
 .later {
+  /* nhãn nhỏ cạnh chữ: không theo bề rộng chung của tag */
+  min-width: 0;
   font-size: 0.65rem;
   margin-left: 0.3rem;
 }
