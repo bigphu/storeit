@@ -12,6 +12,8 @@ import Tag from 'primevue/tag'
 import type { MenuItem } from 'primevue/menuitem'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import EmptyState from '@/components/EmptyState.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import IconAction from '@/components/IconAction.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import PersonCell from '@/components/PersonCell.vue'
@@ -65,7 +67,7 @@ const params = computed(() => ({
   page: state.value.page,
   page_size: pageSize.value,
 }))
-const { data, isFetching } = useAccounts(params)
+const { data, isFetching, isLoading } = useAccounts(params)
 
 // Ô tìm kiếm: đợi gõ xong rồi mới đổi URL
 const search = ref(state.value.q)
@@ -215,7 +217,10 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
           </div>
         </template>
       </Column>
-      <template #empty>No accounts match these filters.</template>
+      <template #empty>
+        <TableSkeleton v-if="isLoading" />
+        <EmptyState v-else icon="pi pi-users" text="No accounts match these filters." />
+      </template>
     </DataTable>
     <CreateAccountDialog v-model:visible="creating" />
   </section>

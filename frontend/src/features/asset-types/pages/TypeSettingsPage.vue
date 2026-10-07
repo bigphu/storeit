@@ -14,6 +14,8 @@ import { computed, ref, watch } from 'vue'
 import { useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
 import DetailHeader from '@/components/DetailHeader.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import IconAction from '@/components/IconAction.vue'
 import type { Attribute } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
@@ -44,7 +46,7 @@ const session = useSession()
 const confirm = useConfirm()
 const canManage = computed(() => session.can(Perm.TypeManage))
 
-const { data: type, refetch } = useAssetType(() => props.typeId)
+const { data: type, refetch, isLoading } = useAssetType(() => props.typeId)
 
 const showRemoved = ref(false)
 // thứ tự đang hiện: kéo thả đổi ngay, không đợi tải lại
@@ -302,7 +304,10 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
             </div>
           </template>
         </Column>
-        <template #empty>No attributes yet.</template>
+        <template #empty>
+          <TableSkeleton v-if="isLoading" />
+          <EmptyState v-else icon="pi pi-tag" text="No attributes yet." :action="canManage ? 'Add attribute' : undefined" @action="openAttribute(null)" />
+        </template>
       </DataTable>
       <p class="hint after">New attributes appear as columns and filters in this type's asset list right away.</p>
     </Panel>

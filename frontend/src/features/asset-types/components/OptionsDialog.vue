@@ -7,6 +7,7 @@ import InputText from 'primevue/inputtext'
 import { useConfirm } from 'primevue/useconfirm'
 import { reactive, ref, watch } from 'vue'
 import type { Attribute, Option } from '@/lib/api/types'
+import EmptyState from '@/components/EmptyState.vue'
 import IconAction from '@/components/IconAction.vue'
 import { notify } from '@/lib/notify'
 import { useAddOption, useRemoveOption, useReorderOptions, useUpdateOption } from '../api'
@@ -91,7 +92,7 @@ function askRemove(o: Option) {
           <IconAction icon="pi pi-trash" label="Remove" danger @click="askRemove(o)" />
         </template>
       </Column>
-      <template #empty>No options yet.</template>
+      <template #empty><EmptyState icon="pi pi-list" text="No options yet." /></template>
     </DataTable>
     <form v-if="canManage" class="actions add" @submit.prevent="addOption">
       <InputText v-model="newLabel" placeholder="New option" aria-label="New option" />

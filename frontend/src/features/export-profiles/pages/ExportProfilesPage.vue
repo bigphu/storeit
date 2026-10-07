@@ -7,6 +7,8 @@ import InputText from 'primevue/inputtext'
 import Tag from 'primevue/tag'
 import { useConfirm } from 'primevue/useconfirm'
 import { computed, nextTick, ref } from 'vue'
+import EmptyState from '@/components/EmptyState.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import IconAction from '@/components/IconAction.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
@@ -24,7 +26,7 @@ import { onRowClick, useRowMenu } from '@/lib/tableRows'
 // Profile export: của mình và được chia sẻ; mở để sửa, chạy trên mọi tài sản, chia sẻ, xoá
 const session = useSession()
 const confirm = useConfirm()
-const { data: profiles, isFetching } = useExportProfiles(true)
+const { data: profiles, isFetching, isLoading } = useExportProfiles(true)
 const { data: types } = useAssetTypes(false, true)
 
 type Show = 'all' | 'mine' | 'shared'
@@ -195,7 +197,10 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Export
           </div>
         </template>
       </Column>
-      <template #empty>No profiles yet. Save one from Export report… on any asset list.</template>
+      <template #empty>
+        <TableSkeleton v-if="isLoading" />
+        <EmptyState v-else icon="pi pi-file-export" text="No profiles yet. Save one from Export report… on any asset list." />
+      </template>
     </DataTable>
     <ReportDialog v-model:visible="dialogOpen" :scope="scope" :profile-id="dialogProfile" />
   </section>

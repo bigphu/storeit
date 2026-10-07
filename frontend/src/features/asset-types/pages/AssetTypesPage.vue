@@ -14,6 +14,8 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AddCard from '@/components/AddCard.vue'
 import CardGrid from '@/components/CardGrid.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import EntityCard from '@/components/EntityCard.vue'
 import IconAction from '@/components/IconAction.vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -37,7 +39,7 @@ import KindMeter from '../components/KindMeter.vue'
 const session = useSession()
 const router = useRouter()
 const canManage = computed(() => session.can(Perm.TypeManage))
-const { data: types, isFetching } = useAssetTypes(true, true)
+const { data: types, isFetching, isLoading } = useAssetTypes(true, true)
 
 type Show = 'active' | 'archived'
 type Layout = 'cards' | 'table'
@@ -249,7 +251,10 @@ async function submit() {
           </div>
         </template>
       </Column>
-      <template #empty>{{ state.q ? `No types match "${state.q}".` : 'No asset types here.' }}</template>
+      <template #empty>
+        <TableSkeleton v-if="isLoading" />
+        <EmptyState v-else icon="pi pi-sitemap" :text="state.q ? `No types match &quot;${state.q}&quot;.` : 'No asset types here.'" />
+      </template>
     </DataTable>
 
     <Dialog v-model:visible="creating" modal header="New asset type" :style="{ width: '32rem' }">

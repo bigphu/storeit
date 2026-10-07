@@ -9,6 +9,8 @@ import Message from 'primevue/message'
 import Tag from 'primevue/tag'
 import { useConfirm } from 'primevue/useconfirm'
 import { computed, nextTick, ref } from 'vue'
+import EmptyState from '@/components/EmptyState.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import IconAction from '@/components/IconAction.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import type { Status, StatusKind } from '@/lib/api/types'
@@ -32,7 +34,7 @@ const session = useSession()
 const confirm = useConfirm()
 const canManage = computed(() => session.can(Perm.StatusManage))
 const showArchived = ref(false)
-const { data: statuses } = useStatuses(showArchived, true)
+const { data: statuses, isLoading } = useStatuses(showArchived, true)
 
 const byKind = computed(() => lanes(statuses.value ?? []))
 const activeOf = (k: StatusKind) => byKind.value[k].filter((s) => !s.archived_at)
@@ -221,7 +223,10 @@ function doRestore(s: Status) {
               </div>
             </template>
           </Column>
-          <template #empty>No {{ KIND_INFO[k].label.toLowerCase() }} statuses.</template>
+          <template #empty>
+            <TableSkeleton v-if="isLoading" />
+            <EmptyState v-else icon="pi pi-tag" :text="`No ${KIND_INFO[k].label.toLowerCase()} statuses.`" />
+          </template>
         </DataTable>
 
         <ul v-if="showArchived && archivedOf(k).length" class="archived-list">

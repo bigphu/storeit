@@ -26,6 +26,8 @@ import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
 import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
 import { kindSeverity, statusKinds, useStatuses } from '@/features/statuses/api'
 import { useAssetList } from '../api'
+import EmptyState from '@/components/EmptyState.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import AttributeFilterPopover from '../components/AttributeFilterPopover.vue'
 import BulkActionDialog from '../components/BulkActionDialog.vue'
 import RetireDialog from '../components/RetireDialog.vue'
@@ -68,7 +70,7 @@ function update(patch: Partial<AssetListState>) {
 
 // Số dòng mỗi trang: mỗi bảng (mọi loại, từng loại) nhớ số riêng
 const { size: pageSize, set: setPageSize } = usePageSize(() => `assets:${state.value.typeId ?? 'all'}`)
-const { data, isFetching } = useAssetList(computed(() => toApiParams(state.value, pageSize.value)))
+const { data, isFetching, isLoading } = useAssetList(computed(() => toApiParams(state.value, pageSize.value)))
 
 // danh sách lọc gồm cả status đã lưu trữ: tài sản cũ vẫn mang chúng
 const { data: statuses } = useStatuses(true)
@@ -466,7 +468,10 @@ function cell(row: AssetListItem, key: string) {
           </div>
         </template>
       </Column>
-      <template #empty>No assets found.</template>
+      <template #empty>
+        <TableSkeleton v-if="isLoading" />
+        <EmptyState v-else icon="pi pi-box" text="No assets match these filters." />
+      </template>
     </DataTable>
 
     <RetireDialog v-model:visible="actions.retireOpen.value" :asset="actions.retireTarget.value" />

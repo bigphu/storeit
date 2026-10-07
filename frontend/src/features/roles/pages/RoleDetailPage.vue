@@ -19,6 +19,8 @@ import { useRouter } from 'vue-router'
 import { useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb from '@/components/AppBreadcrumb.vue'
 import DetailHeader from '@/components/DetailHeader.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import IconAction from '@/components/IconAction.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import SaveBar from '@/components/SaveBar.vue'
@@ -304,7 +306,10 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
             </div>
           </template>
         </Column>
-        <template #empty>Nobody has this role yet.</template>
+        <template #empty>
+          <TableSkeleton v-if="membersLoading && !members" />
+          <EmptyState v-else icon="pi pi-users" text="Nobody has this role yet." />
+        </template>
       </DataTable>
     </template>
 
