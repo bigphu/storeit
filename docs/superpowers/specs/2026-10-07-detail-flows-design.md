@@ -31,7 +31,7 @@ Out of scope:
 5. **Ask for the minimum, prefill the rest, land where the next step is.**
 6. **Rows mirror the header.** Every one-click header action is also on the list row, in the same order.
 7. **Quick edits stay on the list.**
-   - Double-click a name, or an asset's status or purchase date, to edit it inline.
+   - Hovering a row or card shows a small pencil next to its name (and an asset's status and purchase date); clicking it edits that value inline.
    - The pencil opens a side drawer with the item's Overview.
    - The detail page is for everything else.
 
@@ -143,21 +143,20 @@ Notes:
   - **New:** Delete on custom role cards.
   - **Kept:** status archive and restore, account disable and enable, profile share and delete.
 - **The status edit icon** opens the status page with the name selected.
-- **Profile rename** is a double-click on the name; the right-click Rename… goes.
+- **Profile rename** is the pencil next to the name; the right-click Rename… goes.
 - **A pencil icon** opens the quick edit drawer (see Quick edit).
 
 ## Quick edit from lists
 
 The commonest small edits never leave the list. There are two ways in, and the detail page stays the place for everything else.
 
-### Inline cells (double-click)
+### Inline cells (hover pencil)
 
 **Behaviour:**
-- Double-clicking an editable cell turns it into an input, a dropdown or a date picker.
+- Hovering a row or card, or moving keyboard focus into it, shows a small pencil next to each editable value. Touch screens show it all the time.
+- Clicking the pencil turns the value into an input, a dropdown or a date picker. Pressing Enter or Space on the focused pencil does the same.
 - Enter, or clicking away, saves through `runAction`, and the toast offers Undo. Esc cancels.
-- F2 on a focused row edits its name.
-
-**Telling single from double clicks:** a single click on an editable cell waits about 200 ms before opening the detail page, so a double click can cancel it. Ctrl-click, middle-click and clicks on other cells open at once.
+- Clicking the value itself opens the item as before (the click reaches the row or card), with no delay.
 
 **Inline-editable cells:**
 
@@ -228,8 +227,8 @@ The demo counts these tasks, from the area's list, typing and finishing keys not
 
 | Task | Clicks |
 |---|---|
-| Rename anything (role, status, type, account, profile, asset) | 0 page loads: double-click, type, Enter |
-| Change an asset's status | Double-click, pick |
+| Rename anything (role, status, type, account, profile, asset) | 0 page loads: hover, click the pencil, type, Enter |
+| Change an asset's status | Hover, click the pencil, pick |
 | Archive a type | 1 |
 | Disable an account | 1 |
 | Share a profile | 1 |
@@ -252,7 +251,6 @@ The demo counts these tasks, from the area's list, typing and finishing keys not
 - **Undo payload helpers:** the previous values and the version for each area.
 - **Facts line helpers** per area.
 - **Asset quick-save helper:** a fetched asset plus a change gives the right PUT body and version; Undo gives the previous body.
-- **Click-or-double-click timer:** a pure helper that delays a single click and cancels it on a double click.
 
 **Browser:**
 - walk every row of the click budget;

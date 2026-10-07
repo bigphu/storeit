@@ -162,7 +162,7 @@ Spec: `docs/superpowers/specs/2026-10-07-detail-flows-design.md`.
   - Guard pages with `useTabDirty` and `useLeaveGuard`.
 - **Each area has one save path** (`use…OverviewSave` in `features/<area>/overviewSave.ts`), shared by the page, the quick edit drawer and inline cells.
 - **Lists:**
-  - `InlineCell` edits a name, or an asset's status or purchase date, on double-click. A single click opens the page after 220 ms; Ctrl/⌘ click opens at once.
+  - `InlineCell` shows a pencil next to a name (or an asset's status or purchase date) while its row or card is hovered or focused; the pencil edits it in place. Clicking the value itself still opens the item.
   - `QuickEditDrawer` (the pencil) shows the Overview fields; ↑/↓ moves between rows.
 - **Asset quick saves** read the full asset and PUT it with its version (`features/assets/quickEdit.ts`, `useAssetActions().quickSave`).
 - **The report editor** (`ReportEditor.vue`) is shared by the Export report dialog and the export profile page.

@@ -523,7 +523,7 @@ watch(rows, (list) => {
       </Column>
       <Column header="Name" sort-field="name" sortable>
         <template #body="{ data: a }: { data: AssetListItem }">
-          <InlineCell :value="a.name" :editable="canQuick(a)" @save="(v) => actions.quickSave(a, { name: v }, `renamed to ${v}`)" @open="(e) => actions.open(a, e)">
+          <InlineCell :value="a.name" label="name" :editable="canQuick(a)" @save="(v) => actions.quickSave(a, { name: v }, `renamed to ${v}`)">
             {{ a.name }}
           </InlineCell>
         </template>
@@ -533,11 +533,12 @@ watch(rows, (list) => {
         <template #body="{ data: a }: { data: AssetListItem }">
           <InlineCell
             :value="a.status_id"
+            label="status"
             :editable="canQuick(a)"
             kind="select"
             :options="statusChoices"
             @save="(v) => actions.quickSave(a, { status_id: v }, `set to ${statusLabel(v)}`)"
-            @open="(e) => actions.open(a, e)"
+           
           >
             <Tag :value="a.status_name" :severity="kindSeverity(a.status_kind)" />
           </InlineCell>
@@ -556,10 +557,11 @@ watch(rows, (list) => {
         <template #body="{ data: a }: { data: AssetListItem }">
           <InlineCell
             :value="a.purchase_date ?? ''"
+            label="purchase date"
             :editable="canQuick(a)"
             kind="date"
             @save="(v) => actions.quickSave(a, { purchase_date: v }, 'purchase date changed')"
-            @open="(e) => actions.open(a, e)"
+           
           >
             {{ formatDate(a.purchase_date) || '—' }}
           </InlineCell>

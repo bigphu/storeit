@@ -194,10 +194,12 @@ watch(statuses, (list) => {
                 <InlineCell
                   class="status-name"
                   :value="s.name"
+                  label="name"
                   :editable="canManage"
+                  :tabindex="canManage ? 0 : undefined"
                   :data-status-name="s.id"
                   @save="(v) => rename(s, v)"
-                  @open="(e) => openStatus(s, e)"
+                 
                   @keydown.alt.up.prevent="moveKey(s, -1)"
                   @keydown.alt.down.prevent="moveKey(s, 1)"
                 >

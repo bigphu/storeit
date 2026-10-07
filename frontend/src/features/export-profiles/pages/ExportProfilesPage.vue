@@ -170,7 +170,7 @@ async function submitCreate() {
     >
       <Column header="Name">
         <template #body="{ data: p }: { data: ExportProfile }">
-          <InlineCell :value="p.name" :editable="p.can_edit" class="name" @save="(v) => rename(p, v)" @open="(e) => openProfile(p, e)">
+          <InlineCell :value="p.name" label="name" :editable="p.can_edit" class="name" @save="(v) => rename(p, v)">
             {{ p.name }}
           </InlineCell>
         </template>

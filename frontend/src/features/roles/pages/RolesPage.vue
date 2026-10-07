@@ -24,7 +24,6 @@ import { useSession } from '@/lib/auth/session'
 import { mayClose } from '@/lib/confirm'
 import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
 import { useDirty, useFormErrors } from '@/lib/forms'
-import { openLocation } from '@/lib/navigation'
 import { useUrlState } from '@/lib/urlState'
 import { useCreateRole, useRoles } from '../api'
 import { ALL_PERMS, EMPLOYEE_ROLE_ID, label, moduleOf } from '../catalog'
@@ -94,7 +93,6 @@ async function submit() {
 const saveRole = useRoleOverviewSave()
 const deleteRole = useRoleDelete()
 const rename = (r: Role, name: string) => saveRole(r, { name })
-const openRole = (r: Role, e?: MouseEvent) => openLocation(router, `/roles/${r.id}`, e)
 const list = computed(() => roles.value ?? [])
 const quick = ref<Role | null>(null)
 const quickDraft = reactive(emptyDraft())
@@ -151,7 +149,7 @@ watch(roles, (l) => {
       <EntityCard v-for="r in roles ?? []" :key="r.id" :to="`/roles/${r.id}`" :label="r.name">
         <div class="top">
           <h3>
-            <InlineCell :value="r.name" :editable="canManage && !r.is_system" @save="(v) => rename(r, v)" @open="(e) => openRole(r, e)">{{ r.name }}</InlineCell>
+            <InlineCell :value="r.name" label="name" :editable="canManage && !r.is_system" @save="(v) => rename(r, v)">{{ r.name }}</InlineCell>
           </h3>
           <i v-if="r.is_system" v-tooltip.top="'Built-in role'" class="pi pi-lock lock" aria-label="Built-in" />
           <Tag v-else value="Custom" severity="secondary" />

@@ -237,7 +237,7 @@ watch(rows, (list) => {
         <template #body="{ data: a }: { data: AccountListItem }">
           <PersonCell :name="a.name" :email="a.email" :to="`/accounts/${a.id}`" :muted="a.status === 'disabled'" :you="actions.isSelf(a)">
             <template #name>
-              <InlineCell :value="a.name" :editable="canManage" class="person-name" @save="(v) => rename(a, v)" @open="(e) => openAccount(a, e)">
+              <InlineCell :value="a.name" label="name" :editable="canManage" class="person-name" @save="(v) => rename(a, v)">
                 {{ a.name }}
               </InlineCell>
             </template>

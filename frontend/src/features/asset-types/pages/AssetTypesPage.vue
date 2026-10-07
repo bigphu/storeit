@@ -229,7 +229,7 @@ watch(types, (list) => {
           <span class="mark">{{ codeMark(t.code) }}</span>
           <div class="title">
             <h3>
-              <InlineCell :value="t.name" :editable="canManage" @save="(v) => rename(t, v)" @open="(e) => openType(t, e)">{{ t.name }}</InlineCell>
+              <InlineCell :value="t.name" label="name" :editable="canManage" @save="(v) => rename(t, v)">{{ t.name }}</InlineCell>
             </h3>
             <code>{{ t.code }}</code>
           </div>
@@ -288,8 +288,8 @@ watch(types, (list) => {
           <div class="name-cell">
             <span class="mark small">{{ codeMark(t.code) }}</span>
             <div>
-              <InlineCell :value="t.name" :editable="canManage" @save="(v) => rename(t, v)" @open="(e) => openType(t, e)">
-                <RouterLink :to="listOf(t)" @click.prevent>{{ t.name }}</RouterLink>
+              <InlineCell :value="t.name" label="name" :editable="canManage" @save="(v) => rename(t, v)">
+                <RouterLink :to="listOf(t)">{{ t.name }}</RouterLink>
               </InlineCell>
               <code class="sub-code">{{ t.code }}</code>
             </div>
