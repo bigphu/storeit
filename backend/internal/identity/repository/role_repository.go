@@ -135,15 +135,41 @@ func (r *RoleRepository) Delete(ctx context.Context, id uuid.UUID) error {
 		if err != nil {
 			return err
 		}
-		if _, err := q.DeleteRole(ctx, id); err != nil {
-			// Còn account giữ role này (service đã kiểm tra, đây là lớp chặn cuối)
-			if code, _ := pgCode(err); code == codeForeignKeyViolation {
-				return domain.ErrRoleInUse
-			}
+		n, err := q.DeleteRole(ctx, id)
+		if err != nil {
 			return fmt.Errorf("identity: delete role: %w", err)
+		}
+		if n == 0 {
+			// vừa có account được gán role này (service đã kiểm tra, đây là lớp chặn cuối)
+			return domain.ErrRoleInUse
 		}
 		return r.append(ctx, tx, contract.EventRoleDeleted, id, contract.RoleDeleted{RoleID: id, Name: cur.Name})
 	})
+}
+
+func (r *RoleRepository) Restore(ctx context.Context, id uuid.UUID) (domain.Role, error) {
+	var out domain.Role
+	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
+		q := r.q.WithTx(tx)
+		row, err := q.GetRoleAnyForUpdate(ctx, id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrRoleNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("identity: lock role: %w", err)
+		}
+		if row.DeletedAt != nil {
+			if _, err := q.RestoreRole(ctx, id); err != nil {
+				return roleWriteError(err)
+			}
+			if err := r.append(ctx, tx, contract.EventRoleRestored, id, contract.RoleRestored{RoleID: id, Name: row.Name}); err != nil {
+				return err
+			}
+		}
+		out, err = getRole(ctx, q, id)
+		return err
+	})
+	return out, err
 }
 
 func (r *RoleRepository) CountAssignments(ctx context.Context, id uuid.UUID) (int64, error) {

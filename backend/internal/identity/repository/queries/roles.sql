@@ -1,11 +1,12 @@
+-- Role đã xoá (xoá mềm) không hiện ở đâu, trừ khi khôi phục
 -- name: ListRoles :many
-SELECT * FROM identity.roles ORDER BY name;
+SELECT * FROM identity.roles WHERE deleted_at IS NULL ORDER BY name;
 
 -- name: GetRole :one
-SELECT * FROM identity.roles WHERE id = @id;
+SELECT * FROM identity.roles WHERE id = @id AND deleted_at IS NULL;
 
 -- name: GetRolesByIDs :many
-SELECT * FROM identity.roles WHERE id = ANY(@ids::uuid[]) ORDER BY name;
+SELECT * FROM identity.roles WHERE id = ANY(@ids::uuid[]) AND deleted_at IS NULL ORDER BY name;
 
 -- name: CreateRole :one
 INSERT INTO identity.roles (id, name, description) VALUES (@id, @name, @description)
@@ -19,8 +20,20 @@ RETURNING *;
 -- name: TouchRole :exec
 UPDATE identity.roles SET updated_at = now() WHERE id = @id;
 
+-- Xoá mềm; không xoá nếu còn account giữ role (service đã kiểm tra, đây là lớp chặn cuối)
 -- name: DeleteRole :execrows
-DELETE FROM identity.roles WHERE id = @id;
+UPDATE identity.roles SET deleted_at = now(), updated_at = now()
+WHERE id = @id AND deleted_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM identity.account_roles WHERE role_id = @id);
+
+-- Kể cả role đã xoá (khôi phục)
+-- name: GetRoleAnyForUpdate :one
+SELECT * FROM identity.roles WHERE id = @id FOR UPDATE;
+
+-- name: RestoreRole :one
+UPDATE identity.roles SET deleted_at = NULL, updated_at = now()
+WHERE id = @id
+RETURNING *;
 
 -- name: RolePermissions :many
 SELECT permission FROM identity.role_permissions WHERE role_id = @role_id ORDER BY permission;

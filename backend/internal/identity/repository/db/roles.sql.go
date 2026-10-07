@@ -58,7 +58,7 @@ func (q *Queries) CountRoleAssignments(ctx context.Context, roleID uuid.UUID) (i
 
 const createRole = `-- name: CreateRole :one
 INSERT INTO identity.roles (id, name, description) VALUES ($1, $2, $3)
-RETURNING id, name, description, is_system, created_at, updated_at
+RETURNING id, name, description, is_system, created_at, updated_at, deleted_at
 `
 
 type CreateRoleParams struct {
@@ -77,14 +77,18 @@ func (q *Queries) CreateRole(ctx context.Context, arg CreateRoleParams) (Identit
 		&i.IsSystem,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const deleteRole = `-- name: DeleteRole :execrows
-DELETE FROM identity.roles WHERE id = $1
+UPDATE identity.roles SET deleted_at = now(), updated_at = now()
+WHERE id = $1 AND deleted_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM identity.account_roles WHERE role_id = $1)
 `
 
+// Xoá mềm; không xoá nếu còn account giữ role (service đã kiểm tra, đây là lớp chặn cuối)
 func (q *Queries) DeleteRole(ctx context.Context, id uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteRole, id)
 	if err != nil {
@@ -103,7 +107,7 @@ func (q *Queries) DeleteRolePermissions(ctx context.Context, roleID uuid.UUID) e
 }
 
 const getRole = `-- name: GetRole :one
-SELECT id, name, description, is_system, created_at, updated_at FROM identity.roles WHERE id = $1
+SELECT id, name, description, is_system, created_at, updated_at, deleted_at FROM identity.roles WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetRole(ctx context.Context, id uuid.UUID) (IdentityRole, error) {
@@ -116,12 +120,33 @@ func (q *Queries) GetRole(ctx context.Context, id uuid.UUID) (IdentityRole, erro
 		&i.IsSystem,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getRoleAnyForUpdate = `-- name: GetRoleAnyForUpdate :one
+SELECT id, name, description, is_system, created_at, updated_at, deleted_at FROM identity.roles WHERE id = $1 FOR UPDATE
+`
+
+// Kể cả role đã xoá (khôi phục)
+func (q *Queries) GetRoleAnyForUpdate(ctx context.Context, id uuid.UUID) (IdentityRole, error) {
+	row := q.db.QueryRow(ctx, getRoleAnyForUpdate, id)
+	var i IdentityRole
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.IsSystem,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const getRolesByIDs = `-- name: GetRolesByIDs :many
-SELECT id, name, description, is_system, created_at, updated_at FROM identity.roles WHERE id = ANY($1::uuid[]) ORDER BY name
+SELECT id, name, description, is_system, created_at, updated_at, deleted_at FROM identity.roles WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL ORDER BY name
 `
 
 func (q *Queries) GetRolesByIDs(ctx context.Context, ids []uuid.UUID) ([]IdentityRole, error) {
@@ -140,6 +165,7 @@ func (q *Queries) GetRolesByIDs(ctx context.Context, ids []uuid.UUID) ([]Identit
 			&i.IsSystem,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -190,9 +216,10 @@ func (q *Queries) ListPermissions(ctx context.Context) ([]IdentityPermission, er
 }
 
 const listRoles = `-- name: ListRoles :many
-SELECT id, name, description, is_system, created_at, updated_at FROM identity.roles ORDER BY name
+SELECT id, name, description, is_system, created_at, updated_at, deleted_at FROM identity.roles WHERE deleted_at IS NULL ORDER BY name
 `
 
+// Role đã xoá (xoá mềm) không hiện ở đâu, trừ khi khôi phục
 func (q *Queries) ListRoles(ctx context.Context) ([]IdentityRole, error) {
 	rows, err := q.db.Query(ctx, listRoles)
 	if err != nil {
@@ -209,6 +236,7 @@ func (q *Queries) ListRoles(ctx context.Context) ([]IdentityRole, error) {
 			&i.IsSystem,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -218,6 +246,27 @@ func (q *Queries) ListRoles(ctx context.Context) ([]IdentityRole, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const restoreRole = `-- name: RestoreRole :one
+UPDATE identity.roles SET deleted_at = NULL, updated_at = now()
+WHERE id = $1
+RETURNING id, name, description, is_system, created_at, updated_at, deleted_at
+`
+
+func (q *Queries) RestoreRole(ctx context.Context, id uuid.UUID) (IdentityRole, error) {
+	row := q.db.QueryRow(ctx, restoreRole, id)
+	var i IdentityRole
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.IsSystem,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
 }
 
 const rolePermissions = `-- name: RolePermissions :many
@@ -283,7 +332,7 @@ func (q *Queries) TouchRole(ctx context.Context, id uuid.UUID) error {
 const updateRole = `-- name: UpdateRole :one
 UPDATE identity.roles SET name = $1, description = $2, updated_at = now()
 WHERE id = $3
-RETURNING id, name, description, is_system, created_at, updated_at
+RETURNING id, name, description, is_system, created_at, updated_at, deleted_at
 `
 
 type UpdateRoleParams struct {
@@ -302,6 +351,7 @@ func (q *Queries) UpdateRole(ctx context.Context, arg UpdateRoleParams) (Identit
 		&i.IsSystem,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }

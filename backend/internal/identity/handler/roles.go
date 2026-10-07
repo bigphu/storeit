@@ -47,6 +47,21 @@ func (h *Handler) GetRole(ctx context.Context, req api.GetRoleRequestObject) (ap
 	return api.GetRole200JSONResponse(out), nil
 }
 
+func (h *Handler) RestoreRole(ctx context.Context, req api.RestoreRoleRequestObject) (api.RestoreRoleResponseObject, error) {
+	r, err := h.svc.RestoreRole(ctx, req.RoleID)
+	if err != nil {
+		return nil, err
+	}
+	counts, err := h.svc.RoleMemberCounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := toAPIRole(r)
+	n := counts[r.ID]
+	out.MemberCount = &n
+	return api.RestoreRole200JSONResponse(out), nil
+}
+
 func (h *Handler) UpdateRole(ctx context.Context, req api.UpdateRoleRequestObject) (api.UpdateRoleResponseObject, error) {
 	r, err := h.svc.UpdateRole(ctx, req.RoleID, req.Body.Name, req.Body.Description)
 	if err != nil {

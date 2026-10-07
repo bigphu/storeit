@@ -83,6 +83,16 @@ func (f *fakeRoles) Delete(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
+func (f *fakeRoles) Restore(_ context.Context, id uuid.UUID) (domain.Role, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r, ok := f.roles[id]
+	if !ok {
+		return domain.Role{}, domain.ErrRoleNotFound
+	}
+	return r, nil
+}
+
 func (f *fakeRoles) CountAssignments(context.Context, uuid.UUID) (int64, error) { return 0, nil }
 
 func (f *fakeRoles) Permissions(context.Context) ([]domain.Permission, error) {

@@ -76,6 +76,7 @@ type IdentityRole struct {
 	IsSystem    bool
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	DeletedAt   *time.Time
 }
 
 type IdentityRolePermission struct {
@@ -170,6 +171,7 @@ type InventoryExportProfile struct {
 	Version   int32
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	DeletedAt *time.Time
 }
 
 type PlatformEvent struct {

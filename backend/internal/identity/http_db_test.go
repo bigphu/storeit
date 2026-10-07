@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -568,5 +569,75 @@ func TestRolesHaveMemberCounts(t *testing.T) {
 	rec = a.do(call{method: "GET", path: "/api/v1/roles/" + domain.AdministratorRoleID.String(), token: admin})
 	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &one) != nil || one.MemberCount == nil || *one.MemberCount < 1 {
 		t.Errorf("role detail: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// accountID: id của account theo email, tìm qua danh sách account
+func (a *app) accountID(token, email string) string {
+	a.t.Helper()
+	rec := a.do(call{method: "GET", path: "/api/v1/accounts?q=" + url.QueryEscape(email), token: token})
+	var page struct {
+		Items []struct{ ID, Email string } `json:"items"`
+	}
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &page) != nil {
+		a.t.Fatalf("list accounts: %d %s", rec.Code, rec.Body)
+	}
+	for _, it := range page.Items {
+		if strings.EqualFold(it.Email, email) {
+			return it.ID
+		}
+	}
+	a.t.Fatalf("account %s not found", email)
+	return ""
+}
+
+// Xoá role là xoá mềm: ẩn khỏi danh sách, không gán được, khôi phục được; tên của role đã
+// xoá dùng lại được, và khi đó khôi phục báo trùng tên
+func TestRoleSoftDeleteAndRestore(t *testing.T) {
+	a := newApp(t)
+	admin, _ := a.login(a.seed(domain.AdministratorRoleID))
+	name := "Kế toán " + uuid.NewString()[:6]
+	var role struct {
+		ID string `json:"id"`
+	}
+	rec := a.do(call{method: "POST", path: "/api/v1/roles", token: admin, body: map[string]any{"name": name, "permissions": []string{"inventory.asset.read"}}})
+	if rec.Code != 201 || json.Unmarshal(rec.Body.Bytes(), &role) != nil {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body)
+	}
+	if rec := a.do(call{method: "DELETE", path: "/api/v1/roles/" + role.ID, token: admin}); rec.Code != 204 {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
+	}
+	if rec := a.do(call{method: "GET", path: "/api/v1/roles/" + role.ID, token: admin}); rec.Code != 404 {
+		t.Errorf("get deleted: %d", rec.Code)
+	}
+	if rec := a.do(call{method: "GET", path: "/api/v1/roles", token: admin}); strings.Contains(rec.Body.String(), role.ID) {
+		t.Error("deleted role listed")
+	}
+	// gán role đã xoá: như role không tồn tại
+	accID := a.accountID(admin, a.seed(domain.EmployeeRoleID))
+	rec = a.do(call{method: "PUT", path: "/api/v1/accounts/" + accID + "/roles", token: admin, body: map[string]any{"role_ids": []string{role.ID}}})
+	if rec.Code != 422 || problemType(t, rec) != "/errors/unknown-roles" {
+		t.Errorf("assigning a deleted role: %d %s", rec.Code, rec.Body)
+	}
+
+	rec = a.do(call{method: "POST", path: "/api/v1/roles/" + role.ID + "/restore", token: admin})
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "inventory.asset.read") {
+		t.Fatalf("restore: %d %s", rec.Code, rec.Body)
+	}
+	if rec := a.do(call{method: "GET", path: "/api/v1/roles/" + role.ID, token: admin}); rec.Code != 200 {
+		t.Errorf("get restored: %d", rec.Code)
+	}
+
+	// xoá lại, tạo role mới cùng tên (được), khôi phục role cũ → 409
+	a.do(call{method: "DELETE", path: "/api/v1/roles/" + role.ID, token: admin})
+	if rec := a.do(call{method: "POST", path: "/api/v1/roles", token: admin, body: map[string]any{"name": name}}); rec.Code != 201 {
+		t.Fatalf("reuse name of deleted role: %d %s", rec.Code, rec.Body)
+	}
+	rec = a.do(call{method: "POST", path: "/api/v1/roles/" + role.ID + "/restore", token: admin})
+	if rec.Code != 409 || problemType(t, rec) != "/errors/role-name-taken" {
+		t.Errorf("restore over a reused name: %d %s", rec.Code, rec.Body)
+	}
+	if rec := a.do(call{method: "POST", path: "/api/v1/roles/" + uuid.NewString() + "/restore", token: admin}); rec.Code != 404 {
+		t.Errorf("restore unknown role: %d", rec.Code)
 	}
 }

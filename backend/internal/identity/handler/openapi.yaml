@@ -366,6 +366,20 @@ paths:
         "204": { description: Deleted }
         default: { $ref: '#/components/responses/Problem' }
 
+  /roles/{roleID}/restore:
+    parameters:
+      - $ref: '#/components/parameters/RoleID'
+    post:
+      operationId: restoreRole
+      summary: Undo deleting a role (identity.role.manage)
+      responses:
+        "200":
+          description: Restored role
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Role' }
+        default: { $ref: '#/components/responses/Problem' }
+
   /roles/{roleID}/permissions:
     parameters:
       - $ref: '#/components/parameters/RoleID'
