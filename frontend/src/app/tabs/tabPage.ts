@@ -39,10 +39,16 @@ export function useTabTitle(title: () => string | undefined) {
   const tabs = useTabs()
   const tabId = tabs.routeTabId
   const shown = useShown()
-  watchEffect(() => {
-    const t = title()
-    if (tabId && t && shown.value) tabs.setTitle(tabId, t)
-  })
+  // Chỉ theo tiêu đề của trang và việc trang đang hiện. Không dùng watchEffect: setTitle
+  // đọc tiêu đề hiện tại của tab, nên khi rời trang (Back) sync đổi tiêu đề tab theo route
+  // mới thì effect chạy lại trước khi KeepAlive cất trang đi và ghi đè tiêu đề cũ lên tab
+  watch(
+    [title, shown],
+    ([t, isShown]) => {
+      if (tabId && t && isShown) tabs.setTitle(tabId, t)
+    },
+    { immediate: true },
+  )
 }
 
 // useTabDirty: chấm "chưa lưu" trên tab, hỏi lại khi đóng tab. Chuyển sang tab khác

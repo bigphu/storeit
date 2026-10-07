@@ -16,6 +16,8 @@ async function setup() {
     routes: [
       { path: '/assets', component: {}, meta: { title: 'Assets' } },
       { path: '/statuses', component: {}, meta: { title: 'Statuses' } },
+      { path: '/accounts', component: {}, meta: { title: 'Accounts' } },
+      { path: '/accounts/:id', component: {}, meta: { title: 'Account' } },
     ],
   })
   const app = createApp({})
@@ -50,5 +52,63 @@ describe('useTabs', () => {
     await router.push('/statuses')
     expect(tabs.byId(id)?.title).toBe('Statuses')
     expect(tabs.routeTabId).toBe(id)
+  })
+})
+
+describe('useTabs back and forth (probe)', () => {
+  it('list tab and account tab: switching keeps highlight and page together', async () => {
+    const { tabs, router } = await setup()
+    await router.push('/accounts')
+    const list = tabs.activeId!
+    await tabs.open('/accounts/42', { background: false })
+    const acct = tabs.activeId!
+    for (let i = 0; i < 3; i++) {
+      await tabs.activate(list)
+      expect([tabs.activeId, tabs.routeTabId, router.currentRoute.value.fullPath]).toEqual([list, list, '/accounts'])
+      await tabs.activate(acct)
+      expect([tabs.activeId, tabs.routeTabId, router.currentRoute.value.fullPath]).toEqual([acct, acct, '/accounts/42'])
+    }
+  })
+
+  it('one tab, browser back and forward between list and account', async () => {
+    const { tabs, router } = await setup()
+    await router.push('/accounts')
+    const id = tabs.activeId!
+    await router.push('/accounts/42')
+    for (let i = 0; i < 2; i++) {
+      router.back()
+      await new Promise((r) => setTimeout(r, 10))
+      expect([tabs.activeId, tabs.byId(id)?.path, tabs.byId(id)?.title]).toEqual([id, '/accounts', 'Accounts'])
+      router.forward()
+      await new Promise((r) => setTimeout(r, 10))
+      expect([tabs.activeId, tabs.byId(id)?.path, tabs.byId(id)?.title]).toEqual([id, '/accounts/42', 'Account'])
+    }
+  })
+
+  it('one tab, app back (goBack) then open the account again', async () => {
+    const { tabs, router } = await setup()
+    await router.push('/accounts')
+    const id = tabs.activeId!
+    await router.push('/accounts/42')
+    await tabs.goBack()
+    expect([tabs.byId(id)?.path, tabs.byId(id)?.title]).toEqual(['/accounts', 'Accounts'])
+    await router.push('/accounts/42')
+    expect([tabs.byId(id)?.path, tabs.byId(id)?.title]).toEqual(['/accounts/42', 'Account'])
+  })
+
+  it('account tab already open, opening it again from the list tab', async () => {
+    const { tabs, router } = await setup()
+    await router.push('/accounts')
+    const list = tabs.activeId!
+    await tabs.open('/accounts/42', { background: false })
+    const acct = tabs.activeId!
+    await tabs.activate(list)
+    // bấm dòng trong danh sách: đi trong tab danh sách tới đúng URL của tab kia
+    await router.push('/accounts/42')
+    expect([tabs.activeId, tabs.routeTabId]).toEqual([list, list])
+    await tabs.activate(acct)
+    expect([tabs.activeId, tabs.routeTabId]).toEqual([acct, acct])
+    await tabs.activate(list)
+    expect([tabs.activeId, tabs.routeTabId]).toEqual([list, list])
   })
 })
