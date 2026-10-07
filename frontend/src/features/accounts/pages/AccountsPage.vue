@@ -209,7 +209,6 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
               v-else
               icon="pi pi-ban"
               label="Disable"
-              danger
               :disabled="actions.isSelf(a)"
               reason="You can’t disable yourself"
               @click="actions.disable(a)"

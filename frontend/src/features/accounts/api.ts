@@ -68,31 +68,32 @@ export function useUpdateAccount() {
   )
 }
 
+// Các mutation dưới đây chạy qua runAction: lỗi do runAction báo (toast: false)
 export function useAssignRoles() {
-  return useAccountMutation(({ id, roleIds }: { id: string; roleIds: string[] }) =>
-    unwrap(identityApi.PUT('/accounts/{accountID}/roles', { ...path(id), body: { role_ids: roleIds } })),
+  return useAccountMutation(
+    ({ id, roleIds }: { id: string; roleIds: string[] }) =>
+      unwrap(identityApi.PUT('/accounts/{accountID}/roles', { ...path(id), body: { role_ids: roleIds } })),
+    false,
   )
 }
 
 export function useDisableAccount() {
-  return useAccountMutation((id: string) => unwrap(identityApi.POST('/accounts/{accountID}/disable', path(id))))
+  return useAccountMutation((id: string) => unwrap(identityApi.POST('/accounts/{accountID}/disable', path(id))), false)
 }
 
 export function useEnableAccount() {
-  return useAccountMutation((id: string) => unwrap(identityApi.POST('/accounts/{accountID}/enable', path(id))))
+  return useAccountMutation((id: string) => unwrap(identityApi.POST('/accounts/{accountID}/enable', path(id))), false)
 }
 
 export function useResendInvitation() {
-  return useAccountMutation((id: string) => unwrap(identityApi.POST('/accounts/{accountID}/invitation', path(id))))
+  return useAccountMutation((id: string) => unwrap(identityApi.POST('/accounts/{accountID}/invitation', path(id))), false)
 }
 
 export function useSendPasswordReset() {
-  return useAccountMutation((id: string) =>
-    unwrap(identityApi.POST('/accounts/{accountID}/password-reset', path(id))),
-  )
+  return useAccountMutation((id: string) => unwrap(identityApi.POST('/accounts/{accountID}/password-reset', path(id))), false)
 }
 
 // Đăng xuất account khỏi mọi thiết bị; trả số phiên đã kết thúc
 export function useSignOutAccount() {
-  return useAccountMutation((id: string) => unwrap(identityApi.POST('/accounts/{accountID}/sign-out', path(id))))
+  return useAccountMutation((id: string) => unwrap(identityApi.POST('/accounts/{accountID}/sign-out', path(id))), false)
 }

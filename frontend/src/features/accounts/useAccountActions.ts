@@ -1,10 +1,9 @@
-// Hành động trên một tài khoản, dùng chung cho danh sách và trang tài khoản: gửi lại
-// lời mời, gửi link đặt lại mật khẩu, khoá, mở khoá, đăng xuất mọi nơi. Hỏi lại bằng
-// ConfirmDialog; lỗi đã hiện bằng toast mặc định của mutation.
-import { useConfirm } from 'primevue/useconfirm'
+// Hành động trên một tài khoản, dùng chung cho danh sách và trang tài khoản. Khoá / mở
+// khoá chạy ngay và có Undo; gửi email và đăng xuất mọi nơi không hoàn tác được nên hỏi trước
 import type { Account } from '@/lib/api/types'
+import { runAction } from '@/lib/actions'
 import { useSession } from '@/lib/auth/session'
-import { notify } from '@/lib/notify'
+import { confirmAction } from '@/lib/confirm'
 import {
   useDisableAccount,
   useEnableAccount,
@@ -16,7 +15,6 @@ import {
 type Target = Pick<Account, 'id' | 'name' | 'email' | 'status'>
 
 export function useAccountActions() {
-  const confirm = useConfirm()
   const session = useSession()
   const disable = useDisableAccount()
   const enable = useEnableAccount()
@@ -24,47 +22,64 @@ export function useAccountActions() {
   const reset = useSendPasswordReset()
   const signOut = useSignOutAccount()
 
-  function ask(header: string, message: string, acceptLabel: string, danger: boolean, run: () => Promise<unknown>) {
-    confirm.require({
-      header,
-      message,
-      acceptLabel,
-      rejectLabel: 'Cancel',
-      acceptProps: danger ? { severity: 'danger' } : undefined,
-      accept: () => run().catch(() => {}),
-    })
-  }
-
   const isSelf = (a: Target) => a.id === session.me?.account.id
 
   return {
     isSelf,
-    resendInvitation(a: Target) {
-      ask('Resend invitation', `Send a new invitation to ${a.email}? The previous link stops working.`, 'Send invitation', false, () =>
-        resend.mutateAsync(a.id).then(() => notify.success('Invitation sent.')),
-      )
+    async resendInvitation(a: Target) {
+      const ok = await confirmAction({
+        title: `Resend the invitation to ${a.email}?`,
+        body: 'A new link is emailed. The previous link stops working.',
+        action: 'Send invitation',
+        danger: false,
+        icon: 'mail',
+      })
+      if (ok) await runAction({ run: () => resend.mutateAsync(a.id), done: `Invitation sent to ${a.email}.`, failed: `Couldn't send the invitation to ${a.email}.` })
     },
-    sendReset(a: Target) {
-      ask('Send reset link', `Email a password reset link to ${a.email}? It works for one hour.`, 'Send link', false, () =>
-        reset.mutateAsync(a.id).then(() => notify.success('Reset link sent.')),
-      )
+    async sendReset(a: Target) {
+      const ok = await confirmAction({
+        title: `Send ${a.name} a password reset link?`,
+        body: `The link goes to ${a.email} and works for one hour.`,
+        action: 'Send link',
+        danger: false,
+        icon: 'mail',
+      })
+      if (ok) await runAction({ run: () => reset.mutateAsync(a.id), done: `Reset link sent to ${a.email}.`, failed: `Couldn't send the reset link to ${a.email}.` })
     },
     disable(a: Target) {
-      ask('Disable account', `Disable ${a.name}? They are signed out everywhere and their links stop working.`, 'Disable', true, () =>
-        disable.mutateAsync(a.id).then(() => notify.success('Account disabled.')),
-      )
+      return runAction({
+        run: () => disable.mutateAsync(a.id),
+        done: `${a.name} disabled.`,
+        failed: `Couldn't disable ${a.name}.`,
+        undo: () => enable.mutateAsync(a.id),
+        undone: `${a.name} enabled again.`,
+        undoFailed: `Couldn't enable ${a.name} again. The account is still disabled.`,
+      })
     },
     enable(a: Target) {
-      ask('Enable account', `Enable ${a.name}? They get back every permission their roles give.`, 'Enable', false, () =>
-        enable.mutateAsync(a.id).then(() => notify.success('Account enabled.')),
-      )
+      return runAction({
+        run: () => enable.mutateAsync(a.id),
+        done: `${a.name} enabled.`,
+        failed: `Couldn't enable ${a.name}.`,
+        undo: () => disable.mutateAsync(a.id),
+        undone: `${a.name} disabled again.`,
+        undoFailed: `Couldn't disable ${a.name} again. The account stays enabled.`,
+      })
     },
-    signOutEverywhere(a: Target) {
-      ask('Sign out everywhere', `Sign ${a.name} out on every device? They need to sign in again.`, 'Sign out', true, () =>
-        signOut.mutateAsync(a.id).then((r) =>
-          notify.success(r.revoked ? `Ended ${r.revoked} session${r.revoked === 1 ? '' : 's'}.` : 'No sessions were open.'),
-        ),
-      )
+    async signOutEverywhere(a: Target) {
+      const ok = await confirmAction({
+        title: `Sign ${a.name} out everywhere?`,
+        body: 'Every device they are signed in on is signed out. They need their password to come back.',
+        action: 'Sign out everywhere',
+        danger: false,
+        icon: 'logout',
+      })
+      if (!ok) return
+      await runAction({
+        run: () => signOut.mutateAsync(a.id),
+        done: (r) => (r.revoked ? `${a.name} signed out on ${r.revoked} device${r.revoked === 1 ? '' : 's'}.` : `${a.name} had no open sessions.`),
+        failed: `Couldn't sign ${a.name} out.`,
+      })
     },
   }
 }

@@ -23,6 +23,7 @@ import { useSession } from '@/lib/auth/session'
 import { formatDateTime } from '@/lib/dates'
 import { isApiError } from '@/lib/errors'
 import { useFormErrors } from '@/lib/forms'
+import { runAction } from '@/lib/actions'
 import { notify } from '@/lib/notify'
 import { initials, inviteNote, relativeTime } from '@/lib/people'
 import { useUrlState } from '@/lib/urlState'
@@ -95,13 +96,16 @@ const groups = computed(() => effective(roles.data.value ?? [], saved.value, cur
 
 const assign = useAssignRoles()
 async function saveRoles() {
-  try {
-    await assign.mutateAsync({ id: props.id, roleIds: current.value })
-    draft.value = null
-    notify.success('Roles saved.')
-  } catch {
-    // lỗi đã hiện qua toast của mutation
-  }
+  const before = [...saved.value]
+  const ok = await runAction({
+    run: () => assign.mutateAsync({ id: props.id, roleIds: current.value }),
+    done: `Roles of ${account.value?.name ?? 'the account'} saved.`,
+    failed: "Couldn't save the roles.",
+    undo: () => assign.mutateAsync({ id: props.id, roleIds: before }),
+    undone: 'Roles put back.',
+    undoFailed: "Couldn't put the roles back. The new roles stay.",
+  })
+  if (ok) draft.value = null
 }
 
 const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: account.value?.name ?? '…' }])
@@ -129,7 +133,7 @@ const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: 
         <Button v-if="account.status === 'active'" label="Send reset link" icon="pi pi-key" severity="secondary" outlined @click="actions.sendReset(account)" />
         <Button v-if="account.status === 'disabled'" label="Enable" icon="pi pi-check-circle" @click="actions.enable(account)" />
         <span v-else v-tooltip.top="self ? 'You can’t disable yourself' : undefined">
-          <Button label="Disable" icon="pi pi-ban" severity="danger" outlined :disabled="self" @click="actions.disable(account)" />
+          <Button label="Disable" icon="pi pi-ban" severity="secondary" outlined :disabled="self" @click="actions.disable(account)" />
         </span>
       </template>
     </DetailHeader>
