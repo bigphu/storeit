@@ -1,13 +1,12 @@
-<!doctype html>
-<html lang="en">
-<body style="margin:0;padding:24px;background:#f4f7f6;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#17252a">
-  <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #d5dfdc;border-radius:8px;padding:28px">
-    <p style="margin:0 0 16px">Hello {{.Name}},</p>
-    <p style="margin:0 0 20px">An administrator has created a StoreIt account for you. Choose your password to activate it.</p>
-    <p style="margin:0 0 24px"><a href="{{.Link}}" style="display:inline-block;background:#1d6a73;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:6px">Set your password</a></p>
-    <p style="margin:0 0 12px;font-size:14px;color:#56666b">This link works once and expires in {{.ExpiresIn}}. If it has expired, use "Forgot password" on the sign-in page or ask your administrator for a new invitation.</p>
-    <p style="margin:0 0 12px;font-size:14px;color:#56666b">If the button does not work, copy this address into your browser:<br><span style="word-break:break-all">{{.Link}}</span></p>
-    <p style="margin:0;font-size:14px;color:#56666b">If you weren't expecting this email, you can ignore it.</p>
-  </div>
-</body>
-</html>
+{{template "email-top" .}}
+<h1 style="margin:0 0 16px;font-size:24px;line-height:1.25;font-weight:800;color:#14201c">You're invited to StoreIt</h1>
+<p style="margin:0 0 12px">Hello {{.Name}},</p>
+<p style="margin:0 0 24px">An administrator has created a StoreIt account for you. Choose your password to activate it.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px"><tr>
+<td style="background:#059669;border-radius:8px"><a href="{{.Link}}" style="display:inline-block;padding:12px 22px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px">Set your password</a></td>
+</tr></table>
+{{template "email-expiry" .}}
+<p style="margin:0 0 12px;font-size:14px;line-height:1.5;color:#5d6b67">If it has expired, use "Forgot password" on the sign-in page or ask your administrator for a new invitation.</p>
+{{template "email-link" .}}
+If you weren't expecting this email, you can ignore it.
+{{template "email-end" .}}
