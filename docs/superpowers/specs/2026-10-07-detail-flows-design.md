@@ -16,8 +16,10 @@ In scope:
 - creating an item;
 - lifecycle actions (archive, restore, disable, enable, share, delete).
 
+Also in scope: quick edit from the lists of all five areas and from the assets list.
+
 Out of scope:
-- **List layouts.** They stay as they are: type cards or table, status columns, the accounts table, role cards or compare view, the profiles table.
+- **List layouts.** They stay as they are: type cards or table, status columns, the accounts table, role cards or compare view, the profiles table. Lists only gain quick edit and the row actions below.
 - **Backend.** No changes. Every endpoint needed exists.
 
 ## Principles
@@ -28,6 +30,10 @@ Out of scope:
 4. **Keys finish the job.** Enter submits dialogs, Ctrl/⌘ S saves the save bar, Esc closes dialogs and menus.
 5. **Ask for the minimum, prefill the rest, land where the next step is.**
 6. **Rows mirror the header.** Every one-click header action is also on the list row, in the same order.
+7. **Quick edits stay on the list.**
+   - Double-click a name, or an asset's status or purchase date, to edit it inline.
+   - The pencil opens a side drawer with the item's Overview.
+   - The detail page is for everything else.
 
 ## The detail page
 
@@ -137,7 +143,72 @@ Notes:
   - **New:** Delete on custom role cards.
   - **Kept:** status archive and restore, account disable and enable, profile share and delete.
 - **The status edit icon** opens the status page with the name selected.
-- **Profile rename** moves to the profile page; the inline rename on the profiles list goes.
+- **Profile rename** is a double-click on the name; the right-click Rename… goes.
+- **A pencil icon** opens the quick edit drawer (see Quick edit).
+
+## Quick edit from lists
+
+The commonest small edits never leave the list. There are two ways in, and the detail page stays the place for everything else.
+
+### Inline cells (double-click)
+
+**Behaviour:**
+- Double-clicking an editable cell turns it into an input, a dropdown or a date picker.
+- Enter, or clicking away, saves through `runAction`, and the toast offers Undo. Esc cancels.
+- F2 on a focused row edits its name.
+
+**Telling single from double clicks:** a single click on an editable cell waits about 200 ms before opening the detail page, so a double click can cancel it. Ctrl-click, middle-click and clicks on other cells open at once.
+
+**Inline-editable cells:**
+
+| List | Cells |
+|---|---|
+| Asset types (table rows, card titles) | Name |
+| Statuses | Name |
+| Accounts | Name |
+| Roles (card titles) | Name |
+| Export profiles | Name. Replaces the current right-click Rename… |
+| Assets | Name, Status (dropdown of active, non-retired statuses), Purchase date (date picker) |
+
+**Not inline:**
+- retired assets;
+- read-only viewers;
+- built-in role names;
+- profiles the viewer can't edit.
+
+### Side drawer (pencil icon)
+
+**What it is:**
+- The row's pencil icon opens a PrimeVue Drawer on the right, so the list stays visible.
+- It shows the same Overview form as the detail page: one `OverviewFields` component on the same `detailDraft` model.
+- Save, or Ctrl/⌘ S, saves through `runAction` with Undo.
+- "Open full page" goes to the detail page.
+
+**Moving between rows:**
+- ↑/↓, while focus is not in a field, move the drawer to the previous or next row of the current list page.
+- Unsaved edits ask "Discard changes?" before moving or closing.
+
+Lifecycle actions stay on the row icons, not in the drawer.
+
+| List | Drawer fields | Full page only |
+|---|---|---|
+| Asset types | Name, description (code 🔒) | Attributes |
+| Statuses | Name (kind 🔒) | — |
+| Accounts | Name, roles (tick list) | Sign-in facts, More actions |
+| Roles | Name, description | Permissions, People |
+| Export profiles | Name (owner 🔒) | Columns, Format |
+| Assets | Name, status, purchase date, description, the type's attributes | Changing the type, history |
+
+### Assets: full-record saves
+
+An asset save replaces the whole record (`PUT /assets/{id}`) and needs its version, but list rows don't carry every field. So inline and drawer saves:
+1. read the asset (`fetchAsset`);
+2. apply the change to `assetBodyOf(asset)`;
+3. PUT it with the asset's version.
+
+Undo PUTs the previous body with the version the save returned.
+
+A version conflict (`/errors/asset-changed`) shows "Someone else changed LAP-0012. Reloaded it; try again." and refreshes the row.
 
 ## Creating
 
@@ -157,9 +228,8 @@ The demo counts these tasks, from the area's list, typing and finishing keys not
 
 | Task | Clicks |
 |---|---|
-| Rename a role | 1 |
-| Rename a status | 1 |
-| Rename an export profile | 1 |
+| Rename anything (role, status, type, account, profile, asset) | 0 page loads: double-click, type, Enter |
+| Change an asset's status | Double-click, pick |
 | Archive a type | 1 |
 | Disable an account | 1 |
 | Share a profile | 1 |
@@ -181,9 +251,12 @@ The demo counts these tasks, from the area's list, typing and finishing keys not
 - **Routes:** `/statuses/:id` and `/export-profiles/:id` resolve with titles and icons.
 - **Undo payload helpers:** the previous values and the version for each area.
 - **Facts line helpers** per area.
+- **Asset quick-save helper:** a fetched asset plus a change gives the right PUT body and version; Undo gives the previous body.
+- **Click-or-double-click timer:** a pure helper that delays a single click and cancels it on a double click.
 
 **Browser:**
 - walk every row of the click budget;
-- check read-only, locked fields, leaving with unsaved edits, and Ctrl+S.
+- check read-only, locked fields, leaving with unsaved edits, and Ctrl+S;
+- check inline edits (Enter, Esc, click away) and the drawer's ↑/↓ moves.
 
 `npm run check` passes.
