@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ApiError, describeError } from '@/lib/errors'
 
 // useFormErrors: lỗi theo field (errors[].field của problem) và lỗi chung của form
@@ -23,4 +23,14 @@ export function useFormErrors() {
   }
 
   return { fields, general, clear, set }
+}
+
+// useDirty: form có thay đổi so với lúc reset() (gọi khi mở hộp thoại, sau khi điền sẵn)
+export function useDirty(state: () => unknown) {
+  const base = ref(JSON.stringify(state()))
+  const dirty = computed(() => JSON.stringify(state()) !== base.value)
+  function reset() {
+    base.value = JSON.stringify(state())
+  }
+  return { dirty, reset }
 }

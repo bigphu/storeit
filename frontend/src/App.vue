@@ -1,11 +1,15 @@
 <script setup lang="ts">
+import Button from 'primevue/button'
 import ConfirmDialog from 'primevue/confirmdialog'
 import Toast, { type ToastMessageOptions } from 'primevue/toast'
+import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import { onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import AppIcon from '@/components/AppIcon.vue'
 import NoticeCard from '@/components/NoticeCard.vue'
 import { useSession } from '@/lib/auth/session'
+import { bindConfirm, type ConfirmOptions } from '@/lib/confirm'
 import { isUndoShortcut, latestUndo, type Notice, onNotice } from '@/lib/notify'
 import { usePreferences } from '@/lib/preferences'
 
@@ -42,6 +46,10 @@ onUnmounted(() => {
   window.removeEventListener('keydown', onKey)
 })
 
+// Hộp xác nhận: confirmAction (lib/confirm.ts) gửi tới ConfirmDialog qua đây
+bindConfirm(useConfirm().require)
+const view = (m: unknown) => (m as { view: ConfirmOptions }).view
+
 // Phiên hết hạn (refresh hỏng hoặc tab khác đăng xuất): về trang đăng nhập
 const router = useRouter()
 // nạp tuỳ chọn ngay từ đầu để theme áp cả trang đăng nhập
@@ -61,7 +69,22 @@ useSession().setOnExpired(() => {
       <NoticeCard :notice="(message as NoticeMessage).notice" @close="closeCallback" />
     </template>
   </Toast>
-  <ConfirmDialog />
+  <ConfirmDialog :draggable="false" :pt="{ root: { class: 'app-confirm' } }">
+    <template #container="{ message, acceptCallback, rejectCallback }">
+      <div :class="['confirm', view(message).danger ? 'danger' : 'info']">
+        <span class="bubble"><AppIcon :name="view(message).icon" /></span>
+        <h2 class="confirm-title">{{ view(message).title }}</h2>
+        <p class="confirm-body">{{ view(message).body }}</p>
+        <ul v-if="view(message).impact?.length" class="confirm-impact">
+          <li v-for="line in view(message).impact" :key="line">{{ line }}</li>
+        </ul>
+        <div class="confirm-actions">
+          <Button label="Cancel" severity="secondary" outlined :autofocus="view(message).danger" @click="rejectCallback" />
+          <Button :label="view(message).action" class="go" :autofocus="!view(message).danger" @click="acceptCallback" />
+        </div>
+      </div>
+    </template>
+  </ConfirmDialog>
 </template>
 
 <style>
@@ -76,5 +99,74 @@ useSession().setOnExpired(() => {
   box-shadow: none;
   backdrop-filter: none;
   margin: 0 0 0.5rem;
+}
+
+/* Hộp xác nhận: căn giữa; bong bóng tròn (biểu tượng đặc trắng) nhô nửa lên mép trên, có
+   vòng sáng cùng màu; tiêu đề và nút hành động theo loại (đỏ: bỏ; xanh dương: không hoàn
+   tác được) */
+.app-confirm.p-dialog {
+  width: min(26rem, calc(100vw - 2rem));
+  margin-top: 2.4rem;
+  overflow: visible;
+}
+.confirm {
+  --tone: var(--app-info);
+  --tone-strong: var(--app-info-strong);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 3.2rem 1.4rem 1.3rem;
+  text-align: center;
+}
+.confirm.danger {
+  --tone: var(--app-danger);
+  --tone-strong: var(--app-danger-strong);
+}
+.confirm .bubble {
+  position: absolute;
+  top: -2.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  width: 4.8rem;
+  height: 4.8rem;
+  border-radius: 50%;
+  background: var(--tone);
+  box-shadow:
+    0 0 0 5px color-mix(in srgb, var(--tone) 40%, #ffffff),
+    0 8px 20px color-mix(in srgb, var(--tone) 35%, transparent);
+  color: var(--app-on-color);
+  font-size: 2.2rem;
+}
+.confirm-title {
+  font-size: 1.2rem;
+  color: var(--tone-strong);
+}
+.confirm-body {
+  margin: 0;
+}
+.confirm-impact {
+  align-self: stretch;
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  list-style: none;
+  border-radius: 8px;
+  background: var(--app-soft);
+  font-size: 0.86rem;
+}
+.confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  align-self: stretch;
+  margin-top: 0.4rem;
+}
+.confirm .go {
+  background: var(--tone-strong);
+  border-color: var(--tone-strong);
+  color: var(--app-on-color);
 }
 </style>
