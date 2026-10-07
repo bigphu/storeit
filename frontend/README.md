@@ -137,7 +137,7 @@ Spec: `docs/superpowers/specs/2026-10-07-ui-patterns-design.md`.
   - Mutations used this way are created with `toast: false`.
 - **Ask only before the irreversible:**
   - `confirmAction({ title, body, impact?, action, danger, icon })` from `lib/confirm.ts`.
-  - Red (`danger`) only for discarding; blue for sends and sign-outs.
+  - Red (`danger`) only for discarding; orange (`warn`) for changes that lock someone out (disabling an account); blue for sends and sign-outs.
   - Exceptions that ask first and still offer Undo: changing who sees an export profile (Share / Make private, or Visibility in quick edit), and disabling an account (it signs the person out).
 - **Toasts:**
   - `notify.success(msg, { undo?, action? })` and `notify.error(summary, { detail?, retry? })`;

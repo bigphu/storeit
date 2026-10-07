@@ -53,7 +53,8 @@ export function useAccountActions() {
         body: 'They are signed out within 15 minutes and can’t sign in until the account is enabled again.',
         action: 'Disable account',
         danger: false,
-        icon: 'logout',
+        warn: true,
+        icon: 'alert',
       })
       if (!ok) return false
       return runAction({

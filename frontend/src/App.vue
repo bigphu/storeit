@@ -71,7 +71,7 @@ useSession().setOnExpired(() => {
   </Toast>
   <ConfirmDialog :draggable="false" :pt="{ root: { class: 'app-confirm' } }">
     <template #container="{ message, acceptCallback, rejectCallback }">
-      <div :class="['confirm', view(message).danger ? 'danger' : 'info']">
+      <div :class="['confirm', view(message).danger ? 'danger' : view(message).warn ? 'warn' : 'info']">
         <span class="bubble"><AppIcon :name="view(message).icon" /></span>
         <h2 class="confirm-title">{{ view(message).title }}</h2>
         <p class="confirm-body">{{ view(message).body }}</p>
@@ -79,8 +79,9 @@ useSession().setOnExpired(() => {
           <li v-for="line in view(message).impact" :key="line">{{ line }}</li>
         </ul>
         <div class="confirm-actions">
-          <Button label="Cancel" severity="secondary" outlined :autofocus="view(message).danger" @click="rejectCallback" />
-          <Button :label="view(message).action" class="go" :autofocus="!view(message).danger" @click="acceptCallback" />
+          <!-- đỏ và cam: focus sẵn ở Cancel, Enter không lỡ tay làm -->
+          <Button label="Cancel" severity="secondary" outlined :autofocus="view(message).danger || view(message).warn" @click="rejectCallback" />
+          <Button :label="view(message).action" class="go" :autofocus="!view(message).danger && !view(message).warn" @click="acceptCallback" />
         </div>
       </div>
     </template>
@@ -123,6 +124,10 @@ useSession().setOnExpired(() => {
 .confirm.danger {
   --tone: var(--app-danger);
   --tone-strong: var(--app-danger-strong);
+}
+.confirm.warn {
+  --tone: var(--app-warn);
+  --tone-strong: var(--app-warn-strong);
 }
 .confirm .bubble {
   position: absolute;

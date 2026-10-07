@@ -12,6 +12,8 @@ export interface ConfirmOptions {
   action: string
   // đỏ: bỏ thay đổi; xanh dương: không hoàn tác được nhưng không phá gì
   danger: boolean
+  // cam: làm được lại nhưng ảnh hưởng tới người khác (khoá tài khoản); không dùng cùng danger
+  warn?: boolean
   icon: IconName
 }
 
