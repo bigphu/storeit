@@ -17,6 +17,7 @@ type ExportProfile struct {
 	Version   int32
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	DeletedAt *time.Time
 }
 
 type NewExportProfile struct {
@@ -52,8 +53,13 @@ type ExportProfileRepository interface {
 	Create(ctx context.Context, in NewExportProfile) (ExportProfile, error)
 	// Update: ErrExportProfileChanged, ErrExportProfileNameTaken; event export_profile_updated
 	Update(ctx context.Context, id uuid.UUID, ch ExportProfileChange) (ExportProfile, error)
-	// Delete: ErrExportProfileNotFound; event export_profile_deleted
+	// Delete: xoá mềm; ErrExportProfileNotFound; event export_profile_deleted
 	Delete(ctx context.Context, id uuid.UUID) error
+	// GetAny: kể cả đã xoá (để kiểm tra quyền khôi phục); ErrExportProfileNotFound
+	GetAny(ctx context.Context, id uuid.UUID) (ExportProfile, error)
+	// Restore: khôi phục profile đã xoá (chưa xoá thì trả nguyên); ErrExportProfileNotFound,
+	// ErrExportProfileNameTaken; event export_profile_restored
+	Restore(ctx context.Context, id uuid.UUID) (ExportProfile, error)
 	// RecordExport ghi event assets_exported trong transaction riêng
 	RecordExport(ctx context.Context, r ExportRecord) error
 }

@@ -20,10 +20,11 @@ const (
 	EventStatusArchived = "inventory.status_archived"
 	EventStatusRestored = "inventory.status_restored"
 
-	EventExportProfileCreated = "inventory.export_profile_created"
-	EventExportProfileUpdated = "inventory.export_profile_updated"
-	EventExportProfileDeleted = "inventory.export_profile_deleted"
-	EventAssetsExported       = "inventory.assets_exported"
+	EventExportProfileCreated  = "inventory.export_profile_created"
+	EventExportProfileUpdated  = "inventory.export_profile_updated"
+	EventExportProfileDeleted  = "inventory.export_profile_deleted"
+	EventExportProfileRestored = "inventory.export_profile_restored"
+	EventAssetsExported        = "inventory.assets_exported"
 )
 
 // Loại aggregate trong platform.events
@@ -119,6 +120,10 @@ type ExportProfileUpdated struct {
 }
 
 type ExportProfileDeleted struct {
+	ProfileID uuid.UUID `json:"profile_id"`
+}
+
+type ExportProfileRestored struct {
 	ProfileID uuid.UUID `json:"profile_id"`
 }
 

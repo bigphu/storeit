@@ -522,6 +522,23 @@ paths:
         "204": { description: Deleted }
         default: { $ref: '#/components/responses/Problem' }
 
+  /export-profiles/{profileID}/restore:
+    parameters:
+      - name: profileID
+        in: path
+        required: true
+        schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+    post:
+      operationId: restoreExportProfile
+      summary: Undo deleting a profile (owner; shared ones also inventory.export_profile.manage)
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExportProfile' }
+        default: { $ref: '#/components/responses/Problem' }
+
   /assets/{assetID}:
     parameters:
       - $ref: '#/components/parameters/AssetID'

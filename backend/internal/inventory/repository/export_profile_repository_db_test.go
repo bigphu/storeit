@@ -67,6 +67,18 @@ func TestExportProfiles_CRUD(t *testing.T) {
 			t.Errorf("want one %s event", typ)
 		}
 	}
+	// xoá mềm: GetAny vẫn thấy, Restore đưa về
+	got, err := r.profiles.GetAny(context.Background(), p.ID)
+	if err != nil || got.DeletedAt == nil {
+		t.Errorf("GetAny after delete = %+v, %v", got, err)
+	}
+	back, err := r.profiles.Restore(ctx, p.ID)
+	if err != nil || back.DeletedAt != nil {
+		t.Fatalf("restore = %+v, %v", back, err)
+	}
+	if countEvents(t, r, contract.EventExportProfileRestored, p.ID) != 1 {
+		t.Error("want one export_profile_restored event")
+	}
 	if err := r.profiles.RecordExport(ctx, domain.ExportRecord{Mode: "data", Rows: 3, Sheets: 1, Filters: map[string]any{"q": "x"}}); err != nil {
 		t.Errorf("record export: %v", err)
 	}

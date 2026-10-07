@@ -733,3 +733,59 @@ func TestExportOverHTTP(t *testing.T) {
 		t.Errorf("problem type = %s", typ)
 	}
 }
+
+// Xoá profile là xoá mềm: ẩn với mọi người (kể cả export theo profile_id), khôi phục được
+// bởi người xoá được nó
+func TestExportProfileRestoreOverHTTP(t *testing.T) {
+	a := newApp(t)
+	owner := a.token(domain.PermAssetRead, domain.PermAssetExport)
+	other := a.token(domain.PermAssetRead, domain.PermAssetExport)
+	layout := map[string]any{
+		"columns": []map[string]any{{"field": "tag"}}, "sheets": "single", "sheet_name": "Assets",
+		"title_row": false, "summary": false, "header": "bold", "freeze": true, "filter": true, "stripes": false,
+		"date_format": "dd/mm/yyyy", "bool_style": "yes_no", "status_as": "name", "unit_in": "header",
+	}
+	name := "Kiểm kê " + uuid.NewString()[:6]
+	p := decode[struct{ ID string }](t, a.do("POST", "/api/v1/export-profiles", owner, map[string]any{"name": name, "shared": true, "layout": layout}), 201)
+
+	if rec := a.do("DELETE", "/api/v1/export-profiles/"+p.ID, owner, nil); rec.Code != 204 {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
+	}
+	if rec := a.do("GET", "/api/v1/export-profiles/"+p.ID, other, nil); rec.Code != 404 {
+		t.Errorf("deleted shared profile visible to others: %d", rec.Code)
+	}
+	if rec := a.do("POST", "/api/v1/assets/export", owner, map[string]any{"mode": "report", "profile_id": p.ID}); rec.Code != 404 {
+		t.Errorf("export with a deleted profile: %d", rec.Code)
+	} else if typ, _ := problem(t, rec); typ != "/errors/export-profile-not-found" {
+		t.Errorf("problem type = %s", typ)
+	}
+	// không phải chủ, không có quyền quản lý: không khôi phục được profile chia sẻ của người khác
+	if rec := a.do("POST", "/api/v1/export-profiles/"+p.ID+"/restore", other, nil); rec.Code != 403 {
+		t.Errorf("non-manager restores someone else's shared profile: %d", rec.Code)
+	}
+	if rec := a.do("POST", "/api/v1/export-profiles/"+p.ID+"/restore", owner, nil); rec.Code != 200 {
+		t.Fatalf("restore: %d %s", rec.Code, rec.Body)
+	}
+	if rec := a.do("GET", "/api/v1/export-profiles/"+p.ID, other, nil); rec.Code != 200 {
+		t.Errorf("restored shared profile: %d", rec.Code)
+	}
+
+	// profile riêng của người khác: 404 (không lộ là nó tồn tại)
+	priv := decode[struct{ ID string }](t, a.do("POST", "/api/v1/export-profiles", owner, map[string]any{"name": "Riêng " + uuid.NewString()[:6], "layout": layout}), 201)
+	a.do("DELETE", "/api/v1/export-profiles/"+priv.ID, owner, nil)
+	if rec := a.do("POST", "/api/v1/export-profiles/"+priv.ID+"/restore", other, nil); rec.Code != 404 {
+		t.Errorf("restore someone else's private profile: %d", rec.Code)
+	}
+
+	// tên dùng lại sau khi xoá: được; khôi phục bản cũ → 409
+	a.do("DELETE", "/api/v1/export-profiles/"+p.ID, owner, nil)
+	if rec := a.do("POST", "/api/v1/export-profiles", owner, map[string]any{"name": name, "layout": layout}); rec.Code != 201 {
+		t.Fatalf("reuse name: %d %s", rec.Code, rec.Body)
+	}
+	rec := a.do("POST", "/api/v1/export-profiles/"+p.ID+"/restore", owner, nil)
+	if rec.Code != 409 {
+		t.Errorf("restore over reused name: %d", rec.Code)
+	} else if typ, _ := problem(t, rec); typ != "/errors/export-profile-name-taken" {
+		t.Errorf("problem type = %s", typ)
+	}
+}

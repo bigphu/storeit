@@ -119,6 +119,30 @@ func (s *Service) DeleteExportProfile(ctx context.Context, id uuid.UUID) error {
 	return s.profiles.Delete(ctx, id)
 }
 
+// RestoreExportProfile: hoàn tác xoá. Ai xoá được thì khôi phục được; profile riêng của
+// người khác (kể cả đã xoá) như không tồn tại
+func (s *Service) RestoreExportProfile(ctx context.Context, id uuid.UUID) (ExportProfileView, error) {
+	actor, err := auth.Require(ctx, domain.PermAssetExport)
+	if err != nil {
+		return ExportProfileView{}, err
+	}
+	cur, err := s.profiles.GetAny(ctx, id)
+	if err != nil {
+		return ExportProfileView{}, err
+	}
+	if cur.OwnerID != actor.AccountID && !cur.Shared {
+		return ExportProfileView{}, domain.ErrExportProfileNotFound
+	}
+	if !canEditProfile(actor, cur) {
+		return ExportProfileView{}, domain.ErrExportProfileForbidden
+	}
+	p, err := s.profiles.Restore(ctx, id)
+	if err != nil {
+		return ExportProfileView{}, err
+	}
+	return s.profileView(ctx, actor, p)
+}
+
 // visibleProfile: profile của người khác mà không chia sẻ thì như không tồn tại
 func (s *Service) visibleProfile(ctx context.Context, actor auth.Actor, id uuid.UUID) (domain.ExportProfile, error) {
 	p, err := s.profiles.Get(ctx, id)
