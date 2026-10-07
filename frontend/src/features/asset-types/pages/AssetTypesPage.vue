@@ -8,7 +8,7 @@ import InputIcon from 'primevue/inputicon'
 import InputText from 'primevue/inputtext'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AddCard from '@/components/AddCard.vue'
 import CardGrid from '@/components/CardGrid.vue'
@@ -17,6 +17,9 @@ import TableSkeleton from '@/components/TableSkeleton.vue'
 import EntityCard from '@/components/EntityCard.vue'
 import FormDialog from '@/components/FormDialog.vue'
 import IconAction from '@/components/IconAction.vue'
+import InlineCell from '@/components/InlineCell.vue'
+import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
+import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
 import { useListContext } from '@/features/assets/listContext'
@@ -24,13 +27,16 @@ import { typeListLocation } from '@/features/assets/listQuery'
 import type { AssetType } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
+import { mayClose } from '@/lib/confirm'
 import { formatDate } from '@/lib/dates'
+import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
 import { useDirty, useFormErrors } from '@/lib/forms'
 import { openLocation } from '@/lib/navigation'
 import { onRowClick, useRowMenu } from '@/lib/tableRows'
 import { queryString, useUrlState } from '@/lib/urlState'
 import { useAssetTypes, useCreateAssetType } from '../api'
 import { codeFromName, codeMark } from '../code'
+import { useTypeArchive, useTypeOverviewSave } from '../overviewSave'
 import KindMeter from '../components/KindMeter.vue'
 
 // Danh sách loại: thẻ (mặc định) hoặc bảng; đang dùng / đã archive; tìm theo tên, mã.
@@ -102,6 +108,8 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<AssetT
   { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => openType(t, undefined, true) },
   { separator: true },
   { label: 'Type settings', icon: 'pi pi-cog', command: () => openLocation(router, settingsPath(t)) },
+  { label: 'Quick edit', icon: 'pi pi-pencil', visible: canManage.value, command: () => openQuick(t) },
+  { label: t.archived_at ? 'Restore' : 'Archive', icon: t.archived_at ? 'pi pi-replay' : 'pi pi-inbox', visible: canManage.value && !t.is_system, command: () => archiveType(t) },
 ])
 function onCardMenu(t: AssetType, e: MouseEvent) {
   e.preventDefault()
@@ -134,12 +142,60 @@ async function submit() {
   try {
     const t = await create.mutateAsync({ code: code.value, name: name.value, description: description.value })
     creating.value = false
-    // thêm thuộc tính ở trang cài đặt
-    await router.push(settingsPath(t))
+    // mở trang của loại ở Attributes, nút "Add attribute" sẵn focus
+    await router.push({ path: settingsPath(t), query: { tab: 'attributes', new: '1' } })
   } catch (err) {
     errors.set(err)
   }
 }
+
+// Sửa nhanh từ danh sách: nhấp đúp tên để đổi tại chỗ; bút chì mở ngăn kéo (tên, mô tả)
+const saveType = useTypeOverviewSave()
+const archiveType = useTypeArchive()
+const rename = (t: AssetType, name: string) => saveType(t, { name })
+const quick = ref<AssetType | null>(null)
+const quickDraft = reactive(emptyDraft())
+const quickSaving = ref(false)
+const quickFields: FieldDef[] = [
+  { key: 'name', label: 'Name', maxlength: 100 },
+  { key: 'code', label: 'Code', lock: 'Part of every asset tag, so it can’t change.' },
+  { key: 'description', label: 'Description', kind: 'textarea' },
+]
+const quickSaved = computed(() => ({ name: quick.value?.name ?? '', code: quick.value?.code ?? '', description: quick.value?.description ?? '' }))
+const quickOpen = computed({
+  get: () => quick.value !== null,
+  set: (v) => {
+    if (!v) closeQuick()
+  },
+})
+function closeQuick() {
+  quick.value = null
+  clearTab(quickDraft, 'overview')
+}
+function openQuick(t: AssetType) {
+  clearTab(quickDraft, 'overview')
+  quick.value = t
+}
+const quickIndex = computed(() => (quick.value ? visible.value.findIndex((t) => t.id === quick.value!.id) : -1))
+async function moveQuick(step: number) {
+  const next = visible.value[quickIndex.value + step]
+  if (!next || !(await mayClose(isDirty(quickDraft)))) return
+  openQuick(next)
+}
+async function saveQuick() {
+  const t = quick.value
+  if (!t) return
+  quickSaving.value = true
+  try {
+    if (await saveType(t, changesOf(quickDraft, 'overview'))) clearTab(quickDraft, 'overview')
+  } finally {
+    quickSaving.value = false
+  }
+}
+// danh sách nạp lại sau khi lưu: ngăn kéo theo bản mới (version mới)
+watch(types, (list) => {
+  if (quick.value) quick.value = list?.find((t) => t.id === quick.value!.id) ?? null
+})
 </script>
 
 <template>
@@ -172,12 +228,21 @@ async function submit() {
         <header class="card-head">
           <span class="mark">{{ codeMark(t.code) }}</span>
           <div class="title">
-            <h3>{{ t.name }}</h3>
+            <h3>
+              <InlineCell :value="t.name" :editable="canManage" @save="(v) => rename(t, v)" @open="(e) => openType(t, e)">{{ t.name }}</InlineCell>
+            </h3>
             <code>{{ t.code }}</code>
           </div>
           <span v-if="t.is_system" v-tooltip.top="'Built-in type'" class="lock" aria-label="Built-in">
             <i class="pi pi-lock" />
           </span>
+          <IconAction v-if="canManage" icon="pi pi-pencil" :label="`Quick edit ${t.name}`" @click="openQuick(t)" />
+          <IconAction
+            v-if="canManage && !t.is_system"
+            :icon="t.archived_at ? 'pi pi-replay' : 'pi pi-inbox'"
+            :label="t.archived_at ? `Restore ${t.name}` : `Archive ${t.name}`"
+            @click="archiveType(t)"
+          />
           <IconAction icon="pi pi-cog" :label="`${t.name} settings`" :to="settingsPath(t)" />
         </header>
         <p class="desc">{{ t.description || 'No description.' }}</p>
@@ -223,7 +288,9 @@ async function submit() {
           <div class="name-cell">
             <span class="mark small">{{ codeMark(t.code) }}</span>
             <div>
-              <RouterLink :to="listOf(t)">{{ t.name }}</RouterLink>
+              <InlineCell :value="t.name" :editable="canManage" @save="(v) => rename(t, v)" @open="(e) => openType(t, e)">
+                <RouterLink :to="listOf(t)" @click.prevent>{{ t.name }}</RouterLink>
+              </InlineCell>
               <code class="sub-code">{{ t.code }}</code>
             </div>
           </div>
@@ -245,9 +312,16 @@ async function submit() {
           <KindMeter v-else :type="t" />
         </template>
       </Column>
-      <Column header="" header-style="width: 4rem">
+      <Column header="" header-style="width: 8rem">
         <template #body="{ data: t }: { data: AssetType }">
           <div class="row-actions">
+            <IconAction v-if="canManage" icon="pi pi-pencil" label="Quick edit" @click="openQuick(t)" />
+            <IconAction
+              v-if="canManage && !t.is_system"
+              :icon="t.archived_at ? 'pi pi-replay' : 'pi pi-inbox'"
+              :label="t.archived_at ? 'Restore' : 'Archive'"
+              @click="archiveType(t)"
+            />
             <IconAction icon="pi pi-cog" label="Type settings" :to="settingsPath(t)" />
           </div>
         </template>
@@ -257,6 +331,23 @@ async function submit() {
         <EmptyState v-else icon="pi pi-sitemap" :text="state.q ? `No types match &quot;${state.q}&quot;.` : 'No asset types here.'" />
       </template>
     </DataTable>
+
+    <QuickEditDrawer
+      v-if="quick"
+      v-model:visible="quickOpen"
+      :title="quick.name"
+      icon="sitemap"
+      :dirty="isDirty(quickDraft)"
+      :busy="quickSaving"
+      :can-prev="quickIndex > 0"
+      :can-next="quickIndex >= 0 && quickIndex < visible.length - 1"
+      @save="saveQuick"
+      @prev="moveQuick(-1)"
+      @next="moveQuick(1)"
+      @open-page="router.push(settingsPath(quick))"
+    >
+      <OverviewFields :fields="quickFields" :saved="quickSaved" :draft="quickDraft" stacked />
+    </QuickEditDrawer>
 
     <FormDialog
       v-model:visible="creating"
