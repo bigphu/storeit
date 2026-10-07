@@ -23,6 +23,12 @@ async function requestClose() {
 }
 function onKey(e: KeyboardEvent) {
   if (!visible.value) return
+  // Esc: tự xử lý thay closeOnEscape của Drawer để Esc trên hộp xác nhận (mở từ nút trong
+  // ngăn kéo) chỉ đóng hộp xác nhận
+  if (e.key === 'Escape') {
+    if (!(e.target as HTMLElement | null)?.closest?.('.p-dialog')) void requestClose()
+    return
+  }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
     e.preventDefault()
     if (props.dirty && !props.busy) emit('save')
@@ -65,6 +71,7 @@ onUnmounted(unlisten)
     position="right"
     :modal="false"
     :dismissable="false"
+    :close-on-escape="false"
     :show-close-icon="false"
     :pt="{
       root: { class: 'quick-edit', style: 'width: min(26rem, 100vw)' },

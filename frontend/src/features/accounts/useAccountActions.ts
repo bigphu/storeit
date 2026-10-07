@@ -1,5 +1,6 @@
-// Hành động trên một tài khoản, dùng chung cho danh sách và trang tài khoản. Khoá / mở
-// khoá chạy ngay và có Undo; gửi email và đăng xuất mọi nơi không hoàn tác được nên hỏi trước
+// Hành động trên một tài khoản, dùng chung cho danh sách, ngăn kéo sửa nhanh và trang tài
+// khoản. Gửi email, đăng xuất mọi nơi và khoá tài khoản hỏi trước (khoá đá người đó ra);
+// khoá / mở khoá vẫn có Undo
 import type { Account } from '@/lib/api/types'
 import { runAction } from '@/lib/actions'
 import { useSession } from '@/lib/auth/session'
@@ -46,7 +47,15 @@ export function useAccountActions() {
       })
       if (ok) await runAction({ run: () => reset.mutateAsync(a.id), done: `Reset link sent to ${a.email}.`, failed: `Couldn't send the reset link to ${a.email}.` })
     },
-    disable(a: Target) {
+    async disable(a: Target) {
+      const ok = await confirmAction({
+        title: `Disable ${a.name}?`,
+        body: 'They are signed out within 15 minutes and can’t sign in until the account is enabled again.',
+        action: 'Disable account',
+        danger: false,
+        icon: 'logout',
+      })
+      if (!ok) return false
       return runAction({
         run: () => disable.mutateAsync(a.id),
         done: `${a.name} disabled.`,
