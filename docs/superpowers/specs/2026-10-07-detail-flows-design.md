@@ -187,7 +187,7 @@ The commonest small edits never leave the list. There are two ways in, and the d
 - ↑/↓, while focus is not in a field, move the drawer to the previous or next row of the current list page.
 - Unsaved edits ask "Discard changes?" before moving or closing.
 
-Lifecycle actions stay on the row icons, not in the drawer.
+Lifecycle actions stay on the row icons. Accounts and export profiles also repeat them in an actions block under the drawer's fields; they run at once (asking first where the row does), not through Save.
 
 | List | Drawer fields | Full page only |
 |---|---|---|

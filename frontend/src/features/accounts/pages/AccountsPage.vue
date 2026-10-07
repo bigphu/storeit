@@ -301,6 +301,7 @@ watch(rows, (list) => {
       :busy="quickSaving"
       :can-prev="quickIndex > 0"
       :can-next="quickIndex >= 0 && quickIndex < rows.length - 1"
+      actions-label="Account"
       @save="saveQuick"
       @prev="moveQuick(-1)"
       @next="moveQuick(1)"
@@ -321,49 +322,46 @@ watch(rows, (list) => {
         </label>
       </fieldset>
       <!-- hành động trên tài khoản, như nút cuối dòng; đều hỏi trước -->
-      <div class="quick-actions">
-        <span class="qa-label">Account</span>
-        <div class="qa-buttons">
+      <template #actions>
+        <Button
+          v-if="quick.status === 'invited'"
+          label="Resend invitation"
+          icon="pi pi-envelope"
+          severity="secondary"
+          outlined
+          size="small"
+          @click="actions.resendInvitation(quick)"
+        />
+        <Button
+          v-if="quick.status === 'active'"
+          label="Send reset link"
+          icon="pi pi-key"
+          severity="secondary"
+          outlined
+          size="small"
+          @click="actions.sendReset(quick)"
+        />
+        <Button
+          v-if="quick.status === 'disabled'"
+          label="Enable"
+          icon="pi pi-check-circle"
+          severity="secondary"
+          outlined
+          size="small"
+          @click="actions.enable(quick)"
+        />
+        <span v-else v-tooltip.top="actions.isSelf(quick) ? 'You can’t disable yourself' : undefined">
           <Button
-            v-if="quick.status === 'invited'"
-            label="Resend invitation"
-            icon="pi pi-envelope"
+            label="Disable"
+            icon="pi pi-ban"
             severity="secondary"
             outlined
             size="small"
-            @click="actions.resendInvitation(quick)"
+            :disabled="actions.isSelf(quick)"
+            @click="actions.disable(quick)"
           />
-          <Button
-            v-if="quick.status === 'active'"
-            label="Send reset link"
-            icon="pi pi-key"
-            severity="secondary"
-            outlined
-            size="small"
-            @click="actions.sendReset(quick)"
-          />
-          <Button
-            v-if="quick.status === 'disabled'"
-            label="Enable"
-            icon="pi pi-check-circle"
-            severity="secondary"
-            outlined
-            size="small"
-            @click="actions.enable(quick)"
-          />
-          <span v-else v-tooltip.top="actions.isSelf(quick) ? 'You can’t disable yourself' : undefined">
-            <Button
-              label="Disable"
-              icon="pi pi-ban"
-              severity="secondary"
-              outlined
-              size="small"
-              :disabled="actions.isSelf(quick)"
-              @click="actions.disable(quick)"
-            />
-          </span>
-        </div>
-      </div>
+        </span>
+      </template>
     </QuickEditDrawer>
   </section>
 </template>
@@ -393,20 +391,6 @@ watch(rows, (list) => {
 }
 .quick-role.off {
   opacity: 0.55;
-}
-.quick-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-.qa-label {
-  font-size: 0.85rem;
-  color: var(--p-text-muted-color);
-}
-.qa-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
 }
 /* role trên một dòng như mọi ô của bảng; nhiều role thì bảng cuộn ngang */
 .chips {

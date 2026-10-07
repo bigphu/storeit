@@ -27,7 +27,7 @@ import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
 import { useDirty, useFormErrors } from '@/lib/forms'
 import { openLocation } from '@/lib/navigation'
 import { onRowClick, useRowMenu } from '@/lib/tableRows'
-import { useProfileDelete, useProfileOverviewSave, useProfileShare, VISIBILITY_OPTIONS, visibilityOf } from '../overviewSave'
+import { useProfileDelete, useProfileOverviewSave, useProfileShare } from '../overviewSave'
 
 // Profile export: của mình và được chia sẻ. Bấm dòng mở trang profile; nhấp đúp tên để đổi
 // tại chỗ; bút chì mở ngăn kéo sửa nhanh; xuất, chia sẻ, xoá ngay trên dòng (có Undo)
@@ -82,20 +82,15 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Export
   { label: 'Delete', icon: 'pi pi-trash', disabled: !p.can_edit, command: () => deleteProfile(p) },
 ])
 
-// Sửa nhanh: ngăn kéo với tên, ai thấy (hỏi trước khi đổi), chủ (khoá)
+// Sửa nhanh: ngăn kéo với tên, chủ (khoá); bên dưới là nút xuất, chia sẻ, xoá như cuối dòng
 const quick = ref<ExportProfile | null>(null)
 const quickDraft = reactive(emptyDraft())
 const quickSaving = ref(false)
 const quickFields: FieldDef[] = [
   { key: 'name', label: 'Name', maxlength: 100 },
-  { key: 'visibility', label: 'Visibility', kind: 'select', options: VISIBILITY_OPTIONS },
   { key: 'owner', label: 'Owner', lock: 'Profiles keep the person who made them.' },
 ]
-const quickSaved = computed(() => ({
-  name: quick.value?.name ?? '',
-  visibility: quick.value ? visibilityOf(quick.value) : '',
-  owner: quick.value?.owner.name ?? '',
-}))
+const quickSaved = computed(() => ({ name: quick.value?.name ?? '', owner: quick.value?.owner.name ?? '' }))
 const quickOpen = computed({
   get: () => quick.value !== null,
   set: (v) => {
@@ -225,12 +220,28 @@ async function submitCreate() {
       :busy="quickSaving"
       :can-prev="quickIndex > 0"
       :can-next="quickIndex >= 0 && quickIndex < visible.length - 1"
+      actions-label="Profile"
       @save="saveQuick"
       @prev="moveQuick(-1)"
       @next="moveQuick(1)"
       @open-page="router.push(`/export-profiles/${quick.id}`)"
     >
       <OverviewFields :fields="quickFields" :saved="quickSaved" :draft="quickDraft" :readonly="!quick.can_edit" stacked />
+      <!-- hành động như nút cuối dòng; chia sẻ / làm riêng tư hỏi trước -->
+      <template #actions>
+        <Button label="Export all assets" icon="pi pi-download" severity="secondary" outlined size="small" @click="exportAll(quick)" />
+        <template v-if="quick.can_edit">
+          <Button
+            :label="quick.shared ? 'Make private' : 'Share'"
+            :icon="quick.shared ? 'pi pi-lock' : 'pi pi-share-alt'"
+            severity="secondary"
+            outlined
+            size="small"
+            @click="toggleShare(quick)"
+          />
+          <Button label="Delete" icon="pi pi-trash" severity="danger" outlined size="small" @click="deleteProfile(quick)" />
+        </template>
+      </template>
     </QuickEditDrawer>
 
     <FormDialog

@@ -10,7 +10,16 @@ import type { IconName } from './icons'
 // Sửa nhanh từ danh sách: ngăn kéo bên phải (chuột ít phải di), cùng form với Overview của
 // trang chi tiết. ↑/↓ (khi không đang gõ) sang dòng trước/sau; Ctrl/⌘ S lưu; còn thay đổi
 // chưa lưu thì hỏi trước khi đóng (cha tự hỏi khi chuyển dòng)
-const props = defineProps<{ title: string; icon: IconName; dirty: boolean; busy?: boolean; canPrev: boolean; canNext: boolean }>()
+// actionsLabel: nhãn của khối nút hành động (slot #actions), ví dụ "Account"
+const props = defineProps<{
+  title: string
+  icon: IconName
+  dirty: boolean
+  busy?: boolean
+  canPrev: boolean
+  canNext: boolean
+  actionsLabel?: string
+}>()
 const visible = defineModel<boolean>('visible', { required: true })
 const emit = defineEmits<{ save: []; prev: []; next: []; openPage: [] }>()
 
@@ -91,6 +100,11 @@ onUnmounted(unlisten)
     </template>
     <div v-if="$slots.meta" class="qe-meta"><slot name="meta" /></div>
     <slot />
+    <!-- hành động trên mục (như nút cuối dòng), chạy ngay, không qua Save -->
+    <section v-if="$slots.actions" class="qe-actions">
+      <span class="qe-actions-label">{{ actionsLabel ?? 'Actions' }}</span>
+      <div class="qe-actions-buttons"><slot name="actions" /></div>
+    </section>
     <p class="qe-hint">↑/↓ moves to the previous or next row.</p>
     <template #footer>
       <Button label="Open full page" icon="pi pi-arrow-right" icon-pos="right" text @click="emit('openPage')" />
@@ -142,6 +156,20 @@ onUnmounted(unlisten)
   flex-direction: column;
   gap: 1rem;
   padding: 1.1rem;
+}
+.quick-edit .qe-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.quick-edit .qe-actions-label {
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color);
+}
+.quick-edit .qe-actions-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 .quick-edit .qe-meta {
   display: flex;

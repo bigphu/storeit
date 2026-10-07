@@ -138,7 +138,7 @@ Spec: `docs/superpowers/specs/2026-10-07-ui-patterns-design.md`.
 - **Ask only before the irreversible:**
   - `confirmAction({ title, body, impact?, action, danger, icon })` from `lib/confirm.ts`.
   - Red (`danger`) only for discarding; orange (`warn`) for changes that lock someone out (disabling an account); blue for sends and sign-outs.
-  - Exceptions that ask first and still offer Undo: changing who sees an export profile (Share / Make private, or Visibility in quick edit), and disabling an account (it signs the person out).
+  - Exceptions that ask first and still offer Undo: changing who sees an export profile (Share / Make private; Make private is orange), and disabling an account (it signs the person out).
 - **Toasts:**
   - `notify.success(msg, { undo?, action? })` and `notify.error(summary, { detail?, retry? })`;
   - success shows 4 s, or 8 s with Undo or an action; errors stay until closed;
@@ -164,7 +164,7 @@ Spec: `docs/superpowers/specs/2026-10-07-detail-flows-design.md`.
 - **Each area has one save path** (`use…OverviewSave` in `features/<area>/overviewSave.ts`), shared by the page, the quick edit drawer and inline cells.
 - **Lists:**
   - `InlineCell` shows a pencil next to a name (or an asset's status or purchase date) while its row or card is hovered or focused; the pencil edits it in place. Clicking the value itself still opens the item.
-  - `QuickEditDrawer` (the pencil) shows the Overview fields; ↑/↓ moves between rows.
+  - `QuickEditDrawer` (the pencil) shows the Overview fields; ↑/↓ moves between rows. Its `#actions` slot (label from `actions-label`) holds the row's actions as buttons that run at once, not through Save (accounts, export profiles).
 - **Asset quick saves** read the full asset and PUT it with its version (`features/assets/quickEdit.ts`, `useAssetActions().quickSave`).
 - **The report editor** (`ReportEditor.vue`) is shared by the Export report dialog and the export profile page.
 
