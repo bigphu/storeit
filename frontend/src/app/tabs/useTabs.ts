@@ -6,7 +6,7 @@ import { useRouter } from 'vue-router'
 import { useSession } from '@/lib/auth/session'
 import { usePreferences } from '@/lib/preferences'
 import { readJSON, writeJSON } from '@/lib/storage'
-import { closeOthers as closeOthersOf, closeTab, initialTabs, openTab, pushBack, type Tab, togglePin as togglePinOf } from './tabList'
+import { closeOthers as closeOthersOf, closeTab, initialTabs, openTab, pushBack, reopenTab, type Tab, togglePin as togglePinOf } from './tabList'
 
 const HOME = '/assets'
 let seq = 0
@@ -161,6 +161,15 @@ export const useTabs = defineStore('tabs', () => {
     return Promise.resolve()
   }
 
+  // reopen: Undo của close; tab mới (id mới) cùng đường dẫn và vị trí, mở lại nếu nó đang mở
+  function reopen(closed: Tab, index: number, wasActive: boolean) {
+    const tab: Tab = { ...closed, id: newId(), pinned: false }
+    tabs.value = reopenTab(tabs.value, tab, index)
+    if (!wasActive) return Promise.resolve()
+    activeId.value = null
+    return activate(tab.id)
+  }
+
   function closeOthers(id: string) {
     const keep = closeOthersOf(tabs.value, id)
     for (const t of tabs.value) if (!keep.includes(t)) dirty.delete(t.id)
@@ -214,6 +223,7 @@ export const useTabs = defineStore('tabs', () => {
     activate,
     open,
     close,
+    reopen,
     closeOthers,
     togglePin,
     rename,

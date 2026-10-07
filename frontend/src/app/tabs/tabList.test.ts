@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { closeOthers, closeTab, dedupeKey, initialTabs, openTab, restoreTabs, type Tab, togglePin } from './tabList'
+import { closeOthers, closeTab, dedupeKey, initialTabs, openTab, reopenTab, restoreTabs, type Tab, togglePin } from './tabList'
 
 const t = (id: string, path: string, pinned = false): Tab => ({ id, path, pinned })
 let n = 0
@@ -118,5 +118,18 @@ describe('initialTabs', () => {
 
   it('leaves the tabs alone after that, even if All assets was unpinned or closed', () => {
     expect(initialTabs([t('a', '/2')], true, true, () => 'h')).toEqual([t('a', '/2')])
+  })
+})
+
+describe('reopenTab', () => {
+  const t = (id: string, pinned = false) => ({ id, path: `/${id}`, pinned })
+  it('puts the tab back at its old index', () => {
+    expect(reopenTab([t('a'), t('c')], t('b'), 1).map((x) => x.id)).toEqual(['a', 'b', 'c'])
+  })
+  it('clamps an index past the end', () => {
+    expect(reopenTab([t('a')], t('b'), 5).map((x) => x.id)).toEqual(['a', 'b'])
+  })
+  it('never lands inside the pinned group', () => {
+    expect(reopenTab([t('p', true), t('q', true), t('a')], t('b'), 0).map((x) => x.id)).toEqual(['p', 'q', 'b', 'a'])
   })
 })
