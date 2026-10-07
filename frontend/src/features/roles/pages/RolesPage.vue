@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Column from 'primevue/column'
-import DataTable from 'primevue/datatable'
+import ContextMenu from 'primevue/contextmenu'
+import DataTable, { type DataTableRowContextMenuEvent } from 'primevue/datatable'
 import InputText from 'primevue/inputtext'
+import Menu from 'primevue/menu'
+import type { MenuItem } from 'primevue/menuitem'
 import Select from 'primevue/select'
-import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AddCard from '@/components/AddCard.vue'
 import CardGrid from '@/components/CardGrid.vue'
@@ -24,6 +26,8 @@ import { useSession } from '@/lib/auth/session'
 import { mayClose } from '@/lib/confirm'
 import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
 import { useDirty, useFormErrors } from '@/lib/forms'
+import { openLocation } from '@/lib/navigation'
+import { useRowMenu } from '@/lib/tableRows'
 import { useUrlState } from '@/lib/urlState'
 import { useCreateRole, useRoles } from '../api'
 import { ALL_PERMS, EMPLOYEE_ROLE_ID, label, moduleOf } from '../catalog'
@@ -88,8 +92,8 @@ async function submit() {
   }
 }
 
-// Sửa nhanh trên thẻ: nhấp đúp tên để đổi tại chỗ (role tự tạo); bút chì mở ngăn kéo; xoá
-// role tự tạo không ai giữ
+// Sửa nhanh trên thẻ: bút chì cạnh tên để đổi tại chỗ (role tự tạo); "Quick edit" trong menu
+// mở ngăn kéo; xoá role tự tạo không ai giữ
 const saveRole = useRoleOverviewSave()
 const deleteRole = useRoleDelete()
 const rename = (r: Role, name: string) => saveRole(r, { name })
@@ -134,6 +138,38 @@ async function saveQuick() {
 watch(roles, (l) => {
   if (quick.value) quick.value = l?.find((x) => x.id === quick.value!.id) ?? null
 })
+
+// Hành động trên thẻ: nút menu (☰) ở đầu thẻ và chuột phải, cùng một danh sách. Xoá chỉ cho
+// role tự tạo; còn người giữ thì tắt, nhãn nói lý do
+const openRole = (r: Role, newTab?: boolean) => openLocation(router, `/roles/${r.id}`, undefined, newTab)
+const roleMenu = (r: Role): MenuItem[] => [
+  { label: 'Open', icon: 'pi pi-arrow-right', command: () => openRole(r) },
+  { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => openRole(r, true) },
+  { separator: true, visible: canManage.value },
+  { label: 'Quick edit', icon: 'pi pi-pencil', visible: canManage.value, command: () => openQuick(r) },
+  {
+    label: people(r) > 0 ? `Delete (held by ${peopleLabel(people(r))})` : 'Delete',
+    icon: 'pi pi-trash',
+    visible: canManage.value && !r.is_system,
+    disabled: people(r) > 0,
+    command: () => deleteRole(r),
+  },
+]
+const menu = ref<InstanceType<typeof ContextMenu>>()
+const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Role>(menu, roleMenu)
+function onCardMenu(r: Role, e: MouseEvent) {
+  e.preventDefault()
+  showMenu({ originalEvent: e, data: r, index: 0 } as DataTableRowContextMenuEvent)
+}
+// không xoá role đang chọn khi menu đóng: Menu báo đóng sau hiệu ứng, lúc đó có thể đã mở
+// cho thẻ khác
+const cardMenu = ref<InstanceType<typeof Menu>>()
+const cardMenuRole = shallowRef<Role | null>(null)
+const cardMenuItems = computed(() => (cardMenuRole.value ? roleMenu(cardMenuRole.value) : []))
+function toggleCardMenu(r: Role, e: MouseEvent) {
+  cardMenuRole.value = r
+  cardMenu.value?.toggle(e)
+}
 </script>
 
 <template>
@@ -145,24 +181,17 @@ watch(roles, (l) => {
       <SegmentedFilter v-model="layout" :options="layoutOptions" label="Layout" />
     </div>
 
+    <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />
+    <Menu ref="cardMenu" :model="cardMenuItems" popup />
+
     <CardGrid v-if="state.layout === 'cards'">
-      <EntityCard v-for="r in roles ?? []" :key="r.id" :to="`/roles/${r.id}`" :label="r.name">
+      <EntityCard v-for="r in roles ?? []" :key="r.id" :to="`/roles/${r.id}`" :label="r.name" @menu="(e) => onCardMenu(r, e)">
         <div class="top">
           <h3>
             <InlineCell :value="r.name" label="name" :editable="canManage && !r.is_system" @save="(v) => rename(r, v)">{{ r.name }}</InlineCell>
           </h3>
           <i v-if="r.is_system" v-tooltip.top="'Built-in role'" class="pi pi-lock lock" aria-label="Built-in" />
-          <Tag v-else value="Custom" severity="secondary" />
-          <IconAction v-if="canManage" icon="pi pi-pencil" :label="`Quick edit ${r.name}`" @click="openQuick(r)" />
-          <IconAction
-            v-if="canManage && !r.is_system"
-            icon="pi pi-trash"
-            :label="`Delete ${r.name}`"
-            danger
-            :disabled="people(r) > 0"
-            :reason="`Held by ${peopleLabel(people(r))}. Remove them from the role first.`"
-            @click="deleteRole(r)"
-          />
+          <IconAction icon="pi pi-bars" :label="`Actions for ${r.name}`" aria-haspopup="menu" @click="(e) => toggleCardMenu(r, e)" />
         </div>
         <p class="desc">{{ r.description || 'No description.' }}</p>
         <div>
