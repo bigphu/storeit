@@ -157,6 +157,26 @@ export interface paths {
         patch: operations["updateAttribute"];
         trace?: never;
     };
+    "/asset-types/{typeID}/attributes/{attributeID}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                typeID: components["parameters"]["TypeID"];
+                attributeID: components["parameters"]["AttributeID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo removing an attribute (inventory.type.manage) */
+        post: operations["restoreAttribute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/asset-types/{typeID}/attributes/{attributeID}/options": {
         parameters: {
             query?: never;
@@ -197,6 +217,27 @@ export interface paths {
         head?: never;
         /** Rename or move an option (inventory.type.manage) */
         patch: operations["updateOption"];
+        trace?: never;
+    };
+    "/asset-types/{typeID}/attributes/{attributeID}/options/{optionID}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                typeID: components["parameters"]["TypeID"];
+                attributeID: components["parameters"]["AttributeID"];
+                optionID: components["parameters"]["OptionID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo removing an option (inventory.type.manage) */
+        post: operations["restoreOption"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/asset-statuses": {
@@ -363,6 +404,25 @@ export interface paths {
         head?: never;
         /** Rename, share or change the layout (owner; shared ones also inventory.export_profile.manage) */
         patch: operations["updateExportProfile"];
+        trace?: never;
+    };
+    "/export-profiles/{profileID}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profileID: components["schemas"]["ID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo deleting a profile (owner; shared ones also inventory.export_profile.manage) */
+        post: operations["restoreExportProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/assets/{assetID}": {
@@ -1146,6 +1206,30 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    restoreAttribute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                typeID: components["parameters"]["TypeID"];
+                attributeID: components["parameters"]["AttributeID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored attribute */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attribute"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     addOption: {
         parameters: {
             query?: never;
@@ -1215,6 +1299,31 @@ export interface operations {
         };
         responses: {
             /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Option"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    restoreOption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                typeID: components["parameters"]["TypeID"];
+                attributeID: components["parameters"]["AttributeID"];
+                optionID: components["parameters"]["OptionID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored option */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1587,6 +1696,29 @@ export interface operations {
         };
         responses: {
             /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportProfile"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    restoreExportProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profileID: components["schemas"]["ID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored */
             200: {
                 headers: {
                     [name: string]: unknown;

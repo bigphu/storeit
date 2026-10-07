@@ -315,6 +315,25 @@ export interface paths {
         patch: operations["updateRole"];
         trace?: never;
     };
+    "/roles/{roleID}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                roleID: components["parameters"]["RoleID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo deleting a role (identity.role.manage) */
+        post: operations["restoreRole"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/roles/{roleID}/permissions": {
         parameters: {
             query?: never;
@@ -1113,6 +1132,29 @@ export interface operations {
         };
         responses: {
             /** @description Updated role */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Role"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    restoreRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                roleID: components["parameters"]["RoleID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored role */
             200: {
                 headers: {
                     [name: string]: unknown;
