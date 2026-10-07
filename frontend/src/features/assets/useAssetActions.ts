@@ -6,7 +6,7 @@ import { runAction } from '@/lib/actions'
 import { openLocation } from '@/lib/navigation'
 import { fetchAsset, useReplaceAsset, useRestoreAsset, useRetireAsset } from './api'
 import { type AssetQuickChange, quickAssetBody } from './quickEdit'
-import { assetBodyOf } from './values'
+import { assetBodyOf, type FormValues } from './values'
 
 export interface ActionAsset {
   id: string
@@ -41,12 +41,13 @@ export function useAssetActions() {
       retireTarget.value = a
       retireOpen.value = true
     },
-    // Sửa nhanh từ danh sách: đọc bản mới nhất, chỉ đổi phần vừa sửa, PUT với version; Undo đặt lại
-    quickSave(row: { id: string; tag: string }, change: AssetQuickChange, what: string) {
+    // Sửa nhanh từ danh sách: đọc bản mới nhất, chỉ đổi phần vừa sửa (attrPatch: thuộc tính
+    // vừa sửa, các thuộc tính khác giữ nguyên), PUT với version; Undo đặt lại
+    quickSave(row: { id: string; tag: string }, change: AssetQuickChange, what: string, attrPatch?: FormValues) {
       return runAction({
         run: async () => {
           const a = await fetchAsset(row.id)
-          const saved = await replaceAsset.mutateAsync({ id: a.id, version: a.version, ...quickAssetBody(a, change) })
+          const saved = await replaceAsset.mutateAsync({ id: a.id, version: a.version, ...quickAssetBody(a, change, attrPatch) })
           return { before: assetBodyOf(a), saved }
         },
         done: `${row.tag} ${what}.`,

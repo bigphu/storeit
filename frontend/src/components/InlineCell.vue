@@ -91,11 +91,12 @@ function finish(keep: boolean) {
 </template>
 
 <style scoped>
+/* chiếm hết bề ngang của ô: bút chì luôn ở cuối, vị trí đoán trước được */
 .inline-cell {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.3rem;
-  max-width: 100%;
+  width: 100%;
   min-width: 0;
 }
 .inline-cell.editing {
@@ -103,11 +104,14 @@ function finish(keep: boolean) {
   width: 100%;
 }
 .ic-value {
+  flex: 1 1 auto;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 /* bút chì: ẩn cho đến khi rê chuột lên dòng / thẻ chứa nó, hay focus vào trong */
 .ic-edit {
   flex: none;
+  margin-left: auto;
   display: inline-grid;
   place-items: center;
   width: 1.5rem;

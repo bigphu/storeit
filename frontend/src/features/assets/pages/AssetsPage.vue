@@ -25,7 +25,7 @@ import { mayClose } from '@/lib/confirm'
 import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
-import { formatDate, formatDateTime, fromDateString, toDateString } from '@/lib/dates'
+import { formatDate, formatDateTime, toDateString } from '@/lib/dates'
 import { usePageKeys } from '@/lib/pageKeys'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
 import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
@@ -53,7 +53,7 @@ import {
   toTableSort,
 } from '../listQuery'
 import { useAssetActions } from '../useAssetActions'
-import { type FormValues, formatValue, fromApiValues, toApiValues } from '../values'
+import { attrText, type FormValues, formatValue, formValueFrom, fromApiValues } from '../values'
 
 // typeId (từ /types/:typeId/assets): danh sách của một loại; không có là mọi loại
 const props = defineProps<{ typeId?: string }>()
@@ -295,6 +295,15 @@ const quickDraft = reactive(emptyDraft())
 const quickSaving = ref(false)
 const { data: quickAsset } = useAsset(() => quick.value?.id)
 const { data: quickType } = useAssetType(() => quickAsset.value?.asset_type.id)
+// Ô thuộc tính: kiểu ô nhập theo kiểu dữ liệu; có/không và lựa chọn dùng danh sách thả xuống
+type AttrDef = { data_type: string; options: { id: string; label: string; removed?: boolean }[] }
+const attrKind = (x: AttrDef) => (x.data_type === 'date' ? 'date' : x.data_type === 'select' || x.data_type === 'boolean' ? 'select' : 'text')
+const attrOptions = (x: AttrDef) =>
+  x.data_type === 'boolean'
+    ? [{ label: 'Yes', value: 'true' }, { label: 'No', value: 'false' }]
+    : x.data_type === 'select'
+      ? x.options.filter((o) => !o.removed).map((o) => ({ label: o.label, value: o.id }))
+      : undefined
 // khoá trường thuộc tính: "attr:<key>" để không trùng tên trường của tài sản
 const attrKey = (k: string) => `attr:${k}`
 const quickFields = computed<FieldDef[]>(() => {
@@ -365,22 +374,16 @@ async function saveQuick() {
   const change: Record<string, unknown> = {}
   for (const k of ['name', 'status_id', 'description'] as const) if (k in ch) change[k] = String(ch[k])
   if ('purchase_date' in ch) change.purchase_date = ch.purchase_date ? String(ch.purchase_date) : undefined
-  const attrChanges = Object.keys(ch).filter((k) => k.startsWith('attr:'))
-  if (attrChanges.length) {
-    // dựng lại toàn bộ giá trị thuộc tính: PUT thay toàn bộ
-    const values = fromApiValues(a.attributes, a.attributes)
-    for (const k of attrChanges) {
-      const key = k.slice(5)
-      const def = a.attributes.find((x) => x.key === key)
-      const v = String(ch[k] ?? '')
-      values[key] =
-        def?.data_type === 'number' ? (v === '' ? null : Number(v)) : def?.data_type === 'date' ? fromDateString(v) : v === '' && def?.data_type !== 'text' ? null : v
-    }
-    change.attributes = toApiValues(a.attributes, values)
+  // chỉ gửi thuộc tính vừa sửa; quickSave đọc bản mới nhất và giữ nguyên các thuộc tính khác
+  const attrPatch: FormValues = {}
+  for (const k of Object.keys(ch).filter((x) => x.startsWith('attr:'))) {
+    const key = k.slice(5)
+    const def = a.attributes.find((x) => x.key === key)
+    if (def) attrPatch[key] = formValueFrom(def.data_type, String(ch[k] ?? ''))
   }
   quickSaving.value = true
   try {
-    if (await actions.quickSave(row, change, 'saved')) clearTab(quickDraft, 'overview')
+    if (await actions.quickSave(row, change, 'saved', attrPatch)) clearTab(quickDraft, 'overview')
   } finally {
     quickSaving.value = false
   }
@@ -551,7 +554,18 @@ watch(rows, (list) => {
         :sort-field="`attributes.${attr.key}`"
         sortable
       >
-        <template #body="{ data: a }: { data: AssetListItem }">{{ cell(a, attr.key) }}</template>
+        <template #body="{ data: a }: { data: AssetListItem }">
+          <InlineCell
+            :value="attrText(a.attributes?.find((x) => x.key === attr.key))"
+            :label="attr.label"
+            :editable="canQuick(a)"
+            :kind="attrKind(attr)"
+            :options="attrOptions(attr)"
+            @save="(v) => actions.quickSave(a, {}, `${attr.label} changed`, { [attr.key]: formValueFrom(attr.data_type, v) })"
+          >
+            {{ cell(a, attr.key) }}
+          </InlineCell>
+        </template>
       </Column>
       <Column header="Purchased" sort-field="purchase_date" sortable>
         <template #body="{ data: a }: { data: AssetListItem }">

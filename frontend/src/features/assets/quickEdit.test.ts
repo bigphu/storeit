@@ -17,3 +17,16 @@ describe('quickAssetBody', () => {
     expect(body.attributes).toEqual({ color: 'Xám' })
   })
 })
+
+describe('quickAssetBody with an attribute patch', () => {
+  it('changes one attribute and keeps the others', () => {
+    const b = {
+      ...a,
+      attributes: [
+        { key: 'color', label: 'Màu', data_type: 'text', value: 'Xám' },
+        { key: 'ram', label: 'RAM', data_type: 'number', value: 16 },
+      ],
+    } as unknown as AssetDetail
+    expect(quickAssetBody(b, {}, { ram: 32 }).attributes).toEqual({ color: 'Xám', ram: 32 })
+  })
+})

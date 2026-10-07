@@ -102,3 +102,26 @@ export function assetBodyOf(a: AssetDetail): AssetBody {
     attributes: toApiValues(a.attributes, fromApiValues(a.attributes, a.attributes)),
   }
 }
+
+// attrText: giá trị thuộc tính của dòng danh sách thành chữ để sửa tại chỗ (số, ngày
+// YYYY-MM-DD, 'true'/'false', id option, chữ); trống là ''
+export function attrText(v: AttributeValue | undefined): string {
+  if (!v || v.value === null || v.value === undefined) return ''
+  return String(v.value)
+}
+
+// formValueFrom: chữ vừa sửa thành giá trị form đúng kiểu (toApiValues đổi tiếp sang API)
+export function formValueFrom(type: DataType, text: string): FormValue {
+  const t = text.trim()
+  switch (type) {
+    case 'number':
+      return t === '' ? null : Number(t)
+    case 'date':
+      return fromDateString(t)
+    case 'boolean':
+    case 'select':
+      return t === '' ? null : t
+    default:
+      return text
+  }
+}

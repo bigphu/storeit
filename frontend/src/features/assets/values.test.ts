@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AssetDetail, AttributeValue } from '@/lib/api/types'
-import { assetBodyOf, formatValue, fromApiValues, toApiValues, type FormValues } from './values'
+import { assetBodyOf, attrText, formatValue, formValueFrom, fromApiValues, toApiValues, type FormValues } from './values'
 
 const attrs = [
   { key: 'serial', data_type: 'text' },
@@ -99,5 +99,24 @@ describe('assetBodyOf', () => {
       location_id: 'l1', holder_member_id: undefined, purchase_date: '2026-01-02',
       attributes: { ram: 16, os: 'opt-1' },
     })
+  })
+})
+
+describe('attrText / formValueFrom', () => {
+  it('gives the editable text of a list cell value', () => {
+    expect(attrText({ key: 'ram', label: 'RAM', data_type: 'number', value: 16 } as AttributeValue)).toBe('16')
+    expect(attrText({ key: 'os', label: 'OS', data_type: 'select', value: 'opt-1', option_label: 'Windows' } as AttributeValue)).toBe('opt-1')
+    expect(attrText({ key: 'ok', label: 'OK', data_type: 'boolean', value: false } as AttributeValue)).toBe('false')
+    expect(attrText({ key: 'd', label: 'D', data_type: 'date', value: '2026-03-25' } as AttributeValue)).toBe('2026-03-25')
+    expect(attrText(undefined)).toBe('')
+  })
+  it('turns edited text back into a form value of the right type', () => {
+    expect(formValueFrom('number', '32')).toBe(32)
+    expect(formValueFrom('number', '')).toBeNull()
+    expect(formValueFrom('date', '2026-03-25')).toEqual(new Date(2026, 2, 25))
+    expect(formValueFrom('boolean', 'true')).toBe('true')
+    expect(formValueFrom('boolean', '')).toBeNull()
+    expect(formValueFrom('select', 'opt-2')).toBe('opt-2')
+    expect(formValueFrom('text', 'Xám')).toBe('Xám')
   })
 })
