@@ -96,6 +96,9 @@ function submit() {
   gap: 0.75rem;
   padding: 1rem 1.1rem 1rem 1.3rem;
   background: var(--app-soft);
+  /* dải nền theo góc bo của hộp thoại, không tràn ra ngoài góc */
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
 }
 .form-dialog .fd-icon {
   color: var(--app-brand);
