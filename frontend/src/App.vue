@@ -1,24 +1,46 @@
 <script setup lang="ts">
-import Button from 'primevue/button'
 import ConfirmDialog from 'primevue/confirmdialog'
 import Toast, { type ToastMessageOptions } from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
-import { onUnmounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import NoticeCard from '@/components/NoticeCard.vue'
 import { useSession } from '@/lib/auth/session'
+import { isUndoShortcut, latestUndo, type Notice, onNotice } from '@/lib/notify'
 import { usePreferences } from '@/lib/preferences'
-import { type NoticeAction, onNotice } from '@/lib/notify'
 
-// Thông báo có thể kèm một nút (vd "What’s inside"); nút chạy rồi đóng thông báo
-type NoticeMessage = ToastMessageOptions & { action?: NoticeAction }
+// Thông báo: thẻ riêng (NoticeCard) trong Toast của PrimeVue; tối đa 3, mới nhất ở dưới.
+// Toast không tự đóng (không có life): NoticeCard tự đếm giờ rồi gọi closeCallback
+const MAX_NOTICES = 3
+type NoticeMessage = ToastMessageOptions & { notice: Notice }
 const toast = useToast()
-const off = onNotice((n) => toast.add({ severity: n.severity, summary: n.summary, life: n.action ? 8000 : 5000, action: n.action } as NoticeMessage))
-const ICONS: Record<string, string> = { success: 'pi pi-check-circle', info: 'pi pi-info-circle', warn: 'pi pi-exclamation-triangle', error: 'pi pi-times-circle' }
-function runAction(m: NoticeMessage) {
-  m.action?.run()
-  toast.remove(m)
+const shown: NoticeMessage[] = []
+const off = onNotice((n) => {
+  const m: NoticeMessage = { severity: n.severity, notice: n }
+  shown.push(m)
+  while (shown.length > MAX_NOTICES) toast.remove(shown.shift()!)
+  toast.add(m)
+})
+// Toast gắn id vào message khi thêm (kiểu không khai báo id); so theo id vì Toast trả lại
+// bản proxy
+const idOf = (m: ToastMessageOptions) => (m as { id?: unknown }).id
+function forget(e: { message: ToastMessageOptions }) {
+  const i = shown.findIndex((m) => idOf(m) === idOf(e.message))
+  if (i >= 0) shown.splice(i, 1)
 }
-onUnmounted(off)
+// Ctrl/⌘ Z: Undo của thông báo mới nhất còn hiện (không khi đang gõ)
+function onKey(e: KeyboardEvent) {
+  if (!isUndoShortcut(e)) return
+  const undo = latestUndo()
+  if (!undo) return
+  e.preventDefault()
+  undo()
+}
+onMounted(() => window.addEventListener('keydown', onKey))
+onUnmounted(() => {
+  off()
+  window.removeEventListener('keydown', onKey)
+})
 
 // Phiên hết hạn (refresh hỏng hoặc tab khác đăng xuất): về trang đăng nhập
 const router = useRouter()
@@ -34,33 +56,25 @@ useSession().setOnExpired(() => {
 
 <template>
   <RouterView />
-  <Toast>
-    <template #message="{ message }">
-      <i :class="['notice-icon', ICONS[message.severity ?? 'info']]" aria-hidden="true" />
-      <div class="notice-text">
-        <span class="p-toast-summary">{{ message.summary }}</span>
-        <Button v-if="(message as NoticeMessage).action" :label="(message as NoticeMessage).action!.label" text size="small" class="notice-action" @click="runAction(message as NoticeMessage)" />
-      </div>
+  <Toast position="bottom-right" :pt="{ root: { class: 'app-notices' } }" @close="forget">
+    <template #container="{ message, closeCallback }">
+      <NoticeCard :notice="(message as NoticeMessage).notice" @close="closeCallback" />
     </template>
   </Toast>
   <ConfirmDialog />
 </template>
 
-<style scoped>
-.notice-icon {
-  font-size: 1.15rem;
-  margin-top: 0.1rem;
+<style>
+/* Toast của PrimeVue chỉ giữ chỗ và vị trí; thẻ do NoticeCard vẽ */
+.app-notices {
+  width: auto;
+  max-width: calc(100vw - 32px);
 }
-.notice-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.2rem;
-  flex: 1;
-  min-width: 0;
-}
-.notice-action {
-  padding: 0;
-  font-weight: 600;
+.app-notices .p-toast-message {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  margin: 0 0 0.5rem;
 }
 </style>
