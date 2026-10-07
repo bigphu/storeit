@@ -110,8 +110,10 @@ function set(i: number, patch: Partial<EditorColumn>) {
 .col-editor :deep(tr:has(.label:focus)) > td {
   background: var(--p-highlight-background);
 }
-.col-editor :deep(tr:has(.label:focus-visible)) > td:first-child {
-  box-shadow: inset 2px 0 0 var(--p-primary-color);
+.label:focus-visible {
+  outline: 2px solid var(--app-brand);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 .label.off {
   opacity: 0.5;

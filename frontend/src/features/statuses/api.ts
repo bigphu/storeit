@@ -3,6 +3,7 @@ import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 import { inventoryApi } from '@/lib/api/client'
 import type { Status, StatusKind } from '@/lib/api/types'
 import { unwrap } from '@/lib/errors'
+import { statusKindTone, type Tone } from '@/lib/tones'
 
 export const statusKeys = {
   all: ['statuses'] as const,
@@ -12,12 +13,8 @@ export const statusKeys = {
 export const statusKinds: StatusKind[] = ['available', 'in_use', 'unavailable', 'retired']
 
 // Màu tag theo kind
-export function kindSeverity(k: StatusKind): 'success' | 'info' | 'warn' | 'secondary' {
-  return { available: 'success', in_use: 'info', unavailable: 'warn', retired: 'secondary' }[k] as
-    | 'success'
-    | 'info'
-    | 'warn'
-    | 'secondary'
+export function kindSeverity(k: StatusKind): Tone {
+  return statusKindTone(k)
 }
 
 // withCounts: kèm asset_count (số tài sản của mỗi status, kể cả đã retire) cho trang status

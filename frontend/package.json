@@ -13,6 +13,9 @@
     "gen:api": "openapi-typescript ../backend/internal/identity/handler/openapi.yaml -o src/lib/api/identity.d.ts && openapi-typescript ../backend/internal/inventory/handler/openapi.yaml -o src/lib/api/inventory.d.ts"
   },
   "dependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource/be-vietnam-pro": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
     "@primeuix/themes": "^2.0.3",
     "@tanstack/vue-query": "^5.104.1",
     "openapi-fetch": "^0.17.0",

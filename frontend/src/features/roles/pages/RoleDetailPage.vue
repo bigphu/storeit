@@ -413,9 +413,9 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
 .via i {
   font-size: 0.75rem;
 }
-/* dòng có thay đổi chưa lưu: vạch nhấn bên trái */
-:deep(tr.changed > td:first-child) {
-  box-shadow: var(--app-bar-left);
+/* dòng có thay đổi chưa lưu: nền cam nhạt (không vạch một bên) */
+:deep(tr.changed > td) {
+  background: var(--app-warn-soft);
 }
 .end {
   margin-left: auto;
