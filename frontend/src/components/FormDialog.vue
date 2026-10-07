@@ -72,7 +72,7 @@ function submit() {
     </component>
     <template #footer>
       <div class="fd-hint"><slot name="hint" /></div>
-      <slot name="footer">
+      <slot name="footer" :close="requestClose">
         <Button :label="action ? 'Cancel' : 'Close'" text severity="secondary" @click="requestClose" />
         <Button
           v-if="action"

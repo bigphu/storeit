@@ -79,16 +79,16 @@ async function saveRename(p: ExportProfile) {
     cancelRename()
     return
   }
-  const ok = await runAction({
+  // lỗi (trùng tên, đã bị sửa): giữ ô nhập để sửa tiếp
+  await runAction({
     run: () => update.mutateAsync({ id: p.id, version: p.version, name }),
     done: `${p.name} renamed to ${name}.`,
     failed: `Couldn't rename ${p.name}.`,
     undo: (next) => update.mutateAsync({ id: p.id, version: next.version, name: p.name }),
     undone: `Name put back to ${p.name}.`,
     undoFailed: `Couldn't put the name back. It stays ${name}.`,
+    after: () => (renaming.value = null),
   })
-  // lỗi (trùng tên, đã bị sửa): giữ ô nhập để sửa tiếp
-  if (ok) renaming.value = null
 }
 
 function toggleShare(p: ExportProfile) {

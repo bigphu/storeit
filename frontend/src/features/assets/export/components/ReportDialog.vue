@@ -360,13 +360,14 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
         </div>
       </div>
     </div>
-    <template #footer>
+    <template #footer="{ close }">
       <span v-tooltip.top="'Built on the server with the same filters as the list. Up to 50,000 rows.'" class="foot-note">
         <i class="pi pi-table" aria-hidden="true" />
         <span><b>{{ scope.count }}</b> {{ scope.count === 1 ? 'asset' : 'assets' }} · {{ scope.label }}</span>
         <span class="muted">· {{ scope.selection ? 'only the selected assets' : 'uses the list’s current filters' }}</span>
       </span>
-      <Button label="Cancel" text severity="secondary" @click="visible = false" />
+      <!-- qua FormDialog: còn thay đổi chưa lưu thì hỏi như ✕ và Esc -->
+      <Button label="Cancel" text severity="secondary" @click="close" />
       <Button label="Download .xlsx" icon="pi pi-download" :loading="running" :disabled="!current.columns.length && !(current.sheets === 'per_type' && current.each_type_attrs)" @click="download" />
     </template>
   </FormDialog>

@@ -76,15 +76,15 @@ const peopleLabel = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`
 const setPerms = useSetRolePermissions()
 async function savePermissions() {
   const before = [...saved.value]
-  const ok = await runAction({
+  await runAction({
     run: () => setPerms.mutateAsync({ id: props.id, permissions: current.value }),
     done: `Permissions of ${role.value?.name ?? 'the role'} saved.`,
     failed: "Couldn't save the permissions.",
     undo: () => setPerms.mutateAsync({ id: props.id, permissions: before }),
     undone: 'Permissions put back.',
     undoFailed: "Couldn't put the permissions back. The new permissions stay.",
+    after: () => (draft.value = null),
   })
-  if (ok) draft.value = null
 }
 
 // Sửa tên, mô tả (role hệ thống giữ tên); xoá role tự tạo
@@ -121,15 +121,15 @@ async function deleteRole() {
     return
   }
   const name = role.value?.name ?? 'The role'
-  const ok = await runAction({
+  await runAction({
     run: () => remove.mutateAsync(props.id),
     done: `${name} deleted.`,
     failed: `Couldn't delete ${name}.`,
     undo: () => restoreRole.mutateAsync(props.id),
     undone: `${name} restored.`,
     undoFailed: `Couldn't restore ${name}. It stays deleted.`,
+    after: () => router.push('/roles'),
   })
-  if (ok) await router.push('/roles')
 }
 
 // People: tài khoản giữ role (GET /accounts?role_id=), tải khi mở tab
@@ -166,18 +166,18 @@ async function addPerson() {
   if (!a) return
   const before = a.roles.map((r) => r.id)
   const name = role.value?.name
-  const ok = await runAction({
+  await runAction({
     run: () => assign.mutateAsync({ id: a.id, roleIds: [...before, props.id] }),
     done: `${a.name} now has ${name}.`,
     failed: `Couldn't give ${a.name} ${name}.`,
     undo: () => assign.mutateAsync({ id: a.id, roleIds: before }),
     undone: `${a.name} removed from ${name} again.`,
     undoFailed: `Couldn't remove ${a.name} from ${name} again.`,
+    after: () => {
+      adding.value = false
+      addId.value = ''
+    },
   })
-  if (ok) {
-    adding.value = false
-    addId.value = ''
-  }
 }
 
 const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.value?.name ?? '…' }])

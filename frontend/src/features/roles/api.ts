@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 import { identityApi } from '@/lib/api/client'
 import { unwrap } from '@/lib/errors'
@@ -63,8 +63,20 @@ export function useSetRolePermissions() {
   )
 }
 
+// Sau khi xoá role: bỏ hẳn query của role đó (trang của nó sắp rời đi; nạp lại là 404 và
+// hiện lỗi), chỉ làm mới danh sách
+export function forgetDeletedRole(qc: QueryClient, id: string) {
+  qc.removeQueries({ queryKey: roleKeys.one(id), exact: true })
+  return qc.invalidateQueries({ queryKey: roleKeys.all, exact: true })
+}
+
 export function useDeleteRole() {
-  return useRoleMutation((id: string) => unwrap(identityApi.DELETE('/roles/{roleID}', { params: { path: { roleID: id } } })), false)
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => unwrap(identityApi.DELETE('/roles/{roleID}', { params: { path: { roleID: id } } })),
+    meta: { toast: false },
+    onSuccess: (_r, id) => forgetDeletedRole(qc, id),
+  })
 }
 
 // Undo của xoá role (xoá mềm)

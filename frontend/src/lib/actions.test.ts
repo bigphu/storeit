@@ -56,6 +56,18 @@ describe('runAction', () => {
   })
 })
 
+describe('runAction after', () => {
+  it('runs the follow-up after success, also when it succeeds on Retry', async () => {
+    const after = vi.fn()
+    const run = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce('r')
+    expect(await runAction({ run, done: 'Deleted.', after })).toBe(false)
+    expect(after).not.toHaveBeenCalled()
+    seen[0].retry!()
+    await flush()
+    expect(after).toHaveBeenCalledWith('r')
+  })
+})
+
 describe('announce', () => {
   it('runs the undo once even if triggered twice', async () => {
     const undo = vi.fn().mockResolvedValue(undefined)

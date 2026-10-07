@@ -18,6 +18,8 @@ export interface ActionOptions<T> extends UndoOptions<T> {
   run: () => Promise<T>
   // "Couldn't archive Laptop."; không có thì dùng câu của lỗi
   failed?: string
+  // việc tiếp theo khi chạy được (rời trang, đóng hộp thoại); chạy cả khi thành công nhờ Retry
+  after?: (result: T) => unknown
 }
 
 // announce: báo thành công (kèm Undo) cho việc đã chạy xong ở chỗ khác (form tự báo lỗi)
@@ -52,5 +54,6 @@ export async function runAction<T>(o: ActionOptions<T>): Promise<boolean> {
     return false
   }
   announce(result, o)
+  await o.after?.(result)
   return true
 }

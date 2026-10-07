@@ -97,15 +97,15 @@ const groups = computed(() => effective(roles.data.value ?? [], saved.value, cur
 const assign = useAssignRoles()
 async function saveRoles() {
   const before = [...saved.value]
-  const ok = await runAction({
+  await runAction({
     run: () => assign.mutateAsync({ id: props.id, roleIds: current.value }),
     done: `Roles of ${account.value?.name ?? 'the account'} saved.`,
     failed: "Couldn't save the roles.",
     undo: () => assign.mutateAsync({ id: props.id, roleIds: before }),
     undone: 'Roles put back.',
     undoFailed: "Couldn't put the roles back. The new roles stay.",
+    after: () => (draft.value = null),
   })
-  if (ok) draft.value = null
 }
 
 const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: account.value?.name ?? '…' }])
