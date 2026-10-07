@@ -2,9 +2,7 @@
 import Button from 'primevue/button'
 import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
-import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
-import Message from 'primevue/message'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
@@ -13,12 +11,13 @@ import { useRouter } from 'vue-router'
 import AddCard from '@/components/AddCard.vue'
 import CardGrid from '@/components/CardGrid.vue'
 import EntityCard from '@/components/EntityCard.vue'
+import FormDialog from '@/components/FormDialog.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
 import type { Role } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
-import { useFormErrors } from '@/lib/forms'
+import { useDirty, useFormErrors } from '@/lib/forms'
 import { useUrlState } from '@/lib/urlState'
 import { useCreateRole, useRoles } from '../api'
 import { ALL_PERMS, label, moduleOf } from '../catalog'
@@ -54,6 +53,7 @@ const description = ref('')
 const copyFrom = ref('')
 const errors = useFormErrors()
 const create = useCreateRole()
+const form = useDirty(() => ({ n: name.value.trim(), d: description.value.trim(), c: copyFrom.value }))
 const copyOptions = computed(() => [
   { label: 'No permissions', value: '' },
   ...(roles.value ?? [])
@@ -63,6 +63,7 @@ const copyOptions = computed(() => [
 function openCreate() {
   name.value = description.value = copyFrom.value = ''
   errors.clear()
+  form.reset()
   creating.value = true
 }
 async function submit() {
@@ -139,29 +140,31 @@ async function submit() {
       </Column>
     </DataTable>
 
-    <Dialog v-model:visible="creating" modal header="New role" :style="{ width: '32rem' }">
-      <form class="form" @submit.prevent="submit">
-        <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
-        <div class="field">
-          <label for="role-name">Name</label>
-          <InputText id="role-name" v-model="name" required maxlength="100" autofocus />
-          <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
-        </div>
-        <div class="field">
-          <label for="role-desc">Description</label>
-          <Textarea id="role-desc" v-model="description" rows="3" />
-        </div>
-        <div class="field">
-          <label for="role-copy">Start from</label>
-          <Select v-model="copyFrom" input-id="role-copy" :options="copyOptions" option-label="label" option-value="value" />
-          <small>You can change the permissions on the next page.</small>
-        </div>
-        <div class="actions">
-          <Button type="submit" label="Create role" :loading="create.isPending.value" />
-          <Button label="Cancel" severity="secondary" text @click="creating = false" />
-        </div>
-      </form>
-    </Dialog>
+    <FormDialog
+      v-model:visible="creating"
+      icon="shield"
+      title="New role"
+      action="Create role"
+      :busy="create.isPending.value"
+      :error="errors.general.value"
+      :dirty="form.dirty.value"
+      @submit="submit"
+    >
+      <div class="field">
+        <label for="role-name">Name</label>
+        <InputText id="role-name" v-model="name" required maxlength="100" autofocus />
+        <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
+      </div>
+      <div class="field">
+        <label for="role-desc">Description</label>
+        <Textarea id="role-desc" v-model="description" rows="3" />
+      </div>
+      <div class="field">
+        <label for="role-copy">Start from</label>
+        <Select v-model="copyFrom" input-id="role-copy" :options="copyOptions" option-label="label" option-value="value" />
+        <small>You can change the permissions on the next page.</small>
+      </div>
+    </FormDialog>
   </section>
 </template>
 

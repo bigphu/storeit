@@ -4,7 +4,6 @@ import Checkbox from 'primevue/checkbox'
 import Chip from 'primevue/chip'
 import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
-import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Select from 'primevue/select'
@@ -13,13 +12,13 @@ import TabList from 'primevue/tablist'
 import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
-import { useConfirm } from 'primevue/useconfirm'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb from '@/components/AppBreadcrumb.vue'
 import DetailHeader from '@/components/DetailHeader.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import FormDialog from '@/components/FormDialog.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import IconAction from '@/components/IconAction.vue'
 import PersonCell from '@/components/PersonCell.vue'
@@ -29,12 +28,13 @@ import { statusSeverity } from '@/features/accounts/status'
 import type { AccountListItem } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
-import { useFormErrors } from '@/lib/forms'
+import { runAction } from '@/lib/actions'
+import { useDirty, useFormErrors } from '@/lib/forms'
 import { notify } from '@/lib/notify'
 import { onRowClick } from '@/lib/tableRows'
 import { openLocation } from '@/lib/navigation'
 import { useUrlState } from '@/lib/urlState'
-import { useDeleteRole, useRole, useSetRolePermissions, useUpdateRole } from '../api'
+import { useDeleteRole, useRestoreRole, useRole, useSetRolePermissions, useUpdateRole } from '../api'
 import { ADMINISTRATOR_ROLE_ID, ALL_PERMS, AREAS, type Area, label, toggle } from '../catalog'
 
 // Trang vai trò: thẻ đầu trang, rồi Permissions (ma trận khu vực × Xem / Quản lý) | People
@@ -42,7 +42,6 @@ const props = defineProps<{ id: string }>()
 
 const session = useSession()
 const router = useRouter()
-const confirm = useConfirm()
 const canManage = computed(() => session.can(Perm.RoleManage))
 const canSeePeople = computed(() => session.can(Perm.AccountRead))
 const canAssign = computed(() => session.can(Perm.AccountManage))
@@ -76,13 +75,16 @@ const peopleLabel = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`
 
 const setPerms = useSetRolePermissions()
 async function savePermissions() {
-  try {
-    await setPerms.mutateAsync({ id: props.id, permissions: current.value })
-    draft.value = null
-    notify.success('Permissions saved.')
-  } catch {
-    // lỗi đã hiện qua toast của mutation
-  }
+  const before = [...saved.value]
+  const ok = await runAction({
+    run: () => setPerms.mutateAsync({ id: props.id, permissions: current.value }),
+    done: `Permissions of ${role.value?.name ?? 'the role'} saved.`,
+    failed: "Couldn't save the permissions.",
+    undo: () => setPerms.mutateAsync({ id: props.id, permissions: before }),
+    undone: 'Permissions put back.',
+    undoFailed: "Couldn't put the permissions back. The new permissions stay.",
+  })
+  if (ok) draft.value = null
 }
 
 // Sửa tên, mô tả (role hệ thống giữ tên); xoá role tự tạo
@@ -91,10 +93,12 @@ const name = ref('')
 const description = ref('')
 const errors = useFormErrors()
 const updateRole = useUpdateRole()
+const editForm = useDirty(() => ({ n: name.value.trim(), d: description.value.trim() }))
 function openEdit() {
   name.value = role.value?.name ?? ''
   description.value = role.value?.description ?? ''
   errors.clear()
+  editForm.reset()
   editing.value = true
 }
 async function saveDetails() {
@@ -109,27 +113,23 @@ async function saveDetails() {
   }
 }
 const remove = useDeleteRole()
-function askDelete() {
-  // role còn người giữ thì API trả 409: nói trước thay vì hỏi rồi báo lỗi
+const restoreRole = useRestoreRole()
+async function deleteRole() {
+  // role còn người giữ thì API trả 409: nói trước
   if (people.value) {
     notify.info(`${role.value?.name} is still held by ${peopleLabel(people.value)}. Remove them from the role first.`)
     return
   }
-  confirm.require({
-    header: 'Delete role',
-    message: `Delete the role ${role.value?.name}? This can't be undone.`,
-    acceptLabel: 'Delete',
-    rejectLabel: 'Cancel',
-    acceptProps: { severity: 'danger' },
-    accept: () =>
-      remove
-        .mutateAsync(props.id)
-        .then(() => {
-          notify.success('Role deleted.')
-          return router.push('/roles')
-        })
-        .catch(() => {}),
+  const name = role.value?.name ?? 'The role'
+  const ok = await runAction({
+    run: () => remove.mutateAsync(props.id),
+    done: `${name} deleted.`,
+    failed: `Couldn't delete ${name}.`,
+    undo: () => restoreRole.mutateAsync(props.id),
+    undone: `${name} restored.`,
+    undoFailed: `Couldn't restore ${name}. It stays deleted.`,
   })
+  if (ok) await router.push('/roles')
 }
 
 // People: tài khoản giữ role (GET /accounts?role_id=), tải khi mở tab
@@ -140,18 +140,16 @@ const { data: members, isFetching: membersLoading } = useAccounts(
 )
 const isSelf = (a: AccountListItem) => a.id === session.me?.account.id
 const assign = useAssignRoles()
-function askRemove(a: AccountListItem) {
-  confirm.require({
-    header: 'Remove from role',
-    message: `Remove ${a.name} from ${role.value?.name}? They lose what only this role gave them.`,
-    acceptLabel: 'Remove',
-    rejectLabel: 'Cancel',
-    acceptProps: { severity: 'danger' },
-    accept: () =>
-      assign
-        .mutateAsync({ id: a.id, roleIds: a.roles.map((r) => r.id).filter((id) => id !== props.id) })
-        .then(() => notify.success(`${a.name} removed from ${role.value?.name}.`))
-        .catch(() => {}),
+function removePerson(a: AccountListItem) {
+  const before = a.roles.map((r) => r.id)
+  const name = role.value?.name
+  return runAction({
+    run: () => assign.mutateAsync({ id: a.id, roleIds: before.filter((id) => id !== props.id) }),
+    done: `${a.name} removed from ${name}.`,
+    failed: `Couldn't remove ${a.name} from ${name}.`,
+    undo: () => assign.mutateAsync({ id: a.id, roleIds: before }),
+    undone: `${a.name} has ${name} again.`,
+    undoFailed: `Couldn't give ${a.name} ${name} again.`,
   })
 }
 const openPerson = onRowClick((a: AccountListItem, e: MouseEvent) => openLocation(router, `/accounts/${a.id}`, e))
@@ -166,13 +164,19 @@ const candidates = computed(() =>
 async function addPerson() {
   const a = candidates.value.find((x) => x.id === addId.value)
   if (!a) return
-  try {
-    await assign.mutateAsync({ id: a.id, roleIds: [...a.roles.map((r) => r.id), props.id] })
-    notify.success(`${a.name} now has ${role.value?.name}.`)
+  const before = a.roles.map((r) => r.id)
+  const name = role.value?.name
+  const ok = await runAction({
+    run: () => assign.mutateAsync({ id: a.id, roleIds: [...before, props.id] }),
+    done: `${a.name} now has ${name}.`,
+    failed: `Couldn't give ${a.name} ${name}.`,
+    undo: () => assign.mutateAsync({ id: a.id, roleIds: before }),
+    undone: `${a.name} removed from ${name} again.`,
+    undoFailed: `Couldn't remove ${a.name} from ${name} again.`,
+  })
+  if (ok) {
     adding.value = false
     addId.value = ''
-  } catch {
-    // lỗi đã hiện qua toast của mutation
   }
 }
 
@@ -195,7 +199,7 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
       <div class="meta">{{ role.permissions.length }} of {{ ALL_PERMS.length }} permissions · {{ peopleLabel(people) }}</div>
       <template v-if="canManage" #actions>
         <Button label="Edit details" icon="pi pi-pencil" severity="secondary" outlined @click="openEdit" />
-        <Button v-if="!role.is_system" label="Delete" icon="pi pi-trash" severity="danger" outlined @click="askDelete" />
+        <Button v-if="!role.is_system" label="Delete" icon="pi pi-trash" severity="danger" outlined @click="deleteRole" />
       </template>
     </DetailHeader>
 
@@ -301,7 +305,7 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
                 danger
                 :disabled="isSelf(a) && role!.id === ADMINISTRATOR_ROLE_ID"
                 reason="You can’t remove your own Administrator role"
-                @click="askRemove(a)"
+                @click="removePerson(a)"
               />
             </div>
           </template>
@@ -313,55 +317,61 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
       </DataTable>
     </template>
 
-    <Dialog v-model:visible="editing" modal header="Edit role" :style="{ width: '32rem' }">
-      <form class="form" @submit.prevent="saveDetails">
-        <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
-        <div class="field">
-          <label for="role-name">Name</label>
-          <InputText id="role-name" v-model="name" :disabled="role.is_system" required maxlength="100" />
-          <small v-if="role.is_system">Built-in roles keep their name.</small>
-          <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
-        </div>
-        <div class="field">
-          <label for="role-desc">Description</label>
-          <Textarea id="role-desc" v-model="description" rows="3" />
-        </div>
-        <div class="actions">
-          <Button type="submit" label="Save" :loading="updateRole.isPending.value" />
-          <Button label="Cancel" severity="secondary" text @click="editing = false" />
-        </div>
-      </form>
-    </Dialog>
+    <FormDialog
+      v-model:visible="editing"
+      icon="shield"
+      title="Edit role"
+      action="Save role"
+      :busy="updateRole.isPending.value"
+      :error="errors.general.value"
+      :dirty="editForm.dirty.value"
+      @submit="saveDetails"
+    >
+      <div class="field">
+        <label for="role-name">Name</label>
+        <InputText id="role-name" v-model="name" :disabled="role.is_system" required maxlength="100" />
+        <small v-if="role.is_system">Built-in roles keep their name.</small>
+        <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
+      </div>
+      <div class="field">
+        <label for="role-desc">Description</label>
+        <Textarea id="role-desc" v-model="description" rows="3" />
+      </div>
+    </FormDialog>
 
-    <Dialog v-model:visible="adding" modal :header="`Add people to ${role.name}`" :style="{ width: '30rem' }">
-      <form class="form" @submit.prevent="addPerson">
-        <div class="field">
-          <label for="add-person">Account</label>
-          <Select
-            v-model="addId"
-            input-id="add-person"
-            :options="candidates"
-            option-label="name"
-            option-value="id"
-            filter
-            :filter-fields="['name', 'email']"
-            placeholder="Choose someone"
-            empty-message="Everyone already has this role."
-          >
-            <template #option="{ option }">
-              <div>
-                <div>{{ option.name }}</div>
-                <small class="muted">{{ option.email }}</small>
-              </div>
-            </template>
-          </Select>
-        </div>
-        <div class="actions">
-          <Button type="submit" label="Add" :disabled="!addId" :loading="assign.isPending.value" />
-          <Button label="Cancel" severity="secondary" text @click="adding = false" />
-        </div>
-      </form>
-    </Dialog>
+    <FormDialog
+      v-model:visible="adding"
+      size="s"
+      icon="user-plus"
+      :title="`Add people to ${role.name}`"
+      action="Add"
+      :disabled="!addId"
+      :busy="assign.isPending.value"
+      :dirty="addId !== ''"
+      @submit="addPerson"
+    >
+      <div class="field">
+        <label for="add-person">Account</label>
+        <Select
+          v-model="addId"
+          input-id="add-person"
+          :options="candidates"
+          option-label="name"
+          option-value="id"
+          filter
+          :filter-fields="['name', 'email']"
+          placeholder="Choose someone"
+          empty-message="Everyone already has this role."
+        >
+          <template #option="{ option }">
+            <div>
+              <div>{{ option.name }}</div>
+              <small class="muted">{{ option.email }}</small>
+            </div>
+          </template>
+        </Select>
+      </div>
+    </FormDialog>
   </section>
 </template>
 

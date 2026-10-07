@@ -56,13 +56,21 @@ export function useUpdateRole() {
 }
 
 export function useSetRolePermissions() {
-  return useRoleMutation(({ id, permissions }: { id: string; permissions: string[] }) =>
-    unwrap(identityApi.PUT('/roles/{roleID}/permissions', { params: { path: { roleID: id } }, body: { permissions } })),
+  return useRoleMutation(
+    ({ id, permissions }: { id: string; permissions: string[] }) =>
+      unwrap(identityApi.PUT('/roles/{roleID}/permissions', { params: { path: { roleID: id } }, body: { permissions } })),
+    false,
   )
 }
 
 export function useDeleteRole() {
-  return useRoleMutation((id: string) =>
-    unwrap(identityApi.DELETE('/roles/{roleID}', { params: { path: { roleID: id } } })),
+  return useRoleMutation((id: string) => unwrap(identityApi.DELETE('/roles/{roleID}', { params: { path: { roleID: id } } })), false)
+}
+
+// Undo của xoá role (xoá mềm)
+export function useRestoreRole() {
+  return useRoleMutation(
+    (id: string) => unwrap(identityApi.POST('/roles/{roleID}/restore', { params: { path: { roleID: id } } })),
+    false,
   )
 }
