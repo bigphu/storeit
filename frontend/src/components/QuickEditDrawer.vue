@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Drawer from 'primevue/drawer'
-import { onMounted, onUnmounted } from 'vue'
+import { onActivated, onDeactivated, onMounted, onUnmounted } from 'vue'
+import { isPageClickOutside } from '@/lib/clickAway'
 import { closeGuard } from '@/lib/confirm'
 import AppIcon from './AppIcon.vue'
 import type { IconName } from './icons'
@@ -38,8 +39,24 @@ function onKey(e: KeyboardEvent) {
     emit('prev')
   }
 }
-onMounted(() => window.addEventListener('keydown', onKey))
-onUnmounted(() => window.removeEventListener('keydown', onKey))
+// Bấm ra ngoài: tự nghe thay cho dismissable của Drawer, vì Drawer coi cả việc chọn trong
+// danh sách thả xuống (dựng ngoài ngăn kéo) là bấm ra ngoài
+function onClickAway(e: MouseEvent) {
+  if (visible.value && isPageClickOutside(e.target)) void requestClose()
+}
+// Tab bị ẩn (KeepAlive) thì thôi nghe phím và chuột, khỏi xử lý thay tab đang mở
+function listen() {
+  window.addEventListener('keydown', onKey)
+  document.addEventListener('click', onClickAway, true)
+}
+function unlisten() {
+  window.removeEventListener('keydown', onKey)
+  document.removeEventListener('click', onClickAway, true)
+}
+onMounted(listen)
+onActivated(listen)
+onDeactivated(unlisten)
+onUnmounted(unlisten)
 </script>
 
 <template>
@@ -47,6 +64,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     :visible="visible"
     position="right"
     :modal="false"
+    :dismissable="false"
     :show-close-icon="false"
     :pt="{
       root: { class: 'quick-edit', style: 'width: min(26rem, 100vw)' },
