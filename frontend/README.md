@@ -138,6 +138,7 @@ Spec: `docs/superpowers/specs/2026-10-07-ui-patterns-design.md`.
 - **Ask only before the irreversible:**
   - `confirmAction({ title, body, impact?, action, danger, icon })` from `lib/confirm.ts`.
   - Red (`danger`) only for discarding; blue for sends and sign-outs.
+  - One exception: changing who sees an export profile (Share / Make private, or Visibility in quick edit) asks first, then still offers Undo.
 - **Toasts:**
   - `notify.success(msg, { undo?, action? })` and `notify.error(summary, { detail?, retry? })`;
   - success shows 4 s, or 8 s with Undo or an action; errors stay until closed;

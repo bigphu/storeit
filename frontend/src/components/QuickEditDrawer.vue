@@ -14,7 +14,10 @@ const visible = defineModel<boolean>('visible', { required: true })
 const emit = defineEmits<{ save: []; prev: []; next: []; openPage: [] }>()
 
 const mayClose = closeGuard()
+// đang lưu (cả lúc đang hỏi xác nhận trước khi lưu) thì không đóng: Esc trên hộp xác nhận
+// cũng tới ngăn kéo
 async function requestClose() {
+  if (props.busy) return
   if (await mayClose(props.dirty)) visible.value = false
 }
 function onKey(e: KeyboardEvent) {
