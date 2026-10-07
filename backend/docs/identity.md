@@ -185,7 +185,7 @@ like disable, you must hold all of that account's permissions (403 otherwise).
   lock the Administrator role row first, so two admins acting on each other at once
   cannot both pass.
 - A role still assigned to an account cannot be deleted (409).
-- Deleting is a soft delete (`deleted_at`, migration `00006`): the role keeps its
+- Deleting is a soft delete (`deleted_at`): the role keeps its
   permissions, is hidden from `GET /roles` and `GET /roles/{id}` (404), and can't be
   assigned (422 `/errors/unknown-roles`). Role names are unique among roles that aren't
   deleted, so the name can be reused. `POST /roles/{roleID}/restore` undoes the delete

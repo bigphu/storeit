@@ -234,7 +234,7 @@ is visible to its owner and, when shared, to everyone who can export; someone el
 profile is 404 `/errors/export-profile-not-found`. Edit and delete: the owner, or for a shared
 profile also anyone with `inventory.export_profile.manage`; others get 403
 `/errors/export-profile-forbidden`. Responses carry `owner {id, name}` and `can_edit`
-for the caller. Deleting is a soft delete (`deleted_at`, migration `00006`): a deleted profile
+for the caller. Deleting is a soft delete (`deleted_at`): a deleted profile
 is 404 everywhere, for everyone (including exports by `profile_id`), and names are unique only
 among profiles that aren't deleted. Restore follows the delete rules (someone else's private
 profile is 404, a shared one without `inventory.export_profile.manage` is 403) and is 409

@@ -3159,7 +3159,7 @@ Expected: pass. Nothing in the backend changed; this confirms the generated type
 
 - [ ] **Step 4: Browser walkthrough**
 
-This needs migration `00006` applied on the dev database (the user runs `docker compose run --rm migrate`) and the dev app running. With the seeded data, check:
+This needs the dev app running on a database with the soft-delete columns (migrations 00002 and 00005 now create them; the dev database was reset and re-seeded on 2026-10-07). With the seeded data, check:
 - **Assets:**
   - Retire an asset, then Undo.
   - Restore an asset, then Undo; it is retired again with its old reason.
