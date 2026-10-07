@@ -20,6 +20,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import InlineCell from '@/components/InlineCell.vue'
 import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import PersonCell from '@/components/PersonCell.vue'
+import YouTag from '@/components/YouTag.vue'
 import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
 import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
 import { useRoles } from '@/features/roles/api'
@@ -235,10 +236,11 @@ watch(rows, (list) => {
     >
       <Column header="Person">
         <template #body="{ data: a }: { data: AccountListItem }">
-          <PersonCell :name="a.name" :email="a.email" :to="`/accounts/${a.id}`" :muted="a.status === 'disabled'" :you="actions.isSelf(a)">
+          <PersonCell :name="a.name" :email="a.email" :to="`/accounts/${a.id}`" :muted="a.status === 'disabled'">
+            <!-- tên và nhãn "You" trong ô sửa tại chỗ: bút chì ở cuối cột -->
             <template #name>
-              <InlineCell :value="a.name" label="name" :editable="canManage" class="person-name" @save="(v) => rename(a, v)">
-                {{ a.name }}
+              <InlineCell :value="a.name" label="name" :editable="canManage" @save="(v) => rename(a, v)">
+                <span class="person-name">{{ a.name }}</span><YouTag v-if="actions.isSelf(a)" />
               </InlineCell>
             </template>
           </PersonCell>
@@ -323,6 +325,10 @@ watch(rows, (list) => {
 </template>
 
 <style scoped>
+.person-name {
+  font-weight: 600;
+  color: var(--p-text-color);
+}
 .quick-roles {
   border: 0;
   padding: 0;
@@ -344,9 +350,9 @@ watch(rows, (list) => {
 .quick-role.off {
   opacity: 0.55;
 }
+/* role trên một dòng như mọi ô của bảng; nhiều role thì bảng cuộn ngang */
 .chips {
   display: flex;
-  flex-wrap: wrap;
   gap: 0.3rem;
 }
 .chips :deep(.p-chip) {
