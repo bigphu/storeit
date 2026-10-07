@@ -1,14 +1,12 @@
 <script setup lang="ts">
-import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
-import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
-import Message from 'primevue/message'
 import Select from 'primevue/select'
 import Textarea from 'primevue/textarea'
 import { computed, ref, watch } from 'vue'
+import FormDialog from '@/components/FormDialog.vue'
 import type { Attribute, DataType } from '@/lib/api/types'
-import { useFormErrors } from '@/lib/forms'
+import { useDirty, useFormErrors } from '@/lib/forms'
 import { notify } from '@/lib/notify'
 import { useAddAttribute, useUpdateAttribute } from '../api'
 
@@ -32,6 +30,7 @@ const errors = useFormErrors()
 const add = useAddAttribute()
 const update = useUpdateAttribute()
 const isNew = computed(() => props.attribute === null)
+const form = useDirty(() => ({ k: key.value, l: label.value, t: dataType.value, u: unit.value, r: required.value, o: optionsText.value }))
 
 watch(visible, (open) => {
   if (!open) return
@@ -44,6 +43,7 @@ watch(visible, (open) => {
   position.value = a?.position ?? props.nextPosition
   optionsText.value = ''
   errors.clear()
+  form.reset()
 })
 
 async function submit() {
@@ -85,43 +85,45 @@ async function submit() {
 </script>
 
 <template>
-  <Dialog v-model:visible="visible" modal :header="isNew ? 'Add attribute' : 'Edit attribute'" :style="{ width: '32rem' }">
-    <form class="form" @submit.prevent="submit">
-      <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
-      <div class="field">
-        <label for="attr-key">Key</label>
-        <InputText id="attr-key" v-model="key" :disabled="!isNew" required placeholder="ram_gb" />
-        <small v-if="isNew">a-z, 0-9 and _, starting with a letter. Used in the API; can't be changed.</small>
-        <small v-if="errors.fields.value.key" class="field-error">{{ errors.fields.value.key }}</small>
-      </div>
-      <div class="field">
-        <label for="attr-label">Label</label>
-        <InputText id="attr-label" v-model="label" required />
-        <small v-if="errors.fields.value.label" class="field-error">{{ errors.fields.value.label }}</small>
-      </div>
-      <div class="field">
-        <label for="attr-type">Data type</label>
-        <Select v-model="dataType" input-id="attr-type" :options="dataTypes" />
-        <small v-if="!isNew">Can't change while assets have values for this attribute.</small>
-        <small v-if="errors.fields.value.data_type" class="field-error">{{ errors.fields.value.data_type }}</small>
-      </div>
-      <div v-if="dataType === 'number'" class="field">
-        <label for="attr-unit">Unit</label>
-        <InputText id="attr-unit" v-model="unit" placeholder="GB, inch, kg…" />
-        <small v-if="errors.fields.value.unit" class="field-error">{{ errors.fields.value.unit }}</small>
-      </div>
-      <div v-if="isNew && dataType === 'select'" class="field">
-        <label for="attr-options">Options (one per line)</label>
-        <Textarea id="attr-options" v-model="optionsText" rows="4" />
-      </div>
-      <div class="actions">
-        <Checkbox v-model="required" input-id="attr-required" binary />
-        <label for="attr-required">Required</label>
-      </div>
-      <div class="actions">
-        <Button type="submit" label="Save" :loading="add.isPending.value || update.isPending.value" />
-        <Button label="Cancel" severity="secondary" text @click="visible = false" />
-      </div>
-    </form>
-  </Dialog>
+  <FormDialog
+    v-model:visible="visible"
+    icon="tag"
+    :title="isNew ? 'Add attribute' : 'Edit attribute'"
+    :action="isNew ? 'Add attribute' : 'Save attribute'"
+    :busy="add.isPending.value || update.isPending.value"
+    :error="errors.general.value"
+    :dirty="form.dirty.value"
+    @submit="submit"
+  >
+    <div class="field">
+      <label for="attr-key">Key</label>
+      <InputText id="attr-key" v-model="key" :disabled="!isNew" required placeholder="ram_gb" />
+      <small v-if="isNew">a-z, 0-9 and _, starting with a letter. Used in the API; can't be changed.</small>
+      <small v-if="errors.fields.value.key" class="field-error">{{ errors.fields.value.key }}</small>
+    </div>
+    <div class="field">
+      <label for="attr-label">Label</label>
+      <InputText id="attr-label" v-model="label" required />
+      <small v-if="errors.fields.value.label" class="field-error">{{ errors.fields.value.label }}</small>
+    </div>
+    <div class="field">
+      <label for="attr-type">Data type</label>
+      <Select v-model="dataType" input-id="attr-type" :options="dataTypes" />
+      <small v-if="!isNew">Can't change while assets have values for this attribute.</small>
+      <small v-if="errors.fields.value.data_type" class="field-error">{{ errors.fields.value.data_type }}</small>
+    </div>
+    <div v-if="dataType === 'number'" class="field">
+      <label for="attr-unit">Unit</label>
+      <InputText id="attr-unit" v-model="unit" placeholder="GB, inch, kg…" />
+      <small v-if="errors.fields.value.unit" class="field-error">{{ errors.fields.value.unit }}</small>
+    </div>
+    <div v-if="isNew && dataType === 'select'" class="field">
+      <label for="attr-options">Options (one per line)</label>
+      <Textarea id="attr-options" v-model="optionsText" rows="4" />
+    </div>
+    <div class="actions">
+      <Checkbox v-model="required" input-id="attr-required" binary />
+      <label for="attr-required">Required</label>
+    </div>
+  </FormDialog>
 </template>

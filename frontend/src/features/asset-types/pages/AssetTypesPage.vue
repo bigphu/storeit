@@ -3,11 +3,9 @@ import Button from 'primevue/button'
 import Column from 'primevue/column'
 import ContextMenu from 'primevue/contextmenu'
 import DataTable, { type DataTableRowContextMenuEvent } from 'primevue/datatable'
-import Dialog from 'primevue/dialog'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import InputText from 'primevue/inputtext'
-import Message from 'primevue/message'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 import { computed, ref, watch } from 'vue'
@@ -17,6 +15,7 @@ import CardGrid from '@/components/CardGrid.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import EntityCard from '@/components/EntityCard.vue'
+import FormDialog from '@/components/FormDialog.vue'
 import IconAction from '@/components/IconAction.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
@@ -26,7 +25,7 @@ import type { AssetType } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { formatDate } from '@/lib/dates'
-import { useFormErrors } from '@/lib/forms'
+import { useDirty, useFormErrors } from '@/lib/forms'
 import { openLocation } from '@/lib/navigation'
 import { onRowClick, useRowMenu } from '@/lib/tableRows'
 import { queryString, useUrlState } from '@/lib/urlState'
@@ -117,6 +116,7 @@ const name = ref('')
 const description = ref('')
 const errors = useFormErrors()
 const create = useCreateAssetType()
+const form = useDirty(() => ({ c: code.value.trim(), n: name.value.trim(), d: description.value.trim() }))
 watch(name, (n) => {
   if (!codeTouched.value) code.value = codeFromName(n)
 })
@@ -125,6 +125,7 @@ function openCreate() {
   code.value = name.value = description.value = ''
   codeTouched.value = false
   errors.clear()
+  form.reset()
   creating.value = true
 }
 
@@ -257,30 +258,32 @@ async function submit() {
       </template>
     </DataTable>
 
-    <Dialog v-model:visible="creating" modal header="New asset type" :style="{ width: '32rem' }">
-      <form class="form" @submit.prevent="submit">
-        <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
-        <div class="field">
-          <label for="type-name">Name</label>
-          <InputText id="type-name" v-model="name" required placeholder="Network gear" autofocus />
-          <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
-        </div>
-        <div class="field">
-          <label for="type-code">Code</label>
-          <InputText id="type-code" v-model="code" required class="mono" placeholder="NETWORK_GEAR" @input="codeTouched = true" />
-          <small>Filled from the name. A-Z, 0-9, _ or -. It can't change later.</small>
-          <small v-if="errors.fields.value.code" class="field-error">{{ errors.fields.value.code }}</small>
-        </div>
-        <div class="field">
-          <label for="type-desc">Description</label>
-          <Textarea id="type-desc" v-model="description" rows="3" />
-        </div>
-        <div class="actions">
-          <Button type="submit" label="Create and add attributes" :loading="create.isPending.value" />
-          <Button label="Cancel" severity="secondary" text @click="creating = false" />
-        </div>
-      </form>
-    </Dialog>
+    <FormDialog
+      v-model:visible="creating"
+      icon="sitemap"
+      title="New asset type"
+      action="Create and add attributes"
+      :busy="create.isPending.value"
+      :error="errors.general.value"
+      :dirty="form.dirty.value"
+      @submit="submit"
+    >
+      <div class="field">
+        <label for="type-name">Name</label>
+        <InputText id="type-name" v-model="name" required placeholder="Network gear" autofocus />
+        <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
+      </div>
+      <div class="field">
+        <label for="type-code">Code</label>
+        <InputText id="type-code" v-model="code" required class="mono" placeholder="NETWORK_GEAR" @input="codeTouched = true" />
+        <small>Filled from the name. A-Z, 0-9, _ or -. It can't change later.</small>
+        <small v-if="errors.fields.value.code" class="field-error">{{ errors.fields.value.code }}</small>
+      </div>
+      <div class="field">
+        <label for="type-desc">Description</label>
+        <Textarea id="type-desc" v-model="description" rows="3" />
+      </div>
+    </FormDialog>
   </section>
 </template>
 

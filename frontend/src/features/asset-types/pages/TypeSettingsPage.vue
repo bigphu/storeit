@@ -9,7 +9,6 @@ import Message from 'primevue/message'
 import Panel from 'primevue/panel'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
-import { useConfirm } from 'primevue/useconfirm'
 import { computed, ref, watch } from 'vue'
 import { useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
@@ -20,6 +19,7 @@ import IconAction from '@/components/IconAction.vue'
 import type { Attribute } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
+import { runAction } from '@/lib/actions'
 import { describeError, isApiError } from '@/lib/errors'
 import { useFormErrors } from '@/lib/forms'
 import { notify } from '@/lib/notify'
@@ -30,6 +30,7 @@ import {
   useRemoveAttribute,
   useReorderAttributes,
   useRestoreAssetType,
+  useRestoreAttribute,
   useUpdateAssetType,
   useUpdateAttribute,
 } from '../api'
@@ -43,7 +44,6 @@ import { typeListLocation } from '@/features/assets/listQuery'
 const props = defineProps<{ typeId: string }>()
 
 const session = useSession()
-const confirm = useConfirm()
 const canManage = computed(() => session.can(Perm.TypeManage))
 
 const { data: type, refetch, isLoading } = useAssetType(() => props.typeId)
@@ -81,8 +81,18 @@ const activeOptions = (a: Attribute) =>
 // Kéo thả thứ tự thuộc tính (thứ tự cột trong danh sách và trong form)
 const reorder = useReorderAttributes()
 function onReorder(e: DataTableRowReorderEvent) {
+  const activeIds = (list: Attribute[]) => list.filter((a) => !a.removed).map((a) => a.id)
+  const before = activeIds(attributes.value)
   attributes.value = e.value as Attribute[]
-  reorder.mutate({ typeId: props.typeId, ids: attributes.value.filter((a) => !a.removed).map((a) => a.id) })
+  const after = activeIds(attributes.value)
+  void runAction({
+    run: () => reorder.mutateAsync({ typeId: props.typeId, ids: after }),
+    done: 'Attributes reordered.',
+    failed: "Couldn't save the new order.",
+    undo: () => reorder.mutateAsync({ typeId: props.typeId, ids: before }),
+    undone: 'Order put back.',
+    undoFailed: "Couldn't put the order back.",
+  })
 }
 const nextPosition = computed(() => Math.max(0, ...(type.value?.attributes ?? []).map((a) => a.position)) + 1)
 
@@ -121,23 +131,22 @@ const restore = useRestoreAssetType()
 function toggleArchived() {
   const t = type.value
   if (!t) return
-  if (t.archived_at) {
-    restore
-      .mutateAsync(t.id)
-      .then(() => notify.success('Asset type restored.'))
-      .catch(() => {})
-    return
-  }
-  confirm.require({
-    message: `Archive ${t.name}? It can't be chosen for new assets; existing assets keep it.`,
-    header: 'Confirm',
-    acceptLabel: 'Archive',
-    rejectLabel: 'Cancel',
-    accept: () =>
-      archive
-        .mutateAsync(t.id)
-        .then(() => notify.success('Asset type archived.'))
-        .catch(() => {}),
+  if (t.archived_at)
+    return runAction({
+      run: () => restore.mutateAsync(t.id),
+      done: `${t.name} restored.`,
+      failed: `Couldn't restore ${t.name}.`,
+      undo: () => archive.mutateAsync(t.id),
+      undone: `${t.name} archived again.`,
+      undoFailed: `Couldn't archive ${t.name} again. It stays available.`,
+    })
+  return runAction({
+    run: () => archive.mutateAsync(t.id),
+    done: `${t.name} archived.`,
+    failed: `Couldn't archive ${t.name}.`,
+    undo: () => restore.mutateAsync(t.id),
+    undone: `${t.name} restored.`,
+    undoFailed: `Couldn't restore ${t.name}. It is still archived.`,
   })
 }
 
@@ -157,17 +166,16 @@ function openOptions(a: Attribute) {
 }
 
 const removeAttr = useRemoveAttribute()
-function askRemove(a: Attribute) {
-  confirm.require({
-    message: `Remove the attribute ${a.label}? Existing values are kept but hidden.`,
-    header: 'Confirm',
-    acceptLabel: 'Remove',
-    rejectLabel: 'Cancel',
-    accept: () =>
-      removeAttr
-        .mutateAsync({ typeId: props.typeId, attrId: a.id })
-        .then(() => notify.success('Attribute removed.'))
-        .catch(() => {}),
+const restoreAttr = useRestoreAttribute()
+function removeAttribute(a: Attribute) {
+  const ids = { typeId: props.typeId, attrId: a.id }
+  return runAction({
+    run: () => removeAttr.mutateAsync(ids),
+    done: `${a.label} removed.`,
+    failed: `Couldn't remove ${a.label}.`,
+    undo: () => restoreAttr.mutateAsync(ids),
+    undone: `${a.label} is back.`,
+    undoFailed: `Couldn't bring ${a.label} back. It stays removed.`,
   })
 }
 
@@ -196,7 +204,7 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
         { label: 'Edit', icon: 'pi pi-pencil', command: () => openAttribute(a) },
         { label: 'Edit options', icon: 'pi pi-list', visible: a.data_type === 'select', command: () => openOptions(a) },
         { separator: true },
-        { label: 'Remove', icon: 'pi pi-trash', command: () => askRemove(a) },
+        { label: 'Remove', icon: 'pi pi-trash', command: () => removeAttribute(a) },
       ]
     : [],
 )
@@ -300,7 +308,7 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
             <Tag v-if="a.removed" value="removed" severity="secondary" />
             <div v-else-if="canManage" class="row-actions">
               <IconAction icon="pi pi-pencil" label="Edit" @click="openAttribute(a)" />
-              <IconAction icon="pi pi-trash" label="Remove" danger @click="askRemove(a)" />
+              <IconAction icon="pi pi-trash" label="Remove" danger @click="removeAttribute(a)" />
             </div>
           </template>
         </Column>
@@ -317,7 +325,7 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
       <Button
         :label="type.archived_at ? 'Restore' : 'Archive'"
         :icon="type.archived_at ? 'pi pi-replay' : 'pi pi-inbox'"
-        :severity="type.archived_at ? 'secondary' : 'danger'"
+        severity="secondary"
         outlined
         @click="toggleArchived"
       />
