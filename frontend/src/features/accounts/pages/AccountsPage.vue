@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Chip from 'primevue/chip'
+import Checkbox from 'primevue/checkbox'
 import Column from 'primevue/column'
 import ContextMenu from 'primevue/contextmenu'
 import DataTable, { type DataTablePageEvent } from 'primevue/datatable'
@@ -10,19 +11,24 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import type { MenuItem } from 'primevue/menuitem'
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import IconAction from '@/components/IconAction.vue'
 import PageHeader from '@/components/PageHeader.vue'
+import InlineCell from '@/components/InlineCell.vue'
+import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import PersonCell from '@/components/PersonCell.vue'
+import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
 import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
 import { useRoles } from '@/features/roles/api'
 import type { AccountListItem } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
+import { mayClose } from '@/lib/confirm'
 import { formatDay } from '@/lib/dates'
+import { changeCount, changesOf, clearTab, emptyDraft, isDirty, listOf, setList } from '@/lib/detailDraft'
 import { openLocation } from '@/lib/navigation'
 import { inviteNote } from '@/lib/people'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
@@ -30,6 +36,7 @@ import { onRowClick, useRowMenu } from '@/lib/tableRows'
 import { queryInt, queryString, useUrlState } from '@/lib/urlState'
 import { type AccountStatus, useAccounts } from '../api'
 import CreateAccountDialog from '../components/CreateAccountDialog.vue'
+import { useAccountOverviewSave, useAccountRolesSave } from '../overviewSave'
 import { statusSeverity } from '../status'
 import { useAccountActions } from '../useAccountActions'
 
@@ -119,11 +126,71 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
   ]
   if (!canManage.value) return items
   items.push({ separator: true })
+  items.push({ label: 'Quick edit', icon: 'pi pi-pencil', command: () => openQuick(a) })
   if (a.status === 'invited') items.push({ label: 'Resend invitation', icon: 'pi pi-envelope', command: () => actions.resendInvitation(a) })
   if (a.status === 'active') items.push({ label: 'Send reset link', icon: 'pi pi-key', command: () => actions.sendReset(a) })
   if (a.status === 'disabled') items.push({ label: 'Enable', icon: 'pi pi-check-circle', command: () => actions.enable(a) })
   else items.push({ label: 'Disable', icon: 'pi pi-ban', disabled: actions.isSelf(a), command: () => actions.disable(a) })
   return items
+})
+
+// Sửa nhanh: nhấp đúp tên để đổi tại chỗ; bút chì mở ngăn kéo (tên, role)
+const saveAccount = useAccountOverviewSave()
+const saveRoles = useAccountRolesSave()
+const rename = (a: AccountListItem, name: string) => saveAccount(a, { name })
+const rows = computed(() => data.value?.items ?? [])
+const quick = ref<AccountListItem | null>(null)
+const quickDraft = reactive(emptyDraft())
+const quickSaving = ref(false)
+const quickFields: FieldDef[] = [
+  { key: 'name', label: 'Display name', maxlength: 200 },
+  { key: 'email', label: 'Email', lock: 'The sign-in address. Invite a new account to use another one.' },
+]
+const quickSaved = computed(() => ({ name: quick.value?.name ?? '', email: quick.value?.email ?? '' }))
+const quickRoles = computed(() => quick.value?.roles.map((r) => r.id) ?? [])
+const allRoleIds = computed(() => (roles.data.value ?? []).map((r) => r.id))
+const quickCurrent = computed(() => listOf(quickDraft, 'roles', quickRoles.value, allRoleIds.value))
+const grantable = (permissions: string[]) => permissions.every((p) => session.can(p))
+function pickRole(id: string, on: boolean) {
+  const next = on ? [...quickCurrent.value, id] : quickCurrent.value.filter((x) => x !== id)
+  setList(quickDraft, 'roles', quickRoles.value, next)
+}
+function clearQuick() {
+  clearTab(quickDraft, 'overview')
+  clearTab(quickDraft, 'roles')
+}
+const quickOpen = computed({
+  get: () => quick.value !== null,
+  set: (v) => {
+    if (!v) {
+      quick.value = null
+      clearQuick()
+    }
+  },
+})
+function openQuick(a: AccountListItem) {
+  clearQuick()
+  quick.value = a
+}
+const quickIndex = computed(() => (quick.value ? rows.value.findIndex((x) => x.id === quick.value!.id) : -1))
+async function moveQuick(step: number) {
+  const next = rows.value[quickIndex.value + step]
+  if (!next || !(await mayClose(isDirty(quickDraft)))) return
+  openQuick(next)
+}
+async function saveQuick() {
+  const a = quick.value
+  if (!a) return
+  quickSaving.value = true
+  try {
+    if (changeCount(quickDraft, 'overview') && (await saveAccount(a, changesOf(quickDraft, 'overview')))) clearTab(quickDraft, 'overview')
+    if (changeCount(quickDraft, 'roles') && (await saveRoles(a, quickRoles.value, quickCurrent.value))) clearTab(quickDraft, 'roles')
+  } finally {
+    quickSaving.value = false
+  }
+}
+watch(rows, (list) => {
+  if (quick.value) quick.value = list.find((x) => x.id === quick.value!.id) ?? null
 })
 </script>
 
@@ -168,13 +235,13 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
     >
       <Column header="Person">
         <template #body="{ data: a }: { data: AccountListItem }">
-          <PersonCell
-            :name="a.name"
-            :email="a.email"
-            :to="`/accounts/${a.id}`"
-            :muted="a.status === 'disabled'"
-            :you="actions.isSelf(a)"
-          />
+          <PersonCell :name="a.name" :email="a.email" :to="`/accounts/${a.id}`" :muted="a.status === 'disabled'" :you="actions.isSelf(a)">
+            <template #name>
+              <InlineCell :value="a.name" :editable="canManage" class="person-name" @save="(v) => rename(a, v)" @open="(e) => openAccount(a, e)">
+                {{ a.name }}
+              </InlineCell>
+            </template>
+          </PersonCell>
         </template>
       </Column>
       <Column header="Roles">
@@ -202,6 +269,7 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
       <Column v-if="canManage" header="" header-style="width: 6rem">
         <template #body="{ data: a }: { data: AccountListItem }">
           <div class="row-actions">
+            <IconAction icon="pi pi-pencil" label="Quick edit" @click="openQuick(a)" />
             <IconAction v-if="a.status === 'invited'" icon="pi pi-envelope" label="Resend invitation" @click="actions.resendInvitation(a)" />
             <IconAction v-if="a.status === 'active'" icon="pi pi-key" label="Send reset link" @click="actions.sendReset(a)" />
             <IconAction v-if="a.status === 'disabled'" icon="pi pi-check-circle" label="Enable" @click="actions.enable(a)" />
@@ -221,11 +289,61 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
         <EmptyState v-else icon="pi pi-users" text="No accounts match these filters." />
       </template>
     </DataTable>
-    <CreateAccountDialog v-model:visible="creating" />
+    <CreateAccountDialog v-model:visible="creating" @created="(a) => router.push(`/accounts/${a.id}`)" />
+    <QuickEditDrawer
+      v-if="quick"
+      v-model:visible="quickOpen"
+      :title="quick.name"
+      icon="user-plus"
+      :dirty="isDirty(quickDraft)"
+      :busy="quickSaving"
+      :can-prev="quickIndex > 0"
+      :can-next="quickIndex >= 0 && quickIndex < rows.length - 1"
+      @save="saveQuick"
+      @prev="moveQuick(-1)"
+      @next="moveQuick(1)"
+      @open-page="router.push(`/accounts/${quick.id}`)"
+    >
+      <OverviewFields :fields="quickFields" :saved="quickSaved" :draft="quickDraft" stacked />
+      <fieldset class="quick-roles">
+        <legend>Roles</legend>
+        <label v-for="r in roles.data.value ?? []" :key="r.id" class="quick-role" :class="{ off: !grantable(r.permissions) }">
+          <Checkbox
+            :model-value="quickCurrent.includes(r.id)"
+            binary
+            :input-id="`qr-${r.id}`"
+            :disabled="!grantable(r.permissions)"
+            @update:model-value="(v: boolean) => pickRole(r.id, v)"
+          />
+          <span>{{ r.name }}</span>
+        </label>
+      </fieldset>
+    </QuickEditDrawer>
   </section>
 </template>
 
 <style scoped>
+.quick-roles {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.quick-roles legend {
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color);
+  margin-bottom: 0.3rem;
+}
+.quick-role {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.quick-role.off {
+  opacity: 0.55;
+}
 .chips {
   display: flex;
   flex-wrap: wrap;

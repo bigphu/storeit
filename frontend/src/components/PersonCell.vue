@@ -12,8 +12,10 @@ defineProps<{ name: string; email: string; to?: RouteLocationRaw; muted?: boolea
   <div class="person">
     <Avatar :label="initials(name)" shape="circle" class="person-avatar" :class="{ muted }" />
     <div class="person-text">
-      <RouterLink v-if="to" :to="to" class="person-name">{{ name }}</RouterLink>
-      <span v-else class="person-name">{{ name }}</span>
+      <slot name="name">
+        <RouterLink v-if="to" :to="to" class="person-name">{{ name }}</RouterLink>
+        <span v-else class="person-name">{{ name }}</span>
+      </slot>
       <Tag v-if="you" value="You" severity="secondary" class="person-you" />
       <div class="person-email">{{ email }}</div>
     </div>

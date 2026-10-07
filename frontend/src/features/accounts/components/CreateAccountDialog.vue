@@ -14,6 +14,7 @@ import { useCreateAccount } from '../api'
 // Mời người dùng: account bắt đầu ở trạng thái invited, nhận link đặt mật khẩu qua email.
 // Role giao ngay lúc mời; role có quyền mình không có thì không chọn được (API cũng từ chối).
 const visible = defineModel<boolean>('visible', { required: true })
+const emit = defineEmits<{ created: [account: { id: string }] }>()
 
 const session = useSession()
 const errors = useFormErrors()
@@ -42,6 +43,7 @@ async function submit() {
     const account = await create.mutateAsync({ email: email.value, name: name.value, role_ids: roleIds.value })
     notify.success(`Invitation sent to ${account.email}.`)
     visible.value = false
+    emit('created', account)
   } catch (err) {
     errors.set(err)
   }
