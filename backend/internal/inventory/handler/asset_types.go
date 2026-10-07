@@ -114,6 +114,14 @@ func (h *Handler) RemoveAttribute(ctx context.Context, req api.RemoveAttributeRe
 	return api.RemoveAttribute204Response{}, nil
 }
 
+func (h *Handler) RestoreAttribute(ctx context.Context, req api.RestoreAttributeRequestObject) (api.RestoreAttributeResponseObject, error) {
+	a, err := h.svc.RestoreAttribute(ctx, req.TypeID, req.AttributeID)
+	if err != nil {
+		return nil, err
+	}
+	return api.RestoreAttribute200JSONResponse(toAPIAttribute(a)), nil
+}
+
 func (h *Handler) ReorderAttributes(ctx context.Context, req api.ReorderAttributesRequestObject) (api.ReorderAttributesResponseObject, error) {
 	t, err := h.svc.ReorderAttributes(ctx, req.TypeID, req.Body.Ids)
 	if err != nil {
@@ -151,6 +159,14 @@ func (h *Handler) RemoveOption(ctx context.Context, req api.RemoveOptionRequestO
 		return nil, err
 	}
 	return api.RemoveOption204Response{}, nil
+}
+
+func (h *Handler) RestoreOption(ctx context.Context, req api.RestoreOptionRequestObject) (api.RestoreOptionResponseObject, error) {
+	o, err := h.svc.RestoreOption(ctx, req.TypeID, req.AttributeID, req.OptionID)
+	if err != nil {
+		return nil, err
+	}
+	return api.RestoreOption200JSONResponse(toAPIOption(o)), nil
 }
 
 func toNewAttribute(a api.NewAttribute) domain.NewAttribute {

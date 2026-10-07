@@ -80,6 +80,8 @@ func TestPermissionChecks(t *testing.T) {
 		"AddOption":         {domain.PermTypeManage, func(c context.Context) error { _, err := e.svc.AddOption(c, id, id, "x", 1); return err }},
 		"UpdateOption":      {domain.PermTypeManage, func(c context.Context) error { _, err := e.svc.UpdateOption(c, id, id, id, nil, nil); return err }},
 		"RemoveOption":      {domain.PermTypeManage, func(c context.Context) error { return e.svc.RemoveOption(c, id, id, id) }},
+		"RestoreAttribute":  {domain.PermTypeManage, func(c context.Context) error { _, err := e.svc.RestoreAttribute(c, id, id); return err }},
+		"RestoreOption":     {domain.PermTypeManage, func(c context.Context) error { _, err := e.svc.RestoreOption(c, id, id, id); return err }},
 		"ListStatuses":      {domain.PermAssetRead, func(c context.Context) error { _, err := e.svc.ListStatuses(c, false); return err }},
 		"CreateStatus":      {domain.PermStatusManage, func(c context.Context) error { _, err := e.svc.CreateStatus(c, domain.NewStatus{}); return err }},
 		"UpdateStatus":      {domain.PermStatusManage, func(c context.Context) error { _, err := e.svc.UpdateStatus(c, id, domain.StatusChange{}); return err }},

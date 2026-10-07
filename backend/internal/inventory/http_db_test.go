@@ -789,3 +789,74 @@ func TestExportProfileRestoreOverHTTP(t *testing.T) {
 		t.Errorf("problem type = %s", typ)
 	}
 }
+
+// Bỏ thuộc tính / option đã là xoá mềm; khôi phục đưa lại, trùng nhãn với cái đang dùng thì 409
+func TestRestoreAttributeAndOption(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	code := "RS" + strings.ToUpper(uuid.NewString()[:6])
+	typ := decode[typeDetail](t, a.do("POST", "/api/v1/asset-types", tok, map[string]any{
+		"code": code, "name": "Restore " + code,
+		"attributes": []map[string]any{
+			{"key": "ram", "label": "RAM", "data_type": "number", "position": 1},
+			{"key": "os", "label": "OS", "data_type": "select", "position": 2, "options": []string{"Windows", "macOS"}},
+		},
+	}), 201)
+	var ramID, osID, winID string
+	for _, at := range typ.Attributes {
+		switch at.Key {
+		case "ram":
+			ramID = at.ID
+		case "os":
+			osID = at.ID
+			for _, o := range at.Options {
+				if o.Label == "Windows" {
+					winID = o.ID
+				}
+			}
+		}
+	}
+	if ramID == "" || osID == "" || winID == "" {
+		t.Fatalf("attributes not found in %+v", typ)
+	}
+	base := "/api/v1/asset-types/" + typ.ID + "/attributes/"
+
+	if rec := a.do("DELETE", base+ramID, tok, nil); rec.Code != 204 {
+		t.Fatalf("remove attribute: %d %s", rec.Code, rec.Body)
+	}
+	rec := a.do("POST", base+ramID+"/restore", tok, nil)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"key":"ram"`) {
+		t.Fatalf("restore attribute: %d %s", rec.Code, rec.Body)
+	}
+	// khôi phục cái chưa bỏ: không đổi gì
+	if rec := a.do("POST", base+ramID+"/restore", tok, nil); rec.Code != 200 {
+		t.Errorf("restore active attribute: %d", rec.Code)
+	}
+
+	// bỏ, thêm thuộc tính mới cùng nhãn "RAM" (khoá khác), khôi phục cái cũ → 409
+	a.do("DELETE", base+ramID, tok, nil)
+	if rec := a.do("POST", "/api/v1/asset-types/"+typ.ID+"/attributes", tok, map[string]any{"key": "ram2", "label": "RAM", "data_type": "number", "position": 3}); rec.Code != 201 {
+		t.Fatalf("add attribute with the removed label: %d %s", rec.Code, rec.Body)
+	}
+	rec = a.do("POST", base+ramID+"/restore", tok, nil)
+	if rec.Code != 409 {
+		t.Errorf("restore over a reused label: %d", rec.Code)
+	} else if typ, _ := problem(t, rec); typ != "/errors/attribute-label-taken" {
+		t.Errorf("problem type = %s", typ)
+	}
+
+	optBase := base + osID + "/options/"
+	if rec := a.do("DELETE", optBase+winID, tok, nil); rec.Code != 204 {
+		t.Fatalf("remove option: %d", rec.Code)
+	}
+	if rec := a.do("POST", optBase+winID+"/restore", tok, nil); rec.Code != 200 || !strings.Contains(rec.Body.String(), "Windows") {
+		t.Errorf("restore option: %d %s", rec.Code, rec.Body)
+	}
+	if rec := a.do("POST", optBase+uuid.NewString()+"/restore", tok, nil); rec.Code != 404 {
+		t.Errorf("restore unknown option: %d", rec.Code)
+	}
+	reader := a.token(domain.PermAssetRead)
+	if rec := a.do("POST", base+ramID+"/restore", reader, nil); rec.Code != 403 {
+		t.Errorf("restore without type manage: %d", rec.Code)
+	}
+}

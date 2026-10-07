@@ -47,6 +47,9 @@ type TypeRepository interface {
 	// bỏ kiểu select thì xoá option của nó
 	UpdateAttribute(ctx context.Context, typeID, attrID uuid.UUID, ch AttributeChange) (Attribute, error)
 	RemoveAttribute(ctx context.Context, typeID, attrID uuid.UUID) error
+	// RestoreAttribute: hoàn tác bỏ thuộc tính (chưa bỏ thì trả nguyên); ErrAttributeNotFound,
+	// ErrAttributeLabelTaken
+	RestoreAttribute(ctx context.Context, typeID, attrID uuid.UUID) (Attribute, error)
 	// ReorderAttributes: ids là mọi thuộc tính đang hoạt động theo thứ tự mới (vị trí
 	// 1..n), không thì ErrInvalidOrder; một event cho cả lần sắp xếp
 	ReorderAttributes(ctx context.Context, typeID uuid.UUID, ids []uuid.UUID) (AssetType, error)
@@ -56,6 +59,9 @@ type TypeRepository interface {
 	AddOption(ctx context.Context, typeID, attrID uuid.UUID, label string, position int32) (Option, error)
 	UpdateOption(ctx context.Context, typeID, attrID, optID uuid.UUID, label *string, position *int32) (Option, error)
 	RemoveOption(ctx context.Context, typeID, attrID, optID uuid.UUID) error
+	// RestoreOption: hoàn tác bỏ option; thuộc tính phải còn dùng; ErrOptionNotFound,
+	// ErrOptionLabelTaken
+	RestoreOption(ctx context.Context, typeID, attrID, optID uuid.UUID) (Option, error)
 	// AttributeLabels: nhãn thuộc tính đang dùng của mỗi loại theo thứ tự hiển thị;
 	// loại không có thuộc tính thì không có trong map
 	AttributeLabels(ctx context.Context) (map[uuid.UUID][]string, error)

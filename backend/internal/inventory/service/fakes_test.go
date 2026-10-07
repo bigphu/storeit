@@ -184,6 +184,36 @@ func (f *fakeTypes) UpdateOption(_ context.Context, _, _, optID uuid.UUID, label
 
 func (f *fakeTypes) RemoveOption(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error { return nil }
 
+func (f *fakeTypes) RestoreAttribute(_ context.Context, typeID, attrID uuid.UUID) (domain.Attribute, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t := f.types[typeID]
+	for i, a := range t.Attributes {
+		if a.ID == attrID {
+			t.Attributes[i].RemovedAt = nil
+			return t.Attributes[i], nil
+		}
+	}
+	return domain.Attribute{}, domain.ErrAttributeNotFound
+}
+
+func (f *fakeTypes) RestoreOption(_ context.Context, typeID, attrID, optID uuid.UUID) (domain.Option, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, a := range f.types[typeID].Attributes {
+		if a.ID != attrID {
+			continue
+		}
+		for i, o := range a.Options {
+			if o.ID == optID {
+				a.Options[i].RemovedAt = nil
+				return a.Options[i], nil
+			}
+		}
+	}
+	return domain.Option{}, domain.ErrOptionNotFound
+}
+
 func (f *fakeTypes) AttributeLabels(context.Context) (map[uuid.UUID][]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

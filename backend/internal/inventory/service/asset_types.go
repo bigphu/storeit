@@ -178,6 +178,21 @@ func (s *Service) RemoveAttribute(ctx context.Context, typeID, attrID uuid.UUID)
 	return s.types.RemoveAttribute(ctx, typeID, attrID)
 }
 
+// RestoreAttribute, RestoreOption: hoàn tác bỏ thuộc tính / option
+func (s *Service) RestoreAttribute(ctx context.Context, typeID, attrID uuid.UUID) (domain.Attribute, error) {
+	if _, err := auth.Require(ctx, domain.PermTypeManage); err != nil {
+		return domain.Attribute{}, err
+	}
+	return s.types.RestoreAttribute(ctx, typeID, attrID)
+}
+
+func (s *Service) RestoreOption(ctx context.Context, typeID, attrID, optID uuid.UUID) (domain.Option, error) {
+	if _, err := auth.Require(ctx, domain.PermTypeManage); err != nil {
+		return domain.Option{}, err
+	}
+	return s.types.RestoreOption(ctx, typeID, attrID, optID)
+}
+
 // ReorderAttributes, ReorderOptions: kéo thả trong trang cài đặt loại
 func (s *Service) ReorderAttributes(ctx context.Context, typeID uuid.UUID, ids []uuid.UUID) (domain.AssetType, error) {
 	if _, err := auth.Require(ctx, domain.PermTypeManage); err != nil {
