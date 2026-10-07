@@ -4,23 +4,22 @@ import Checkbox from 'primevue/checkbox'
 import Chip from 'primevue/chip'
 import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
-import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Select from 'primevue/select'
 import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
 import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
-import Textarea from 'primevue/textarea'
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
+import { useLeaveGuard, useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb from '@/components/AppBreadcrumb.vue'
 import DetailHeader from '@/components/DetailHeader.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import FormDialog from '@/components/FormDialog.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import IconAction from '@/components/IconAction.vue'
+import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import SaveBar from '@/components/SaveBar.vue'
 import { useAccounts, useAssignRoles } from '@/features/accounts/api'
@@ -29,15 +28,17 @@ import type { AccountListItem } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { runAction } from '@/lib/actions'
-import { useDirty, useFormErrors } from '@/lib/forms'
+import { changeCount, changesOf, clearTab, discardTab, emptyDraft, isDirty, listOf, restoreTab, setList } from '@/lib/detailDraft'
 import { notify } from '@/lib/notify'
 import { onRowClick } from '@/lib/tableRows'
 import { openLocation } from '@/lib/navigation'
 import { useUrlState } from '@/lib/urlState'
-import { useDeleteRole, useRestoreRole, useRole, useSetRolePermissions, useUpdateRole } from '../api'
+import { useRole, useSetRolePermissions } from '../api'
+import { useRoleDelete, useRoleOverviewSave } from '../overviewSave'
 import { ADMINISTRATOR_ROLE_ID, ALL_PERMS, AREAS, type Area, label, toggle } from '../catalog'
 
-// Trang vai trò: thẻ đầu trang, rồi Permissions (ma trận khu vực × Xem / Quản lý) | People
+// Trang vai trò: thẻ đầu trang, rồi Overview (tên, mô tả sửa tại chỗ) | Permissions (ma trận
+// khu vực × Xem / Quản lý) | People
 const props = defineProps<{ id: string }>()
 
 const session = useSession()
@@ -49,21 +50,28 @@ const canAssign = computed(() => session.can(Perm.AccountManage))
 const { data: role } = useRole(() => props.id)
 useTabTitle(() => role.value?.name)
 
-type Section = 'permissions' | 'people'
+type Section = 'overview' | 'permissions' | 'people'
 const { state, update } = useUrlState(
-  (q) => ({ tab: (q.tab === 'people' ? 'people' : 'permissions') as Section }),
-  (s) => ({ tab: s.tab === 'people' ? s.tab : undefined }),
+  (q) => ({ tab: (q.tab === 'people' || q.tab === 'permissions' ? q.tab : 'overview') as Section }),
+  (s) => ({ tab: s.tab === 'overview' ? undefined : s.tab }),
 )
 
-// Quyền: bản nháp so với bản đã lưu; bật Quản lý kéo theo Xem (catalog.toggle)
+// Bản nháp chung: Overview (tên, mô tả) và Permissions (tick); một thanh lưu cho tab đang mở
+const draft = reactive(emptyDraft())
+useTabDirty(() => isDirty(draft))
+useLeaveGuard(() => isDirty(draft))
+const fields = computed<FieldDef[]>(() => [
+  { key: 'name', label: 'Name', maxlength: 100, lock: role.value?.is_system ? 'Built-in roles keep their name.' : undefined },
+  { key: 'description', label: 'Description', kind: 'textarea' },
+])
+const savedFields = computed(() => ({ name: role.value?.name ?? '', description: role.value?.description ?? '' }))
+
+// Quyền: bản nháp theo từng quyền so với bản đã lưu; bật Quản lý kéo theo Xem (catalog.toggle)
 const saved = computed(() => role.value?.permissions ?? [])
-const draft = ref<string[] | null>(null)
-const current = computed(() => draft.value ?? saved.value)
-watch(saved, () => (draft.value = null))
+const current = computed(() => listOf(draft, 'permissions', saved.value, ALL_PERMS))
 const changed = computed(() => ALL_PERMS.filter((p) => current.value.includes(p) !== saved.value.includes(p)))
-useTabDirty(() => changed.value.length > 0)
 function set(code: string, on: boolean) {
-  draft.value = toggle(current.value, code, on)
+  setList(draft, 'permissions', saved.value, toggle(current.value, code, on))
 }
 // Chỉ đổi được quyền mình có (API trả 403 cho phần vượt quyền)
 const editable = (code: string) => canManage.value && session.can(code)
@@ -83,53 +91,38 @@ async function savePermissions() {
     undo: () => setPerms.mutateAsync({ id: props.id, permissions: before }),
     undone: 'Permissions put back.',
     undoFailed: "Couldn't put the permissions back. The new permissions stay.",
-    after: () => (draft.value = null),
+    after: () => clearTab(draft, 'permissions'),
   })
 }
 
-// Sửa tên, mô tả (role hệ thống giữ tên); xoá role tự tạo
-const editing = ref(false)
-const name = ref('')
-const description = ref('')
-const errors = useFormErrors()
-const updateRole = useUpdateRole()
-const editForm = useDirty(() => ({ n: name.value.trim(), d: description.value.trim() }))
-function openEdit() {
-  name.value = role.value?.name ?? ''
-  description.value = role.value?.description ?? ''
-  errors.clear()
-  editForm.reset()
-  editing.value = true
-}
+// Overview: lưu tên, mô tả; Discard có Undo
+const saveOverview = useRoleOverviewSave()
+const saving = ref(false)
 async function saveDetails() {
-  errors.clear()
+  const r = role.value
+  if (!r) return
+  saving.value = true
   try {
-    const body = role.value?.is_system ? { description: description.value } : { name: name.value, description: description.value }
-    await updateRole.mutateAsync({ id: props.id, ...body })
-    editing.value = false
-    notify.success('Role saved.')
-  } catch (err) {
-    errors.set(err)
+    if (await saveOverview(r, changesOf(draft, 'overview'))) clearTab(draft, 'overview')
+  } finally {
+    saving.value = false
   }
 }
-const remove = useDeleteRole()
-const restoreRole = useRestoreRole()
-async function deleteRole() {
-  // role còn người giữ thì API trả 409: nói trước
+function discard(tab: Section) {
+  const removed = discardTab(draft, tab)
+  notify.success('Changes discarded.', { undo: () => restoreTab(draft, tab, removed) })
+}
+
+// Xoá role tự tạo; role còn người giữ thì API trả 409: nói trước
+const removeRole = useRoleDelete()
+function deleteRole() {
+  const r = role.value
+  if (!r) return
   if (people.value) {
-    notify.info(`${role.value?.name} is still held by ${peopleLabel(people.value)}. Remove them from the role first.`)
+    notify.info(`${r.name} is still held by ${peopleLabel(people.value)}. Remove them from the role first.`)
     return
   }
-  const name = role.value?.name ?? 'The role'
-  await runAction({
-    run: () => remove.mutateAsync(props.id),
-    done: `${name} deleted.`,
-    failed: `Couldn't delete ${name}.`,
-    undo: () => restoreRole.mutateAsync(props.id),
-    undone: `${name} restored.`,
-    undoFailed: `Couldn't restore ${name}. It stays deleted.`,
-    after: () => router.push('/roles'),
-  })
+  return removeRole(r, () => router.push('/roles'))
 }
 
 // People: tài khoản giữ role (GET /accounts?role_id=), tải khi mở tab
@@ -187,30 +180,31 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
   <section v-if="role">
     <AppBreadcrumb :items="crumbs" />
 
-    <DetailHeader :title="role.name">
-      <template #media>
-        <span class="mark"><i class="pi pi-shield" /></span>
-      </template>
+    <DetailHeader :title="role.name" icon="shield">
       <template #tags>
         <Tag v-if="role.is_system" value="Built-in" icon="pi pi-lock" severity="secondary" />
         <Tag v-else value="Custom" severity="secondary" />
       </template>
-      <div>{{ role.description || 'No description.' }}</div>
-      <div class="meta">{{ role.permissions.length }} of {{ ALL_PERMS.length }} permissions · {{ peopleLabel(people) }}</div>
-      <template v-if="canManage" #actions>
-        <Button label="Edit details" icon="pi pi-pencil" severity="secondary" outlined @click="openEdit" />
-        <Button v-if="!role.is_system" label="Delete" icon="pi pi-trash" severity="danger" outlined @click="deleteRole" />
+      <div class="meta">{{ peopleLabel(people) }} · {{ role.permissions.length }} of {{ ALL_PERMS.length }} permissions</div>
+      <template v-if="canManage && !role.is_system" #actions>
+        <Button label="Delete" icon="pi pi-trash" severity="danger" outlined @click="deleteRole" />
       </template>
     </DetailHeader>
 
     <Tabs :value="state.tab" class="section-tabs" @update:value="(v) => update({ tab: v as Section })">
       <TabList>
-        <Tab value="permissions">Permissions</Tab>
+        <Tab value="overview">Overview<span v-if="changeCount(draft, 'overview')" class="tab-dirty" aria-label="Unsaved changes" /></Tab>
+        <Tab value="permissions">Permissions<span v-if="changeCount(draft, 'permissions')" class="tab-dirty" aria-label="Unsaved changes" /></Tab>
         <Tab v-if="canSeePeople" value="people">People <span class="tab-count">{{ people }}</span></Tab>
       </TabList>
     </Tabs>
 
-    <template v-if="state.tab === 'permissions'">
+    <template v-if="state.tab === 'overview'">
+      <OverviewFields :fields="fields" :saved="savedFields" :draft="draft" :readonly="!canManage" />
+      <SaveBar v-if="canManage && changeCount(draft, 'overview')" :count="changeCount(draft, 'overview')" :saving="saving" @save="saveDetails" @discard="discard('overview')" />
+    </template>
+
+    <template v-else-if="state.tab === 'permissions'">
       <Message v-if="lockout" severity="warn" :closable="false" class="block-msg">
         Administrator must keep “Manage roles”, or nobody could change roles again.
       </Message>
@@ -261,7 +255,7 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
         :saving="setPerms.isPending.value"
         :blocked="lockout"
         @save="savePermissions"
-        @discard="draft = null"
+        @discard="discard('permissions')"
       />
     </template>
 
@@ -317,27 +311,6 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
       </DataTable>
     </template>
 
-    <FormDialog
-      v-model:visible="editing"
-      icon="shield"
-      title="Edit role"
-      action="Save role"
-      :busy="updateRole.isPending.value"
-      :error="errors.general.value"
-      :dirty="editForm.dirty.value"
-      @submit="saveDetails"
-    >
-      <div class="field">
-        <label for="role-name">Name</label>
-        <InputText id="role-name" v-model="name" :disabled="role.is_system" required maxlength="100" />
-        <small v-if="role.is_system">Built-in roles keep their name.</small>
-        <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
-      </div>
-      <div class="field">
-        <label for="role-desc">Description</label>
-        <Textarea id="role-desc" v-model="description" rows="3" />
-      </div>
-    </FormDialog>
 
     <FormDialog
       v-model:visible="adding"
@@ -376,6 +349,15 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
 </template>
 
 <style scoped>
+/* tab còn thay đổi chưa lưu */
+.tab-dirty {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-left: 0.4rem;
+  border-radius: 50%;
+  background: var(--app-warn);
+}
 .mark {
   flex: none;
   display: grid;

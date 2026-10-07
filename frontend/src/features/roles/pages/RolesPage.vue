@@ -6,21 +6,29 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
-import { computed, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AddCard from '@/components/AddCard.vue'
 import CardGrid from '@/components/CardGrid.vue'
 import EntityCard from '@/components/EntityCard.vue'
 import FormDialog from '@/components/FormDialog.vue'
+import IconAction from '@/components/IconAction.vue'
+import InlineCell from '@/components/InlineCell.vue'
+import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
+import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
 import type { Role } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
+import { mayClose } from '@/lib/confirm'
+import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
 import { useDirty, useFormErrors } from '@/lib/forms'
+import { openLocation } from '@/lib/navigation'
 import { useUrlState } from '@/lib/urlState'
 import { useCreateRole, useRoles } from '../api'
-import { ALL_PERMS, label, moduleOf } from '../catalog'
+import { ALL_PERMS, EMPLOYEE_ROLE_ID, label, moduleOf } from '../catalog'
+import { useRoleDelete, useRoleOverviewSave } from '../overviewSave'
 
 // Vai trò: thẻ (đồng hồ quyền, số người) hoặc bảng so sánh mọi role với mọi quyền
 const session = useSession()
@@ -61,7 +69,9 @@ const copyOptions = computed(() => [
     .map((r) => ({ label: `Copy ${r.name}`, value: r.id })),
 ])
 function openCreate() {
-  name.value = description.value = copyFrom.value = ''
+  name.value = description.value = ''
+  // bắt đầu từ Employee khi được phép chép quyền của nó (ít bấm nhất cho role mới thường gặp)
+  copyFrom.value = copyOptions.value.some((o) => o.value === EMPLOYEE_ROLE_ID) ? EMPLOYEE_ROLE_ID : ''
   errors.clear()
   form.reset()
   creating.value = true
@@ -72,11 +82,60 @@ async function submit() {
   try {
     const role = await create.mutateAsync({ name: name.value, description: description.value, permissions: from?.permissions })
     creating.value = false
-    await router.push(`/roles/${role.id}`)
+    // mở ở Permissions để chỉnh phần vừa chép
+    await router.push({ path: `/roles/${role.id}`, query: { tab: 'permissions' } })
   } catch (err) {
     errors.set(err)
   }
 }
+
+// Sửa nhanh trên thẻ: nhấp đúp tên để đổi tại chỗ (role tự tạo); bút chì mở ngăn kéo; xoá
+// role tự tạo không ai giữ
+const saveRole = useRoleOverviewSave()
+const deleteRole = useRoleDelete()
+const rename = (r: Role, name: string) => saveRole(r, { name })
+const openRole = (r: Role, e?: MouseEvent) => openLocation(router, `/roles/${r.id}`, e)
+const list = computed(() => roles.value ?? [])
+const quick = ref<Role | null>(null)
+const quickDraft = reactive(emptyDraft())
+const quickSaving = ref(false)
+const quickFields = computed<FieldDef[]>(() => [
+  { key: 'name', label: 'Name', maxlength: 100, lock: quick.value?.is_system ? 'Built-in roles keep their name.' : undefined },
+  { key: 'description', label: 'Description', kind: 'textarea' },
+])
+const quickSaved = computed(() => ({ name: quick.value?.name ?? '', description: quick.value?.description ?? '' }))
+const quickOpen = computed({
+  get: () => quick.value !== null,
+  set: (v) => {
+    if (!v) {
+      quick.value = null
+      clearTab(quickDraft, 'overview')
+    }
+  },
+})
+function openQuick(r: Role) {
+  clearTab(quickDraft, 'overview')
+  quick.value = r
+}
+const quickIndex = computed(() => (quick.value ? list.value.findIndex((x) => x.id === quick.value!.id) : -1))
+async function moveQuick(step: number) {
+  const next = list.value[quickIndex.value + step]
+  if (!next || !(await mayClose(isDirty(quickDraft)))) return
+  openQuick(next)
+}
+async function saveQuick() {
+  const r = quick.value
+  if (!r) return
+  quickSaving.value = true
+  try {
+    if (await saveRole(r, changesOf(quickDraft, 'overview'))) clearTab(quickDraft, 'overview')
+  } finally {
+    quickSaving.value = false
+  }
+}
+watch(roles, (l) => {
+  if (quick.value) quick.value = l?.find((x) => x.id === quick.value!.id) ?? null
+})
 </script>
 
 <template>
@@ -91,9 +150,21 @@ async function submit() {
     <CardGrid v-if="state.layout === 'cards'">
       <EntityCard v-for="r in roles ?? []" :key="r.id" :to="`/roles/${r.id}`" :label="r.name">
         <div class="top">
-          <h3>{{ r.name }}</h3>
+          <h3>
+            <InlineCell :value="r.name" :editable="canManage && !r.is_system" @save="(v) => rename(r, v)" @open="(e) => openRole(r, e)">{{ r.name }}</InlineCell>
+          </h3>
           <i v-if="r.is_system" v-tooltip.top="'Built-in role'" class="pi pi-lock lock" aria-label="Built-in" />
           <Tag v-else value="Custom" severity="secondary" />
+          <IconAction v-if="canManage" icon="pi pi-pencil" :label="`Quick edit ${r.name}`" @click="openQuick(r)" />
+          <IconAction
+            v-if="canManage && !r.is_system"
+            icon="pi pi-trash"
+            :label="`Delete ${r.name}`"
+            danger
+            :disabled="people(r) > 0"
+            :reason="`Held by ${peopleLabel(people(r))}. Remove them from the role first.`"
+            @click="deleteRole(r)"
+          />
         </div>
         <p class="desc">{{ r.description || 'No description.' }}</p>
         <div>
@@ -139,6 +210,23 @@ async function submit() {
         </template>
       </Column>
     </DataTable>
+
+    <QuickEditDrawer
+      v-if="quick"
+      v-model:visible="quickOpen"
+      :title="quick.name"
+      icon="shield"
+      :dirty="isDirty(quickDraft)"
+      :busy="quickSaving"
+      :can-prev="quickIndex > 0"
+      :can-next="quickIndex >= 0 && quickIndex < list.length - 1"
+      @save="saveQuick"
+      @prev="moveQuick(-1)"
+      @next="moveQuick(1)"
+      @open-page="router.push(`/roles/${quick.id}`)"
+    >
+      <OverviewFields :fields="quickFields" :saved="quickSaved" :draft="quickDraft" stacked />
+    </QuickEditDrawer>
 
     <FormDialog
       v-model:visible="creating"
