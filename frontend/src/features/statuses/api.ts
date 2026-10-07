@@ -58,14 +58,16 @@ export function useUpdateStatus() {
 }
 
 export function useArchiveStatus() {
-  return useStatusMutation((id: string) =>
-    unwrap(inventoryApi.POST('/asset-statuses/{statusID}/archive', { params: { path: { statusID: id } } })),
+  return useStatusMutation(
+    (id: string) => unwrap(inventoryApi.POST('/asset-statuses/{statusID}/archive', { params: { path: { statusID: id } } })),
+    false,
   )
 }
 
 export function useRestoreStatus() {
-  return useStatusMutation((id: string) =>
-    unwrap(inventoryApi.POST('/asset-statuses/{statusID}/restore', { params: { path: { statusID: id } } })),
+  return useStatusMutation(
+    (id: string) => unwrap(inventoryApi.POST('/asset-statuses/{statusID}/restore', { params: { path: { statusID: id } } })),
+    false,
   )
 }
 
@@ -75,7 +77,8 @@ export function useReorderStatuses() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (ids: string[]) => unwrap(inventoryApi.PUT('/asset-statuses/order', { body: { ids } })),
-    meta: { toast: true },
+    // lỗi do runAction báo
+    meta: { toast: false },
     onMutate: async (ids: string[]) => {
       await qc.cancelQueries({ queryKey: statusKeys.all })
       const rank = new Map(ids.map((id, i) => [id, i + 1]))

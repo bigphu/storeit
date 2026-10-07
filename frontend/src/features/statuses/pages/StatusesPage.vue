@@ -3,20 +3,19 @@ import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import Column from 'primevue/column'
 import DataTable, { type DataTableRowReorderEvent } from 'primevue/datatable'
-import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
-import Message from 'primevue/message'
 import Tag from 'primevue/tag'
-import { useConfirm } from 'primevue/useconfirm'
 import { computed, nextTick, ref } from 'vue'
 import EmptyState from '@/components/EmptyState.vue'
+import FormDialog from '@/components/FormDialog.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import IconAction from '@/components/IconAction.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import type { Status, StatusKind } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
-import { useFormErrors } from '@/lib/forms'
+import { runAction } from '@/lib/actions'
+import { useDirty, useFormErrors } from '@/lib/forms'
 import { notify } from '@/lib/notify'
 import {
   kindSeverity,
@@ -31,7 +30,6 @@ import { archiveBlock, KIND_INFO, KIND_ORDER, lanes, moveBy, orderAfterMove } fr
 
 // Status chia theo kind thành bốn làn; kéo thả (hay Alt+↑/↓ trên tên) đổi thứ tự trong làn
 const session = useSession()
-const confirm = useConfirm()
 const canManage = computed(() => session.can(Perm.StatusManage))
 const showArchived = ref(false)
 const { data: statuses, isLoading } = useStatuses(showArchived, true)
@@ -44,7 +42,20 @@ const laneCount = (k: StatusKind) => activeOf(k).reduce((n, s) => n + (s.asset_c
 // Đổi thứ tự: gửi thứ tự của mọi status đang dùng
 const reorder = useReorderStatuses()
 function saveLane(kind: StatusKind, laneIds: string[]) {
-  reorder.mutate(orderAfterMove(statuses.value ?? [], kind, laneIds))
+  const all = statuses.value ?? []
+  const before = all
+    .filter((s) => !s.archived_at)
+    .sort((a, b) => a.position - b.position)
+    .map((s) => s.id)
+  const after = orderAfterMove(all, kind, laneIds)
+  void runAction({
+    run: () => reorder.mutateAsync(after),
+    done: 'Statuses reordered.',
+    failed: "Couldn't save the new order.",
+    undo: () => reorder.mutateAsync(before),
+    undone: 'Order put back.',
+    undoFailed: "Couldn't put the order back.",
+  })
 }
 function onReorder(kind: StatusKind, e: DataTableRowReorderEvent) {
   saveLane(kind, (e.value as Status[]).map((s) => s.id))
@@ -59,13 +70,17 @@ async function moveKey(s: Status, delta: number) {
 }
 
 const update = useUpdateStatus()
-async function makeDefault(s: Status) {
-  try {
-    await update.mutateAsync({ id: s.id, make_default: true })
-    notify.success(`${s.name} is now the default ${KIND_INFO[s.kind].label.toLowerCase()} status.`)
-  } catch {
-    // lỗi đã hiện qua toast của mutation
-  }
+function makeDefault(s: Status) {
+  const prev = (statuses.value ?? []).find((x) => x.kind === s.kind && x.is_default && !x.archived_at)
+  const kind = KIND_INFO[s.kind].label.toLowerCase()
+  return runAction({
+    run: () => update.mutateAsync({ id: s.id, make_default: true }),
+    done: `${s.name} is now the default ${kind} status.`,
+    failed: `Couldn't make ${s.name} the default.`,
+    undo: prev ? () => update.mutateAsync({ id: prev.id, make_default: true }) : undefined,
+    undone: prev && `${prev.name} is the default ${kind} status again.`,
+    undoFailed: `Couldn't change the default back. ${s.name} is still the default.`,
+  })
 }
 
 // Thêm status ở cuối làn; kind lấy từ làn
@@ -98,6 +113,7 @@ async function submitAdd() {
 const editing = ref<Status | null>(null)
 const editName = ref('')
 const editErrors = useFormErrors()
+const editForm = useDirty(() => editName.value.trim())
 const editOpen = computed({
   get: () => editing.value !== null,
   set: (v) => {
@@ -108,6 +124,7 @@ function openEdit(s: Status) {
   editing.value = s
   editName.value = s.name
   editErrors.clear()
+  editForm.reset()
 }
 async function submitEdit() {
   const s = editing.value
@@ -123,27 +140,26 @@ async function submitEdit() {
 }
 
 const archive = useArchiveStatus()
-function askArchive(s: Status) {
-  const n = s.asset_count ?? 0
-  confirm.require({
-    message: `Archive ${s.name}? ${n ? `The ${n} asset${n === 1 ? '' : 's'} using it keep it, but it` : 'It'} can't be chosen again until restored.`,
-    header: 'Archive status',
-    acceptLabel: 'Archive',
-    rejectLabel: 'Cancel',
-    acceptProps: { severity: 'danger' },
-    accept: () =>
-      archive
-        .mutateAsync(s.id)
-        .then(() => notify.success(`${s.name} archived.`))
-        .catch(() => {}),
+function archiveStatus(s: Status) {
+  return runAction({
+    run: () => archive.mutateAsync(s.id),
+    done: `${s.name} archived.`,
+    failed: `Couldn't archive ${s.name}.`,
+    undo: () => restore.mutateAsync(s.id),
+    undone: `${s.name} restored.`,
+    undoFailed: `Couldn't restore ${s.name}. It is still archived.`,
   })
 }
 const restore = useRestoreStatus()
-function doRestore(s: Status) {
-  restore
-    .mutateAsync(s.id)
-    .then(() => notify.success(`${s.name} restored.`))
-    .catch(() => {})
+function restoreStatus(s: Status) {
+  return runAction({
+    run: () => restore.mutateAsync(s.id),
+    done: `${s.name} restored.`,
+    failed: `Couldn't restore ${s.name}.`,
+    undo: () => archive.mutateAsync(s.id),
+    undone: `${s.name} archived again.`,
+    undoFailed: `Couldn't archive ${s.name} again. It stays available.`,
+  })
 }
 </script>
 
@@ -215,10 +231,9 @@ function doRestore(s: Status) {
                 <IconAction
                   icon="pi pi-inbox"
                   label="Archive"
-                  danger
                   :disabled="!!archiveBlock(s)"
                   :reason="archiveBlock(s)"
-                  @click="askArchive(s)"
+                  @click="archiveStatus(s)"
                 />
               </div>
             </template>
@@ -234,7 +249,7 @@ function doRestore(s: Status) {
             <span class="archived-name">{{ s.name }}</span>
             <Tag value="Archived" severity="secondary" />
             <span class="count">{{ s.asset_count ?? '' }}</span>
-            <Button v-if="canManage" label="Restore" icon="pi pi-replay" text size="small" @click="doRestore(s)" />
+            <Button v-if="canManage" label="Restore" icon="pi pi-replay" text size="small" @click="restoreStatus(s)" />
           </li>
         </ul>
 
@@ -260,9 +275,18 @@ function doRestore(s: Status) {
       </section>
     </div>
 
-    <Dialog v-model:visible="editOpen" modal header="Edit status" :style="{ width: '28rem' }">
-      <form v-if="editing" class="form" @submit.prevent="submitEdit">
-        <Message v-if="editErrors.general.value" severity="error">{{ editErrors.general.value }}</Message>
+    <FormDialog
+      v-model:visible="editOpen"
+      size="s"
+      icon="tag"
+      title="Edit status"
+      action="Save status"
+      :busy="update.isPending.value"
+      :error="editErrors.general.value"
+      :dirty="editForm.dirty.value"
+      @submit="submitEdit"
+    >
+      <template v-if="editing">
         <div class="field">
           <label for="status-name">Name</label>
           <InputText id="status-name" v-model="editName" required maxlength="100" autofocus />
@@ -273,12 +297,8 @@ function doRestore(s: Status) {
           <div><Tag :value="KIND_INFO[editing.kind].label" :severity="kindSeverity(editing.kind)" /></div>
           <small>The kind can't change after a status is created. Drag it in its lane to change the order.</small>
         </div>
-        <div class="actions">
-          <Button type="submit" label="Save" :loading="update.isPending.value" />
-          <Button label="Cancel" severity="secondary" text @click="editing = null" />
-        </div>
-      </form>
-    </Dialog>
+      </template>
+    </FormDialog>
   </section>
 </template>
 
