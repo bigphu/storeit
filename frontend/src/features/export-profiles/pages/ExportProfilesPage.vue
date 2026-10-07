@@ -5,27 +5,35 @@ import ContextMenu from 'primevue/contextmenu'
 import DataTable from 'primevue/datatable'
 import InputText from 'primevue/inputtext'
 import Tag from 'primevue/tag'
-import { computed, nextTick, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
-import TableSkeleton from '@/components/TableSkeleton.vue'
+import FormDialog from '@/components/FormDialog.vue'
 import IconAction from '@/components/IconAction.vue'
+import InlineCell from '@/components/InlineCell.vue'
+import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import PageHeader from '@/components/PageHeader.vue'
+import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
 import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
-import { useAssetTypes } from '@/features/asset-types/api'
-import { useDeleteExportProfile, useExportProfiles, useRestoreExportProfile, useUpdateExportProfile } from '@/features/assets/export/api'
-import ReportDialog from '@/features/assets/export/components/ReportDialog.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
+import { useCreateExportProfile, useExportProfiles } from '@/features/assets/export/api'
+import { defaultReportLayout } from '@/features/assets/export/layout'
 import { useExport } from '@/features/assets/export/useExport'
-import type { ExportScope } from '@/features/assets/export/usePreviewData'
 import type { ExportProfile } from '@/lib/api/types'
 import { useSession } from '@/lib/auth/session'
-import { runAction } from '@/lib/actions'
+import { mayClose } from '@/lib/confirm'
 import { formatDay } from '@/lib/dates'
+import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
+import { useDirty, useFormErrors } from '@/lib/forms'
+import { openLocation } from '@/lib/navigation'
 import { onRowClick, useRowMenu } from '@/lib/tableRows'
+import { useProfileDelete, useProfileOverviewSave, useProfileShare } from '../overviewSave'
 
-// Profile export: của mình và được chia sẻ; mở để sửa, chạy trên mọi tài sản, chia sẻ, xoá
+// Profile export: của mình và được chia sẻ. Bấm dòng mở trang profile; nhấp đúp tên để đổi
+// tại chỗ; bút chì mở ngăn kéo sửa nhanh; xuất, chia sẻ, xoá ngay trên dòng (có Undo)
 const session = useSession()
+const router = useRouter()
 const { data: profiles, isFetching, isLoading } = useExportProfiles(true)
-const { data: types } = useAssetTypes(false, true)
 
 type Show = 'all' | 'mine' | 'shared'
 const show = ref<Show>('all')
@@ -39,79 +47,15 @@ const visible = computed(() =>
   (profiles.value ?? []).filter((p) => show.value === 'all' || (show.value === 'mine' ? mine(p) : p.shared)),
 )
 
-// phạm vi khi mở từ trang này: mọi tài sản
-const scope = computed<ExportScope>(() => ({
-  filters: {},
-  label: 'All assets',
-  count: (types.value ?? []).reduce((n, t) => n + (t.asset_count ?? 0), 0),
-  typeIds: (types.value ?? []).filter((t) => (t.asset_count ?? 0) > 0).map((t) => t.id),
-  rows: [],
-  selection: false,
-}))
-const dialogOpen = ref(false)
-const dialogProfile = ref<string | undefined>()
-function open(p?: ExportProfile) {
-  dialogProfile.value = p?.id
-  dialogOpen.value = true
-}
-
+const openProfile = (p: ExportProfile, e?: MouseEvent, newTab?: boolean) => openLocation(router, `/export-profiles/${p.id}`, e, newTab)
 const { run } = useExport()
-const update = useUpdateExportProfile(false)
-const remove = useDeleteExportProfile()
-const restore = useRestoreExportProfile()
 function exportAll(p: ExportProfile) {
   run({ mode: 'report', filters: {}, profile_id: p.id }, `${p.name}.xlsx`)
 }
-// Đổi tên ngay trên dòng: ô tên thành ô nhập, Enter lưu, Escape huỷ
-const renaming = ref<string | null>(null)
-const newName = ref('')
-function startRename(p: ExportProfile) {
-  renaming.value = p.id
-  newName.value = p.name
-  nextTick(() => (document.getElementById(`rename-${p.id}`) as HTMLInputElement | null)?.select())
-}
-function cancelRename() {
-  renaming.value = null
-}
-async function saveRename(p: ExportProfile) {
-  const name = newName.value.trim()
-  if (!name || name === p.name) {
-    cancelRename()
-    return
-  }
-  // lỗi (trùng tên, đã bị sửa): giữ ô nhập để sửa tiếp
-  await runAction({
-    run: () => update.mutateAsync({ id: p.id, version: p.version, name }),
-    done: `${p.name} renamed to ${name}.`,
-    failed: `Couldn't rename ${p.name}.`,
-    undo: (next) => update.mutateAsync({ id: p.id, version: next.version, name: p.name }),
-    undone: `Name put back to ${p.name}.`,
-    undoFailed: `Couldn't put the name back. It stays ${name}.`,
-    after: () => (renaming.value = null),
-  })
-}
-
-function toggleShare(p: ExportProfile) {
-  const sharing = !p.shared
-  return runAction({
-    run: () => update.mutateAsync({ id: p.id, version: p.version, shared: sharing }),
-    done: sharing ? `${p.name} is shared with everyone who can export.` : `${p.name} is private again.`,
-    failed: `Couldn't change who sees ${p.name}.`,
-    undo: (next) => update.mutateAsync({ id: p.id, version: next.version, shared: p.shared }),
-    undone: sharing ? `${p.name} is private again.` : `${p.name} is shared again.`,
-    undoFailed: `Couldn't change who sees ${p.name} back.`,
-  })
-}
-function deleteProfile(p: ExportProfile) {
-  return runAction({
-    run: () => remove.mutateAsync(p.id),
-    done: `${p.name} deleted.`,
-    failed: `Couldn't delete ${p.name}.`,
-    undo: () => restore.mutateAsync(p.id),
-    undone: `${p.name} restored.`,
-    undoFailed: `Couldn't restore ${p.name}. It stays deleted.`,
-  })
-}
+const saveProfile = useProfileOverviewSave()
+const toggleShare = useProfileShare()
+const deleteProfile = useProfileDelete()
+const rename = (p: ExportProfile, name: string) => saveProfile(p, { name })
 const why = (p: ExportProfile) => `Only ${p.owner.name} or a profile manager can change this`
 function summary(p: ExportProfile) {
   const n = p.layout.columns.length
@@ -125,28 +69,89 @@ function summary(p: ExportProfile) {
     .join(' · ')
 }
 
-// Bấm dòng mở profile; menu chuột phải có cùng các hành động như nút ở cuối dòng
-const rowClick = onRowClick<ExportProfile>((p) => open(p))
+// Bấm dòng mở trang profile; menu chuột phải có cùng các hành động như nút ở cuối dòng
+const rowClick = onRowClick<ExportProfile>((p, e) => openProfile(p, e))
 const menu = ref<InstanceType<typeof ContextMenu>>()
 const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<ExportProfile>(menu, (p) => [
-  { label: p.can_edit ? 'Edit layout' : 'Open (save as a copy)', icon: 'pi pi-sliders-h', command: () => open(p) },
-  { label: 'Rename…', icon: 'pi pi-pencil', disabled: !p.can_edit, command: () => startRename(p) },
+  { label: 'Open', icon: 'pi pi-arrow-right', command: () => openProfile(p) },
+  { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => openProfile(p, undefined, true) },
   { label: 'Export all assets', icon: 'pi pi-download', command: () => exportAll(p) },
   { separator: true },
-  {
-    label: p.shared ? 'Stop sharing' : 'Share',
-    icon: p.shared ? 'pi pi-lock' : 'pi pi-share-alt',
-    disabled: !p.can_edit,
-    command: () => toggleShare(p),
-  },
+  { label: 'Quick edit', icon: 'pi pi-pencil', disabled: !p.can_edit, command: () => openQuick(p) },
+  { label: p.shared ? 'Make private' : 'Share', icon: p.shared ? 'pi pi-lock' : 'pi pi-share-alt', disabled: !p.can_edit, command: () => toggleShare(p) },
   { label: 'Delete', icon: 'pi pi-trash', disabled: !p.can_edit, command: () => deleteProfile(p) },
 ])
+
+// Sửa nhanh: ngăn kéo với tên (chủ khoá)
+const quick = ref<ExportProfile | null>(null)
+const quickDraft = reactive(emptyDraft())
+const quickSaving = ref(false)
+const quickFields: FieldDef[] = [
+  { key: 'name', label: 'Name', maxlength: 100 },
+  { key: 'owner', label: 'Owner', lock: 'Profiles keep the person who made them.' },
+]
+const quickSaved = computed(() => ({ name: quick.value?.name ?? '', owner: quick.value?.owner.name ?? '' }))
+const quickOpen = computed({
+  get: () => quick.value !== null,
+  set: (v) => {
+    if (!v) {
+      quick.value = null
+      clearTab(quickDraft, 'overview')
+    }
+  },
+})
+function openQuick(p: ExportProfile) {
+  clearTab(quickDraft, 'overview')
+  quick.value = p
+}
+const quickIndex = computed(() => (quick.value ? visible.value.findIndex((x) => x.id === quick.value!.id) : -1))
+async function moveQuick(step: number) {
+  const next = visible.value[quickIndex.value + step]
+  if (!next || !(await mayClose(isDirty(quickDraft)))) return
+  openQuick(next)
+}
+async function saveQuick() {
+  const p = quick.value
+  if (!p) return
+  quickSaving.value = true
+  try {
+    if (await saveProfile(p, changesOf(quickDraft, 'overview'))) clearTab(quickDraft, 'overview')
+  } finally {
+    quickSaving.value = false
+  }
+}
+watch(profiles, (list) => {
+  if (quick.value) quick.value = list?.find((x) => x.id === quick.value!.id) ?? null
+})
+
+// Profile mới: chỉ hỏi tên, bố cục mặc định; mở ở Columns để chọn cột
+const creating = ref(false)
+const newName = ref('')
+const errors = useFormErrors()
+const form = useDirty(() => newName.value.trim())
+const create = useCreateExportProfile()
+function openCreate() {
+  newName.value = ''
+  errors.clear()
+  form.reset()
+  creating.value = true
+}
+async function submitCreate() {
+  errors.clear()
+  try {
+    const np = await create.mutateAsync({ name: newName.value.trim(), shared: false, layout: defaultReportLayout() })
+    creating.value = false
+    await router.push({ path: `/export-profiles/${np.id}`, query: { tab: 'columns' } })
+  } catch (err) {
+    errors.set(err)
+  }
+}
 </script>
 
 <template>
   <section>
     <PageHeader title="Export profiles" subtitle="Saved report layouts. Shared ones can be used by everyone who can export.">
-      <Button label="New profile" icon="pi pi-plus" @click="open()" />
+      <Button label="New profile" icon="pi pi-plus" @click="openCreate" />
     </PageHeader>
     <div class="toolbar">
       <SegmentedFilter v-model="show" :options="showOptions" label="Show" />
@@ -165,12 +170,9 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Export
     >
       <Column header="Name">
         <template #body="{ data: p }: { data: ExportProfile }">
-          <form v-if="renaming === p.id" class="rename" @submit.prevent="saveRename(p)" @keydown.esc.prevent="cancelRename">
-            <InputText :id="`rename-${p.id}`" v-model="newName" size="small" maxlength="100" required :aria-label="`New name for ${p.name}`" />
-            <Button type="submit" label="Save" size="small" :loading="update.isPending.value" />
-            <Button label="Cancel" size="small" text severity="secondary" @click="cancelRename" />
-          </form>
-          <span v-else class="name">{{ p.name }}</span>
+          <InlineCell :value="p.name" :editable="p.can_edit" class="name" @save="(v) => rename(p, v)" @open="(e) => openProfile(p, e)">
+            {{ p.name }}
+          </InlineCell>
         </template>
       </Column>
       <Column header="Owner">
@@ -187,15 +189,14 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Export
       <Column header="Updated">
         <template #body="{ data: p }: { data: ExportProfile }">{{ formatDay(p.updated_at) }}</template>
       </Column>
-      <Column header="" header-style="width: 12rem">
+      <Column header="" header-style="width: 10rem">
         <template #body="{ data: p }: { data: ExportProfile }">
           <div class="row-actions">
             <IconAction icon="pi pi-download" label="Export all assets with this profile" @click="exportAll(p)" />
-            <IconAction icon="pi pi-sliders-h" :label="p.can_edit ? 'Edit layout' : 'Open (save as a copy)'" @click="open(p)" />
-            <IconAction icon="pi pi-pencil" label="Rename" :disabled="!p.can_edit" :reason="why(p)" @click="startRename(p)" />
+            <IconAction icon="pi pi-pencil" label="Quick edit" :disabled="!p.can_edit" :reason="why(p)" @click="openQuick(p)" />
             <IconAction
               :icon="p.shared ? 'pi pi-lock' : 'pi pi-share-alt'"
-              :label="p.shared ? 'Stop sharing' : 'Share'"
+              :label="p.shared ? 'Make private' : 'Share'"
               :disabled="!p.can_edit"
               :reason="why(p)"
               @click="toggleShare(p)"
@@ -206,25 +207,51 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Export
       </Column>
       <template #empty>
         <TableSkeleton v-if="isLoading" />
-        <EmptyState v-else icon="pi pi-file-export" text="No profiles yet. Save one from Export report… on any asset list." />
+        <EmptyState v-else icon="pi pi-file-export" text="No profiles yet. Make one here, or save one from Export report… on any asset list." />
       </template>
     </DataTable>
-    <ReportDialog v-model:visible="dialogOpen" :scope="scope" :profile-id="dialogProfile" />
+
+    <QuickEditDrawer
+      v-if="quick"
+      v-model:visible="quickOpen"
+      :title="quick.name"
+      icon="file"
+      :dirty="isDirty(quickDraft)"
+      :busy="quickSaving"
+      :can-prev="quickIndex > 0"
+      :can-next="quickIndex >= 0 && quickIndex < visible.length - 1"
+      @save="saveQuick"
+      @prev="moveQuick(-1)"
+      @next="moveQuick(1)"
+      @open-page="router.push(`/export-profiles/${quick.id}`)"
+    >
+      <OverviewFields :fields="quickFields" :saved="quickSaved" :draft="quickDraft" :readonly="!quick.can_edit" stacked />
+    </QuickEditDrawer>
+
+    <FormDialog
+      v-model:visible="creating"
+      size="s"
+      icon="file"
+      title="New export profile"
+      action="Create profile"
+      :busy="create.isPending.value"
+      :error="errors.general.value"
+      :dirty="form.dirty.value"
+      @submit="submitCreate"
+    >
+      <div class="field">
+        <label for="profile-name">Name</label>
+        <InputText id="profile-name" v-model="newName" required maxlength="100" autofocus />
+        <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
+      </div>
+      <template #hint>Starts with Tag, Name, Type, Status and Purchase date. Pick columns on the next page.</template>
+    </FormDialog>
   </section>
 </template>
 
 <style scoped>
 .name {
   font-weight: 600;
-}
-.rename {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem;
-}
-.rename :deep(.p-inputtext) {
-  min-width: 12rem;
 }
 .muted {
   color: var(--p-text-muted-color);
