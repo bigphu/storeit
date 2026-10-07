@@ -6,9 +6,11 @@ import DataTable, { type DataTableRowContextMenuEvent } from 'primevue/datatable
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import InputText from 'primevue/inputtext'
+import Menu from 'primevue/menu'
+import type { MenuItem } from 'primevue/menuitem'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AddCard from '@/components/AddCard.vue'
 import CardGrid from '@/components/CardGrid.vue'
@@ -103,17 +105,28 @@ function openType(t: AssetType, e?: MouseEvent, newTab?: boolean) {
 }
 const rowClick = onRowClick(openType)
 const menu = ref<InstanceType<typeof ContextMenu>>()
-const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<AssetType>(menu, (t) => [
+// Cùng một danh sách hành động cho menu chuột phải (dòng, thẻ) và nút menu trên thẻ
+const typeMenu = (t: AssetType): MenuItem[] => [
   { label: 'Open assets', icon: 'pi pi-arrow-right', command: () => openType(t) },
   { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => openType(t, undefined, true) },
   { separator: true },
   { label: 'Type settings', icon: 'pi pi-cog', command: () => openLocation(router, settingsPath(t)) },
   { label: 'Quick edit', icon: 'pi pi-pencil', visible: canManage.value, command: () => openQuick(t) },
   { label: t.archived_at ? 'Restore' : 'Archive', icon: t.archived_at ? 'pi pi-replay' : 'pi pi-inbox', visible: canManage.value && !t.is_system, command: () => archiveType(t) },
-])
+]
+const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<AssetType>(menu, typeMenu)
 function onCardMenu(t: AssetType, e: MouseEvent) {
   e.preventDefault()
   showMenu({ originalEvent: e, data: t, index: 0 } as DataTableRowContextMenuEvent)
+}
+// Nút menu (☰) trên đầu thẻ: thay cho hàng nút hành động để thẻ gọn. Không xoá thẻ đang
+// chọn khi menu đóng: Menu báo đóng sau hiệu ứng, lúc đó có thể đã mở cho thẻ khác.
+const cardMenu = ref<InstanceType<typeof Menu>>()
+const cardMenuType = shallowRef<AssetType | null>(null)
+const cardMenuItems = computed(() => (cardMenuType.value ? typeMenu(cardMenuType.value) : []))
+function toggleCardMenu(t: AssetType, e: MouseEvent) {
+  cardMenuType.value = t
+  cardMenu.value?.toggle(e)
 }
 
 // Loại mới: mã tự điền theo tên cho đến khi người dùng tự sửa mã
@@ -215,6 +228,7 @@ watch(types, (list) => {
     <KindMeter v-if="state.show === 'active'" legend class="legend-row" />
 
     <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />
+    <Menu ref="cardMenu" :model="cardMenuItems" popup />
 
     <CardGrid v-if="state.layout === 'cards'">
       <EntityCard
@@ -236,14 +250,7 @@ watch(types, (list) => {
           <span v-if="t.is_system" v-tooltip.top="'Built-in type'" class="lock" aria-label="Built-in">
             <i class="pi pi-lock" />
           </span>
-          <IconAction v-if="canManage" icon="pi pi-pencil" :label="`Quick edit ${t.name}`" @click="openQuick(t)" />
-          <IconAction
-            v-if="canManage && !t.is_system"
-            :icon="t.archived_at ? 'pi pi-replay' : 'pi pi-inbox'"
-            :label="t.archived_at ? `Restore ${t.name}` : `Archive ${t.name}`"
-            @click="archiveType(t)"
-          />
-          <IconAction icon="pi pi-cog" :label="`${t.name} settings`" :to="settingsPath(t)" />
+          <IconAction icon="pi pi-bars" :label="`Actions for ${t.name}`" aria-haspopup="menu" @click="(e) => toggleCardMenu(t, e)" />
         </header>
         <p class="desc">{{ t.description || 'No description.' }}</p>
         <Tag
