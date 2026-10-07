@@ -196,7 +196,7 @@ function commitRename() {
   box-shadow: inset 0 2px 0 var(--app-accent);
   /* đè lên viền dưới của thanh để nối liền với trang */
   margin-bottom: -1px;
-  padding-bottom: calc(0.45rem + 1px);
+  /* padding-bottom: 0.; */
 }
 .tab-icon {
   font-size: 0.75rem;
@@ -205,6 +205,9 @@ function commitRename() {
 .app-tab.pinned .tab-icon {
   color: var(--app-accent);
   opacity: 1;
+}
+.app-tab.pinned {
+  padding-right: 0.7rem;
 }
 .tab-label {
   overflow: hidden;

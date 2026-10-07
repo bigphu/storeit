@@ -87,7 +87,7 @@ const statusOptions = computed<SegmentOption<Filter>[]>(() => {
     { label: 'Disabled', value: 'disabled', count: c ? n('disabled') : undefined },
   ]
 })
-const roleOptions = computed(() => [{ name: 'Any role', id: '' }, ...(roles.data.value ?? [])])
+const roleOptions = computed(() => [{ name: 'All roles', id: 'all' }, ...(roles.data.value ?? [])])
 
 function onPage(e: DataTablePageEvent) {
   // đổi số dòng thì về trang 1
@@ -137,12 +137,12 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
         <InputText v-model="search" placeholder="Search name or email" aria-label="Search accounts" />
       </IconField>
       <Select
-        :model-value="state.role"
+        :model-value="state.role || 'all'"
         :options="roleOptions"
         option-label="name"
         option-value="id"
         aria-label="Role"
-        @update:model-value="(v: string) => update({ role: v, page: 1 })"
+        @update:model-value="(v: string) => update({ role: v === 'all' ? '' : v, page: 1 })"
       />
     </div>
     <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />

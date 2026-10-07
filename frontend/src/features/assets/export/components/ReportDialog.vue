@@ -158,12 +158,6 @@ const patch = computed(() => {
   if (!p || !saveForm.value) return null
   return profilePatch(p, saveForm.value, dirty.value ? current.value : null)
 })
-const saveLead = computed(() => {
-  const p = profile.value
-  if (!p) return 'Save these settings as a new profile.'
-  if (!p.can_edit) return `Shared by ${p.owner.name}. You can save your own copy.`
-  return 'Rename, share, or save the current columns and format.'
-})
 function openSave(e: Event) {
   errors.clear()
   const p = profile.value
@@ -263,7 +257,7 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
     v-model:visible="visible"
     modal
     class="report-dialog"
-    :style="{ width: 'min(72rem, 96vw)' }"
+    :style="{ width: 'max(80rem, 88vw)' }"
     :content-style="{ padding: 0 }"
     :pt="{
       footer: {
@@ -284,7 +278,6 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
     </template>
     <Popover ref="savePop" @hide="saveForm = null">
       <form v-if="saveForm" class="save-as" @submit.prevent="submitSave">
-        <p class="save-lead">{{ saveLead }}</p>
         <label for="save-name">Name</label>
         <InputText id="save-name" v-model="saveForm.name" required maxlength="100" autofocus fluid :invalid="!!errors.fields.value.name" @update:model-value="saveForm.hint = ''" />
         <span class="check">
