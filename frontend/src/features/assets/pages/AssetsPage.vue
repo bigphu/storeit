@@ -14,18 +14,23 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import type { MenuItem } from 'primevue/menuitem'
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTabId, useTabQuery, useTabTitle } from '@/app/tabs/tabPage'
 import type { AssetListItem } from '@/lib/api/types'
+import InlineCell from '@/components/InlineCell.vue'
+import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
+import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
+import { mayClose } from '@/lib/confirm'
+import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
-import { formatDate, formatDateTime } from '@/lib/dates'
+import { formatDate, formatDateTime, fromDateString, toDateString } from '@/lib/dates'
 import { usePageKeys } from '@/lib/pageKeys'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
 import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
 import { kindSeverity, statusKinds, useStatuses } from '@/features/statuses/api'
-import { useAssetList } from '../api'
+import { useAsset, useAssetList } from '../api'
 import EmptyState from '@/components/EmptyState.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import AttributeFilterPopover from '../components/AttributeFilterPopover.vue'
@@ -48,7 +53,7 @@ import {
   toTableSort,
 } from '../listQuery'
 import { useAssetActions } from '../useAssetActions'
-import { formatValue } from '../values'
+import { type FormValues, formatValue, fromApiValues, toApiValues } from '../values'
 
 // typeId (từ /types/:typeId/assets): danh sách của một loại; không có là mọi loại
 const props = defineProps<{ typeId?: string }>()
@@ -276,6 +281,113 @@ function cell(row: AssetListItem, key: string) {
   return formatValue(row.attributes?.find((a) => a.key === key))
 }
 
+
+// Sửa nhanh: nhấp đúp tên, status, ngày mua để đổi tại chỗ; bút chì mở ngăn kéo (các trường
+// của tài sản và thuộc tính của loại). Tài sản đã retire không sửa nhanh được
+const statusChoices = computed(() =>
+  (statuses.value ?? []).filter((x) => !x.archived_at && x.kind !== 'retired').map((x) => ({ label: x.name, value: x.id })),
+)
+const statusLabel = (id: string) => statusChoices.value.find((o) => o.value === id)?.label ?? 'another status'
+const canQuick = (a: AssetListItem) => canManage.value && !a.retired_at
+const rows = computed(() => data.value?.items ?? [])
+const quick = ref<AssetListItem | null>(null)
+const quickDraft = reactive(emptyDraft())
+const quickSaving = ref(false)
+const { data: quickAsset } = useAsset(() => quick.value?.id)
+const { data: quickType } = useAssetType(() => quickAsset.value?.asset_type.id)
+// khoá trường thuộc tính: "attr:<key>" để không trùng tên trường của tài sản
+const attrKey = (k: string) => `attr:${k}`
+const quickFields = computed<FieldDef[]>(() => {
+  const base: FieldDef[] = [
+    { key: 'name', label: 'Name', maxlength: 200 },
+    { key: 'tag', label: 'Tag', lock: 'Tags never change.' },
+    { key: 'status_id', label: 'Status', kind: 'select', options: statusChoices.value },
+    { key: 'purchase_date', label: 'Purchase date', kind: 'date' },
+    { key: 'description', label: 'Description', kind: 'textarea' },
+  ]
+  const attrs = (quickType.value?.attributes ?? []).filter((x) => !x.removed).sort((x, y) => x.position - y.position)
+  return base.concat(
+    attrs.map((x) => {
+      const label = x.unit ? `${x.label} (${x.unit})` : x.label
+      if (x.data_type === 'date') return { key: attrKey(x.key), label, kind: 'date' }
+      if (x.data_type === 'boolean')
+        return { key: attrKey(x.key), label, kind: 'select', options: [{ label: '—', value: '' }, { label: 'Yes', value: 'true' }, { label: 'No', value: 'false' }] }
+      if (x.data_type === 'select')
+        return {
+          key: attrKey(x.key),
+          label,
+          kind: 'select',
+          options: [{ label: '—', value: '' }, ...x.options.filter((o) => !o.removed).map((o) => ({ label: o.label, value: o.id }))],
+        }
+      return { key: attrKey(x.key), label }
+    }),
+  )
+})
+// giá trị form của thuộc tính → chuỗi để so với bản nháp
+const asText = (v: FormValues[string]) => (v instanceof Date ? (toDateString(v) ?? '') : v === null || v === undefined ? '' : String(v))
+const quickSaved = computed(() => {
+  const a = quickAsset.value
+  if (!a) return {}
+  const values = fromApiValues(a.attributes, a.attributes)
+  return {
+    name: a.name,
+    tag: a.tag,
+    status_id: a.status.id,
+    purchase_date: a.purchase_date ?? '',
+    description: a.description,
+    ...Object.fromEntries(a.attributes.map((x) => [attrKey(x.key), asText(values[x.key])])),
+  }
+})
+const quickOpen = computed({
+  get: () => quick.value !== null,
+  set: (v) => {
+    if (!v) {
+      quick.value = null
+      clearTab(quickDraft, 'overview')
+    }
+  },
+})
+function openQuick(a: AssetListItem) {
+  clearTab(quickDraft, 'overview')
+  quick.value = a
+}
+const quickIndex = computed(() => (quick.value ? rows.value.findIndex((x) => x.id === quick.value!.id) : -1))
+async function moveQuick(step: number) {
+  const next = rows.value[quickIndex.value + step]
+  if (!next || !(await mayClose(isDirty(quickDraft)))) return
+  openQuick(next)
+}
+async function saveQuick() {
+  const row = quick.value
+  const a = quickAsset.value
+  if (!row || !a) return
+  const ch = changesOf(quickDraft, 'overview')
+  const change: Record<string, unknown> = {}
+  for (const k of ['name', 'status_id', 'description'] as const) if (k in ch) change[k] = String(ch[k])
+  if ('purchase_date' in ch) change.purchase_date = ch.purchase_date ? String(ch.purchase_date) : undefined
+  const attrChanges = Object.keys(ch).filter((k) => k.startsWith('attr:'))
+  if (attrChanges.length) {
+    // dựng lại toàn bộ giá trị thuộc tính: PUT thay toàn bộ
+    const values = fromApiValues(a.attributes, a.attributes)
+    for (const k of attrChanges) {
+      const key = k.slice(5)
+      const def = a.attributes.find((x) => x.key === key)
+      const v = String(ch[k] ?? '')
+      values[key] =
+        def?.data_type === 'number' ? (v === '' ? null : Number(v)) : def?.data_type === 'date' ? fromDateString(v) : v === '' && def?.data_type !== 'text' ? null : v
+    }
+    change.attributes = toApiValues(a.attributes, values)
+  }
+  quickSaving.value = true
+  try {
+    if (await actions.quickSave(row, change, 'saved')) clearTab(quickDraft, 'overview')
+  } finally {
+    quickSaving.value = false
+  }
+}
+watch(rows, (list) => {
+  if (quick.value) quick.value = list.find((x) => x.id === quick.value!.id) ?? null
+})
 </script>
 
 <template>
@@ -409,11 +521,26 @@ function cell(row: AssetListItem, key: string) {
           <RouterLink :to="`/assets/${a.id}`">{{ a.tag }}</RouterLink>
         </template>
       </Column>
-      <Column field="name" header="Name" sort-field="name" sortable />
+      <Column header="Name" sort-field="name" sortable>
+        <template #body="{ data: a }: { data: AssetListItem }">
+          <InlineCell :value="a.name" :editable="canQuick(a)" @save="(v) => actions.quickSave(a, { name: v }, `renamed to ${v}`)" @open="(e) => actions.open(a, e)">
+            {{ a.name }}
+          </InlineCell>
+        </template>
+      </Column>
       <Column field="asset_type_name" header="Type" sort-field="asset_type" sortable />
       <Column header="Status" sort-field="status" sortable>
         <template #body="{ data: a }: { data: AssetListItem }">
-          <Tag :value="a.status_name" :severity="kindSeverity(a.status_kind)" />
+          <InlineCell
+            :value="a.status_id"
+            :editable="canQuick(a)"
+            kind="select"
+            :options="statusChoices"
+            @save="(v) => actions.quickSave(a, { status_id: v }, `set to ${statusLabel(v)}`)"
+            @open="(e) => actions.open(a, e)"
+          >
+            <Tag :value="a.status_name" :severity="kindSeverity(a.status_kind)" />
+          </InlineCell>
         </template>
       </Column>
       <Column
@@ -426,7 +553,17 @@ function cell(row: AssetListItem, key: string) {
         <template #body="{ data: a }: { data: AssetListItem }">{{ cell(a, attr.key) }}</template>
       </Column>
       <Column header="Purchased" sort-field="purchase_date" sortable>
-        <template #body="{ data: a }: { data: AssetListItem }">{{ formatDate(a.purchase_date) }}</template>
+        <template #body="{ data: a }: { data: AssetListItem }">
+          <InlineCell
+            :value="a.purchase_date ?? ''"
+            :editable="canQuick(a)"
+            kind="date"
+            @save="(v) => actions.quickSave(a, { purchase_date: v }, 'purchase date changed')"
+            @open="(e) => actions.open(a, e)"
+          >
+            {{ formatDate(a.purchase_date) || '—' }}
+          </InlineCell>
+        </template>
       </Column>
       <Column header="Updated" sort-field="updated_at" sortable>
         <template #body="{ data: a }: { data: AssetListItem }">{{ formatDateTime(a.updated_at) }}</template>
@@ -436,13 +573,13 @@ function cell(row: AssetListItem, key: string) {
           <div class="row-actions">
             <template v-if="!a.retired_at">
               <Button
-                v-tooltip.top="'Edit'"
+                v-tooltip.top="'Quick edit'"
                 icon="pi pi-pencil"
                 size="small"
                 text
                 rounded
-                aria-label="Edit"
-                @click="(e: MouseEvent) => actions.edit(a, e)"
+                aria-label="Quick edit"
+                @click="openQuick(a)"
               />
               <Button
                 v-tooltip.top="'Retire'"
@@ -472,6 +609,24 @@ function cell(row: AssetListItem, key: string) {
         <EmptyState v-else icon="pi pi-box" text="No assets match these filters." />
       </template>
     </DataTable>
+
+    <QuickEditDrawer
+      v-if="quick"
+      v-model:visible="quickOpen"
+      :title="`${quick.tag} · ${quick.name}`"
+      icon="box"
+      :dirty="isDirty(quickDraft)"
+      :busy="quickSaving"
+      :can-prev="quickIndex > 0"
+      :can-next="quickIndex >= 0 && quickIndex < rows.length - 1"
+      @save="saveQuick"
+      @prev="moveQuick(-1)"
+      @next="moveQuick(1)"
+      @open-page="router.push(`/assets/${quick.id}`)"
+    >
+      <OverviewFields v-if="quickAsset && quickAsset.id === quick.id" :fields="quickFields" :saved="quickSaved" :draft="quickDraft" stacked />
+      <TableSkeleton v-else />
+    </QuickEditDrawer>
 
     <RetireDialog v-model:visible="actions.retireOpen.value" :asset="actions.retireTarget.value" />
   </section>

@@ -1,10 +1,12 @@
 // Hành động nhanh trên một tài sản, dùng chung cho danh sách và trang tài sản: mở, sửa,
-// retire (RetireDialog, có Undo), restore (chạy ngay, có Undo)
+// retire (RetireDialog, có Undo), restore (chạy ngay, có Undo), sửa nhanh từ danh sách
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { runAction } from '@/lib/actions'
 import { openLocation } from '@/lib/navigation'
-import { fetchAsset, useRestoreAsset, useRetireAsset } from './api'
+import { fetchAsset, useReplaceAsset, useRestoreAsset, useRetireAsset } from './api'
+import { type AssetQuickChange, quickAssetBody } from './quickEdit'
+import { assetBodyOf } from './values'
 
 export interface ActionAsset {
   id: string
@@ -20,6 +22,7 @@ export function useAssetActions() {
   const router = useRouter()
   const restoreAsset = useRestoreAsset()
   const retireAsset = useRetireAsset()
+  const replaceAsset = useReplaceAsset()
 
   // retireTarget + retireOpen gắn vào <RetireDialog>
   const retireTarget = ref<ActionAsset | null>(null)
@@ -37,6 +40,21 @@ export function useAssetActions() {
     askRetire(a: ActionAsset) {
       retireTarget.value = a
       retireOpen.value = true
+    },
+    // Sửa nhanh từ danh sách: đọc bản mới nhất, chỉ đổi phần vừa sửa, PUT với version; Undo đặt lại
+    quickSave(row: { id: string; tag: string }, change: AssetQuickChange, what: string) {
+      return runAction({
+        run: async () => {
+          const a = await fetchAsset(row.id)
+          const saved = await replaceAsset.mutateAsync({ id: a.id, version: a.version, ...quickAssetBody(a, change) })
+          return { before: assetBodyOf(a), saved }
+        },
+        done: `${row.tag} ${what}.`,
+        failed: `Couldn't save ${row.tag}.`,
+        undo: ({ before, saved }) => replaceAsset.mutateAsync({ id: row.id, version: saved.version, ...before }),
+        undone: `${row.tag} changed back.`,
+        undoFailed: `Couldn't change ${row.tag} back. Someone may have changed it since.`,
+      })
     },
     restore(a: ActionAsset) {
       return runAction({
