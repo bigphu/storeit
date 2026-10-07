@@ -45,9 +45,10 @@ export function previousOf(saved: Record<string, DraftValue>, changes: Record<st
   return Object.fromEntries(Object.keys(changes).map((k) => [k, saved[k] ?? null]))
 }
 
-// setList: danh sách tick mới so với danh sách đã lưu, ghi từng khoá
+// setList: danh sách tick mới so với danh sách đã lưu, ghi từng khoá (cả khoá đang có trong
+// bản nháp: bỏ tick một khoá chỉ có trong bản nháp thì nó phải mất khỏi bản nháp)
 export function setList(d: Draft, tab: string, saved: string[], next: string[]) {
-  for (const k of new Set([...saved, ...next])) setEdit(d, tab, k, next.includes(k), saved.includes(k))
+  for (const k of new Set([...saved, ...next, ...Object.keys(d[tab] ?? {})])) setEdit(d, tab, k, next.includes(k), saved.includes(k))
 }
 
 // listOf: danh sách tick hiện tại (đã lưu + bản nháp), theo thứ tự của all
