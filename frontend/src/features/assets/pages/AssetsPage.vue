@@ -497,7 +497,7 @@ watch(rows, (list) => {
     <DataTable
       :value="data?.items ?? []"
       lazy
-      paginator
+      :paginator="!isLoading"
       :rows="pageSize"
       :rows-per-page-options="PAGE_SIZES"
       paginator-template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
@@ -621,7 +621,7 @@ watch(rows, (list) => {
         </template>
       </Column>
       <template #empty>
-        <TableSkeleton v-if="isLoading" />
+        <TableSkeleton v-if="isLoading" :rows="12" />
         <EmptyState v-else icon="pi pi-box" text="No assets match these filters." />
       </template>
     </DataTable>

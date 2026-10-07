@@ -3,9 +3,11 @@
    lấy màu từ đây. */
 
 :root {
-  --app-display: 'Bricolage Grotesque Variable', 'Be Vietnam Pro', system-ui, sans-serif;
-  --app-body: 'Be Vietnam Pro', system-ui, 'Segoe UI', sans-serif;
-  --app-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  /* "<font> fallback": font dự phòng có số đo khớp (fontaine, vite.config.ts), giữ chữ không
+     xô lệch khi font web tải xong */
+  --app-display: 'Bricolage Grotesque Variable', 'Bricolage Grotesque Variable fallback', 'Be Vietnam Pro', system-ui, sans-serif;
+  --app-body: 'Be Vietnam Pro', 'Be Vietnam Pro fallback', system-ui, 'Segoe UI', sans-serif;
+  --app-mono: 'JetBrains Mono', 'JetBrains Mono fallback', ui-monospace, 'Cascadia Mono', Consolas, monospace;
   /* Mỗi vai trò bốn sắc: tươi (biểu tượng, bong bóng, tiến trình, thanh cuộn, focus), đậm
      (nền có chữ trắng: tag, nút đặc; tiêu đề màu), ink (chữ màu trên nền sáng), soft (hộp
      thông báo, vùng chọn). Tươi và đậm giống nhau ở hai theme. brand cũng là "thành công". */
