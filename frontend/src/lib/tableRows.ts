@@ -3,7 +3,7 @@
 import type ContextMenu from 'primevue/contextmenu'
 import type { DataTableRowClickEvent, DataTableRowContextMenuEvent } from 'primevue/datatable'
 import type { MenuItem } from 'primevue/menuitem'
-import { computed, type Ref, shallowRef } from 'vue'
+import { computed, type Ref, ref, shallowRef } from 'vue'
 
 // Bấm trúng liên kết, nút, ô nhập, checkbox hay tay kéo thì để phần tử đó tự xử lý
 const CONTROLS = 'a, button, input, label, textarea, .p-checkbox, .p-datatable-reorderable-row-handle'
@@ -37,6 +37,40 @@ export function useRowMenu<T>(menu: ContextMenuRef, build: (row: T) => MenuItem[
     },
     clear() {
       row.value = null
+    },
+  }
+}
+
+// Hàng "đang dùng" của bảng dài: hàng dưới chuột hay hàng đang có focus. Bảng chỉ dựng nút
+// hành động cho hàng này: mỗi nút PrimeVue tốn công dựng, 50 dòng × 3 nút làm chậm lần mở
+// trang. Màn cảm ứng không rê chuột được nên dựng cho mọi hàng. Gắn onOver/onLeave/onFocusIn/
+// onFocusOut lên DataTable; isActive nhận index trong slot #body (trùng data-p-index của <tr>)
+type RowTarget = { closest?: (s: string) => unknown } | null
+
+function rowIndex(target: EventTarget | null): number | null {
+  const tr = (target as RowTarget)?.closest?.('tbody tr[data-p-index]') as { dataset: { pIndex?: string } } | null | undefined
+  return tr?.dataset.pIndex == null ? null : Number(tr.dataset.pIndex)
+}
+
+export function useActiveRow(touch = typeof window !== 'undefined' && !!window.matchMedia?.('(hover: none)').matches) {
+  const hovered = ref<number | null>(null)
+  const focused = ref<number | null>(null)
+  return {
+    isActive: (i: number) => touch || hovered.value === i || focused.value === i,
+    onOver(e: Event) {
+      const i = rowIndex(e.target)
+      if (i !== null) hovered.value = i
+    },
+    onLeave() {
+      hovered.value = null
+    },
+    onFocusIn(e: Event) {
+      const i = rowIndex(e.target)
+      if (i !== null) focused.value = i
+    },
+    // focus rời hẳn hàng (không sang phần tử khác trong cùng hàng)
+    onFocusOut(e: FocusEvent) {
+      if (rowIndex(e.relatedTarget) !== focused.value) focused.value = null
     },
   }
 }

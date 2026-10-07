@@ -28,6 +28,7 @@ import { useSession } from '@/lib/auth/session'
 import { formatDate, formatDateTime, toDateString } from '@/lib/dates'
 import { usePageKeys } from '@/lib/pageKeys'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
+import { useActiveRow } from '@/lib/tableRows'
 import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
 import { kindSeverity, statusKinds, useStatuses } from '@/features/statuses/api'
 import { useAsset, useAssetList } from '../api'
@@ -75,6 +76,8 @@ function update(patch: Partial<AssetListState>) {
 
 // Số dòng mỗi trang: mỗi bảng (mọi loại, từng loại) nhớ số riêng
 const { size: pageSize, set: setPageSize } = usePageSize(() => `assets:${state.value.typeId ?? 'all'}`)
+// nút hành động chỉ dựng cho hàng dưới chuột / có focus (lib/tableRows.ts)
+const activeRow = useActiveRow()
 const { data, isFetching, isLoading } = useAssetList(computed(() => toApiParams(state.value, pageSize.value)))
 
 // danh sách lọc gồm cả status đã lưu trữ: tài sản cũ vẫn mang chúng
@@ -517,6 +520,10 @@ watch(rows, (list) => {
       @sort="onSort"
       @row-click="onRowClick"
       @row-contextmenu="onRowContextMenu"
+      @mouseover="activeRow.onOver"
+      @mouseleave="activeRow.onLeave"
+      @focusin="activeRow.onFocusIn"
+      @focusout="activeRow.onFocusOut"
     >
       <Column v-if="canManage || canExport" selection-mode="multiple" header-style="width: 3rem" body-class="select-cell" />
       <Column header="Tag" sort-field="tag" sortable body-class="tag-cell">
@@ -584,10 +591,11 @@ watch(rows, (list) => {
       <Column header="Updated" sort-field="updated_at" sortable>
         <template #body="{ data: a }: { data: AssetListItem }">{{ formatDateTime(a.updated_at) }}</template>
       </Column>
-      <Column v-if="canManage" header="" class="row-actions-col">
-        <template #body="{ data: a }: { data: AssetListItem }">
+      <Column v-if="canManage" header="" class="row-actions-col" header-style="width: 5.5rem; min-width: 5.5rem">
+        <template #body="{ data: a, index }: { data: AssetListItem; index: number }">
           <div class="row-actions">
-            <template v-if="!a.retired_at">
+            <template v-if="!activeRow.isActive(index)" />
+            <template v-else-if="!a.retired_at">
               <Button
                 v-tooltip.top="'Quick edit'"
                 icon="pi pi-pencil"

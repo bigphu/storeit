@@ -92,6 +92,14 @@ function startRename(t: TabItem) {
   renameText.value = label(t)
   renameForm.reset()
 }
+// Con lăn dọc trên dải tab cuộn ngang (chuột không có con lăn ngang)
+function onWheel(e: WheelEvent) {
+  const viewport = (e.currentTarget as HTMLElement).querySelector<HTMLElement>('.p-tablist-viewport')
+  if (!viewport || Math.abs(e.deltaY) <= Math.abs(e.deltaX) || viewport.scrollWidth <= viewport.clientWidth) return
+  e.preventDefault()
+  viewport.scrollLeft += e.deltaY
+}
+
 function commitRename() {
   if (renaming.value) tabs.rename(renaming.value.id, renameText.value)
   renaming.value = null
@@ -100,7 +108,17 @@ function commitRename() {
 
 <template>
   <div class="tabbar">
-    <Tabs :value="tabs.activeId ?? ''" scrollable class="tabs app-tabbar" @update:value="(id) => emit('switch', String(id))">
+    <!-- Tắt nút ‹ › của PrimeVue (show-navigators): chúng đo lại kích thước (bắt trình duyệt
+         dựng lại bố cục cả trang) mỗi lần dải tab cập nhật, rất tốn khi trang đang dựng bảng.
+         Dải tab vẫn cuộn ngang; con lăn chuột dọc cũng cuộn ngang (onWheel) -->
+    <Tabs
+      :value="tabs.activeId ?? ''"
+      scrollable
+      :show-navigators="false"
+      class="tabs app-tabbar"
+      @update:value="(id) => emit('switch', String(id))"
+      @wheel="onWheel"
+    >
       <TabList>
         <Tab
           v-for="t in tabs.tabs"

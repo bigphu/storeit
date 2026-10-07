@@ -117,7 +117,17 @@ Selection styling lives in `app/theme.ts` (token preset over Aura) and `app/base
   so the asset page can return to it and step through it (`J`/`K`).
 - Rows per page: every paged table passes `rowsPerPageOptions` and keeps its own size
   through `usePageSize(tableKey)` (`lib/preferences.ts`, per account in localStorage);
-  tables without a size use the default.
+  tables without a size use the default (25).
+- Performance of long tables (measured with Lighthouse on a production build, not the dev
+  server, which scores far lower):
+  - build row-action buttons only for the active row: `useActiveRow()` (`lib/tableRows.ts`)
+    tracks the hovered or focused row; touch screens build them on every row;
+  - give paged tables `TableSkeleton :rows="12"` and `:paginator="!isLoading"`, so nothing
+    below the table jumps when the first page arrives;
+  - format dates through `lib/dates.ts` (cached `Intl.DateTimeFormat`), not
+    `toLocaleDateString()` per cell;
+  - don't use PrimeVue's tab navigators (`show-navigators`) on bars that update while a
+    page renders: they measure the layout on every update.
 - **Stay on PrimeVue 4.x, `@primeuix/themes` 2.x and `primeicons` 7.x (MIT).** From
   PrimeVue 5 / primeicons 8 (July 2026) PrimeTek ships them under a commercial "PrimeUI"
   license that needs a license key (a free Community key exists for eligible users);
