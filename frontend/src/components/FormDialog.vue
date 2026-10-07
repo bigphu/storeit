@@ -61,7 +61,7 @@ function submit() {
   >
     <template #header>
       <span class="fd-icon"><AppIcon :name="icon" /></span>
-      <h2 class="fd-title">{{ title }}</h2>
+      <h2 :class="['fd-title', { grow: !$slots['header-extra'] }]">{{ title }}</h2>
       <slot name="header-extra" />
       <Button icon="pi pi-times" rounded severity="secondary" class="fd-close" aria-label="Close" @click="requestClose" />
     </template>
@@ -101,12 +101,16 @@ function submit() {
   font-size: 1.8rem;
 }
 .form-dialog .fd-title {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   font-family: var(--app-display);
   font-size: 1.5rem;
   font-weight: 800;
   letter-spacing: -0.02em;
+}
+/* không có gì khác trên đầu: tiêu đề chiếm chỗ trống, nút đóng về phải */
+.form-dialog .fd-title.grow {
+  flex: 1;
 }
 .form-dialog .fd-close {
   background: var(--p-content-background);
@@ -119,6 +123,12 @@ function submit() {
 }
 .form-dialog .fd-body.flush {
   padding: 0;
+}
+/* thân flush: nội dung tự chia ngăn cuộn, cần chiều cao của thân */
+.form-dialog .fd-body.flush > .fd-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 0;
 }
 .form-dialog .fd-content {
   display: flex;

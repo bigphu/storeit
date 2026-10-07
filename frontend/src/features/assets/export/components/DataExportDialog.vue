@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
-import Dialog from 'primevue/dialog'
+import FormDialog from '@/components/FormDialog.vue'
 import { computed } from 'vue'
 import { dataPreviewLayout, dataPreviewSheets, exportFileName } from '../layout'
 import { type ExportScope, usePreviewData } from '../usePreviewData'
@@ -22,7 +22,7 @@ const fileName = computed(() => exportFileName('data', undefined, new Date().toI
 </script>
 
 <template>
-  <Dialog v-model:visible="visible" modal header="What’s in the data export" :style="{ width: 'min(60rem, 96vw)' }" :content-style="{ padding: 0 }">
+  <FormDialog v-model:visible="visible" size="l" icon="file" title="What’s in the data export" flush>
     <div class="data-export">
       <div class="sub">
         <i class="pi pi-table" aria-hidden="true" />
@@ -39,7 +39,7 @@ const fileName = computed(() => exportFileName('data', undefined, new Date().toI
       <span class="file">{{ fileName }}</span>
       <Button label="Done" @click="visible = false" />
     </template>
-  </Dialog>
+  </FormDialog>
 </template>
 
 <style scoped>

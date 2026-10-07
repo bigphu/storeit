@@ -5,7 +5,6 @@ import ContextMenu from 'primevue/contextmenu'
 import DataTable from 'primevue/datatable'
 import InputText from 'primevue/inputtext'
 import Tag from 'primevue/tag'
-import { useConfirm } from 'primevue/useconfirm'
 import { computed, nextTick, ref } from 'vue'
 import EmptyState from '@/components/EmptyState.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
@@ -13,19 +12,18 @@ import IconAction from '@/components/IconAction.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
 import { useAssetTypes } from '@/features/asset-types/api'
-import { useDeleteExportProfile, useExportProfiles, useUpdateExportProfile } from '@/features/assets/export/api'
+import { useDeleteExportProfile, useExportProfiles, useRestoreExportProfile, useUpdateExportProfile } from '@/features/assets/export/api'
 import ReportDialog from '@/features/assets/export/components/ReportDialog.vue'
 import { useExport } from '@/features/assets/export/useExport'
 import type { ExportScope } from '@/features/assets/export/usePreviewData'
 import type { ExportProfile } from '@/lib/api/types'
 import { useSession } from '@/lib/auth/session'
+import { runAction } from '@/lib/actions'
 import { formatDay } from '@/lib/dates'
-import { notify } from '@/lib/notify'
 import { onRowClick, useRowMenu } from '@/lib/tableRows'
 
 // Profile export: của mình và được chia sẻ; mở để sửa, chạy trên mọi tài sản, chia sẻ, xoá
 const session = useSession()
-const confirm = useConfirm()
 const { data: profiles, isFetching, isLoading } = useExportProfiles(true)
 const { data: types } = useAssetTypes(false, true)
 
@@ -58,8 +56,9 @@ function open(p?: ExportProfile) {
 }
 
 const { run } = useExport()
-const update = useUpdateExportProfile()
+const update = useUpdateExportProfile(false)
 const remove = useDeleteExportProfile()
+const restore = useRestoreExportProfile()
 function exportAll(p: ExportProfile) {
   run({ mode: 'report', filters: {}, profile_id: p.id }, `${p.name}.xlsx`)
 }
@@ -80,29 +79,37 @@ async function saveRename(p: ExportProfile) {
     cancelRename()
     return
   }
-  try {
-    await update.mutateAsync({ id: p.id, version: p.version, name })
-    renaming.value = null
-    notify.success(`Renamed ${p.name} to ${name}.`)
-  } catch {
-    // lỗi (trùng tên, đã bị sửa) đã báo bằng thông báo chung; giữ ô nhập để sửa tiếp
-  }
+  const ok = await runAction({
+    run: () => update.mutateAsync({ id: p.id, version: p.version, name }),
+    done: `${p.name} renamed to ${name}.`,
+    failed: `Couldn't rename ${p.name}.`,
+    undo: (next) => update.mutateAsync({ id: p.id, version: next.version, name: p.name }),
+    undone: `Name put back to ${p.name}.`,
+    undoFailed: `Couldn't put the name back. It stays ${name}.`,
+  })
+  // lỗi (trùng tên, đã bị sửa): giữ ô nhập để sửa tiếp
+  if (ok) renaming.value = null
 }
 
 function toggleShare(p: ExportProfile) {
-  update.mutateAsync({ id: p.id, version: p.version, shared: !p.shared }).then(
-    () => notify.success(p.shared ? `${p.name} is private again.` : `${p.name} is shared with everyone who can export.`),
-    () => {},
-  )
+  const sharing = !p.shared
+  return runAction({
+    run: () => update.mutateAsync({ id: p.id, version: p.version, shared: sharing }),
+    done: sharing ? `${p.name} is shared with everyone who can export.` : `${p.name} is private again.`,
+    failed: `Couldn't change who sees ${p.name}.`,
+    undo: (next) => update.mutateAsync({ id: p.id, version: next.version, shared: p.shared }),
+    undone: sharing ? `${p.name} is private again.` : `${p.name} is shared again.`,
+    undoFailed: `Couldn't change who sees ${p.name} back.`,
+  })
 }
-function askDelete(p: ExportProfile) {
-  confirm.require({
-    header: 'Delete profile',
-    message: `Delete ${p.name}?${p.shared ? ' People who use this shared profile lose it too.' : ''}`,
-    acceptLabel: 'Delete',
-    rejectLabel: 'Cancel',
-    acceptProps: { severity: 'danger' },
-    accept: () => remove.mutateAsync(p.id).then(() => notify.success(`Deleted ${p.name}.`), () => {}),
+function deleteProfile(p: ExportProfile) {
+  return runAction({
+    run: () => remove.mutateAsync(p.id),
+    done: `${p.name} deleted.`,
+    failed: `Couldn't delete ${p.name}.`,
+    undo: () => restore.mutateAsync(p.id),
+    undone: `${p.name} restored.`,
+    undoFailed: `Couldn't restore ${p.name}. It stays deleted.`,
   })
 }
 const why = (p: ExportProfile) => `Only ${p.owner.name} or a profile manager can change this`
@@ -132,7 +139,7 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Export
     disabled: !p.can_edit,
     command: () => toggleShare(p),
   },
-  { label: 'Delete', icon: 'pi pi-trash', disabled: !p.can_edit, command: () => askDelete(p) },
+  { label: 'Delete', icon: 'pi pi-trash', disabled: !p.can_edit, command: () => deleteProfile(p) },
 ])
 </script>
 
@@ -193,7 +200,7 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Export
               :reason="why(p)"
               @click="toggleShare(p)"
             />
-            <IconAction icon="pi pi-trash" label="Delete" danger :disabled="!p.can_edit" :reason="why(p)" @click="askDelete(p)" />
+            <IconAction icon="pi pi-trash" label="Delete" danger :disabled="!p.can_edit" :reason="why(p)" @click="deleteProfile(p)" />
           </div>
         </template>
       </Column>

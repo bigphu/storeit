@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
-import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Popover from 'primevue/popover'
@@ -13,7 +12,9 @@ import TabPanels from 'primevue/tabpanels'
 import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
 import { computed, ref, watch } from 'vue'
+import FormDialog from '@/components/FormDialog.vue'
 import SegmentedFilter from '@/components/SegmentedFilter.vue'
+import { announce } from '@/lib/actions'
 import type { ExportLayout, ExportProfile } from '@/lib/api/types'
 import { useSession } from '@/lib/auth/session'
 import { useFormErrors } from '@/lib/forms'
@@ -174,11 +175,25 @@ async function saveHere() {
   if (!p || !ch || loadedVersion.value === null) return
   errors.clear()
   try {
+    // bản trước lần lưu này, để Undo đặt lại
+    const before = { name: p.name, shared: p.shared, layout: p.layout }
     const next = await update.mutateAsync({ id: p.id, version: loadedVersion.value, ...ch })
     saved.value = normalizeLayout(next.layout)
     loadedVersion.value = next.version
     closeSave()
-    notify.success(ch.name ? `Saved ${next.name} (renamed).` : `Saved ${next.name}.`)
+    announce(next, {
+      done: ch.name ? `Saved ${next.name} (renamed).` : `Saved ${next.name}.`,
+      undo: async (n) => {
+        const back = await update.mutateAsync({ id: p.id, version: n.version, name: before.name, shared: before.shared, layout: before.layout })
+        // hộp thoại còn mở trên profile này: lấy bản vừa đặt lại
+        if (profileId.value === p.id) {
+          saved.value = normalizeLayout(back.layout)
+          loadedVersion.value = back.version
+        }
+      },
+      undone: `${before.name} put back as it was.`,
+      undoFailed: `Couldn't put ${before.name} back. The saved version stays.`,
+    })
   } catch (err) {
     errors.set(err)
   }
@@ -253,22 +268,10 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
 </script>
 
 <template>
-  <Dialog
-    v-model:visible="visible"
-    modal
-    class="report-dialog"
-    :style="{ width: 'max(80rem, 88vw)' }"
-    :content-style="{ padding: 0 }"
-    :pt="{
-      footer: {
-        style: 'padding: 0.75rem 1.1rem; border-top: 1px solid var(--app-line); align-items: center;'
-      }
-    }"
-  >
-    <!-- Thanh tiêu đề gọn: profile, trạng thái, lưu; không thêm hàng nào trên vùng cuộn -->
-    <template #header>
+  <FormDialog v-model:visible="visible" icon="file" title="Export report" width="max(80rem, 88vw)" flush :dirty="dirty" class="report-dialog">
+    <!-- Cạnh tiêu đề: profile, trạng thái, lưu; không thêm hàng nào trên vùng cuộn -->
+    <template #header-extra>
       <div class="title-bar">
-        <span class="p-dialog-title">Export report</span>
         <Select v-model="profileId" aria-label="Export profile" :options="profiles ?? []" option-label="name" option-value="id" placeholder="No profile" show-clear size="small" class="profile-select" />
         <i v-if="profile && !profile.can_edit" v-tooltip.bottom="`Shared by ${profile.owner.name}`" class="pi pi-lock state" aria-label="Shared by someone else" />
         <i v-else-if="profile?.shared" v-tooltip.bottom="'Shared with everyone who can export'" class="pi pi-users state" aria-label="Shared" />
@@ -366,7 +369,7 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
       <Button label="Cancel" text severity="secondary" @click="visible = false" />
       <Button label="Download .xlsx" icon="pi pi-download" :loading="running" :disabled="!current.columns.length && !(current.sheets === 'per_type' && current.each_type_attrs)" @click="download" />
     </template>
-  </Dialog>
+  </FormDialog>
 </template>
 
 <style scoped>
@@ -377,9 +380,6 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
   gap: 0.4rem 0.6rem;
   flex: 1;
   min-width: 0;
-}
-.title-bar .p-dialog-title {
-  margin-right: 0.4rem;
 }
 .state {
   color: var(--p-text-muted-color);
@@ -436,6 +436,7 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 0.9rem 1.1rem 1.2rem;
 }
 .config :deep(.p-tabpanel) {
