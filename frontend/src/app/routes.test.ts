@@ -25,6 +25,11 @@ describe('routes', () => {
     expect(router.resolve('/nope/at/all').name).toBe('not-found')
     expect(isPublic('/nope/at/all')).toBe(false)
   })
+
+  it('names the status and export profile pages', () => {
+    expect(router.resolve('/statuses/abc').name).toBe('status')
+    expect(router.resolve('/export-profiles/abc').name).toBe('export-profile')
+  })
 })
 
 // stubbed: cùng bảng route, component thay bằng component rỗng

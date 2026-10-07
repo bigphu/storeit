@@ -5,9 +5,12 @@ import Column from 'primevue/column'
 import DataTable, { type DataTableRowReorderEvent } from 'primevue/datatable'
 import InputText from 'primevue/inputtext'
 import Tag from 'primevue/tag'
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
-import FormDialog from '@/components/FormDialog.vue'
+import InlineCell from '@/components/InlineCell.vue'
+import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
+import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import IconAction from '@/components/IconAction.vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -15,21 +18,20 @@ import type { Status, StatusKind } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { runAction } from '@/lib/actions'
-import { useDirty, useFormErrors } from '@/lib/forms'
+import { mayClose } from '@/lib/confirm'
+import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
+import { useFormErrors } from '@/lib/forms'
+import { openLocation } from '@/lib/navigation'
 import { notify } from '@/lib/notify'
-import {
-  kindSeverity,
-  useArchiveStatus,
-  useCreateStatus,
-  useReorderStatuses,
-  useRestoreStatus,
-  useStatuses,
-  useUpdateStatus,
-} from '../api'
+import { onRowClick } from '@/lib/tableRows'
+import { kindSeverity, useCreateStatus, useReorderStatuses, useStatuses } from '../api'
 import { archiveBlock, KIND_INFO, KIND_ORDER, lanes, moveBy, orderAfterMove } from '../lanes'
+import { useStatusLifecycle, useStatusOverviewSave } from '../overviewSave'
 
-// Status chia theo kind thành bốn làn; kéo thả (hay Alt+↑/↓ trên tên) đổi thứ tự trong làn
+// Status chia theo kind thành bốn làn; kéo thả (hay Alt+↑/↓ trên tên) đổi thứ tự trong làn.
+// Bấm dòng mở trang của status; nhấp đúp tên để đổi tại chỗ; bút chì mở ngăn kéo sửa nhanh
 const session = useSession()
+const router = useRouter()
 const canManage = computed(() => session.can(Perm.StatusManage))
 const showArchived = ref(false)
 const { data: statuses, isLoading } = useStatuses(showArchived, true)
@@ -69,19 +71,10 @@ async function moveKey(s: Status, delta: number) {
   document.querySelector<HTMLElement>(`[data-status-name="${s.id}"]`)?.focus()
 }
 
-const update = useUpdateStatus()
-function makeDefault(s: Status) {
-  const prev = (statuses.value ?? []).find((x) => x.kind === s.kind && x.is_default && !x.archived_at)
-  const kind = KIND_INFO[s.kind].label.toLowerCase()
-  return runAction({
-    run: () => update.mutateAsync({ id: s.id, make_default: true }),
-    done: `${s.name} is now the default ${kind} status.`,
-    failed: `Couldn't make ${s.name} the default.`,
-    undo: prev ? () => update.mutateAsync({ id: prev.id, make_default: true }) : undefined,
-    undone: prev && `${prev.name} is the default ${kind} status again.`,
-    undoFailed: `Couldn't change the default back. ${s.name} is still the default.`,
-  })
-}
+const lifecycle = useStatusLifecycle()
+const makeDefault = (s: Status) => lifecycle.makeDefault(s, statuses.value ?? [])
+const archiveStatus = (s: Status) => lifecycle.archive(s)
+const restoreStatus = (s: Status) => lifecycle.restore(s)
 
 // Thêm status ở cuối làn; kind lấy từ làn
 const create = useCreateStatus()
@@ -101,66 +94,66 @@ async function submitAdd() {
   addErrors.clear()
   const last = Math.max(0, ...(statuses.value ?? []).map((s) => s.position))
   try {
-    await create.mutateAsync({ name: newName.value, kind, position: last + 1 })
-    notify.success(`${newName.value.trim()} added.`)
-    adding.value = null
+    const created = await create.mutateAsync({ name: newName.value, kind, position: last + 1 })
+    notify.success(`${created.name} added to ${KIND_INFO[kind].label}.`, {
+      undo: () => void lifecycle.archive(created),
+      action: { label: 'Open', run: () => router.push(`/statuses/${created.id}`) },
+    })
+    newName.value = ''
+    await nextTick()
+    document.getElementById(`add-${kind}`)?.focus()
   } catch (err) {
     addErrors.set(err)
   }
 }
 
-// Sửa tên; kind không đổi được sau khi tạo
-const editing = ref<Status | null>(null)
-const editName = ref('')
-const editErrors = useFormErrors()
-const editForm = useDirty(() => editName.value.trim())
-const editOpen = computed({
-  get: () => editing.value !== null,
+// Sửa nhanh: nhấp đúp tên để đổi tại chỗ; bút chì mở ngăn kéo (tên, kind khoá)
+const saveStatus = useStatusOverviewSave()
+const rename = (st: Status, name: string) => saveStatus(st, { name })
+const openStatus = (st: Status, e?: MouseEvent) => openLocation(router, `/statuses/${st.id}`, e)
+const rowClick = onRowClick((st: Status, e: MouseEvent) => openStatus(st, e))
+// thứ tự đi qua bằng ↑/↓ trong ngăn kéo: theo làn, rồi theo vị trí
+const ordered = computed(() => KIND_ORDER.flatMap((k) => activeOf(k)))
+const quick = ref<Status | null>(null)
+const quickDraft = reactive(emptyDraft())
+const quickSaving = ref(false)
+const quickFields: FieldDef[] = [
+  { key: 'name', label: 'Name', maxlength: 100 },
+  { key: 'kind', label: 'Kind', lock: 'The kind decides how assets behave, so it can’t change.' },
+]
+const quickSaved = computed(() => ({ name: quick.value?.name ?? '', kind: quick.value ? KIND_INFO[quick.value.kind].label : '' }))
+const quickOpen = computed({
+  get: () => quick.value !== null,
   set: (v) => {
-    if (!v) editing.value = null
+    if (!v) {
+      quick.value = null
+      clearTab(quickDraft, 'overview')
+    }
   },
 })
-function openEdit(s: Status) {
-  editing.value = s
-  editName.value = s.name
-  editErrors.clear()
-  editForm.reset()
+function openQuick(st: Status) {
+  clearTab(quickDraft, 'overview')
+  quick.value = st
 }
-async function submitEdit() {
-  const s = editing.value
-  if (!s) return
-  editErrors.clear()
+const quickIndex = computed(() => (quick.value ? ordered.value.findIndex((x) => x.id === quick.value!.id) : -1))
+async function moveQuick(step: number) {
+  const next = ordered.value[quickIndex.value + step]
+  if (!next || !(await mayClose(isDirty(quickDraft)))) return
+  openQuick(next)
+}
+async function saveQuick() {
+  const st = quick.value
+  if (!st) return
+  quickSaving.value = true
   try {
-    await update.mutateAsync({ id: s.id, name: editName.value })
-    editing.value = null
-    notify.success('Status saved.')
-  } catch (err) {
-    editErrors.set(err)
+    if (await saveStatus(st, changesOf(quickDraft, 'overview'))) clearTab(quickDraft, 'overview')
+  } finally {
+    quickSaving.value = false
   }
 }
-
-const archive = useArchiveStatus()
-function archiveStatus(s: Status) {
-  return runAction({
-    run: () => archive.mutateAsync(s.id),
-    done: `${s.name} archived.`,
-    failed: `Couldn't archive ${s.name}.`,
-    undo: () => restore.mutateAsync(s.id),
-    undone: `${s.name} restored.`,
-    undoFailed: `Couldn't restore ${s.name}. It is still archived.`,
-  })
-}
-const restore = useRestoreStatus()
-function restoreStatus(s: Status) {
-  return runAction({
-    run: () => restore.mutateAsync(s.id),
-    done: `${s.name} restored.`,
-    failed: `Couldn't restore ${s.name}.`,
-    undo: () => archive.mutateAsync(s.id),
-    undone: `${s.name} archived again.`,
-    undoFailed: `Couldn't archive ${s.name} again. It stays available.`,
-  })
-}
+watch(statuses, (list) => {
+  if (quick.value) quick.value = list?.find((x) => x.id === quick.value!.id) ?? null
+})
 </script>
 
 <template>
@@ -190,23 +183,26 @@ function restoreStatus(s: Status) {
           size="small"
           class="lane-table"
           table-style="width: 100%; table-layout: fixed"
+          :row-class="() => 'clickable-row'"
+          @row-click="rowClick"
           @row-reorder="(e: DataTableRowReorderEvent) => onReorder(k, e)"
         >
           <Column v-if="canManage" row-reorder header-style="width: 2.5rem" body-style="width: 2.5rem" />
           <Column>
             <template #body="{ data: s }: { data: Status }">
               <div class="name-cell">
-                <button
+                <InlineCell
                   class="status-name"
+                  :value="s.name"
+                  :editable="canManage"
                   :data-status-name="s.id"
-                  :disabled="!canManage"
-                  :title="canManage ? 'Edit' : undefined"
-                  @click="openEdit(s)"
+                  @save="(v) => rename(s, v)"
+                  @open="(e) => openStatus(s, e)"
                   @keydown.alt.up.prevent="moveKey(s, -1)"
                   @keydown.alt.down.prevent="moveKey(s, 1)"
                 >
                   {{ s.name }}
-                </button>
+                </InlineCell>
                 <span v-if="s.is_default" class="default-pill"><i class="pi pi-star-fill" />Default</span>
                 <Button
                   v-else-if="canManage && k !== 'retired'"
@@ -227,7 +223,7 @@ function restoreStatus(s: Status) {
           <Column v-if="canManage" header-style="width: 5.5rem" body-style="width: 5.5rem">
             <template #body="{ data: s }: { data: Status }">
               <div class="row-actions">
-                <IconAction icon="pi pi-pencil" label="Edit" @click="openEdit(s)" />
+                <IconAction icon="pi pi-pencil" label="Quick edit" @click="openQuick(s)" />
                 <IconAction
                   icon="pi pi-inbox"
                   label="Archive"
@@ -275,30 +271,22 @@ function restoreStatus(s: Status) {
       </section>
     </div>
 
-    <FormDialog
-      v-model:visible="editOpen"
-      size="s"
+    <QuickEditDrawer
+      v-if="quick"
+      v-model:visible="quickOpen"
+      :title="quick.name"
       icon="tag"
-      title="Edit status"
-      action="Save status"
-      :busy="update.isPending.value"
-      :error="editErrors.general.value"
-      :dirty="editForm.dirty.value"
-      @submit="submitEdit"
+      :dirty="isDirty(quickDraft)"
+      :busy="quickSaving"
+      :can-prev="quickIndex > 0"
+      :can-next="quickIndex >= 0 && quickIndex < ordered.length - 1"
+      @save="saveQuick"
+      @prev="moveQuick(-1)"
+      @next="moveQuick(1)"
+      @open-page="router.push(`/statuses/${quick.id}`)"
     >
-      <template v-if="editing">
-        <div class="field">
-          <label for="status-name">Name</label>
-          <InputText id="status-name" v-model="editName" required maxlength="100" autofocus />
-          <small v-if="editErrors.fields.value.name" class="field-error">{{ editErrors.fields.value.name }}</small>
-        </div>
-        <div class="field">
-          <span>Kind</span>
-          <div><Tag :value="KIND_INFO[editing.kind].label" :severity="kindSeverity(editing.kind)" /></div>
-          <small>The kind can't change after a status is created. Drag it in its lane to change the order.</small>
-        </div>
-      </template>
-    </FormDialog>
+      <OverviewFields :fields="quickFields" :saved="quickSaved" :draft="quickDraft" stacked />
+    </QuickEditDrawer>
   </section>
 </template>
 
