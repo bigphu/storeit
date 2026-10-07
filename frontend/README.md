@@ -126,6 +126,31 @@ Selection styling lives in `app/theme.ts` (token preset over Aura) and `app/base
 - `openapi-typescript` declares a TypeScript 5 peer; `package.json` overrides it to the
   project's TypeScript 6 (it only generates types).
 
+## Interaction patterns
+
+Spec: `docs/superpowers/specs/2026-10-07-ui-patterns-design.md`.
+
+- **Act now, offer Undo.**
+  - Use `runAction({ run, done, undo?, undone?, undoFailed?, failed? })` from `lib/actions.ts` for anything the server can reverse.
+  - `undo` receives `run`'s result, for example the new `version`.
+  - Use `announce(result, …)` when a form already ran the mutation and shows its own errors.
+  - Mutations used this way are created with `toast: false`.
+- **Ask only before the irreversible:**
+  - `confirmAction({ title, body, impact?, action, danger, icon })` from `lib/confirm.ts`.
+  - Red (`danger`) only for discarding; blue for sends and sign-outs.
+- **Toasts:**
+  - `notify.success(msg, { undo?, action? })` and `notify.error(summary, { detail?, retry? })`;
+  - success shows 4 s, or 8 s with Undo or an action; errors stay until closed;
+  - at most three; Ctrl/⌘ Z runs the newest Undo.
+- **Dialogs:**
+  - `components/FormDialog.vue`, sizes `s`/`m`/`l`, with a filled `icon` from `components/icons.ts`;
+  - pass `dirty` (from `useDirty` in `lib/forms.ts`) so Esc and ✕ ask before discarding.
+- **Lists:** `EmptyState` and `TableSkeleton` in every DataTable `#empty` slot.
+- **Colour:**
+  - `--app-{brand,info,warn,danger,neutral}[-strong|-ink|-soft]` in `app/base.css`;
+  - tags are solid via `lib/tones.ts`;
+  - no coloured stripe on one side of anything.
+
 ## Excel export
 
 - `src/features/assets/export/`: `layout` (report layout and columns), `format` (cell

@@ -3,7 +3,7 @@ import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Message from 'primevue/message'
 import { computed, useId } from 'vue'
-import { mayClose } from '@/lib/confirm'
+import { closeGuard } from '@/lib/confirm'
 import AppIcon from './AppIcon.vue'
 import type { IconName } from './icons'
 
@@ -35,6 +35,7 @@ const emit = defineEmits<{ submit: [] }>()
 const WIDTH = { s: '26rem', m: '34rem', l: '60rem' } as const
 const width = computed(() => props.width ?? `min(${WIDTH[props.size]}, calc(100vw - 2rem))`)
 const formId = useId()
+const mayClose = closeGuard()
 
 async function requestClose() {
   if (await mayClose(!!props.dirty)) visible.value = false

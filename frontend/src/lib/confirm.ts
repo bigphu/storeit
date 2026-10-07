@@ -58,3 +58,20 @@ export function confirmDiscard(): Promise<boolean> {
 export async function mayClose(dirty: boolean, ask: () => Promise<boolean> = confirmDiscard): Promise<boolean> {
   return !dirty || ask()
 }
+
+// closeGuard: mayClose cho một hộp thoại, bỏ qua yêu cầu đóng khi đang hỏi. Esc trên hộp
+// "Discard changes?" cũng tới hộp thoại form bên dưới (cả hai nghe Esc trên document);
+// không có chặn này thì nó hỏi lại ngay và hộp xác nhận như không đóng được
+export function closeGuard(ask: () => Promise<boolean> = confirmDiscard) {
+  let asking = false
+  return async (dirty: boolean): Promise<boolean> => {
+    if (!dirty) return true
+    if (asking) return false
+    asking = true
+    try {
+      return await ask()
+    } finally {
+      asking = false
+    }
+  }
+}
