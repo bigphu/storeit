@@ -296,7 +296,11 @@ watch(types, (list) => {
           </div>
         </template>
       </Column>
-      <Column field="description" header="Description" sortable />
+      <Column field="description" header="Description" sortable>
+        <template #body="{ data: t }: { data: AssetType }">
+          <span class="clip-text" :title="t.description || undefined">{{ t.description }}</span>
+        </template>
+      </Column>
       <Column header="Attributes" sort-field="attribute_count" sortable>
         <template #body="{ data: t }: { data: AssetType }">
           {{ t.attribute_count ?? 0 }}

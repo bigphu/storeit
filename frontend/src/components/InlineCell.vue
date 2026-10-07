@@ -103,10 +103,13 @@ function finish(keep: boolean) {
   display: flex;
   width: 100%;
 }
+/* một dòng: bảng tự giãn cột theo chữ; ô bị bó (bảng table-layout: fixed) thì cắt bằng "…" */
 .ic-value {
   flex: 1 1 auto;
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* bút chì: ẩn cho đến khi rê chuột lên dòng / thẻ chứa nó, hay focus vào trong */
 .ic-edit {

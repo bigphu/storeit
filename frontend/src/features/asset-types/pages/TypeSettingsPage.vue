@@ -244,12 +244,12 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
       <label for="show-removed">Show removed</label>
     </div>
     <p v-if="canManage && attributes.length > 1" class="hint">Drag the handle to change the order of columns and form fields.</p>
-    <!-- Cột trải hết bề ngang; "Required" là checkbox (đổi ngay khi có quyền) -->
+    <!-- Mỗi dòng một dòng chữ, cột giãn theo nội dung (bảng dài thì cuộn ngang);
+         "Required" là checkbox (đổi ngay khi có quyền) -->
     <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />
     <DataTable
       :value="attributes"
       data-key="id"
-      table-style="width: 100%; table-layout: fixed"
       row-hover
       :row-class="(a: Attribute) => (canEditRow(a) ? 'clickable-row' : undefined)"
       @row-reorder="onReorder"
@@ -351,9 +351,11 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
   align-items: center;
   gap: 0.25rem;
 }
+/* danh sách lựa chọn dài thì cắt "…" (bấm bút chì để xem hết) */
 .opts {
   flex: 1;
   min-width: 0;
+  max-width: 18rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

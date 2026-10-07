@@ -223,6 +223,23 @@ section + section {
   font-size: 0.8rem;
   color: var(--p-text-muted-color);
 }
+/* Mỗi dòng của bảng nằm trên một dòng chữ: ô không xuống dòng; bảng rộng hơn chỗ thì cuộn
+   ngang trong khung (khung ngoài giữ bo góc). Bảng table-layout: fixed (làn trạng thái, cột
+   của profile) tự cắt chữ bằng "…" trong ô. */
+.p-datatable .p-datatable-table-container {
+  overflow-x: auto;
+}
+.p-datatable .p-datatable-thead > tr > th,
+.p-datatable .p-datatable-tbody > tr > td {
+  white-space: nowrap;
+}
+/* chữ tự do dài (mô tả) trong ô: cắt bằng "…" thay vì kéo bảng rộng mãi; title có đủ chữ */
+.clip-text {
+  display: block;
+  max-width: 28rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .p-datatable .p-datatable-tbody > tr:last-child > td {
   border-bottom: 0;
 }
