@@ -330,9 +330,9 @@ func insertRoles(ctx context.Context, q *db.Queries, accountID uuid.UUID, roleID
 	if len(roleIDs) == 0 {
 		return nil
 	}
-	found, err := q.GetRolesByIDs(ctx, roleIDs)
+	found, err := q.LockActiveRolesByIDs(ctx, roleIDs)
 	if err != nil {
-		return fmt.Errorf("identity: load roles: %w", err)
+		return fmt.Errorf("identity: lock roles: %w", err)
 	}
 	if len(found) != len(roleIDs) {
 		return domain.ErrUnknownRoles

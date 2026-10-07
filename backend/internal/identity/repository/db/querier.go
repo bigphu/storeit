@@ -12,6 +12,7 @@ import (
 )
 
 type Querier interface {
+	// Role đã xoá không mang quyền (phòng khi còn sót trong account_roles)
 	AccountPermissions(ctx context.Context, accountID uuid.UUID) ([]string, error)
 	AccountRoleIDs(ctx context.Context, accountID uuid.UUID) ([]uuid.UUID, error)
 	// Dùng token: xoá rồi mới kiểm tra, nên hai lần gửi cùng lúc chỉ một bên thấy hàng
@@ -76,6 +77,11 @@ type Querier interface {
 	ListRoles(ctx context.Context) ([]IdentityRole, error)
 	// Role của nhiều account một lần (danh sách account)
 	ListRolesOfAccounts(ctx context.Context, ids []uuid.UUID) ([]ListRolesOfAccountsRow, error)
+	// Khoá role trước khi xoá mềm: đợi các lần gán chưa commit (khoá ngoại giữ FOR KEY SHARE)
+	LockActiveRole(ctx context.Context, id uuid.UUID) (IdentityRole, error)
+	// Khoá chia sẻ các role sắp gán: xoá role cùng lúc phải đợi, và role vừa bị xoá thì
+	// không còn trong kết quả (điều kiện được xét lại sau khi đợi). Khoá theo id để không deadlock
+	LockActiveRolesByIDs(ctx context.Context, ids []uuid.UUID) ([]IdentityRole, error)
 	// Khoá hàng role Administrator: mọi thao tác có thể làm mất một admin (khoá
 	// account, đổi role) chạy lần lượt, để kiểm tra "còn admin" không bị hai
 	// transaction cùng lọt. Luôn khoá trước hàng account.

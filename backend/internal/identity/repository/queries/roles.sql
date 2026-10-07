@@ -8,6 +8,15 @@ SELECT * FROM identity.roles WHERE id = @id AND deleted_at IS NULL;
 -- name: GetRolesByIDs :many
 SELECT * FROM identity.roles WHERE id = ANY(@ids::uuid[]) AND deleted_at IS NULL ORDER BY name;
 
+-- Khoá chia sẻ các role sắp gán: xoá role cùng lúc phải đợi, và role vừa bị xoá thì
+-- không còn trong kết quả (điều kiện được xét lại sau khi đợi). Khoá theo id để không deadlock
+-- name: LockActiveRolesByIDs :many
+SELECT * FROM identity.roles WHERE id = ANY(@ids::uuid[]) AND deleted_at IS NULL ORDER BY id FOR SHARE;
+
+-- Khoá role trước khi xoá mềm: đợi các lần gán chưa commit (khoá ngoại giữ FOR KEY SHARE)
+-- name: LockActiveRole :one
+SELECT * FROM identity.roles WHERE id = @id AND deleted_at IS NULL FOR UPDATE;
+
 -- name: CreateRole :one
 INSERT INTO identity.roles (id, name, description) VALUES (@id, @name, @description)
 RETURNING *;

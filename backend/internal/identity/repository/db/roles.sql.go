@@ -248,6 +248,60 @@ func (q *Queries) ListRoles(ctx context.Context) ([]IdentityRole, error) {
 	return items, nil
 }
 
+const lockActiveRole = `-- name: LockActiveRole :one
+SELECT id, name, description, is_system, created_at, updated_at, deleted_at FROM identity.roles WHERE id = $1 AND deleted_at IS NULL FOR UPDATE
+`
+
+// Khoá role trước khi xoá mềm: đợi các lần gán chưa commit (khoá ngoại giữ FOR KEY SHARE)
+func (q *Queries) LockActiveRole(ctx context.Context, id uuid.UUID) (IdentityRole, error) {
+	row := q.db.QueryRow(ctx, lockActiveRole, id)
+	var i IdentityRole
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.IsSystem,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const lockActiveRolesByIDs = `-- name: LockActiveRolesByIDs :many
+SELECT id, name, description, is_system, created_at, updated_at, deleted_at FROM identity.roles WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL ORDER BY id FOR SHARE
+`
+
+// Khoá chia sẻ các role sắp gán: xoá role cùng lúc phải đợi, và role vừa bị xoá thì
+// không còn trong kết quả (điều kiện được xét lại sau khi đợi). Khoá theo id để không deadlock
+func (q *Queries) LockActiveRolesByIDs(ctx context.Context, ids []uuid.UUID) ([]IdentityRole, error) {
+	rows, err := q.db.Query(ctx, lockActiveRolesByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []IdentityRole{}
+	for rows.Next() {
+		var i IdentityRole
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.IsSystem,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const restoreRole = `-- name: RestoreRole :one
 UPDATE identity.roles SET deleted_at = NULL, updated_at = now()
 WHERE id = $1
