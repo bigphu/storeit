@@ -21,7 +21,7 @@ export function useExport() {
     try {
       const { name, skipped } = await exportAssets(body, fallbackName)
       const rows = info.rows === undefined ? '' : ` with ${info.rows} ${info.rows === 1 ? 'row' : 'rows'}`
-      notify.success(`Downloaded ${name}${rows}.`, info.inside ? { label: 'What’s inside', run: info.inside } : undefined)
+      notify.success(`Downloaded ${name}${rows}.`, info.inside ? { action: { label: 'What’s inside', run: info.inside } } : {})
       if (skipped.length) notify.info(`Skipped columns not available for the exported asset types: ${skipped.join(', ')}.`)
       return true
     } catch (err) {
