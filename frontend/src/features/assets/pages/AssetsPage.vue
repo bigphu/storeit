@@ -249,7 +249,7 @@ const menuItems = computed<MenuItem[]>(() => {
   ]
   if (canManage.value) {
     items.push({ separator: true })
-    if (a.retired_at) items.push({ label: 'Restore', icon: 'pi pi-replay', command: () => actions.askRestore(a) })
+    if (a.retired_at) items.push({ label: 'Restore', icon: 'pi pi-replay', command: () => actions.restore(a) })
     else {
       items.push({ label: 'Edit', icon: 'pi pi-pencil', command: () => actions.edit(a) })
       items.push({ label: 'Retire', icon: 'pi pi-ban', command: () => actions.askRetire(a) })
@@ -360,7 +360,7 @@ function cell(row: AssetListItem, key: string) {
     <div v-if="selected.length" class="selection-bar" role="region" aria-label="Selected assets">
       <span class="selection-count">{{ selected.length }} selected</span>
       <Button v-if="canManage" label="Change status" icon="pi pi-tag" size="small" @click="openBulk('status')" />
-      <Button v-if="canManage" label="Retire" icon="pi pi-ban" size="small" severity="danger" outlined @click="openBulk('retire')" />
+      <Button v-if="canManage" label="Retire" icon="pi pi-ban" size="small" severity="secondary" outlined @click="openBulk('retire')" />
       <Button
         v-if="canExport"
         label="Export selected"
@@ -450,7 +450,6 @@ function cell(row: AssetListItem, key: string) {
                 size="small"
                 text
                 rounded
-                severity="danger"
                 aria-label="Retire"
                 @click="actions.askRetire(a)"
               />
@@ -463,7 +462,7 @@ function cell(row: AssetListItem, key: string) {
               text
               rounded
               aria-label="Restore"
-              @click="actions.askRestore(a)"
+              @click="actions.restore(a)"
             />
           </div>
         </template>

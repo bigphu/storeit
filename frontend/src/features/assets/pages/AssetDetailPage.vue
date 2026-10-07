@@ -106,9 +106,9 @@ usePageKeys((e) => {
           <span>Edit</span>
           <kbd>E</kbd>
         </Button>
-        <Button label="Retire" icon="pi pi-ban" severity="danger" outlined @click="actions.askRetire(asset)" />
+        <Button label="Retire" icon="pi pi-ban" severity="secondary" outlined @click="actions.askRetire(asset)" />
       </template>
-      <Button v-else label="Restore" icon="pi pi-replay" @click="actions.askRestore(asset)" />
+      <Button v-else label="Restore" icon="pi pi-replay" @click="actions.restore(asset)" />
     </div>
 
     <!-- Details | Activity: lịch sử hoạt động là module sau -->

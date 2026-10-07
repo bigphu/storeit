@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { AttributeValue } from '@/lib/api/types'
-import { formatValue, fromApiValues, toApiValues, type FormValues } from './values'
+import type { AssetDetail, AttributeValue } from '@/lib/api/types'
+import { assetBodyOf, formatValue, fromApiValues, toApiValues, type FormValues } from './values'
 
 const attrs = [
   { key: 'serial', data_type: 'text' },
@@ -79,5 +79,25 @@ describe('formatValue', () => {
     )
     expect(formatValue(av('serial', 'text', null))).toBe('—')
     expect(formatValue(undefined)).toBe('—')
+  })
+})
+
+describe('assetBodyOf', () => {
+  it('rebuilds the PUT body from a saved asset', () => {
+    const a = {
+      id: 'x', tag: 'LAP-1', name: 'Laptop', description: 'Old', version: 5,
+      asset_type: { id: 't1' }, status: { id: 's1' },
+      location_id: 'l1', purchase_date: '2026-01-02',
+      attributes: [
+        { key: 'ram', label: 'RAM', data_type: 'number', value: 16 },
+        { key: 'note', label: 'Note', data_type: 'text', value: null },
+        { key: 'os', label: 'OS', data_type: 'select', value: 'opt-1', option_label: 'Windows' },
+      ],
+    } as unknown as AssetDetail
+    expect(assetBodyOf(a)).toEqual({
+      name: 'Laptop', description: 'Old', asset_type_id: 't1', status_id: 's1',
+      location_id: 'l1', holder_member_id: undefined, purchase_date: '2026-01-02',
+      attributes: { ram: 16, os: 'opt-1' },
+    })
   })
 })
