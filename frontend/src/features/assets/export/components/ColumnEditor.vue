@@ -4,17 +4,19 @@ import Column from 'primevue/column'
 import DataTable, { type DataTableRowReorderEvent } from 'primevue/datatable'
 import InputText from 'primevue/inputtext'
 import Tag from 'primevue/tag'
-import { nextTick, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import type { ExportLayout } from '@/lib/api/types'
-import { defaultHeader, type EditorColumn, type FieldOption } from '../layout'
+import { defaultHeader, type EditorColumn, editorRowsFor, type FieldOption, reorderVisible, type TypeInfo } from '../layout'
 
 // Chọn, sắp (kéo hay Alt+↑/↓) và đổi tên cột của báo cáo
-const props = defineProps<{ options: FieldOption[]; layout: ExportLayout }>()
+const props = defineProps<{ options: FieldOption[]; layout: ExportLayout; scope: TypeInfo[] | null }>()
 const columns = defineModel<EditorColumn[]>({ required: true })
 
 const option = (f: string) => props.options.find((o) => o.field === f)
+// các dòng đang hiện: sheet của một loại thì chỉ trường chung và thuộc tính của loại đó
+const rows = computed(() => editorRowsFor(columns.value, props.scope))
 function onReorder(e: DataTableRowReorderEvent) {
-  columns.value = e.value as EditorColumn[]
+  columns.value = reorderVisible(columns.value, e.value as EditorColumn[])
 }
 // Dòng có key theo field: đổi chỗ thì DataTable dời phần tử DOM của dòng, và trình duyệt
 // bỏ focus của phần tử bị dời. Focus lại dòng vừa chuyển để Alt+↑/↓ bấm tiếp được.
@@ -24,25 +26,25 @@ function focusRow(field: string) {
 }
 function move(i: number, d: number) {
   const j = i + d
-  if (j < 0 || j >= columns.value.length) return
-  const field = columns.value[i].field
-  const next = [...columns.value]
+  if (j < 0 || j >= rows.value.length) return
+  const field = rows.value[i].field
+  const next = [...rows.value]
   ;[next[i], next[j]] = [next[j], next[i]]
-  columns.value = next
+  columns.value = reorderVisible(columns.value, next)
   nextTick(() => focusRow(field))
 }
-function set(i: number, patch: Partial<EditorColumn>) {
-  columns.value = columns.value.map((c, n) => (n === i ? { ...c, ...patch } : c))
+function set(field: string, patch: Partial<EditorColumn>) {
+  columns.value = columns.value.map((c) => (c.field === field ? { ...c, ...patch } : c))
 }
 </script>
 
 <template>
   <div ref="root">
-    <DataTable :value="columns" data-key="field" :show-headers="false" size="small" class="col-editor" table-style="width: 100%; table-layout: fixed" @row-reorder="onReorder">
+    <DataTable :value="rows" data-key="field" :show-headers="false" size="small" class="col-editor" table-style="width: 100%; table-layout: fixed" @row-reorder="onReorder">
       <Column row-reorder row-reorder-icon="pi pi-arrows-v" header-style="width: 2rem" body-style="width: 2rem" />
       <Column header-style="width: 2rem" body-style="width: 2rem">
-        <template #body="{ data: c, index: i }: { data: EditorColumn; index: number }">
-          <Checkbox :model-value="c.include" binary :aria-label="`Include ${option(c.field)?.label ?? c.field}`" @update:model-value="(v: boolean) => set(i, { include: v })" />
+        <template #body="{ data: c }: { data: EditorColumn }">
+          <Checkbox :model-value="c.include" binary :aria-label="`Include ${option(c.field)?.label ?? c.field}`" @update:model-value="(v: boolean) => set(c.field, { include: v })" />
         </template>
       </Column>
       <Column>
@@ -65,8 +67,8 @@ function set(i: number, patch: Partial<EditorColumn>) {
         </template>
       </Column>
       <Column header-style="width: 9rem" body-style="width: 9rem">
-        <template #body="{ data: c, index: i }: { data: EditorColumn; index: number }">
-          <InputText :model-value="c.header" size="small" fluid :placeholder="defaultHeader(c.field, layout, options)" :disabled="!c.include" :aria-label="`Header for ${option(c.field)?.label ?? c.field}`" maxlength="100" @update:model-value="(v) => set(i, { header: v ?? '' })" />
+        <template #body="{ data: c }: { data: EditorColumn }">
+          <InputText :model-value="c.header" size="small" fluid :placeholder="defaultHeader(c.field, layout, options)" :disabled="!c.include" :aria-label="`Header for ${option(c.field)?.label ?? c.field}`" maxlength="100" @update:model-value="(v) => set(c.field, { header: v ?? '' })" />
         </template>
       </Column>
     </DataTable>

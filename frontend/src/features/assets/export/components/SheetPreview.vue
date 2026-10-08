@@ -2,13 +2,14 @@
 import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
 import Tabs from 'primevue/tabs'
-import { computed, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { formatCell } from '../format'
 import type { PreviewLayout, PreviewSheet, TypeInfo } from '../layout'
 
 // Bản xem trước như Excel: chữ cột, số dòng, tab sheet; 20 dòng đầu mỗi sheet
 const props = defineProps<{ sheets: PreviewSheet[]; layout: PreviewLayout; types: TypeInfo[]; title: string[] }>()
-const active = ref(0)
+// sheet đang xem; cha (ReportEditor) theo đó để lọc trình sửa cột
+const active = defineModel<number>('active', { default: 0 })
 const tabs = computed(() => [...props.sheets.map((s) => s.name), ...(props.layout.summary ? ['Summary'] : [])])
 watch(tabs, (t) => {
   if (active.value >= t.length) active.value = 0

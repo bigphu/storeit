@@ -32,6 +32,7 @@ export interface PreviewColumn {
 }
 export interface PreviewSheet {
   name: string
+  typeId?: string // sheet của một loại (mỗi loại một sheet)
   columns: PreviewColumn[]
   rows: AssetListItem[]
 }
@@ -56,7 +57,7 @@ export const attrKey = (field: string) => (field.startsWith('attr:') ? field.sli
 export function defaultReportLayout(): ExportLayout {
   return {
     columns: ['tag', 'name', 'type', 'status', 'purchase_date'].map((field) => ({ field })),
-    sheets: 'single',
+    sheets: 'per_type',
     each_type_attrs: false,
     sheet_name: 'Assets',
     title_row: false,
@@ -215,7 +216,7 @@ export function previewSheets(layout: ExportLayout, rows: AssetListItem[], types
   }
   return [...types]
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((t) => ({ name: t.name, columns: sheetColumns(layout, [t], options), rows: rows.filter((r) => r.asset_type_id === t.id) }))
+    .map((t) => ({ name: t.name, typeId: t.id, columns: sheetColumns(layout, [t], options), rows: rows.filter((r) => r.asset_type_id === t.id) }))
     .filter((s) => s.rows.length)
 }
 
@@ -245,4 +246,22 @@ export function normalizeLayout(l: ExportLayout): string {
     unit_in: l.unit_in,
     sort: l.sort ?? '',
   })
+}
+
+// editorRowsFor: các dòng của trình sửa cột cho sheet đang xem. scope null (một sheet hay
+// Summary): mọi dòng; một loại: trường chung và thuộc tính của loại đó
+export function editorRowsFor(cols: EditorColumn[], scope: TypeInfo[] | null): EditorColumn[] {
+  if (!scope) return cols
+  return cols.filter((c) => {
+    const key = attrKey(c.field)
+    return !key || scope.some((t) => t.attributes.some((a) => a.key === key))
+  })
+}
+
+// reorderVisible: các dòng đang hiện đổi thứ tự (kéo, Alt+↑/↓); dòng đang ẩn giữ nguyên chỗ,
+// chỗ của các dòng hiện được lấp theo thứ tự mới
+export function reorderVisible(all: EditorColumn[], reordered: EditorColumn[]): EditorColumn[] {
+  const shown = new Set(reordered.map((c) => c.field))
+  let next = 0
+  return all.map((c) => (shown.has(c.field) ? reordered[next++] : c))
 }

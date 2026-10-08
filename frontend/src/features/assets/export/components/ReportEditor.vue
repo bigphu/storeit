@@ -82,6 +82,13 @@ const sheetName = computed({
   set: (v) => (layout.value = { ...layout.value, sheet_name: sheetNameInput(v ?? '') }),
 })
 const sheets = computed(() => previewSheets(current.value, rows.value, types.value))
+// sheet đang xem ở bản xem trước; sheet của một loại thì trình sửa cột chỉ hiện cột của loại đó
+const activeSheet = ref(0)
+const scope = computed<TypeInfo[] | null>(() => {
+  const s = sheets.value[activeSheet.value]
+  return s?.typeId ? types.value.filter((t) => t.id === s.typeId) : null
+})
+const scopeName = computed(() => (scope.value ? sheets.value[activeSheet.value].name : ''))
 const skipped = computed(() => skippedKeys(current.value, types.value))
 const title = computed(() =>
   current.value.title_row ? [props.titleName ?? 'Asset report', `Generated ${new Date().toLocaleDateString('en-GB')} by ${session.me?.account.name ?? ''} · ${props.scopeLabel}`] : [],
@@ -172,7 +179,8 @@ defineExpose({ current, hasColumns })
             </span>
             <small v-if="layout.sheets === 'single'" class="hint">Ticking this switches to one sheet per type.</small>
           </div>
-          <ColumnEditor v-model="columns" :options="options" :layout="layout" />
+          <p v-if="scope" class="hint">Showing the columns of the {{ scopeName }} sheet. Changes apply to every sheet that has them.</p>
+          <ColumnEditor v-model="columns" :options="options" :layout="layout" :scope="scope" />
           <span class="hint">Drag or press Alt+↑/↓ to reorder. Leave a header empty to use the default.</span>
         </TabPanel>
         <TabPanel value="layout">
@@ -208,7 +216,7 @@ defineExpose({ current, hasColumns })
       <Message v-if="skipped.length" severity="warn" :closable="false">
         Not available for the asset types in this export: <b>{{ skipped.join(', ') }}</b>. Those columns are skipped.
       </Message>
-      <SheetPreview v-if="hasColumns" class="fill" :sheets="sheets" :layout="current" :types="types" :title="title" />
+      <SheetPreview v-if="hasColumns" v-model:active="activeSheet" class="fill" :sheets="sheets" :layout="current" :types="types" :title="title" />
       <p v-else class="fill empty">Tick at least one column.</p>
       <div class="preview-meta">
         <span>{{ sheetCount }} {{ sheetCount === 1 ? 'sheet' : 'sheets' }}</span>
