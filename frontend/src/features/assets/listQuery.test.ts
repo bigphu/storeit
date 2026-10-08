@@ -12,6 +12,7 @@ import {
   toApiParams,
   toTableSort,
   typeListLocation,
+  nextPageParams,
 } from './listQuery'
 
 const base: AssetListState = { q: '', includeRetired: false, filters: [], page: 1 }
@@ -193,5 +194,17 @@ describe('list locations', () => {
       query: { q: 'x', attr: ['a:eq:1'] },
     })
     expect(legacyListRedirect({ q: 'x' })).toBeNull()
+  })
+})
+
+// Trang kế tiếp tải trước khi còn trang sau
+describe('nextPageParams', () => {
+  const s = parseAssetQuery({ q: 'lap', page: '2' })
+  it('asks for the following page while there is one', () => {
+    expect(nextPageParams(s, 25, 100)).toEqual(toApiParams({ ...s, page: 3 }, 25))
+  })
+  it('is undefined on the last page', () => {
+    expect(nextPageParams(s, 25, 50)).toBeUndefined()
+    expect(nextPageParams(s, 25, 0)).toBeUndefined()
   })
 })

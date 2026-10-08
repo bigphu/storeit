@@ -92,6 +92,11 @@ export function toApiParams(s: AssetListState, pageSize: number) {
   }
 }
 
+// nextPageParams: tham số của trang kế tiếp (để tải trước); trang cuối thì undefined
+export function nextPageParams(s: AssetListState, pageSize: number, total: number) {
+  return s.page * pageSize < total ? toApiParams({ ...s, page: s.page + 1 }, pageSize) : undefined
+}
+
 // changeType: thuộc tính thuộc về loại, nên đổi loại thì bỏ lọc và sắp theo thuộc tính
 export function changeType(s: AssetListState, typeId: string | undefined): AssetListState {
   return { ...s, typeId, filters: [], sort: isAttrSort(s.sort) ? undefined : s.sort, page: 1 }

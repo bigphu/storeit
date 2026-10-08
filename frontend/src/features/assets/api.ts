@@ -35,10 +35,18 @@ export function fetchAssetPage(qc: QueryClient, params: ListParams) {
   return qc.fetchQuery(assetListQuery(params))
 }
 
+// assetQuery: khoá và hàm tải của một tài sản, dùng chung cho useAsset và tải trước khi rê chuột
+export function assetQuery(id: string) {
+  return {
+    queryKey: assetKeys.one(id),
+    queryFn: () => unwrap(inventoryApi.GET('/assets/{assetID}', { params: { path: { assetID: id } } })),
+  }
+}
+
 export function useAsset(id: MaybeRefOrGetter<string | undefined>) {
   return useQuery({
-    queryKey: computed(() => assetKeys.one(toValue(id) ?? '')),
-    queryFn: () => unwrap(inventoryApi.GET('/assets/{assetID}', { params: { path: { assetID: toValue(id)! } } })),
+    queryKey: computed(() => assetQuery(toValue(id) ?? '').queryKey),
+    queryFn: () => assetQuery(toValue(id)!).queryFn(),
     enabled: computed(() => !!toValue(id)),
   })
 }

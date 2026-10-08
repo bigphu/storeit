@@ -47,7 +47,7 @@ export function useRowMenu<T>(menu: ContextMenuRef, build: (row: T) => MenuItem[
 // onFocusOut lên DataTable; isActive nhận index trong slot #body (trùng data-p-index của <tr>)
 type RowTarget = { closest?: (s: string) => unknown } | null
 
-function rowIndex(target: EventTarget | null): number | null {
+export function rowIndex(target: EventTarget | null): number | null {
   const tr = (target as RowTarget)?.closest?.('tbody tr[data-p-index]') as { dataset: { pIndex?: string } } | null | undefined
   return tr?.dataset.pIndex == null ? null : Number(tr.dataset.pIndex)
 }

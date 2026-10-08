@@ -15,7 +15,8 @@ import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import type { MenuItem } from 'primevue/menuitem'
 import { computed, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { loadRouteLocation, useRouter } from 'vue-router'
+import { useQueryClient } from '@tanstack/vue-query'
 import { useTabId, useTabQuery, useTabTitle } from '@/app/tabs/tabPage'
 import type { AssetListItem, DataType } from '@/lib/api/types'
 import InlineCell from '@/components/InlineCell.vue'
@@ -29,10 +30,10 @@ import { formatDate, formatDateTime, toDateString } from '@/lib/dates'
 import { usePageKeys } from '@/lib/pageKeys'
 import { notify } from '@/lib/notify'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
-import { useActiveRow } from '@/lib/tableRows'
+import { rowIndex, useActiveRow } from '@/lib/tableRows'
 import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
 import { kindSeverity, statusKinds, useStatuses } from '@/features/statuses/api'
-import { useAsset, useAssetList } from '../api'
+import { assetListQuery, assetQuery, useAsset, useAssetList } from '../api'
 import EmptyState from '@/components/EmptyState.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import AttributeFilterPopover from '../components/AttributeFilterPopover.vue'
@@ -50,6 +51,7 @@ import {
   type AttrFilterRow,
   fromTableSort,
   listLocation,
+  nextPageParams,
   parseAssetQuery,
   toApiParams,
   toTableSort,
@@ -80,6 +82,34 @@ const { size: pageSize, set: setPageSize } = usePageSize(() => `assets:${state.v
 // nút hành động chỉ dựng cho hàng dưới chuột / có focus (lib/tableRows.ts)
 const activeRow = useActiveRow()
 const { data, isFetching, isLoading } = useAssetList(computed(() => toApiParams(state.value, pageSize.value)))
+
+// Tải trước, không đợi người dùng bấm: trang kế tiếp khi trang này về (sang trang tức thì);
+// dòng chuột dừng trên đó một lúc thì tải dữ liệu và code của trang tài sản đó (mở nhanh hơn)
+const qc = useQueryClient()
+watch(data, (d) => {
+  const next = d && nextPageParams(state.value, pageSize.value, d.total)
+  if (next) void qc.prefetchQuery({ ...assetListQuery(next), meta: { toast: false } })
+})
+let hoverRow: number | null = null
+let hoverTimer: ReturnType<typeof setTimeout> | undefined
+function onRowsOver(e: MouseEvent) {
+  activeRow.onOver(e)
+  const i = rowIndex(e.target)
+  if (i === null || i === hoverRow) return
+  hoverRow = i
+  clearTimeout(hoverTimer)
+  hoverTimer = setTimeout(() => {
+    const a = data.value?.items[i]
+    if (!a) return
+    void qc.prefetchQuery({ ...assetQuery(a.id), meta: { toast: false } })
+    loadRouteLocation(router.resolve(`/assets/${a.id}`)).catch(() => {})
+  }, 120)
+}
+function onRowsLeave() {
+  activeRow.onLeave()
+  hoverRow = null
+  clearTimeout(hoverTimer)
+}
 
 // danh sách lọc gồm cả status đã lưu trữ: tài sản cũ vẫn mang chúng
 const { data: statuses } = useStatuses(true)
@@ -531,8 +561,8 @@ watch(rows, (list) => {
       @sort="onSort"
       @row-click="onRowClick"
       @row-contextmenu="onRowContextMenu"
-      @mouseover="activeRow.onOver"
-      @mouseleave="activeRow.onLeave"
+      @mouseover="onRowsOver"
+      @mouseleave="onRowsLeave"
       @focusin="activeRow.onFocusIn"
       @focusout="activeRow.onFocusOut"
     >
