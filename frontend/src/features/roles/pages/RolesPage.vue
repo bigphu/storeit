@@ -7,11 +7,13 @@ import InputText from 'primevue/inputtext'
 import Menu from 'primevue/menu'
 import type { MenuItem } from 'primevue/menuitem'
 import Select from 'primevue/select'
+import Skeleton from 'primevue/skeleton'
 import Textarea from 'primevue/textarea'
 import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AddCard from '@/components/AddCard.vue'
 import CardGrid from '@/components/CardGrid.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import EntityCard from '@/components/EntityCard.vue'
 import FormDialog from '@/components/FormDialog.vue'
 import IconAction from '@/components/IconAction.vue'
@@ -38,7 +40,7 @@ import { useRoleDelete, useRoleOverviewSave } from '../overviewSave'
 const session = useSession()
 const router = useRouter()
 const canManage = computed(() => session.can(Perm.RoleManage))
-const { data: roles } = useRoles()
+const { data: roles, isLoading } = useRoles()
 
 type Layout = 'cards' | 'compare'
 const { state, update } = useUrlState(
@@ -179,6 +181,16 @@ function toggleCardMenu(r: Role, e: MouseEvent) {
     <Menu ref="cardMenu" :model="cardMenuItems" popup />
 
     <CardGrid v-if="state.layout === 'cards'">
+      <!-- đang tải: thẻ giả cùng cỡ; không có role nào (lỗi, dữ liệu lạ): nói rõ -->
+      <template v-if="isLoading">
+        <div v-for="i in 4" :key="i" class="role-skeleton" aria-hidden="true">
+          <Skeleton width="55%" height="1.1rem" />
+          <Skeleton height="2.4rem" />
+          <Skeleton height="0.6rem" />
+          <Skeleton width="35%" height="0.8rem" />
+        </div>
+      </template>
+      <EmptyState v-else-if="!roles?.length" icon="pi pi-shield" text="No roles yet." class="roles-empty" />
       <EntityCard v-for="r in roles ?? []" :key="r.id" :to="`/roles/${r.id}`" :label="r.name" @menu="(e) => onCardMenu(r, e)">
         <div class="top">
           <h3>
@@ -362,5 +374,16 @@ function toggleCardMenu(r: Role, e: MouseEvent) {
 .no {
   color: var(--p-text-muted-color);
   opacity: 0.5;
+}
+.role-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.95rem;
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+}
+.roles-empty {
+  grid-column: 1 / -1;
 }
 </style>
