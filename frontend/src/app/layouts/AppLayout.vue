@@ -4,12 +4,13 @@ import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
 import Dialog from 'primevue/dialog'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { setNewTabHandler } from '@/lib/navigation'
 import { isTyping } from '@/lib/pageKeys'
 import { SHORTCUTS, type Shortcut } from '@/lib/shortcuts'
+import EmptyState from '@/components/EmptyState.vue'
 import NoAccessPage from '../pages/NoAccessPage.vue'
 import { useTabs } from '../tabs/useTabs'
 import AccountMenu from './AccountMenu.vue'
@@ -20,6 +21,7 @@ import TypeSwitcher from './TypeSwitcher.vue'
 
 const session = useSession()
 const route = useRoute()
+const router = useRouter()
 const tabs = useTabs()
 
 const allowed = computed(() => !route.meta.perm || session.can(route.meta.perm))
@@ -47,7 +49,18 @@ function switchTypeFromNav() {
 // Mỗi lần điều hướng: vị trí mới thuộc về tab đang mở
 watch(
   () => route.fullPath,
-  () => tabs.sync(route.fullPath, route.meta.title, route.meta.icon),
+  () => tabs.sync(route.fullPath, route.meta.title, route.meta.icon, route.meta.tab !== false),
+  { immediate: true },
+)
+// /empty khi vẫn còn tab (tải lại trang, nút Back): về tab đang mở hay tab đầu
+watch(
+  [() => route.name, () => tabs.tabs.length],
+  ([name, n]) => {
+    if (name !== 'empty' || n === 0) return
+    const t = tabs.active ?? tabs.tabs[0]
+    if (tabs.activeId === t.id) void router.replace(t.path)
+    else void tabs.activate(t.id)
+  },
   { immediate: true },
 )
 
@@ -156,7 +169,8 @@ onBeforeUnmount(() => {
       <TabBar @switch="switchTo" />
       <main ref="content" class="content">
         <!-- Mỗi tab giữ trang của nó (bộ lọc, cuộn, form đang nhập) khi chuyển tab -->
-        <RouterView v-slot="{ Component, route: r }">
+        <EmptyState v-if="!tabs.tabs.length" icon="pi pi-clone" text="No open tabs. Open a page from the sidebar or press Ctrl K." />
+        <RouterView v-else v-slot="{ Component, route: r }">
           <KeepAlive :max="12">
             <component :is="Component" v-if="allowed" :key="`${tabs.routeTabId}:${r.matched.at(-1)?.path}`" />
           </KeepAlive>
