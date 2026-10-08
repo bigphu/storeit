@@ -270,19 +270,21 @@ watch(rows, (list) => {
       </Column>
       <Column v-if="canManage" header="" header-style="width: 6rem; min-width: 6rem">
         <template #body="{ data: a, index }: { data: AccountListItem; index: number }">
-          <div v-if="activeRow.isActive(index)" class="row-actions">
-            <IconAction icon="pi pi-pencil" label="Quick edit" @click="openQuick(a)" />
-            <IconAction v-if="a.status === 'invited'" icon="pi pi-envelope" label="Resend invitation" @click="actions.resendInvitation(a)" />
-            <IconAction v-if="a.status === 'active'" icon="pi pi-key" label="Send reset link" @click="actions.sendReset(a)" />
-            <IconAction v-if="a.status === 'disabled'" icon="pi pi-check-circle" label="Enable" @click="actions.enable(a)" />
-            <IconAction
-              v-else
-              icon="pi pi-ban"
-              label="Disable"
-              :disabled="actions.isSelf(a)"
-              reason="You can’t disable yourself"
-              @click="actions.disable(a)"
-            />
+          <div class="row-actions">
+            <template v-if="activeRow.isActive(index)">
+              <IconAction icon="pi pi-pencil" label="Quick edit" @click="openQuick(a)" />
+              <IconAction v-if="a.status === 'invited'" icon="pi pi-envelope" label="Resend invitation" @click="actions.resendInvitation(a)" />
+              <IconAction v-if="a.status === 'active'" icon="pi pi-key" label="Send reset link" @click="actions.sendReset(a)" />
+              <IconAction v-if="a.status === 'disabled'" icon="pi pi-check-circle" label="Enable" @click="actions.enable(a)" />
+              <IconAction
+                v-else
+                icon="pi pi-ban"
+                label="Disable"
+                :disabled="actions.isSelf(a)"
+                reason="You can’t disable yourself"
+                @click="actions.disable(a)"
+              />
+            </template>
           </div>
         </template>
       </Column>
