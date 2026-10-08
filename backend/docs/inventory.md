@@ -237,7 +237,8 @@ profile also anyone with `inventory.export_profile.manage`; others get 403
 for the caller. Deleting is a soft delete (`deleted_at`): a deleted profile
 is 404 everywhere, for everyone (including exports by `profile_id`), and names are unique only
 among profiles that aren't deleted. Restore follows the delete rules (someone else's private
-profile is 404, a shared one without `inventory.export_profile.manage` is 403) and is 409
+profile is 404, a shared one without `inventory.export_profile.manage` is 403, checked on the
+row locked inside the restore transaction) and is 409
 `/errors/export-profile-name-taken` if the owner reused the name. Layouts are validated on create and update; a stored layout that no longer
 validates is returned as is and rejected with 422 only when used for an export.
 
