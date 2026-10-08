@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
 
 	"storeit/internal/platform/middleware"
 	"storeit/internal/platform/web"
@@ -38,6 +39,10 @@ func New(cfg Config, log *slog.Logger) *Server {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RequestLogger(log))
 	r.Use(middleware.Recoverer())
+	// Nén gzip phản hồi JSON (danh sách dài nhỏ đi vài lần) khi client nhận gzip; file tải về
+	// (Excel) để nguyên. Không có phản hồi nào trộn bí mật với dữ liệu người gọi tự gửi lên,
+	// nên nén không mở đường cho BREACH
+	r.Use(chimw.Compress(5, "application/json", "application/problem+json"))
 
 	// Để 404 và 405 cũng ra problem+json như mọi lỗi khác, thay vì trang text
 	// mặc định của chi -- client chỉ phải hiểu một format lỗi duy nhất

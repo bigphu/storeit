@@ -62,8 +62,13 @@ Server level (`server.New`, in order):
 
 ```
 BodyLimit(HTTP_MAX_BODY_BYTES) -> NoSniff -> ClientIP(trusted) -> RequestID
-  -> RequestLogger(log) -> Recoverer() -> chi routing
+  -> RequestLogger(log) -> Recoverer() -> Compress(json) -> chi routing
 ```
+
+`Compress` is chi's: gzip/deflate for `application/json` and `application/problem+json`
+when the client accepts it (the access log's `bytes` is then the compressed size).
+Downloads (Excel) and other types pass through. No response mixes a secret with
+caller-supplied text, which BREACH would need; keep it that way.
 
 Module level (oapi-codegen `ChiServerOptions.Middlewares`, run after routing). The
 **last entry runs first**:

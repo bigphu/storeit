@@ -280,3 +280,35 @@ func TestConfig_APIDocsFromEnv(t *testing.T) {
 		}
 	}
 }
+
+// JSON nén gzip khi client nhận gzip; file khác (vd Excel) và client không nhận gzip thì để nguyên
+func TestServer_CompressesJSON(t *testing.T) {
+	s := New(Config{}, discard)
+	body := strings.Repeat(`{"name":"asset"},`, 200)
+	s.Router().Get("/json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	})
+	s.Router().Get("/xlsx", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+		_, _ = w.Write([]byte(body))
+	})
+	get := func(path, accept string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		if accept != "" {
+			req.Header.Set("Accept-Encoding", accept)
+		}
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+	if got := get("/json", "gzip").Header().Get("Content-Encoding"); got != "gzip" {
+		t.Errorf("JSON with Accept-Encoding gzip: Content-Encoding = %q, want gzip", got)
+	}
+	if got := get("/json", "").Header().Get("Content-Encoding"); got != "" {
+		t.Errorf("JSON without Accept-Encoding: Content-Encoding = %q, want none", got)
+	}
+	if got := get("/xlsx", "gzip").Header().Get("Content-Encoding"); got != "" {
+		t.Errorf("xlsx: Content-Encoding = %q, want none", got)
+	}
+}
