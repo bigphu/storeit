@@ -30,6 +30,7 @@ import type { AssetType } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { mayClose } from '@/lib/confirm'
+import { useQuickDrawer } from '@/lib/quickDrawer'
 import { formatDate } from '@/lib/dates'
 import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
 import { useDirty, useFormErrors } from '@/lib/forms'
@@ -175,19 +176,11 @@ const quickFields: FieldDef[] = [
   { key: 'description', label: 'Description', kind: 'textarea' },
 ]
 const quickSaved = computed(() => ({ name: quick.value?.name ?? '', code: quick.value?.code ?? '', description: quick.value?.description ?? '' }))
-const quickOpen = computed({
-  get: () => quick.value !== null,
-  set: (v) => {
-    if (!v) closeQuick()
-  },
-})
-function closeQuick() {
-  quick.value = null
-  clearTab(quickDraft, 'overview')
-}
+// mở/đóng ngăn kéo: mục giữ lại đến khi trượt ra xong rồi mới xoá cùng bản nháp
+const quickDrawer = useQuickDrawer(quick, () => clearTab(quickDraft, 'overview'))
+const quickOpen = quickDrawer.visible
 function openQuick(t: AssetType) {
-  clearTab(quickDraft, 'overview')
-  quick.value = t
+  quickDrawer.open(t)
 }
 const quickIndex = computed(() => (quick.value ? visible.value.findIndex((t) => t.id === quick.value!.id) : -1))
 async function moveQuick(step: number) {
@@ -346,6 +339,7 @@ watch(types, (list) => {
     <QuickEditDrawer
       v-if="quick"
       v-model:visible="quickOpen"
+      @closed="quickDrawer.closed()"
       :title="quick.name"
       icon="sitemap"
       :dirty="isDirty(quickDraft)"

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
-import Drawer from 'primevue/drawer'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Perm } from '@/lib/auth/permissions'
@@ -11,6 +10,7 @@ import { isTyping } from '@/lib/pageKeys'
 import NoAccessPage from '../pages/NoAccessPage.vue'
 import { useTabs } from '../tabs/useTabs'
 import AccountMenu from './AccountMenu.vue'
+import SideDrawer from '@/components/SideDrawer.vue'
 import AppSidebar from './AppSidebar.vue'
 import TabBar from './TabBar.vue'
 import TypeSwitcher from './TypeSwitcher.vue'
@@ -122,8 +122,18 @@ onBeforeUnmount(() => {
     <header class="topbar">
       <Button v-if="narrow" icon="pi pi-bars" text rounded class="nav-toggle" aria-label="Open navigation" @click="navOpen = true" />
       <RouterLink to="/assets" class="brand">StoreIt</RouterLink>
+      <!-- màn hẹp: nút biểu tượng gọn thay cho ô "Go to asset type… Ctrl K" -->
       <Button
-        v-if="session.can(Perm.AssetRead)"
+        v-if="session.can(Perm.AssetRead) && narrow"
+        icon="pi pi-search"
+        text
+        rounded
+        aria-label="Go to asset type"
+        title="Go to asset type"
+        @click="switcherOpen = true"
+      />
+      <Button
+        v-else-if="session.can(Perm.AssetRead)"
         severity="secondary"
         outlined
         size="small"
@@ -138,15 +148,17 @@ onBeforeUnmount(() => {
       <AccountMenu />
     </header>
     <AppSidebar v-if="!narrow" @switch-type="switcherOpen = true" />
-    <Drawer
+    <SideDrawer
       v-else
       v-model:visible="navOpen"
       position="left"
+      width="min(18rem, 85vw)"
       header="StoreIt"
-      :pt="{ root: { class: 'nav-drawer', style: 'width: min(18rem, 85vw)' }, content: { class: 'nav-drawer-content' } }"
+      root-class="nav-drawer"
+      content-class="nav-drawer-content"
     >
       <AppSidebar @switch-type="switchTypeFromNav" />
-    </Drawer>
+    </SideDrawer>
     <div class="work">
       <TabBar @switch="switchTo" />
       <main ref="content" class="content">
@@ -239,12 +251,6 @@ onBeforeUnmount(() => {
     grid-template-rows: auto minmax(0, 1fr);
     height: auto;
     min-height: 100vh;
-  }
-  .go-type {
-    min-width: 0;
-  }
-  .go-type span {
-    display: none;
   }
 }
 </style>

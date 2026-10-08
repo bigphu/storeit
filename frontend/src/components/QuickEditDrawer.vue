@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
-import Drawer from 'primevue/drawer'
 import { onActivated, onDeactivated, onMounted, onUnmounted } from 'vue'
 import { isPageClickOutside } from '@/lib/clickAway'
 import { closeGuard } from '@/lib/confirm'
 import AppIcon from './AppIcon.vue'
+import SideDrawer from './SideDrawer.vue'
 import type { IconName } from './icons'
 
 // Sửa nhanh từ danh sách: ngăn kéo bên phải (chuột ít phải di), cùng form với Overview của
@@ -21,7 +21,8 @@ const props = defineProps<{
   actionsLabel?: string
 }>()
 const visible = defineModel<boolean>('visible', { required: true })
-const emit = defineEmits<{ save: []; prev: []; next: []; openPage: [] }>()
+// closed: ngăn kéo đã trượt ra xong (cha bỏ mục đang sửa lúc này, xem lib/quickDrawer.ts)
+const emit = defineEmits<{ save: []; prev: []; next: []; openPage: []; closed: [] }>()
 
 const mayClose = closeGuard()
 // đang lưu (cả lúc đang hỏi xác nhận trước khi lưu) thì không đóng: Esc trên hộp xác nhận
@@ -75,20 +76,19 @@ onUnmounted(unlisten)
 </script>
 
 <template>
-  <Drawer
+  <SideDrawer
     :visible="visible"
     position="right"
     :modal="false"
     :dismissable="false"
     :close-on-escape="false"
     :show-close-icon="false"
-    :pt="{
-      root: { class: 'quick-edit', style: 'width: min(26rem, 100vw)' },
-      header: { class: 'qe-header' },
-      content: { class: 'qe-body' },
-      footer: { class: 'qe-footer' },
-    }"
+    root-class="quick-edit"
+    header-class="qe-header"
+    content-class="qe-body"
+    footer-class="qe-footer"
     @update:visible="(v: boolean) => !v && requestClose()"
+    @closed="emit('closed')"
   >
     <template #header>
       <span class="qe-icon"><AppIcon :name="icon" /></span>
@@ -111,7 +111,7 @@ onUnmounted(unlisten)
       <span class="qe-grow" />
       <Button label="Save" :loading="busy" :disabled="!dirty" @click="emit('save')" />
     </template>
-  </Drawer>
+  </SideDrawer>
 </template>
 
 <style>

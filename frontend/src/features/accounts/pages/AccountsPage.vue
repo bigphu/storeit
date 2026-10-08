@@ -28,6 +28,7 @@ import type { AccountListItem } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { mayClose } from '@/lib/confirm'
+import { useQuickDrawer } from '@/lib/quickDrawer'
 import { formatDay } from '@/lib/dates'
 import { changeCount, changesOf, clearTab, emptyDraft, isDirty, listOf, setList } from '@/lib/detailDraft'
 import { openLocation } from '@/lib/navigation'
@@ -162,18 +163,11 @@ function clearQuick() {
   clearTab(quickDraft, 'overview')
   clearTab(quickDraft, 'roles')
 }
-const quickOpen = computed({
-  get: () => quick.value !== null,
-  set: (v) => {
-    if (!v) {
-      quick.value = null
-      clearQuick()
-    }
-  },
-})
+// mở/đóng ngăn kéo: mục giữ lại đến khi trượt ra xong rồi mới xoá cùng bản nháp
+const quickDrawer = useQuickDrawer(quick, clearQuick)
+const quickOpen = quickDrawer.visible
 function openQuick(a: AccountListItem) {
-  clearQuick()
-  quick.value = a
+  quickDrawer.open(a)
 }
 const quickIndex = computed(() => (quick.value ? rows.value.findIndex((x) => x.id === quick.value!.id) : -1))
 async function moveQuick(step: number) {
@@ -301,6 +295,7 @@ watch(rows, (list) => {
     <QuickEditDrawer
       v-if="quick"
       v-model:visible="quickOpen"
+      @closed="quickDrawer.closed()"
       :title="quick.name"
       icon="user-plus"
       :dirty="isDirty(quickDraft)"

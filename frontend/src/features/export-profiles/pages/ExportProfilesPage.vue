@@ -22,6 +22,7 @@ import { useExport } from '@/features/assets/export/useExport'
 import type { ExportProfile } from '@/lib/api/types'
 import { useSession } from '@/lib/auth/session'
 import { mayClose } from '@/lib/confirm'
+import { useQuickDrawer } from '@/lib/quickDrawer'
 import { formatDay } from '@/lib/dates'
 import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
 import { useDirty, useFormErrors } from '@/lib/forms'
@@ -91,18 +92,11 @@ const quickFields: FieldDef[] = [
   { key: 'owner', label: 'Owner', lock: 'Profiles keep the person who made them.' },
 ]
 const quickSaved = computed(() => ({ name: quick.value?.name ?? '', owner: quick.value?.owner.name ?? '' }))
-const quickOpen = computed({
-  get: () => quick.value !== null,
-  set: (v) => {
-    if (!v) {
-      quick.value = null
-      clearTab(quickDraft, 'overview')
-    }
-  },
-})
+// mở/đóng ngăn kéo: mục giữ lại đến khi trượt ra xong rồi mới xoá cùng bản nháp
+const quickDrawer = useQuickDrawer(quick, () => clearTab(quickDraft, 'overview'))
+const quickOpen = quickDrawer.visible
 function openQuick(p: ExportProfile) {
-  clearTab(quickDraft, 'overview')
-  quick.value = p
+  quickDrawer.open(p)
 }
 const quickIndex = computed(() => (quick.value ? visible.value.findIndex((x) => x.id === quick.value!.id) : -1))
 async function moveQuick(step: number) {
@@ -214,6 +208,7 @@ async function submitCreate() {
     <QuickEditDrawer
       v-if="quick"
       v-model:visible="quickOpen"
+      @closed="quickDrawer.closed()"
       :title="quick.name"
       icon="file"
       :dirty="isDirty(quickDraft)"
