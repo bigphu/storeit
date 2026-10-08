@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { countdown } from './countdown'
+import { describe, expect, it, vi } from 'vitest'
+import { countdown, holds } from './countdown'
 
 describe('countdown', () => {
   it('counts down, pauses and resumes', () => {
@@ -12,5 +12,21 @@ describe('countdown', () => {
     expect(c.left(1150)).toBeCloseTo(0.5)
     c.resume(1150) // đang chạy: không đổi gì
     expect(c.left(5000)).toBe(0)
+  })
+})
+
+// Dừng khi có lý do (chuột ở trên, focus ở trong), chạy lại khi không còn lý do nào
+describe('holds', () => {
+  it('resumes only when neither hover nor focus holds it', () => {
+    const pause = vi.fn()
+    const resume = vi.fn()
+    const h = holds(pause, resume)
+    h.hold('hover')
+    h.hold('focus')
+    h.release('hover')
+    expect(resume).not.toHaveBeenCalled()
+    h.release('focus')
+    expect(resume).toHaveBeenCalledOnce()
+    expect(pause).toHaveBeenCalledOnce()
   })
 })
