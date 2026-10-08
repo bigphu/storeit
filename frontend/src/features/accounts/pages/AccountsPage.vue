@@ -33,7 +33,7 @@ import { changeCount, changesOf, clearTab, emptyDraft, isDirty, listOf, setList 
 import { openLocation } from '@/lib/navigation'
 import { inviteNote } from '@/lib/people'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
-import { onRowClick, useRowMenu } from '@/lib/tableRows'
+import { onRowClick, useActiveRow, useRowMenu } from '@/lib/tableRows'
 import { queryInt, queryString, useUrlState } from '@/lib/urlState'
 import { type AccountStatus, useAccounts } from '../api'
 import CreateAccountDialog from '../components/CreateAccountDialog.vue'
@@ -119,6 +119,8 @@ function openAccount(a: AccountListItem, e?: MouseEvent, newTab?: boolean) {
   openLocation(router, `/accounts/${a.id}`, e, newTab)
 }
 const rowClick = onRowClick(openAccount)
+// nút cuối dòng chỉ dựng cho hàng dưới chuột / có focus (lib/tableRows.ts)
+const activeRow = useActiveRow()
 const menu = ref<InstanceType<typeof ContextMenu>>()
 const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<AccountListItem>(menu, (a) => {
   const items: MenuItem[] = [
@@ -233,6 +235,10 @@ watch(rows, (list) => {
       @page="onPage"
       @row-click="rowClick"
       @row-contextmenu="showMenu"
+      @mouseover="activeRow.onOver"
+      @mouseleave="activeRow.onLeave"
+      @focusin="activeRow.onFocusIn"
+      @focusout="activeRow.onFocusOut"
     >
       <Column header="Person">
         <template #body="{ data: a }: { data: AccountListItem }">
@@ -268,9 +274,9 @@ watch(rows, (list) => {
       <Column header="Created">
         <template #body="{ data: a }: { data: AccountListItem }">{{ formatDay(a.created_at) }}</template>
       </Column>
-      <Column v-if="canManage" header="" header-style="width: 6rem">
-        <template #body="{ data: a }: { data: AccountListItem }">
-          <div class="row-actions">
+      <Column v-if="canManage" header="" header-style="width: 6rem; min-width: 6rem">
+        <template #body="{ data: a, index }: { data: AccountListItem; index: number }">
+          <div v-if="activeRow.isActive(index)" class="row-actions">
             <IconAction icon="pi pi-pencil" label="Quick edit" @click="openQuick(a)" />
             <IconAction v-if="a.status === 'invited'" icon="pi pi-envelope" label="Resend invitation" @click="actions.resendInvitation(a)" />
             <IconAction v-if="a.status === 'active'" icon="pi pi-key" label="Send reset link" @click="actions.sendReset(a)" />
