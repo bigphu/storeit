@@ -256,7 +256,7 @@ const table = useListTable<Attribute>({ open: (a) => openAttribute(a), clickable
       v-bind="table.bind"
       @row-reorder="onReorder"
     >
-      <Column v-if="canManage && !showRemoved" row-reorder row-reorder-icon="pi pi-grip-vertical" header-style="width: 2.75rem" />
+      <Column v-if="canManage && !showRemoved" row-reorder row-reorder-icon="pi pi-arrows-v" header-style="width: 2.75rem" />
       <Column field="label" header="Label" header-style="width: 22%" />
       <Column header="Key" header-style="width: 16%">
         <template #body="{ data: a }: { data: Attribute }"><code>{{ a.key }}</code></template>

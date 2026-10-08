@@ -203,7 +203,7 @@ watch(statuses, (list) => {
           v-bind="laneTables[k].bind"
           @row-reorder="(e: DataTableRowReorderEvent) => onReorder(k, e)"
         >
-          <Column v-if="canManage" row-reorder row-reorder-icon="pi pi-grip-vertical" header-style="width: 2.5rem" body-style="width: 2.5rem" />
+          <Column v-if="canManage" row-reorder row-reorder-icon="pi pi-arrows-v" header-style="width: 2.5rem" body-style="width: 2.5rem" />
           <Column>
             <template #body="{ data: s }: { data: Status }">
               <div class="name-cell">
