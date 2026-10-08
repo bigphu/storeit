@@ -69,7 +69,8 @@ Seeded IDs are in `domain/permissions.go` (`GeneralTypeID`, `AvailableStatusID`,
   `"unit": ""` removes the unit.
 - `POST /asset-types/{typeID}/attributes/{attributeID}/restore` and
   `…/options/{optionID}/restore` undo a removal and return the attribute (with options) or
-  option; already active returns it unchanged. Keys stay unique including removed
+  option; already active returns it unchanged. A restored item goes to the end of its list
+  (its old position may belong to one added since). Keys stay unique including removed
   attributes, so only the label can clash: 409 `/errors/attribute-label-taken` or
   `/errors/option-label-taken`. An option's attribute must be active. Recorded on
   `asset_type_updated` as `removed → active`.

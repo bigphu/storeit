@@ -283,3 +283,60 @@ func TestTypes_AttributeLabels(t *testing.T) {
 		t.Errorf("labels = %v, want %v", labels[typ.ID], want)
 	}
 }
+
+// Khôi phục thuộc tính / lựa chọn: về cuối danh sách, không trùng vị trí với mục thêm sau khi xoá
+func TestTypes_RestoredItemsGoToTheEnd(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	typ := laptop(t, r)
+	serial := attr(t, typ, "serial")
+	if err := r.types.RemoveAttribute(ctx, typ.ID, serial.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.types.AddAttribute(ctx, typ.ID, domain.NewAttribute{Key: "color", Label: "Color", DataType: domain.TypeText, Position: serial.Position}); err != nil {
+		t.Fatal(err)
+	}
+	back, err := r.types.RestoreAttribute(ctx, typ.ID, serial.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cur, err := r.types.Get(ctx, typ.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[int32]string{}
+	for _, a := range cur.Attributes {
+		if a.RemovedAt != nil {
+			continue
+		}
+		if other, dup := seen[a.Position]; dup {
+			t.Errorf("attributes %s and %s share position %d", other, a.Key, a.Position)
+		}
+		seen[a.Position] = a.Key
+		if a.ID != serial.ID && a.Position >= back.Position {
+			t.Errorf("restored serial at %d, but %s is at %d; want serial last", back.Position, a.Key, a.Position)
+		}
+	}
+
+	os := attr(t, typ, "os")
+	win := os.Options[0]
+	if err := r.types.RemoveOption(ctx, typ.ID, os.ID, win.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.types.AddOption(ctx, typ.ID, os.ID, "Linux", win.Position); err != nil {
+		t.Fatal(err)
+	}
+	opt, err := r.types.RestoreOption(ctx, typ.ID, os.ID, win.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cur, err = r.types.Get(ctx, typ.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range attr(t, cur, "os").Options {
+		if o.ID != win.ID && o.RemovedAt == nil && o.Position >= opt.Position {
+			t.Errorf("restored %s at %d, but %s is at %d; want it last", win.Label, opt.Position, o.Label, o.Position)
+		}
+	}
+}
