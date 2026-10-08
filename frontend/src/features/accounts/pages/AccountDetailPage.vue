@@ -3,17 +3,19 @@ import Avatar from 'primevue/avatar'
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import Chip from 'primevue/chip'
-import InputText from 'primevue/inputtext'
+import Menu from 'primevue/menu'
+import type { MenuItem } from 'primevue/menuitem'
 import Message from 'primevue/message'
 import Panel from 'primevue/panel'
 import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
 import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
-import { computed, ref, watch } from 'vue'
-import { useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
+import { computed, reactive, ref } from 'vue'
+import { useLeaveGuard, useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb from '@/components/AppBreadcrumb.vue'
 import DetailHeader from '@/components/DetailHeader.vue'
+import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import SaveBar from '@/components/SaveBar.vue'
 import { useRoles } from '@/features/roles/api'
 import { ADMINISTRATOR_ROLE_ID, effective } from '@/features/roles/catalog'
@@ -21,12 +23,12 @@ import type { Role } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { formatDateTime } from '@/lib/dates'
-import { isApiError } from '@/lib/errors'
-import { useFormErrors } from '@/lib/forms'
+import { changeCount, changesOf, clearTab, discardTab, emptyDraft, isDirty, listOf, restoreTab, setList } from '@/lib/detailDraft'
 import { notify } from '@/lib/notify'
 import { initials, inviteNote, relativeTime } from '@/lib/people'
 import { useUrlState } from '@/lib/urlState'
-import { useAccount, useAssignRoles, useUpdateAccount } from '../api'
+import { useAccount } from '../api'
+import { useAccountOverviewSave, useAccountRolesSave } from '../overviewSave'
 import { statusSeverity } from '../status'
 import { useAccountActions } from '../useAccountActions'
 
@@ -35,7 +37,7 @@ const props = defineProps<{ id: string }>()
 
 const session = useSession()
 const canManage = computed(() => session.can(Perm.AccountManage))
-const { data: account, refetch } = useAccount(() => props.id)
+const { data: account } = useAccount(() => props.id)
 useTabTitle(() => account.value?.name)
 const roles = useRoles()
 const actions = useAccountActions()
@@ -48,61 +50,62 @@ const { state, update } = useUrlState(
 )
 const label = (s: string) => s[0].toUpperCase() + s.slice(1)
 
-// Sửa tên: gửi version đã đọc; 409 là người khác vừa sửa
-const name = ref('')
-const nameErrors = useFormErrors()
-const update_ = useUpdateAccount()
-watch(
-  () => account.value?.name,
-  (n) => (name.value = n ?? ''),
-  { immediate: true },
-)
-async function saveName() {
-  if (!account.value) return
-  nameErrors.clear()
-  try {
-    await update_.mutateAsync({ id: props.id, name: name.value, version: account.value.version })
-    notify.success('Name saved.')
-  } catch (err) {
-    if (isApiError(err) && err.status === 409) {
-      notify.info('Someone else changed this account. Reloaded the latest version.')
-      await refetch()
-    } else {
-      nameErrors.set(err)
-    }
-  }
-}
+// Bản nháp chung cho mọi tab: Overview (tên) và Roles (tick); một thanh lưu cho tab đang mở
+const draft = reactive(emptyDraft())
+useTabDirty(() => isDirty(draft))
+useLeaveGuard(() => isDirty(draft))
+const fields: FieldDef[] = [
+  { key: 'name', label: 'Display name', maxlength: 200 },
+  { key: 'email', label: 'Email', lock: 'The sign-in address. Invite a new account to use another one.' },
+]
+const savedFields = computed(() => ({ name: account.value?.name ?? '', email: account.value?.email ?? '' }))
 
-// Role: chọn bằng thẻ; bản nháp so với bản đã lưu, có thanh lưu khi khác
+// Role: tick trong danh sách; bản nháp theo từng role so với role đã lưu
 const saved = computed(() => account.value?.roles.map((r) => r.id) ?? [])
-const draft = ref<string[] | null>(null)
-const current = computed(() => draft.value ?? saved.value)
-const dirty = computed(
-  () => !!draft.value && (draft.value.length !== saved.value.length || draft.value.some((id) => !saved.value.includes(id))),
-)
-useTabDirty(() => dirty.value)
-watch(saved, () => (draft.value = null))
+const allRoleIds = computed(() => (roles.data.value ?? []).map((r) => r.id))
+const current = computed(() => listOf(draft, 'roles', saved.value, allRoleIds.value))
 function pick(id: string, on: boolean) {
-  const set = new Set(current.value)
-  if (on) set.add(id)
-  else set.delete(id)
-  draft.value = (roles.data.value ?? []).map((r) => r.id).filter((x) => set.has(x))
+  const next = on ? [...current.value, id] : current.value.filter((x) => x !== id)
+  setList(draft, 'roles', saved.value, next)
 }
 const grantable = (r: Role) => r.permissions.every((p) => session.can(p))
 // Không tự bỏ role Administrator của mình (API trả 409); báo trước khi lưu
 const lockout = computed(() => self.value && saved.value.includes(ADMINISTRATOR_ROLE_ID) && !current.value.includes(ADMINISTRATOR_ROLE_ID))
 const groups = computed(() => effective(roles.data.value ?? [], saved.value, current.value))
 
-const assign = useAssignRoles()
-async function saveRoles() {
+const saveOverview = useAccountOverviewSave()
+const saveRoles = useAccountRolesSave()
+const saving = ref(false)
+const tabCount = computed(() => changeCount(draft, state.value.tab))
+async function save() {
+  const a = account.value
+  if (!a) return
+  const tab = state.value.tab
+  saving.value = true
   try {
-    await assign.mutateAsync({ id: props.id, roleIds: current.value })
-    draft.value = null
-    notify.success('Roles saved.')
-  } catch {
-    // lỗi đã hiện qua toast của mutation
+    const ok = tab === 'overview' ? await saveOverview(a, changesOf(draft, 'overview')) : await saveRoles(a, [...saved.value], current.value)
+    if (ok) clearTab(draft, tab)
+  } finally {
+    saving.value = false
   }
 }
+function discard() {
+  const tab = state.value.tab
+  const removed = discardTab(draft, tab)
+  notify.success('Changes discarded.', { undo: () => restoreTab(draft, tab, removed) })
+}
+
+// Hành động ít dùng: menu "More"
+const more = ref<InstanceType<typeof Menu>>()
+const moreItems = computed<MenuItem[]>(() => {
+  const a = account.value
+  if (!a) return []
+  return [
+    { label: 'Resend invitation', icon: 'pi pi-envelope', visible: a.status === 'invited', command: () => actions.resendInvitation(a) },
+    { label: 'Send reset link', icon: 'pi pi-key', visible: a.status === 'active', command: () => actions.sendReset(a) },
+    { label: 'Sign out everywhere', icon: 'pi pi-sign-out', visible: a.status === 'active', disabled: !a.active_sessions, command: () => actions.signOutEverywhere(a) },
+  ]
+})
 
 const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: account.value?.name ?? '…' }])
 </script>
@@ -125,45 +128,35 @@ const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: 
         <span v-if="!account.roles.length">No roles</span>
       </div>
       <template v-if="canManage" #actions>
-        <Button v-if="account.status === 'invited'" label="Resend invitation" icon="pi pi-envelope" severity="secondary" outlined @click="actions.resendInvitation(account)" />
-        <Button v-if="account.status === 'active'" label="Send reset link" icon="pi pi-key" severity="secondary" outlined @click="actions.sendReset(account)" />
-        <Button v-if="account.status === 'disabled'" label="Enable" icon="pi pi-check-circle" @click="actions.enable(account)" />
+        <Button v-if="account.status === 'disabled'" label="Enable" severity="secondary" outlined @click="actions.enable(account)" />
         <span v-else v-tooltip.top="self ? 'You can’t disable yourself' : undefined">
-          <Button label="Disable" icon="pi pi-ban" severity="danger" outlined :disabled="self" @click="actions.disable(account)" />
+          <Button label="Disable" severity="secondary" outlined :disabled="self" @click="actions.disable(account)" />
         </span>
+        <Button
+          v-if="moreItems.some((i) => i.visible)"
+          icon="pi pi-ellipsis-h"
+          severity="secondary"
+          outlined
+          aria-label="More actions"
+          aria-haspopup="menu"
+          @click="(e: MouseEvent) => more?.toggle(e)"
+        />
+        <Menu ref="more" :model="moreItems" popup />
       </template>
     </DetailHeader>
 
     <Tabs :value="state.tab" class="section-tabs" @update:value="(v) => update({ tab: v as Section })">
       <TabList>
-        <Tab value="overview">Overview</Tab>
-        <Tab value="roles">Roles <span class="tab-count">{{ account.roles.length }}</span></Tab>
+        <Tab value="overview">Overview<span v-if="changeCount(draft, 'overview')" class="tab-dirty" aria-label="Unsaved changes" /></Tab>
+        <Tab value="roles">Roles <span class="tab-count">{{ account.roles.length }}</span><span v-if="changeCount(draft, 'roles')" class="tab-dirty" aria-label="Unsaved changes" /></Tab>
         <Tab value="activity" disabled>Activity · later</Tab>
       </TabList>
     </Tabs>
 
     <div v-if="state.tab === 'overview'" class="grid">
       <Panel header="Profile">
-        <form class="form" @submit.prevent="saveName">
-          <Message v-if="nameErrors.general.value" severity="error">{{ nameErrors.general.value }}</Message>
-          <div class="field">
-            <label for="acct-name">Display name</label>
-            <div class="inline">
-              <InputText id="acct-name" v-model="name" :disabled="!canManage" maxlength="200" />
-              <Button v-if="canManage" type="submit" label="Save" severity="secondary" :loading="update_.isPending.value" :disabled="!name.trim() || name.trim() === account.name" />
-            </div>
-            <small v-if="nameErrors.fields.value.name" class="field-error">{{ nameErrors.fields.value.name }}</small>
-          </div>
-          <div class="field">
-            <span>Email</span>
-            <div>{{ account.email }}</div>
-            <small>Used to sign in. It can't be changed here.</small>
-          </div>
-          <div class="field">
-            <span>Linked member <Tag value="later" severity="secondary" class="later" /></span>
-            <div class="muted">Not linked. Linking to a person in the directory comes with the directory module.</div>
-          </div>
-        </form>
+        <OverviewFields :fields="fields" :saved="savedFields" :draft="draft" :readonly="!canManage" stacked />
+        <p class="note">Linked member <Tag value="later" severity="secondary" class="later" />: linking to a person in the directory comes with the directory module.</p>
       </Panel>
       <Panel header="Sign-in">
         <dl class="props">
@@ -183,17 +176,6 @@ const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: 
           {{ inviteNote(account.invite_expires_at) ?? 'No invitation link is pending.' }} Resending makes a new link and the
           old one stops working.
         </p>
-        <Button
-          v-if="canManage && account.status === 'active'"
-          label="Sign out everywhere"
-          icon="pi pi-sign-out"
-          severity="secondary"
-          outlined
-          size="small"
-          class="signout"
-          :disabled="!account.active_sessions"
-          @click="actions.signOutEverywhere(account)"
-        />
       </Panel>
     </div>
 
@@ -236,16 +218,15 @@ const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: 
         </div>
         <p v-if="!groups.length" class="muted">No permissions. They can sign in but see nothing.</p>
       </Panel>
-      <SaveBar
-        v-if="dirty"
-        :message="`Roles changed for ${account.name}`"
-        save-label="Save roles"
-        :saving="assign.isPending.value"
-        :blocked="lockout"
-        @save="saveRoles"
-        @discard="draft = null"
-      />
     </div>
+    <SaveBar
+      v-if="canManage && tabCount"
+      :count="tabCount"
+      :saving="saving"
+      :blocked="state.tab === 'roles' && lockout"
+      @save="save"
+      @discard="discard"
+    />
   </section>
 </template>
 
@@ -275,6 +256,15 @@ const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: 
 .section-tabs {
   margin-bottom: 1rem;
 }
+/* tab còn thay đổi chưa lưu */
+.tab-dirty {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-left: 0.4rem;
+  border-radius: 50%;
+  background: var(--app-warn);
+}
 .tab-count {
   font: 0.75rem var(--app-mono);
   color: var(--p-text-muted-color);
@@ -300,6 +290,8 @@ const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: 
   min-width: 10rem;
 }
 .later {
+  /* nhãn nhỏ cạnh chữ: không theo bề rộng chung của tag */
+  min-width: 0;
   font-size: 0.65rem;
   margin-left: 0.3rem;
 }

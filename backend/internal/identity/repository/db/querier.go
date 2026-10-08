@@ -12,6 +12,7 @@ import (
 )
 
 type Querier interface {
+	// Role đã xoá không mang quyền (phòng khi còn sót trong account_roles)
 	AccountPermissions(ctx context.Context, accountID uuid.UUID) ([]string, error)
 	AccountRoleIDs(ctx context.Context, accountID uuid.UUID) ([]uuid.UUID, error)
 	// Dùng token: xoá rồi mới kiểm tra, nên hai lần gửi cùng lúc chỉ một bên thấy hàng
@@ -37,6 +38,7 @@ type Querier interface {
 	// Dọn rác: family đã chết (thu hồi hoặc hết hạn tuyệt đối) quá retention
 	DeleteDeadFamilies(ctx context.Context, cutoff time.Time) (int64, error)
 	DeleteExpiredPasswordTokens(ctx context.Context, cutoff time.Time) (int64, error)
+	// Xoá mềm; không xoá nếu còn account giữ role (service đã kiểm tra, đây là lớp chặn cuối)
 	DeleteRole(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteRolePermissions(ctx context.Context, roleID uuid.UUID) error
 	// Token đã dùng trong family còn sống, hết hạn quá retention. Không đụng ngọn.
@@ -61,6 +63,8 @@ type Querier interface {
 	// thái account để account bị khoá không refresh được.
 	GetRefreshForUpdate(ctx context.Context, tokenHash []byte) (GetRefreshForUpdateRow, error)
 	GetRole(ctx context.Context, id uuid.UUID) (IdentityRole, error)
+	// Kể cả role đã xoá (khôi phục)
+	GetRoleAnyForUpdate(ctx context.Context, id uuid.UUID) (IdentityRole, error)
 	GetRolesByIDs(ctx context.Context, ids []uuid.UUID) ([]IdentityRole, error)
 	InsertAccountRole(ctx context.Context, arg InsertAccountRoleParams) error
 	InsertRolePermission(ctx context.Context, arg InsertRolePermissionParams) error
@@ -69,9 +73,15 @@ type Querier interface {
 	ListInviteExpiries(ctx context.Context, ids []uuid.UUID) ([]ListInviteExpiriesRow, error)
 	ListLastSignIns(ctx context.Context, ids []uuid.UUID) ([]IdentityAccountSignIn, error)
 	ListPermissions(ctx context.Context) ([]IdentityPermission, error)
+	// Role đã xoá (xoá mềm) không hiện ở đâu, trừ khi khôi phục
 	ListRoles(ctx context.Context) ([]IdentityRole, error)
 	// Role của nhiều account một lần (danh sách account)
 	ListRolesOfAccounts(ctx context.Context, ids []uuid.UUID) ([]ListRolesOfAccountsRow, error)
+	// Khoá role trước khi xoá mềm: đợi các lần gán chưa commit (khoá ngoại giữ FOR KEY SHARE)
+	LockActiveRole(ctx context.Context, id uuid.UUID) (IdentityRole, error)
+	// Khoá chia sẻ các role sắp gán: xoá role cùng lúc phải đợi, và role vừa bị xoá thì
+	// không còn trong kết quả (điều kiện được xét lại sau khi đợi). Khoá theo id để không deadlock
+	LockActiveRolesByIDs(ctx context.Context, ids []uuid.UUID) ([]IdentityRole, error)
 	// Khoá hàng role Administrator: mọi thao tác có thể làm mất một admin (khoá
 	// account, đổi role) chạy lần lượt, để kiểm tra "còn admin" không bị hai
 	// transaction cùng lọt. Luôn khoá trước hàng account.
@@ -79,6 +89,7 @@ type Querier interface {
 	// Guard used_at IS NULL: 0 hàng là có ai đó đánh dấu trước
 	MarkRefreshTokenUsed(ctx context.Context, arg MarkRefreshTokenUsedParams) (int64, error)
 	RecordSignIn(ctx context.Context, accountID uuid.UUID) error
+	RestoreRole(ctx context.Context, id uuid.UUID) (IdentityRole, error)
 	// Thu hồi mọi phiên còn sống của account, trừ family đang dùng (nếu có)
 	RevokeAccountFamilies(ctx context.Context, arg RevokeAccountFamiliesParams) (int64, error)
 	RevokeFamily(ctx context.Context, arg RevokeFamilyParams) error

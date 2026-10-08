@@ -184,6 +184,36 @@ func (f *fakeTypes) UpdateOption(_ context.Context, _, _, optID uuid.UUID, label
 
 func (f *fakeTypes) RemoveOption(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error { return nil }
 
+func (f *fakeTypes) RestoreAttribute(_ context.Context, typeID, attrID uuid.UUID) (domain.Attribute, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t := f.types[typeID]
+	for i, a := range t.Attributes {
+		if a.ID == attrID {
+			t.Attributes[i].RemovedAt = nil
+			return t.Attributes[i], nil
+		}
+	}
+	return domain.Attribute{}, domain.ErrAttributeNotFound
+}
+
+func (f *fakeTypes) RestoreOption(_ context.Context, typeID, attrID, optID uuid.UUID) (domain.Option, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, a := range f.types[typeID].Attributes {
+		if a.ID != attrID {
+			continue
+		}
+		for i, o := range a.Options {
+			if o.ID == optID {
+				a.Options[i].RemovedAt = nil
+				return a.Options[i], nil
+			}
+		}
+	}
+	return domain.Option{}, domain.ErrOptionNotFound
+}
+
 func (f *fakeTypes) AttributeLabels(context.Context) (map[uuid.UUID][]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -490,7 +520,7 @@ func (f *fakeProfiles) List(_ context.Context, owner uuid.UUID) ([]domain.Export
 	defer f.mu.Unlock()
 	var out []domain.ExportProfile
 	for _, p := range f.profiles {
-		if p.OwnerID == owner || p.Shared {
+		if (p.OwnerID == owner || p.Shared) && p.DeletedAt == nil {
 			out = append(out, p)
 		}
 	}
@@ -501,9 +531,36 @@ func (f *fakeProfiles) Get(_ context.Context, id uuid.UUID) (domain.ExportProfil
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	p, ok := f.profiles[id]
+	if !ok || p.DeletedAt != nil {
+		return domain.ExportProfile{}, domain.ErrExportProfileNotFound
+	}
+	return p, nil
+}
+
+func (f *fakeProfiles) GetAny(_ context.Context, id uuid.UUID) (domain.ExportProfile, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	p, ok := f.profiles[id]
 	if !ok {
 		return p, domain.ErrExportProfileNotFound
 	}
+	return p, nil
+}
+
+func (f *fakeProfiles) Restore(_ context.Context, id uuid.UUID) (domain.ExportProfile, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	p, ok := f.profiles[id]
+	if !ok {
+		return p, domain.ErrExportProfileNotFound
+	}
+	for _, o := range f.profiles {
+		if o.ID != id && o.DeletedAt == nil && o.OwnerID == p.OwnerID && strings.EqualFold(o.Name, p.Name) {
+			return domain.ExportProfile{}, domain.ErrExportProfileNameTaken
+		}
+	}
+	p.DeletedAt = nil
+	f.profiles[id] = p
 	return p, nil
 }
 
@@ -511,7 +568,7 @@ func (f *fakeProfiles) Create(_ context.Context, in domain.NewExportProfile) (do
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, p := range f.profiles {
-		if p.OwnerID == in.OwnerID && strings.EqualFold(p.Name, in.Name) {
+		if p.DeletedAt == nil && p.OwnerID == in.OwnerID && strings.EqualFold(p.Name, in.Name) {
 			return domain.ExportProfile{}, domain.ErrExportProfileNameTaken
 		}
 	}
@@ -524,8 +581,8 @@ func (f *fakeProfiles) Update(_ context.Context, id uuid.UUID, ch domain.ExportP
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	p, ok := f.profiles[id]
-	if !ok {
-		return p, domain.ErrExportProfileNotFound
+	if !ok || p.DeletedAt != nil {
+		return domain.ExportProfile{}, domain.ErrExportProfileNotFound
 	}
 	if p.Version != ch.Version {
 		return p, domain.ErrExportProfileChanged
@@ -547,10 +604,13 @@ func (f *fakeProfiles) Update(_ context.Context, id uuid.UUID, ch domain.ExportP
 func (f *fakeProfiles) Delete(_ context.Context, id uuid.UUID) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if _, ok := f.profiles[id]; !ok {
+	p, ok := f.profiles[id]
+	if !ok || p.DeletedAt != nil {
 		return domain.ErrExportProfileNotFound
 	}
-	delete(f.profiles, id)
+	now := time.Now()
+	p.DeletedAt = &now
+	f.profiles[id] = p
 	return nil
 }
 

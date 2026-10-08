@@ -424,6 +424,63 @@ func (q *Queries) RemoveOption(ctx context.Context, arg RemoveOptionParams) (int
 	return result.RowsAffected(), nil
 }
 
+const restoreAttribute = `-- name: RestoreAttribute :one
+UPDATE inventory.asset_type_attributes SET removed_at = NULL, updated_at = now()
+WHERE id = $1 AND asset_type_id = $2
+RETURNING id, asset_type_id, key, label, data_type, unit, is_required, position, removed_at, created_at, updated_at
+`
+
+type RestoreAttributeParams struct {
+	ID          uuid.UUID
+	AssetTypeID uuid.UUID
+}
+
+func (q *Queries) RestoreAttribute(ctx context.Context, arg RestoreAttributeParams) (InventoryAssetTypeAttribute, error) {
+	row := q.db.QueryRow(ctx, restoreAttribute, arg.ID, arg.AssetTypeID)
+	var i InventoryAssetTypeAttribute
+	err := row.Scan(
+		&i.ID,
+		&i.AssetTypeID,
+		&i.Key,
+		&i.Label,
+		&i.DataType,
+		&i.Unit,
+		&i.IsRequired,
+		&i.Position,
+		&i.RemovedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const restoreOption = `-- name: RestoreOption :one
+UPDATE inventory.asset_attribute_options SET removed_at = NULL, updated_at = now()
+WHERE id = $1 AND attribute_id = $2
+RETURNING id, attribute_id, data_type, label, position, removed_at, created_at, updated_at
+`
+
+type RestoreOptionParams struct {
+	ID          uuid.UUID
+	AttributeID uuid.UUID
+}
+
+func (q *Queries) RestoreOption(ctx context.Context, arg RestoreOptionParams) (InventoryAssetAttributeOption, error) {
+	row := q.db.QueryRow(ctx, restoreOption, arg.ID, arg.AttributeID)
+	var i InventoryAssetAttributeOption
+	err := row.Scan(
+		&i.ID,
+		&i.AttributeID,
+		&i.DataType,
+		&i.Label,
+		&i.Position,
+		&i.RemovedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const setAssetTypeArchived = `-- name: SetAssetTypeArchived :one
 UPDATE inventory.asset_types
 SET archived_at = CASE WHEN $1::boolean THEN coalesce(archived_at, now()) END,

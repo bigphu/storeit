@@ -11,17 +11,25 @@ export const typeKeys = {
 }
 
 // withCounts: kèm asset_count (tài sản chưa retire) cho sidebar và bộ chọn loại
-export function useAssetTypes(includeArchived: MaybeRefOrGetter<boolean> = false, withCounts = false) {
-  return useQuery({
-    queryKey: computed(() => [...typeKeys.list(toValue(includeArchived)), withCounts] as const),
+// assetTypesQuery: khoá và hàm tải dùng chung cho useAssetTypes và tải trước (app/prefetch.ts)
+export function assetTypesQuery(includeArchived: boolean, withCounts: boolean) {
+  return {
+    queryKey: [...typeKeys.list(includeArchived), withCounts] as const,
     queryFn: async () =>
       (
         await unwrap(
           inventoryApi.GET('/asset-types', {
-            params: { query: { include_archived: toValue(includeArchived), with_counts: withCounts || undefined } },
+            params: { query: { include_archived: includeArchived, with_counts: withCounts || undefined } },
           }),
         )
       ).items,
+  }
+}
+
+export function useAssetTypes(includeArchived: MaybeRefOrGetter<boolean> = false, withCounts = false) {
+  return useQuery({
+    queryKey: computed(() => assetTypesQuery(toValue(includeArchived), withCounts).queryKey),
+    queryFn: () => assetTypesQuery(toValue(includeArchived), withCounts).queryFn(),
   })
 }
 
@@ -65,11 +73,11 @@ export function useUpdateAssetType() {
 }
 
 export function useArchiveAssetType() {
-  return useTypeMutation((id: string) => unwrap(inventoryApi.POST('/asset-types/{typeID}/archive', typePath(id))))
+  return useTypeMutation((id: string) => unwrap(inventoryApi.POST('/asset-types/{typeID}/archive', typePath(id))), false)
 }
 
 export function useRestoreAssetType() {
-  return useTypeMutation((id: string) => unwrap(inventoryApi.POST('/asset-types/{typeID}/restore', typePath(id))))
+  return useTypeMutation((id: string) => unwrap(inventoryApi.POST('/asset-types/{typeID}/restore', typePath(id))), false)
 }
 
 export interface AttributeInput {
@@ -103,6 +111,7 @@ export function useUpdateAttribute() {
 export function useRemoveAttribute() {
   return useTypeMutation(({ typeId, attrId }: { typeId: string; attrId: string }) =>
     unwrap(inventoryApi.DELETE('/asset-types/{typeID}/attributes/{attributeID}', attrPath(typeId, attrId))),
+    false,
   )
 }
 
@@ -145,6 +154,7 @@ export function useRemoveOption() {
         params: { path: { typeID: typeId, attributeID: attrId, optionID: optionId } },
       }),
     ),
+    false,
   )
 }
 
@@ -152,6 +162,7 @@ export function useRemoveOption() {
 export function useReorderAttributes() {
   return useTypeMutation(({ typeId, ids }: { typeId: string; ids: string[] }) =>
     unwrap(inventoryApi.PUT('/asset-types/{typeID}/attributes/order', { ...typePath(typeId), body: { ids } })),
+    false,
   )
 }
 
@@ -163,5 +174,27 @@ export function useReorderOptions() {
         body: { ids },
       }),
     ),
+    false,
+  )
+}
+
+// Undo của bỏ thuộc tính / option (xoá mềm)
+export function useRestoreAttribute() {
+  return useTypeMutation(
+    ({ typeId, attrId }: { typeId: string; attrId: string }) =>
+      unwrap(inventoryApi.POST('/asset-types/{typeID}/attributes/{attributeID}/restore', attrPath(typeId, attrId))),
+    false,
+  )
+}
+
+export function useRestoreOption() {
+  return useTypeMutation(
+    ({ typeId, attrId, optionId }: { typeId: string; attrId: string; optionId: string }) =>
+      unwrap(
+        inventoryApi.POST('/asset-types/{typeID}/attributes/{attributeID}/options/{optionID}/restore', {
+          params: { path: { typeID: typeId, attributeID: attrId, optionID: optionId } },
+        }),
+      ),
+    false,
   )
 }

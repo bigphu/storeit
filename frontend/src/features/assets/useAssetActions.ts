@@ -1,11 +1,12 @@
-// Hành động nhanh trên một tài sản, dùng chung cho danh sách và trang tài sản:
-// mở, sửa, retire (qua RetireDialog), restore (hỏi lại bằng ConfirmDialog)
-import { useConfirm } from 'primevue/useconfirm'
+// Hành động nhanh trên một tài sản, dùng chung cho danh sách và trang tài sản: mở, sửa,
+// retire (RetireDialog, có Undo), restore (chạy ngay, có Undo), sửa nhanh từ danh sách
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { notify } from '@/lib/notify'
+import { runAction } from '@/lib/actions'
 import { openLocation } from '@/lib/navigation'
-import { useRestoreAsset } from './api'
+import { fetchAsset, useReplaceAsset, useRestoreAsset, useRetireAsset } from './api'
+import { type AssetQuickChange, quickAssetBody } from './quickEdit'
+import { assetBodyOf, type FormValues } from './values'
 
 export interface ActionAsset {
   id: string
@@ -13,12 +14,15 @@ export interface ActionAsset {
   name: string
   version: number
   retired_at?: string
+  // trang tài sản có sẵn; dòng danh sách không có thì đọc lúc restore
+  retired_reason?: string
 }
 
 export function useAssetActions() {
   const router = useRouter()
-  const confirm = useConfirm()
-  const restore = useRestoreAsset()
+  const restoreAsset = useRestoreAsset()
+  const retireAsset = useRetireAsset()
+  const replaceAsset = useReplaceAsset()
 
   // retireTarget + retireOpen gắn vào <RetireDialog>
   const retireTarget = ref<ActionAsset | null>(null)
@@ -37,17 +41,35 @@ export function useAssetActions() {
       retireTarget.value = a
       retireOpen.value = true
     },
-    askRestore(a: ActionAsset) {
-      confirm.require({
-        message: `Restore ${a.tag}? It goes back to the default available status.`,
-        header: 'Restore asset',
-        acceptLabel: 'Restore',
-        rejectLabel: 'Cancel',
-        accept: () =>
-          restore
-            .mutateAsync({ id: a.id, version: a.version })
-            .then(() => notify.success(`${a.tag} restored.`))
-            .catch(() => {}),
+    // Sửa nhanh từ danh sách: đọc bản mới nhất, chỉ đổi phần vừa sửa (attrPatch: thuộc tính
+    // vừa sửa, các thuộc tính khác giữ nguyên), PUT với version; Undo đặt lại
+    quickSave(row: { id: string; tag: string }, change: AssetQuickChange, what: string, attrPatch?: FormValues) {
+      return runAction({
+        run: async () => {
+          const a = await fetchAsset(row.id)
+          const saved = await replaceAsset.mutateAsync({ id: a.id, version: a.version, ...quickAssetBody(a, change, attrPatch) })
+          return { before: assetBodyOf(a), saved }
+        },
+        done: `${row.tag} ${what}.`,
+        failed: `Couldn't save ${row.tag}.`,
+        undo: ({ before, saved }) => replaceAsset.mutateAsync({ id: row.id, version: saved.version, ...before }),
+        undone: `${row.tag} changed back.`,
+        undoFailed: `Couldn't change ${row.tag} back. Someone may have changed it since.`,
+      })
+    },
+    restore(a: ActionAsset) {
+      return runAction({
+        run: async () => {
+          // giữ lý do để Undo retire lại đúng như cũ
+          const reason = a.retired_reason ?? (await fetchAsset(a.id)).retired_reason ?? ''
+          const restored = await restoreAsset.mutateAsync({ id: a.id, version: a.version })
+          return { restored, reason }
+        },
+        done: `${a.tag} restored.`,
+        failed: `Couldn't restore ${a.tag}.`,
+        undo: ({ restored, reason }) => retireAsset.mutateAsync({ id: a.id, reason, version: restored.version }),
+        undone: `${a.tag} retired again.`,
+        undoFailed: `Couldn't retire ${a.tag} again. It stays restored.`,
       })
     },
   }

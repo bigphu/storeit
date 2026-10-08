@@ -39,6 +39,8 @@ type emailData struct {
 	Name      string
 	Link      string
 	ExpiresIn string
+	// Logo PNG do frontend phục vụ (public/email-logo.png), cùng địa chỉ với link trong thư
+	LogoURL string
 }
 
 // SendAccountEmail là việc của job identity.send_account_email: dựng thư chứa
@@ -85,6 +87,7 @@ func (s *Service) SendAccountEmail(ctx context.Context, args job.SendAccountEmai
 		// nên token không vào access log hay header Referer
 		Link:      fmt.Sprintf("%s/%s#token=%s", s.appURL, kind.page, args.Token),
 		ExpiresIn: humanDuration(s.ttl(tok.Purpose)),
+		LogoURL:   s.appURL + "/email-logo.png",
 	}
 	var text, html bytes.Buffer
 	name := string(tok.Purpose)

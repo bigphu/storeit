@@ -1,27 +1,37 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Column from 'primevue/column'
-import DataTable from 'primevue/datatable'
-import Dialog from 'primevue/dialog'
+import ContextMenu from 'primevue/contextmenu'
+import DataTable, { type DataTableRowContextMenuEvent } from 'primevue/datatable'
 import InputText from 'primevue/inputtext'
-import Message from 'primevue/message'
+import Menu from 'primevue/menu'
+import type { MenuItem } from 'primevue/menuitem'
 import Select from 'primevue/select'
-import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
-import { computed, ref } from 'vue'
+import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AddCard from '@/components/AddCard.vue'
 import CardGrid from '@/components/CardGrid.vue'
 import EntityCard from '@/components/EntityCard.vue'
+import FormDialog from '@/components/FormDialog.vue'
+import IconAction from '@/components/IconAction.vue'
+import InlineCell from '@/components/InlineCell.vue'
+import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
+import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
 import type { Role } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
-import { useFormErrors } from '@/lib/forms'
+import { mayClose } from '@/lib/confirm'
+import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
+import { useDirty, useFormErrors } from '@/lib/forms'
+import { openLocation } from '@/lib/navigation'
+import { useRowMenu } from '@/lib/tableRows'
 import { useUrlState } from '@/lib/urlState'
 import { useCreateRole, useRoles } from '../api'
-import { ALL_PERMS, label, moduleOf } from '../catalog'
+import { ALL_PERMS, EMPLOYEE_ROLE_ID, label, moduleOf } from '../catalog'
+import { useRoleDelete, useRoleOverviewSave } from '../overviewSave'
 
 // Vai trò: thẻ (đồng hồ quyền, số người) hoặc bảng so sánh mọi role với mọi quyền
 const session = useSession()
@@ -54,6 +64,7 @@ const description = ref('')
 const copyFrom = ref('')
 const errors = useFormErrors()
 const create = useCreateRole()
+const form = useDirty(() => ({ n: name.value.trim(), d: description.value.trim(), c: copyFrom.value }))
 const copyOptions = computed(() => [
   { label: 'No permissions', value: '' },
   ...(roles.value ?? [])
@@ -61,8 +72,11 @@ const copyOptions = computed(() => [
     .map((r) => ({ label: `Copy ${r.name}`, value: r.id })),
 ])
 function openCreate() {
-  name.value = description.value = copyFrom.value = ''
+  name.value = description.value = ''
+  // bắt đầu từ Employee khi được phép chép quyền của nó (ít bấm nhất cho role mới thường gặp)
+  copyFrom.value = copyOptions.value.some((o) => o.value === EMPLOYEE_ROLE_ID) ? EMPLOYEE_ROLE_ID : ''
   errors.clear()
+  form.reset()
   creating.value = true
 }
 async function submit() {
@@ -71,10 +85,90 @@ async function submit() {
   try {
     const role = await create.mutateAsync({ name: name.value, description: description.value, permissions: from?.permissions })
     creating.value = false
-    await router.push(`/roles/${role.id}`)
+    // mở ở Permissions để chỉnh phần vừa chép
+    await router.push({ path: `/roles/${role.id}`, query: { tab: 'permissions' } })
   } catch (err) {
     errors.set(err)
   }
+}
+
+// Sửa nhanh trên thẻ: bút chì cạnh tên để đổi tại chỗ (role tự tạo); "Quick edit" trong menu
+// mở ngăn kéo; xoá role tự tạo không ai giữ
+const saveRole = useRoleOverviewSave()
+const deleteRole = useRoleDelete()
+const rename = (r: Role, name: string) => saveRole(r, { name })
+const list = computed(() => roles.value ?? [])
+const quick = ref<Role | null>(null)
+const quickDraft = reactive(emptyDraft())
+const quickSaving = ref(false)
+const quickFields = computed<FieldDef[]>(() => [
+  { key: 'name', label: 'Name', maxlength: 100, lock: quick.value?.is_system ? 'Built-in roles keep their name.' : undefined },
+  { key: 'description', label: 'Description', kind: 'textarea' },
+])
+const quickSaved = computed(() => ({ name: quick.value?.name ?? '', description: quick.value?.description ?? '' }))
+const quickOpen = computed({
+  get: () => quick.value !== null,
+  set: (v) => {
+    if (!v) {
+      quick.value = null
+      clearTab(quickDraft, 'overview')
+    }
+  },
+})
+function openQuick(r: Role) {
+  clearTab(quickDraft, 'overview')
+  quick.value = r
+}
+const quickIndex = computed(() => (quick.value ? list.value.findIndex((x) => x.id === quick.value!.id) : -1))
+async function moveQuick(step: number) {
+  const next = list.value[quickIndex.value + step]
+  if (!next || !(await mayClose(isDirty(quickDraft)))) return
+  openQuick(next)
+}
+async function saveQuick() {
+  const r = quick.value
+  if (!r) return
+  quickSaving.value = true
+  try {
+    if (await saveRole(r, changesOf(quickDraft, 'overview'))) clearTab(quickDraft, 'overview')
+  } finally {
+    quickSaving.value = false
+  }
+}
+watch(roles, (l) => {
+  if (quick.value) quick.value = l?.find((x) => x.id === quick.value!.id) ?? null
+})
+
+// Hành động trên thẻ: nút menu (☰) ở đầu thẻ và chuột phải, cùng một danh sách. Xoá chỉ cho
+// role tự tạo; còn người giữ thì tắt, nhãn nói lý do
+const openRole = (r: Role, newTab?: boolean) => openLocation(router, `/roles/${r.id}`, undefined, newTab)
+const roleMenu = (r: Role): MenuItem[] => [
+  { label: 'Open', icon: 'pi pi-arrow-right', command: () => openRole(r) },
+  { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => openRole(r, true) },
+  { separator: true, visible: canManage.value },
+  { label: 'Quick edit', icon: 'pi pi-pencil', visible: canManage.value, command: () => openQuick(r) },
+  {
+    label: people(r) > 0 ? `Delete (held by ${peopleLabel(people(r))})` : 'Delete',
+    icon: 'pi pi-trash',
+    visible: canManage.value && !r.is_system,
+    disabled: people(r) > 0,
+    command: () => deleteRole(r),
+  },
+]
+const menu = ref<InstanceType<typeof ContextMenu>>()
+const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Role>(menu, roleMenu)
+function onCardMenu(r: Role, e: MouseEvent) {
+  e.preventDefault()
+  showMenu({ originalEvent: e, data: r, index: 0 } as DataTableRowContextMenuEvent)
+}
+// không xoá role đang chọn khi menu đóng: Menu báo đóng sau hiệu ứng, lúc đó có thể đã mở
+// cho thẻ khác
+const cardMenu = ref<InstanceType<typeof Menu>>()
+const cardMenuRole = shallowRef<Role | null>(null)
+const cardMenuItems = computed(() => (cardMenuRole.value ? roleMenu(cardMenuRole.value) : []))
+function toggleCardMenu(r: Role, e: MouseEvent) {
+  cardMenuRole.value = r
+  cardMenu.value?.toggle(e)
 }
 </script>
 
@@ -87,12 +181,17 @@ async function submit() {
       <SegmentedFilter v-model="layout" :options="layoutOptions" label="Layout" />
     </div>
 
+    <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />
+    <Menu ref="cardMenu" :model="cardMenuItems" popup />
+
     <CardGrid v-if="state.layout === 'cards'">
-      <EntityCard v-for="r in roles ?? []" :key="r.id" :to="`/roles/${r.id}`" :label="r.name">
+      <EntityCard v-for="r in roles ?? []" :key="r.id" :to="`/roles/${r.id}`" :label="r.name" @menu="(e) => onCardMenu(r, e)">
         <div class="top">
-          <h3>{{ r.name }}</h3>
+          <h3>
+            <InlineCell :value="r.name" label="name" :editable="canManage && !r.is_system" @save="(v) => rename(r, v)">{{ r.name }}</InlineCell>
+          </h3>
           <i v-if="r.is_system" v-tooltip.top="'Built-in role'" class="pi pi-lock lock" aria-label="Built-in" />
-          <Tag v-else value="Custom" severity="secondary" />
+          <IconAction icon="pi pi-bars" :label="`Actions for ${r.name}`" aria-haspopup="menu" @click="(e) => toggleCardMenu(r, e)" />
         </div>
         <p class="desc">{{ r.description || 'No description.' }}</p>
         <div>
@@ -139,29 +238,48 @@ async function submit() {
       </Column>
     </DataTable>
 
-    <Dialog v-model:visible="creating" modal header="New role" :style="{ width: '32rem' }">
-      <form class="form" @submit.prevent="submit">
-        <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
-        <div class="field">
-          <label for="role-name">Name</label>
-          <InputText id="role-name" v-model="name" required maxlength="100" autofocus />
-          <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
-        </div>
-        <div class="field">
-          <label for="role-desc">Description</label>
-          <Textarea id="role-desc" v-model="description" rows="3" />
-        </div>
-        <div class="field">
-          <label for="role-copy">Start from</label>
-          <Select v-model="copyFrom" input-id="role-copy" :options="copyOptions" option-label="label" option-value="value" />
-          <small>You can change the permissions on the next page.</small>
-        </div>
-        <div class="actions">
-          <Button type="submit" label="Create role" :loading="create.isPending.value" />
-          <Button label="Cancel" severity="secondary" text @click="creating = false" />
-        </div>
-      </form>
-    </Dialog>
+    <QuickEditDrawer
+      v-if="quick"
+      v-model:visible="quickOpen"
+      :title="quick.name"
+      icon="shield"
+      :dirty="isDirty(quickDraft)"
+      :busy="quickSaving"
+      :can-prev="quickIndex > 0"
+      :can-next="quickIndex >= 0 && quickIndex < list.length - 1"
+      @save="saveQuick"
+      @prev="moveQuick(-1)"
+      @next="moveQuick(1)"
+      @open-page="router.push(`/roles/${quick.id}`)"
+    >
+      <OverviewFields :fields="quickFields" :saved="quickSaved" :draft="quickDraft" stacked />
+    </QuickEditDrawer>
+
+    <FormDialog
+      v-model:visible="creating"
+      icon="shield"
+      title="New role"
+      action="Create role"
+      :busy="create.isPending.value"
+      :error="errors.general.value"
+      :dirty="form.dirty.value"
+      @submit="submit"
+    >
+      <div class="field">
+        <label for="role-name">Name</label>
+        <InputText id="role-name" v-model="name" required maxlength="100" autofocus />
+        <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
+      </div>
+      <div class="field">
+        <label for="role-desc">Description</label>
+        <Textarea id="role-desc" v-model="description" rows="3" />
+      </div>
+      <div class="field">
+        <label for="role-copy">Start from</label>
+        <Select v-model="copyFrom" input-id="role-copy" :options="copyOptions" option-label="label" option-value="value" />
+        <small>You can change the permissions on the next page.</small>
+      </div>
+    </FormDialog>
   </section>
 </template>
 

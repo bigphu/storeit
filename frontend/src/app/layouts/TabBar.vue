@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import ContextMenu from 'primevue/contextmenu'
-import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import type { MenuItem } from 'primevue/menuitem'
 import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
 import Tabs from 'primevue/tabs'
-import { useConfirm } from 'primevue/useconfirm'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import FormDialog from '@/components/FormDialog.vue'
+import { runAction } from '@/lib/actions'
+import { confirmAction } from '@/lib/confirm'
+import { useDirty } from '@/lib/forms'
 import type { Tab as TabItem } from '../tabs/tabList'
 import { useTabs } from '../tabs/useTabs'
 
@@ -18,25 +20,33 @@ import { useTabs } from '../tabs/useTabs'
 const emit = defineEmits<{ switch: [id: string] }>()
 
 const tabs = useTabs()
-const confirm = useConfirm()
 
 // tab chưa có tiêu đề (mở nền, lưu từ bản cũ): tiêu đề của route cho đến khi trang tải
 const router = useRouter()
 const label = (t: TabItem) => t.name || t.title || router.resolve(t.path).meta.title || 'Untitled'
 
-// đóng tab còn thay đổi chưa lưu thì hỏi lại
-function close(t: TabItem) {
-  if (!tabs.dirty.has(t.id)) {
-    tabs.close(t.id)
+// đóng tab: có Undo; tab còn thay đổi chưa lưu thì hỏi trước (bỏ thay đổi không hoàn tác được)
+async function close(t: TabItem) {
+  const name = label(t)
+  if (tabs.dirty.has(t.id)) {
+    const ok = await confirmAction({
+      title: `Close ${name}?`,
+      body: 'This tab has unsaved changes. Closing it discards them.',
+      action: 'Discard and close',
+      danger: true,
+      icon: 'alert',
+    })
+    if (ok) await tabs.close(t.id)
     return
   }
-  confirm.require({
-    header: 'Close tab?',
-    message: `“${label(t)}” has unsaved changes. Closing the tab discards them.`,
-    acceptLabel: 'Discard and close',
-    rejectLabel: 'Keep editing',
-    acceptProps: { severity: 'danger' },
-    accept: () => tabs.close(t.id),
+  const index = tabs.tabs.findIndex((x) => x.id === t.id)
+  const wasActive = tabs.activeId === t.id
+  const snapshot = { ...t }
+  await runAction({
+    run: () => tabs.close(t.id),
+    done: `${name} closed.`,
+    undo: () => tabs.reopen(snapshot, index, wasActive),
+    undone: `${name} reopened.`,
   })
 }
 
@@ -70,6 +80,7 @@ function openMenu(e: MouseEvent, t: TabItem) {
 // Đổi tên tab (để trống thì về tiêu đề của trang)
 const renaming = ref<TabItem | null>(null)
 const renameText = ref('')
+const renameForm = useDirty(() => renameText.value)
 const renameOpen = computed({
   get: () => renaming.value !== null,
   set: (v) => {
@@ -79,7 +90,16 @@ const renameOpen = computed({
 function startRename(t: TabItem) {
   renaming.value = t
   renameText.value = label(t)
+  renameForm.reset()
 }
+// Con lăn dọc trên dải tab cuộn ngang (chuột không có con lăn ngang)
+function onWheel(e: WheelEvent) {
+  const viewport = (e.currentTarget as HTMLElement).querySelector<HTMLElement>('.p-tablist-viewport')
+  if (!viewport || Math.abs(e.deltaY) <= Math.abs(e.deltaX) || viewport.scrollWidth <= viewport.clientWidth) return
+  e.preventDefault()
+  viewport.scrollLeft += e.deltaY
+}
+
 function commitRename() {
   if (renaming.value) tabs.rename(renaming.value.id, renameText.value)
   renaming.value = null
@@ -88,7 +108,17 @@ function commitRename() {
 
 <template>
   <div class="tabbar">
-    <Tabs :value="tabs.activeId ?? ''" scrollable class="tabs app-tabbar" @update:value="(id) => emit('switch', String(id))">
+    <!-- Tắt nút ‹ › của PrimeVue (show-navigators): chúng đo lại kích thước (bắt trình duyệt
+         dựng lại bố cục cả trang) mỗi lần dải tab cập nhật, rất tốn khi trang đang dựng bảng.
+         Dải tab vẫn cuộn ngang; con lăn chuột dọc cũng cuộn ngang (onWheel) -->
+    <Tabs
+      :value="tabs.activeId ?? ''"
+      scrollable
+      :show-navigators="false"
+      class="tabs app-tabbar"
+      @update:value="(id) => emit('switch', String(id))"
+      @wheel="onWheel"
+    >
       <TabList>
         <Tab
           v-for="t in tabs.tabs"
@@ -122,22 +152,16 @@ function commitRename() {
     <Button icon="pi pi-plus" text rounded class="new-tab" aria-label="New tab" @click="tabs.open('/assets', { background: false })" />
 
     <ContextMenu ref="menu" :model="menuItems" @hide="menuTab = null" />
-    <Dialog v-model:visible="renameOpen" modal header="Rename tab" :style="{ width: '24rem' }">
-      <form class="form" @submit.prevent="commitRename">
-        <InputText v-model="renameText" aria-label="Tab name" autofocus />
-        <small>Leave empty to use the page's title.</small>
-        <div class="actions">
-          <Button type="submit" label="Rename" />
-          <Button label="Cancel" severity="secondary" text @click="renaming = null" />
-        </div>
-      </form>
-    </Dialog>
+    <FormDialog v-model:visible="renameOpen" size="s" icon="file" title="Rename tab" action="Rename" :dirty="renameForm.dirty.value" @submit="commitRename">
+      <InputText v-model="renameText" aria-label="Tab name" autofocus />
+      <small>Leave empty to use the page's title.</small>
+    </FormDialog>
   </div>
 </template>
 
 <style scoped>
 /* Thanh tab kiểu trình duyệt / VS Code: tab đang mở mang nền của trang và nối liền với
-   trang bên dưới, vạch 2px màu chính phía trên; tab khác là chữ mờ, ngăn bằng vạch mảnh */
+   trang bên dưới, chữ đậm (không vạch màu một bên); tab khác là chữ mờ, ngăn bằng vạch mảnh */
 .tabbar {
   display: flex;
   align-items: flex-end;
@@ -193,10 +217,9 @@ function commitRename() {
   border-color: var(--app-line);
   color: var(--p-text-color);
   font-weight: 600;
-  box-shadow: inset 0 2px 0 var(--app-accent);
   /* đè lên viền dưới của thanh để nối liền với trang */
   margin-bottom: -1px;
-  padding-bottom: calc(0.45rem + 1px);
+  /* padding-bottom: 0.; */
 }
 .tab-icon {
   font-size: 0.75rem;
@@ -205,6 +228,9 @@ function commitRename() {
 .app-tab.pinned .tab-icon {
   color: var(--app-accent);
   opacity: 1;
+}
+.app-tab.pinned {
+  padding-right: 0.7rem;
 }
 .tab-label {
   overflow: hidden;

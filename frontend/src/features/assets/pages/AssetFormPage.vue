@@ -12,6 +12,7 @@ import { useTabs } from '@/app/tabs/useTabs'
 import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { fromDateString, toDateString } from '@/lib/dates'
+import { announce } from '@/lib/actions'
 import { isApiError } from '@/lib/errors'
 import { useFormErrors } from '@/lib/forms'
 import { notify } from '@/lib/notify'
@@ -21,7 +22,7 @@ import { useAsset, useCreateAsset, useReplaceAsset } from '../api'
 import AttributeInput from '../components/AttributeInput.vue'
 import { useListContext } from '../listContext'
 import { typeListLocation } from '../listQuery'
-import { type FormValues, fromApiValues, toApiValues } from '../values'
+import { assetBodyOf, type FormValues, fromApiValues, toApiValues } from '../values'
 
 // Không có id là tạo mới; có id là sửa (PUT thay toàn bộ)
 // typeId (từ /types/:typeId/assets/new): chọn sẵn loại cho tài sản mới
@@ -146,13 +147,22 @@ async function submit() {
     holder_member_id: asset.value?.holder_member_id,
     attributes: toApiValues(attributes.value, values.value),
   }
+  // sửa: giữ bản đã lưu để Undo đặt lại
+  const before = isEdit.value && asset.value ? { id: asset.value.id, tag: asset.value.tag, body: assetBodyOf(asset.value) } : null
   try {
     const saved =
       isEdit.value && asset.value
         ? await replace.mutateAsync({ id: asset.value.id, version: asset.value.version, ...body })
         : await create.mutateAsync({ tag: tag.value, ...body })
     clean.value = formState.value
-    notify.success('Asset saved.')
+    if (before)
+      announce(saved, {
+        done: `${before.tag} saved.`,
+        undo: (s) => replace.mutateAsync({ id: before.id, version: s.version, ...before.body }),
+        undone: `Changes to ${before.tag} undone.`,
+        undoFailed: `Couldn't undo the changes to ${before.tag}. The saved version stays.`,
+      })
+    else notify.success(`${saved.tag} created.`)
     // tài sản mới: mở trang của nó thay cho form; sửa: quay về nơi đã mở form
     if (isEdit.value) leave(`/assets/${saved.id}`)
     else await router.replace(`/assets/${saved.id}`)

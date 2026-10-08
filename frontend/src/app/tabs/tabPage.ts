@@ -1,7 +1,8 @@
 // Cho trang biết nó thuộc tab nào. Trang được giữ sống khi chuyển tab (KeepAlive),
 // nên trang ở tab nền không được phản ứng với URL của tab khác.
 import { onActivated, onDeactivated, onScopeDispose, shallowRef, watch, watchEffect } from 'vue'
-import { type LocationQuery, useRoute } from 'vue-router'
+import { type LocationQuery, onBeforeRouteLeave, useRoute } from 'vue-router'
+import { confirmDiscard } from '@/lib/confirm'
 import { useTabs } from './useTabs'
 
 // useTabId: tab của trang này (trang được tạo cho tab của URL đang hiện)
@@ -39,10 +40,16 @@ export function useTabTitle(title: () => string | undefined) {
   const tabs = useTabs()
   const tabId = tabs.routeTabId
   const shown = useShown()
-  watchEffect(() => {
-    const t = title()
-    if (tabId && t && shown.value) tabs.setTitle(tabId, t)
-  })
+  // Chỉ theo tiêu đề của trang và việc trang đang hiện. Không dùng watchEffect: setTitle
+  // đọc tiêu đề hiện tại của tab, nên khi rời trang (Back) sync đổi tiêu đề tab theo route
+  // mới thì effect chạy lại trước khi KeepAlive cất trang đi và ghi đè tiêu đề cũ lên tab
+  watch(
+    [title, shown],
+    ([t, isShown]) => {
+      if (tabId && t && isShown) tabs.setTitle(tabId, t)
+    },
+    { immediate: true },
+  )
 }
 
 // useTabDirty: chấm "chưa lưu" trên tab, hỏi lại khi đóng tab. Chuyển sang tab khác
@@ -61,4 +68,12 @@ export function useTabDirty(dirty: () => boolean) {
   onScopeDispose(() => {
     if (tabId) tabs.setDirty(tabId, false)
   })
+}
+
+// useLeaveGuard: rời trang (link, breadcrumb, sidebar) khi còn thay đổi chưa lưu thì hỏi.
+// Chuyển sang tab khác của app không hỏi (bản nháp vẫn giữ, tab có chấm)
+export function useLeaveGuard(dirty: () => boolean) {
+  const tabs = useTabs()
+  const tabId = tabs.routeTabId
+  onBeforeRouteLeave(async () => (tabs.activeId !== tabId || !dirty() ? true : confirmDiscard()))
 }

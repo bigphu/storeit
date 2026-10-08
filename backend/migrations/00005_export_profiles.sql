@@ -12,9 +12,12 @@ CREATE TABLE inventory.export_profiles (
     version    integer     NOT NULL DEFAULT 1,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
+    -- Xoá mềm: profile đã xoá như không tồn tại với mọi người cho đến khi khôi phục
+    deleted_at timestamptz,
     CONSTRAINT export_profiles_name_check CHECK (char_length(btrim(name)) BETWEEN 1 AND 100)
 );
-CREATE UNIQUE INDEX export_profiles_owner_name ON inventory.export_profiles (owner_id, lower(name));
+-- Tên duy nhất theo chủ trong các profile chưa xoá
+CREATE UNIQUE INDEX export_profiles_owner_name ON inventory.export_profiles (owner_id, lower(name)) WHERE deleted_at IS NULL;
 CREATE INDEX export_profiles_shared ON inventory.export_profiles (owner_id) WHERE shared;
 
 -- Mọi role export được; sửa profile người khác chia sẻ: Administrator, Authorized Manager

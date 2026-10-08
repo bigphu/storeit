@@ -6,7 +6,7 @@ import { useRouter } from 'vue-router'
 import { useSession } from '@/lib/auth/session'
 import { usePreferences } from '@/lib/preferences'
 import { readJSON, writeJSON } from '@/lib/storage'
-import { closeOthers as closeOthersOf, closeTab, initialTabs, openTab, pushBack, type Tab, togglePin as togglePinOf } from './tabList'
+import { closeOthers as closeOthersOf, closeTab, initialTabs, openTab, pushBack, reopenTab, type Tab, togglePin as togglePinOf } from './tabList'
 
 const HOME = '/assets'
 let seq = 0
@@ -112,6 +112,13 @@ export const useTabs = defineStore('tabs', () => {
     const tab = byId(id)
     if (!tab || id === activeId.value) return Promise.resolve()
     activeId.value = id
+    // URL của tab đã đang mở (tab nhân đôi, hai tab cùng trang): router không điều hướng
+    // nên sync không chạy. Tự giao trang cho tab này, không thì trang (tiêu đề, lịch sử,
+    // bộ lọc) vẫn thuộc tab cũ dù thanh tab tô tab mới
+    if (router.currentRoute.value.fullPath === tab.path) {
+      routeTabId.value = id
+      return Promise.resolve()
+    }
     return router.replace(tab.path)
   }
 
@@ -152,6 +159,15 @@ export const useTabs = defineStore('tabs', () => {
       return activate(r.activeId)
     }
     return Promise.resolve()
+  }
+
+  // reopen: Undo của close; tab mới (id mới) cùng đường dẫn và vị trí, mở lại nếu nó đang mở
+  function reopen(closed: Tab, index: number, wasActive: boolean) {
+    const tab: Tab = { ...closed, id: newId(), pinned: false }
+    tabs.value = reopenTab(tabs.value, tab, index)
+    if (!wasActive) return Promise.resolve()
+    activeId.value = null
+    return activate(tab.id)
   }
 
   function closeOthers(id: string) {
@@ -207,6 +223,7 @@ export const useTabs = defineStore('tabs', () => {
     activate,
     open,
     close,
+    reopen,
     closeOthers,
     togglePin,
     rename,

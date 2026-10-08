@@ -117,7 +117,22 @@ Selection styling lives in `app/theme.ts` (token preset over Aura) and `app/base
   so the asset page can return to it and step through it (`J`/`K`).
 - Rows per page: every paged table passes `rowsPerPageOptions` and keeps its own size
   through `usePageSize(tableKey)` (`lib/preferences.ts`, per account in localStorage);
-  tables without a size use the default.
+  tables without a size use the default (25).
+- Performance of long tables (measured with Lighthouse on a production build, not the dev
+  server, which scores far lower):
+  - build row-action buttons only for the active row: `useActiveRow()` (`lib/tableRows.ts`)
+    tracks the hovered or focused row; touch screens build them on every row;
+  - give paged tables `TableSkeleton :rows="12"` and `:paginator="!isLoading"`, so nothing
+    below the table jumps when the first page arrives;
+  - format dates through `lib/dates.ts` (cached `Intl.DateTimeFormat`), not
+    `toLocaleDateString()` per cell;
+  - don't use PrimeVue's tab navigators (`show-navigators`) on bars that update while a
+    page renders: they measure the layout on every update.
+- Loading a page: the router guard starts the page's code (`loadRouteLocation`) while the
+  session is checked, then starts its data (`prefetchRoute`, `app/prefetch.ts`) while the
+  code downloads. A prefetched query must use the page's own definition (`assetTypesQuery`,
+  `statusesQuery`, `assetListQuery`), or the page fetches again; add a page there when its
+  first request is worth starting early.
 - **Stay on PrimeVue 4.x, `@primeuix/themes` 2.x and `primeicons` 7.x (MIT).** From
   PrimeVue 5 / primeicons 8 (July 2026) PrimeTek ships them under a commercial "PrimeUI"
   license that needs a license key (a free Community key exists for eligible users);
@@ -125,6 +140,48 @@ Selection styling lives in `app/theme.ts` (token preset over Aura) and `app/base
   keep `npm update` on the MIT majors.
 - `openapi-typescript` declares a TypeScript 5 peer; `package.json` overrides it to the
   project's TypeScript 6 (it only generates types).
+
+## Interaction patterns
+
+Spec: `docs/superpowers/specs/2026-10-07-ui-patterns-design.md`.
+
+- **Act now, offer Undo.**
+  - Use `runAction({ run, done, undo?, undone?, undoFailed?, failed? })` from `lib/actions.ts` for anything the server can reverse.
+  - `undo` receives `run`'s result, for example the new `version`.
+  - Use `announce(result, …)` when a form already ran the mutation and shows its own errors.
+  - Mutations used this way are created with `toast: false`.
+- **Ask only before the irreversible:**
+  - `confirmAction({ title, body, impact?, action, danger, icon })` from `lib/confirm.ts`.
+  - Red (`danger`) only for discarding; orange (`warn`) for changes that lock someone out (disabling an account); blue for sends and sign-outs.
+  - Exceptions that ask first and still offer Undo: changing who sees an export profile (Share / Make private; Make private is orange), and disabling an account (it signs the person out).
+- **Toasts:**
+  - `notify.success(msg, { undo?, action? })` and `notify.error(summary, { detail?, retry? })`;
+  - success shows 4 s, or 8 s with Undo or an action; errors stay until closed;
+  - at most three; Ctrl/⌘ Z runs the newest Undo.
+- **Dialogs:**
+  - `components/FormDialog.vue`, sizes `s`/`m`/`l`, with a filled `icon` from `components/icons.ts`;
+  - pass `dirty` (from `useDirty` in `lib/forms.ts`) so Esc and ✕ ask before discarding.
+- **Lists:** `EmptyState` and `TableSkeleton` in every DataTable `#empty` slot.
+- **Colour:**
+  - `--app-{brand,info,warn,danger,neutral}[-strong|-ink|-soft]` in `app/base.css`;
+  - tags are solid via `lib/tones.ts`;
+  - no coloured stripe on one side of anything.
+
+## Detail pages and quick edit
+
+Spec: `docs/superpowers/specs/2026-10-07-detail-flows-design.md`.
+
+- **The detail page** is `DetailHeader` (`icon`, tags, facts, then actions in this order: link or main action, state change, More, Delete), then tabs with Overview first.
+- **Fields** are `OverviewFields` over a `detailDraft` (`lib/detailDraft.ts`). There are no Edit buttons.
+  - `SaveBar :count` saves with Ctrl/⌘ S.
+  - Discard offers Undo.
+  - Guard pages with `useTabDirty` and `useLeaveGuard`.
+- **Each area has one save path** (`use…OverviewSave` in `features/<area>/overviewSave.ts`), shared by the page, the quick edit drawer and inline cells.
+- **Lists:**
+  - `InlineCell` shows a pencil next to a name (or an asset's status or purchase date) while its row or card is hovered or focused; the pencil edits it in place. Clicking the value itself still opens the item.
+  - `QuickEditDrawer` (the pencil) shows the Overview fields; ↑/↓ moves between rows. Its `#actions` slot (label from `actions-label`) holds the row's actions as buttons that run at once, not through Save (accounts, export profiles).
+- **Asset quick saves** read the full asset and PUT it with its version (`features/assets/quickEdit.ts`, `useAssetActions().quickSave`).
+- **The report editor** (`ReportEditor.vue`) is shared by the Export report dialog and the export profile page.
 
 ## Excel export
 

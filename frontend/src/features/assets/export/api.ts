@@ -27,14 +27,28 @@ export function useCreateExportProfile() {
   )
 }
 
-export function useUpdateExportProfile() {
-  return useProfileMutation(({ id, ...body }: { id: string; version: number; name?: string; shared?: boolean; layout?: ExportLayout }) =>
-    unwrap(inventoryApi.PATCH('/export-profiles/{profileID}', { params: { path: { profileID: id } }, body })),
+// toast: false khi form tự hiện lỗi (popover Save… của hộp thoại báo cáo)
+export function useUpdateExportProfile(toast = true) {
+  return useProfileMutation(
+    ({ id, ...body }: { id: string; version: number; name?: string; shared?: boolean; layout?: ExportLayout }) =>
+      unwrap(inventoryApi.PATCH('/export-profiles/{profileID}', { params: { path: { profileID: id } }, body })),
+    toast,
   )
 }
 
 export function useDeleteExportProfile() {
-  return useProfileMutation((id: string) => unwrap(inventoryApi.DELETE('/export-profiles/{profileID}', { params: { path: { profileID: id } } })))
+  return useProfileMutation(
+    (id: string) => unwrap(inventoryApi.DELETE('/export-profiles/{profileID}', { params: { path: { profileID: id } } })),
+    false,
+  )
+}
+
+// Undo của xoá profile (xoá mềm)
+export function useRestoreExportProfile() {
+  return useProfileMutation(
+    (id: string) => unwrap(inventoryApi.POST('/export-profiles/{profileID}/restore', { params: { path: { profileID: id } } })),
+    false,
+  )
 }
 
 // exportAssets tải file và lưu; trả tên file và các cột bị bỏ.

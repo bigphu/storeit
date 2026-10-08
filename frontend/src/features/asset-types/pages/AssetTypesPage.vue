@@ -3,19 +3,25 @@ import Button from 'primevue/button'
 import Column from 'primevue/column'
 import ContextMenu from 'primevue/contextmenu'
 import DataTable, { type DataTableRowContextMenuEvent } from 'primevue/datatable'
-import Dialog from 'primevue/dialog'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import InputText from 'primevue/inputtext'
-import Message from 'primevue/message'
+import Menu from 'primevue/menu'
+import type { MenuItem } from 'primevue/menuitem'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AddCard from '@/components/AddCard.vue'
 import CardGrid from '@/components/CardGrid.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import EntityCard from '@/components/EntityCard.vue'
+import FormDialog from '@/components/FormDialog.vue'
 import IconAction from '@/components/IconAction.vue'
+import InlineCell from '@/components/InlineCell.vue'
+import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
+import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
 import { useListContext } from '@/features/assets/listContext'
@@ -23,13 +29,16 @@ import { typeListLocation } from '@/features/assets/listQuery'
 import type { AssetType } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
+import { mayClose } from '@/lib/confirm'
 import { formatDate } from '@/lib/dates'
-import { useFormErrors } from '@/lib/forms'
+import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
+import { useDirty, useFormErrors } from '@/lib/forms'
 import { openLocation } from '@/lib/navigation'
 import { onRowClick, useRowMenu } from '@/lib/tableRows'
 import { queryString, useUrlState } from '@/lib/urlState'
 import { useAssetTypes, useCreateAssetType } from '../api'
 import { codeFromName, codeMark } from '../code'
+import { useTypeArchive, useTypeOverviewSave } from '../overviewSave'
 import KindMeter from '../components/KindMeter.vue'
 
 // Danh sách loại: thẻ (mặc định) hoặc bảng; đang dùng / đã archive; tìm theo tên, mã.
@@ -37,7 +46,7 @@ import KindMeter from '../components/KindMeter.vue'
 const session = useSession()
 const router = useRouter()
 const canManage = computed(() => session.can(Perm.TypeManage))
-const { data: types, isFetching } = useAssetTypes(true, true)
+const { data: types, isFetching, isLoading } = useAssetTypes(true, true)
 
 type Show = 'active' | 'archived'
 type Layout = 'cards' | 'table'
@@ -96,15 +105,28 @@ function openType(t: AssetType, e?: MouseEvent, newTab?: boolean) {
 }
 const rowClick = onRowClick(openType)
 const menu = ref<InstanceType<typeof ContextMenu>>()
-const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<AssetType>(menu, (t) => [
+// Cùng một danh sách hành động cho menu chuột phải (dòng, thẻ) và nút menu trên thẻ
+const typeMenu = (t: AssetType): MenuItem[] => [
   { label: 'Open assets', icon: 'pi pi-arrow-right', command: () => openType(t) },
   { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => openType(t, undefined, true) },
   { separator: true },
   { label: 'Type settings', icon: 'pi pi-cog', command: () => openLocation(router, settingsPath(t)) },
-])
+  { label: 'Quick edit', icon: 'pi pi-pencil', visible: canManage.value, command: () => openQuick(t) },
+  { label: t.archived_at ? 'Restore' : 'Archive', icon: t.archived_at ? 'pi pi-replay' : 'pi pi-inbox', visible: canManage.value && !t.is_system, command: () => archiveType(t) },
+]
+const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<AssetType>(menu, typeMenu)
 function onCardMenu(t: AssetType, e: MouseEvent) {
   e.preventDefault()
   showMenu({ originalEvent: e, data: t, index: 0 } as DataTableRowContextMenuEvent)
+}
+// Nút menu (☰) trên đầu thẻ: thay cho hàng nút hành động để thẻ gọn. Không xoá thẻ đang
+// chọn khi menu đóng: Menu báo đóng sau hiệu ứng, lúc đó có thể đã mở cho thẻ khác.
+const cardMenu = ref<InstanceType<typeof Menu>>()
+const cardMenuType = shallowRef<AssetType | null>(null)
+const cardMenuItems = computed(() => (cardMenuType.value ? typeMenu(cardMenuType.value) : []))
+function toggleCardMenu(t: AssetType, e: MouseEvent) {
+  cardMenuType.value = t
+  cardMenu.value?.toggle(e)
 }
 
 // Loại mới: mã tự điền theo tên cho đến khi người dùng tự sửa mã
@@ -115,6 +137,7 @@ const name = ref('')
 const description = ref('')
 const errors = useFormErrors()
 const create = useCreateAssetType()
+const form = useDirty(() => ({ c: code.value.trim(), n: name.value.trim(), d: description.value.trim() }))
 watch(name, (n) => {
   if (!codeTouched.value) code.value = codeFromName(n)
 })
@@ -123,6 +146,7 @@ function openCreate() {
   code.value = name.value = description.value = ''
   codeTouched.value = false
   errors.clear()
+  form.reset()
   creating.value = true
 }
 
@@ -131,12 +155,60 @@ async function submit() {
   try {
     const t = await create.mutateAsync({ code: code.value, name: name.value, description: description.value })
     creating.value = false
-    // thêm thuộc tính ở trang cài đặt
-    await router.push(settingsPath(t))
+    // mở trang của loại ở Attributes, nút "Add attribute" sẵn focus
+    await router.push({ path: settingsPath(t), query: { tab: 'attributes', new: '1' } })
   } catch (err) {
     errors.set(err)
   }
 }
+
+// Sửa nhanh từ danh sách: nhấp đúp tên để đổi tại chỗ; bút chì mở ngăn kéo (tên, mô tả)
+const saveType = useTypeOverviewSave()
+const archiveType = useTypeArchive()
+const rename = (t: AssetType, name: string) => saveType(t, { name })
+const quick = ref<AssetType | null>(null)
+const quickDraft = reactive(emptyDraft())
+const quickSaving = ref(false)
+const quickFields: FieldDef[] = [
+  { key: 'name', label: 'Name', maxlength: 100 },
+  { key: 'code', label: 'Code', lock: 'Part of every asset tag, so it can’t change.' },
+  { key: 'description', label: 'Description', kind: 'textarea' },
+]
+const quickSaved = computed(() => ({ name: quick.value?.name ?? '', code: quick.value?.code ?? '', description: quick.value?.description ?? '' }))
+const quickOpen = computed({
+  get: () => quick.value !== null,
+  set: (v) => {
+    if (!v) closeQuick()
+  },
+})
+function closeQuick() {
+  quick.value = null
+  clearTab(quickDraft, 'overview')
+}
+function openQuick(t: AssetType) {
+  clearTab(quickDraft, 'overview')
+  quick.value = t
+}
+const quickIndex = computed(() => (quick.value ? visible.value.findIndex((t) => t.id === quick.value!.id) : -1))
+async function moveQuick(step: number) {
+  const next = visible.value[quickIndex.value + step]
+  if (!next || !(await mayClose(isDirty(quickDraft)))) return
+  openQuick(next)
+}
+async function saveQuick() {
+  const t = quick.value
+  if (!t) return
+  quickSaving.value = true
+  try {
+    if (await saveType(t, changesOf(quickDraft, 'overview'))) clearTab(quickDraft, 'overview')
+  } finally {
+    quickSaving.value = false
+  }
+}
+// danh sách nạp lại sau khi lưu: ngăn kéo theo bản mới (version mới)
+watch(types, (list) => {
+  if (quick.value) quick.value = list?.find((t) => t.id === quick.value!.id) ?? null
+})
 </script>
 
 <template>
@@ -156,6 +228,7 @@ async function submit() {
     <KindMeter v-if="state.show === 'active'" legend class="legend-row" />
 
     <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />
+    <Menu ref="cardMenu" :model="cardMenuItems" popup />
 
     <CardGrid v-if="state.layout === 'cards'">
       <EntityCard
@@ -169,13 +242,15 @@ async function submit() {
         <header class="card-head">
           <span class="mark">{{ codeMark(t.code) }}</span>
           <div class="title">
-            <h3>{{ t.name }}</h3>
+            <h3>
+              <InlineCell :value="t.name" label="name" :editable="canManage" @save="(v) => rename(t, v)">{{ t.name }}</InlineCell>
+            </h3>
             <code>{{ t.code }}</code>
           </div>
           <span v-if="t.is_system" v-tooltip.top="'Built-in type'" class="lock" aria-label="Built-in">
             <i class="pi pi-lock" />
           </span>
-          <IconAction icon="pi pi-cog" :label="`${t.name} settings`" :to="settingsPath(t)" />
+          <IconAction icon="pi pi-bars" :label="`Actions for ${t.name}`" aria-haspopup="menu" @click="(e) => toggleCardMenu(t, e)" />
         </header>
         <p class="desc">{{ t.description || 'No description.' }}</p>
         <Tag
@@ -220,13 +295,19 @@ async function submit() {
           <div class="name-cell">
             <span class="mark small">{{ codeMark(t.code) }}</span>
             <div>
-              <RouterLink :to="listOf(t)">{{ t.name }}</RouterLink>
+              <InlineCell :value="t.name" label="name" :editable="canManage" @save="(v) => rename(t, v)">
+                <RouterLink :to="listOf(t)">{{ t.name }}</RouterLink>
+              </InlineCell>
               <code class="sub-code">{{ t.code }}</code>
             </div>
           </div>
         </template>
       </Column>
-      <Column field="description" header="Description" sortable />
+      <Column field="description" header="Description" sortable>
+        <template #body="{ data: t }: { data: AssetType }">
+          <span class="clip-text" :title="t.description || undefined">{{ t.description }}</span>
+        </template>
+      </Column>
       <Column header="Attributes" sort-field="attribute_count" sortable>
         <template #body="{ data: t }: { data: AssetType }">
           {{ t.attribute_count ?? 0 }}
@@ -242,40 +323,69 @@ async function submit() {
           <KindMeter v-else :type="t" />
         </template>
       </Column>
-      <Column header="" header-style="width: 4rem">
+      <Column header="" header-style="width: 8rem">
         <template #body="{ data: t }: { data: AssetType }">
           <div class="row-actions">
+            <IconAction v-if="canManage" icon="pi pi-pencil" label="Quick edit" @click="openQuick(t)" />
+            <IconAction
+              v-if="canManage && !t.is_system"
+              :icon="t.archived_at ? 'pi pi-replay' : 'pi pi-inbox'"
+              :label="t.archived_at ? 'Restore' : 'Archive'"
+              @click="archiveType(t)"
+            />
             <IconAction icon="pi pi-cog" label="Type settings" :to="settingsPath(t)" />
           </div>
         </template>
       </Column>
-      <template #empty>{{ state.q ? `No types match "${state.q}".` : 'No asset types here.' }}</template>
+      <template #empty>
+        <TableSkeleton v-if="isLoading" />
+        <EmptyState v-else icon="pi pi-sitemap" :text="state.q ? `No types match &quot;${state.q}&quot;.` : 'No asset types here.'" />
+      </template>
     </DataTable>
 
-    <Dialog v-model:visible="creating" modal header="New asset type" :style="{ width: '32rem' }">
-      <form class="form" @submit.prevent="submit">
-        <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
-        <div class="field">
-          <label for="type-name">Name</label>
-          <InputText id="type-name" v-model="name" required placeholder="Network gear" autofocus />
-          <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
-        </div>
-        <div class="field">
-          <label for="type-code">Code</label>
-          <InputText id="type-code" v-model="code" required class="mono" placeholder="NETWORK_GEAR" @input="codeTouched = true" />
-          <small>Filled from the name. A-Z, 0-9, _ or -. It can't change later.</small>
-          <small v-if="errors.fields.value.code" class="field-error">{{ errors.fields.value.code }}</small>
-        </div>
-        <div class="field">
-          <label for="type-desc">Description</label>
-          <Textarea id="type-desc" v-model="description" rows="3" />
-        </div>
-        <div class="actions">
-          <Button type="submit" label="Create and add attributes" :loading="create.isPending.value" />
-          <Button label="Cancel" severity="secondary" text @click="creating = false" />
-        </div>
-      </form>
-    </Dialog>
+    <QuickEditDrawer
+      v-if="quick"
+      v-model:visible="quickOpen"
+      :title="quick.name"
+      icon="sitemap"
+      :dirty="isDirty(quickDraft)"
+      :busy="quickSaving"
+      :can-prev="quickIndex > 0"
+      :can-next="quickIndex >= 0 && quickIndex < visible.length - 1"
+      @save="saveQuick"
+      @prev="moveQuick(-1)"
+      @next="moveQuick(1)"
+      @open-page="router.push(settingsPath(quick))"
+    >
+      <OverviewFields :fields="quickFields" :saved="quickSaved" :draft="quickDraft" stacked />
+    </QuickEditDrawer>
+
+    <FormDialog
+      v-model:visible="creating"
+      icon="sitemap"
+      title="New asset type"
+      action="Create and add attributes"
+      :busy="create.isPending.value"
+      :error="errors.general.value"
+      :dirty="form.dirty.value"
+      @submit="submit"
+    >
+      <div class="field">
+        <label for="type-name">Name</label>
+        <InputText id="type-name" v-model="name" required placeholder="Network gear" autofocus />
+        <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
+      </div>
+      <div class="field">
+        <label for="type-code">Code</label>
+        <InputText id="type-code" v-model="code" required class="mono" placeholder="NETWORK_GEAR" @input="codeTouched = true" />
+        <small>Filled from the name. A-Z, 0-9, _ or -. It can't change later.</small>
+        <small v-if="errors.fields.value.code" class="field-error">{{ errors.fields.value.code }}</small>
+      </div>
+      <div class="field">
+        <label for="type-desc">Description</label>
+        <Textarea id="type-desc" v-model="description" rows="3" />
+      </div>
+    </FormDialog>
   </section>
 </template>
 

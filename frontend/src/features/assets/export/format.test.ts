@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AssetListItem } from '@/lib/api/types'
 import { formatCell } from './format'
-import { defaultReportLayout, type TypeInfo } from './layout'
+import { dataPreviewLayout, defaultReportLayout, type TypeInfo } from './layout'
 
 const laptop: TypeInfo = { id: 'L', name: 'Laptop', code: 'LAPTOP', attributes: [{ key: 'ram_gb', label: 'RAM', data_type: 'number', unit: 'GB' }] }
 const row = {
@@ -25,5 +25,14 @@ describe('formatCell', () => {
     expect(formatCell(row, 'status', l, [laptop]).text).toBe('On loan')
     expect(formatCell(row, 'status', { ...l, status_as: 'kind' }, [laptop]).text).toBe('In use')
     expect(formatCell(row, 'attr:missing', l, [laptop]).text).toBe('')
+  })
+})
+
+describe('data export cells', () => {
+  it('uses ISO dates, TRUE/FALSE and numbers without units, like the re-importable file', () => {
+    const l = dataPreviewLayout()
+    expect(formatCell(row, 'purchase_date', l, [laptop]).text).toBe('2025-03-14')
+    expect(formatCell(row, 'attr:touch', l, [laptop]).text).toBe('TRUE')
+    expect(formatCell(row, 'attr:ram_gb', l, [laptop]).text).toBe('16')
   })
 })

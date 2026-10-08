@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Chip from 'primevue/chip'
+import Checkbox from 'primevue/checkbox'
 import Column from 'primevue/column'
 import ContextMenu from 'primevue/contextmenu'
 import DataTable, { type DataTablePageEvent } from 'primevue/datatable'
@@ -10,17 +11,25 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import type { MenuItem } from 'primevue/menuitem'
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import EmptyState from '@/components/EmptyState.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import IconAction from '@/components/IconAction.vue'
 import PageHeader from '@/components/PageHeader.vue'
+import InlineCell from '@/components/InlineCell.vue'
+import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import PersonCell from '@/components/PersonCell.vue'
+import YouTag from '@/components/YouTag.vue'
+import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
 import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
 import { useRoles } from '@/features/roles/api'
 import type { AccountListItem } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
+import { mayClose } from '@/lib/confirm'
 import { formatDay } from '@/lib/dates'
+import { changeCount, changesOf, clearTab, emptyDraft, isDirty, listOf, setList } from '@/lib/detailDraft'
 import { openLocation } from '@/lib/navigation'
 import { inviteNote } from '@/lib/people'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
@@ -28,6 +37,7 @@ import { onRowClick, useRowMenu } from '@/lib/tableRows'
 import { queryInt, queryString, useUrlState } from '@/lib/urlState'
 import { type AccountStatus, useAccounts } from '../api'
 import CreateAccountDialog from '../components/CreateAccountDialog.vue'
+import { useAccountOverviewSave, useAccountRolesSave } from '../overviewSave'
 import { statusSeverity } from '../status'
 import { useAccountActions } from '../useAccountActions'
 
@@ -65,7 +75,7 @@ const params = computed(() => ({
   page: state.value.page,
   page_size: pageSize.value,
 }))
-const { data, isFetching } = useAccounts(params)
+const { data, isFetching, isLoading } = useAccounts(params)
 
 // Ô tìm kiếm: đợi gõ xong rồi mới đổi URL
 const search = ref(state.value.q)
@@ -87,7 +97,7 @@ const statusOptions = computed<SegmentOption<Filter>[]>(() => {
     { label: 'Disabled', value: 'disabled', count: c ? n('disabled') : undefined },
   ]
 })
-const roleOptions = computed(() => [{ name: 'Any role', id: '' }, ...(roles.data.value ?? [])])
+const roleOptions = computed(() => [{ name: 'All roles', id: 'all' }, ...(roles.data.value ?? [])])
 
 function onPage(e: DataTablePageEvent) {
   // đổi số dòng thì về trang 1
@@ -117,11 +127,71 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
   ]
   if (!canManage.value) return items
   items.push({ separator: true })
+  items.push({ label: 'Quick edit', icon: 'pi pi-pencil', command: () => openQuick(a) })
   if (a.status === 'invited') items.push({ label: 'Resend invitation', icon: 'pi pi-envelope', command: () => actions.resendInvitation(a) })
   if (a.status === 'active') items.push({ label: 'Send reset link', icon: 'pi pi-key', command: () => actions.sendReset(a) })
   if (a.status === 'disabled') items.push({ label: 'Enable', icon: 'pi pi-check-circle', command: () => actions.enable(a) })
   else items.push({ label: 'Disable', icon: 'pi pi-ban', disabled: actions.isSelf(a), command: () => actions.disable(a) })
   return items
+})
+
+// Sửa nhanh: nhấp đúp tên để đổi tại chỗ; bút chì mở ngăn kéo (tên, role)
+const saveAccount = useAccountOverviewSave()
+const saveRoles = useAccountRolesSave()
+const rename = (a: AccountListItem, name: string) => saveAccount(a, { name })
+const rows = computed(() => data.value?.items ?? [])
+const quick = ref<AccountListItem | null>(null)
+const quickDraft = reactive(emptyDraft())
+const quickSaving = ref(false)
+const quickFields: FieldDef[] = [
+  { key: 'name', label: 'Display name', maxlength: 200 },
+  { key: 'email', label: 'Email', lock: 'The sign-in address. Invite a new account to use another one.' },
+]
+const quickSaved = computed(() => ({ name: quick.value?.name ?? '', email: quick.value?.email ?? '' }))
+const quickRoles = computed(() => quick.value?.roles.map((r) => r.id) ?? [])
+const allRoleIds = computed(() => (roles.data.value ?? []).map((r) => r.id))
+const quickCurrent = computed(() => listOf(quickDraft, 'roles', quickRoles.value, allRoleIds.value))
+const grantable = (permissions: string[]) => permissions.every((p) => session.can(p))
+function pickRole(id: string, on: boolean) {
+  const next = on ? [...quickCurrent.value, id] : quickCurrent.value.filter((x) => x !== id)
+  setList(quickDraft, 'roles', quickRoles.value, next)
+}
+function clearQuick() {
+  clearTab(quickDraft, 'overview')
+  clearTab(quickDraft, 'roles')
+}
+const quickOpen = computed({
+  get: () => quick.value !== null,
+  set: (v) => {
+    if (!v) {
+      quick.value = null
+      clearQuick()
+    }
+  },
+})
+function openQuick(a: AccountListItem) {
+  clearQuick()
+  quick.value = a
+}
+const quickIndex = computed(() => (quick.value ? rows.value.findIndex((x) => x.id === quick.value!.id) : -1))
+async function moveQuick(step: number) {
+  const next = rows.value[quickIndex.value + step]
+  if (!next || !(await mayClose(isDirty(quickDraft)))) return
+  openQuick(next)
+}
+async function saveQuick() {
+  const a = quick.value
+  if (!a) return
+  quickSaving.value = true
+  try {
+    if (changeCount(quickDraft, 'overview') && (await saveAccount(a, changesOf(quickDraft, 'overview')))) clearTab(quickDraft, 'overview')
+    if (changeCount(quickDraft, 'roles') && (await saveRoles(a, quickRoles.value, quickCurrent.value))) clearTab(quickDraft, 'roles')
+  } finally {
+    quickSaving.value = false
+  }
+}
+watch(rows, (list) => {
+  if (quick.value) quick.value = list.find((x) => x.id === quick.value!.id) ?? null
 })
 </script>
 
@@ -137,19 +207,19 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
         <InputText v-model="search" placeholder="Search name or email" aria-label="Search accounts" />
       </IconField>
       <Select
-        :model-value="state.role"
+        :model-value="state.role || 'all'"
         :options="roleOptions"
         option-label="name"
         option-value="id"
         aria-label="Role"
-        @update:model-value="(v: string) => update({ role: v, page: 1 })"
+        @update:model-value="(v: string) => update({ role: v === 'all' ? '' : v, page: 1 })"
       />
     </div>
     <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />
     <DataTable
       :value="data?.items ?? []"
       lazy
-      paginator
+      :paginator="!isLoading"
       :rows="pageSize"
       :rows-per-page-options="PAGE_SIZES"
       paginator-template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
@@ -166,13 +236,14 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
     >
       <Column header="Person">
         <template #body="{ data: a }: { data: AccountListItem }">
-          <PersonCell
-            :name="a.name"
-            :email="a.email"
-            :to="`/accounts/${a.id}`"
-            :muted="a.status === 'disabled'"
-            :you="actions.isSelf(a)"
-          />
+          <PersonCell :name="a.name" :email="a.email" :to="`/accounts/${a.id}`" :muted="a.status === 'disabled'">
+            <!-- tên và nhãn "You" trong ô sửa tại chỗ: bút chì ở cuối cột -->
+            <template #name>
+              <InlineCell :value="a.name" label="name" :editable="canManage" @save="(v) => rename(a, v)">
+                <span class="person-name">{{ a.name }}</span><YouTag v-if="actions.isSelf(a)" />
+              </InlineCell>
+            </template>
+          </PersonCell>
         </template>
       </Column>
       <Column header="Roles">
@@ -200,6 +271,7 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
       <Column v-if="canManage" header="" header-style="width: 6rem">
         <template #body="{ data: a }: { data: AccountListItem }">
           <div class="row-actions">
+            <IconAction icon="pi pi-pencil" label="Quick edit" @click="openQuick(a)" />
             <IconAction v-if="a.status === 'invited'" icon="pi pi-envelope" label="Resend invitation" @click="actions.resendInvitation(a)" />
             <IconAction v-if="a.status === 'active'" icon="pi pi-key" label="Send reset link" @click="actions.sendReset(a)" />
             <IconAction v-if="a.status === 'disabled'" icon="pi pi-check-circle" label="Enable" @click="actions.enable(a)" />
@@ -207,7 +279,6 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
               v-else
               icon="pi pi-ban"
               label="Disable"
-              danger
               :disabled="actions.isSelf(a)"
               reason="You can’t disable yourself"
               @click="actions.disable(a)"
@@ -215,16 +286,115 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
           </div>
         </template>
       </Column>
-      <template #empty>No accounts match these filters.</template>
+      <template #empty>
+        <TableSkeleton v-if="isLoading" :rows="12" />
+        <EmptyState v-else icon="pi pi-users" text="No accounts match these filters." />
+      </template>
     </DataTable>
-    <CreateAccountDialog v-model:visible="creating" />
+    <CreateAccountDialog v-model:visible="creating" @created="(a) => router.push(`/accounts/${a.id}`)" />
+    <QuickEditDrawer
+      v-if="quick"
+      v-model:visible="quickOpen"
+      :title="quick.name"
+      icon="user-plus"
+      :dirty="isDirty(quickDraft)"
+      :busy="quickSaving"
+      :can-prev="quickIndex > 0"
+      :can-next="quickIndex >= 0 && quickIndex < rows.length - 1"
+      actions-label="Account"
+      @save="saveQuick"
+      @prev="moveQuick(-1)"
+      @next="moveQuick(1)"
+      @open-page="router.push(`/accounts/${quick.id}`)"
+    >
+      <OverviewFields :fields="quickFields" :saved="quickSaved" :draft="quickDraft" stacked />
+      <fieldset class="quick-roles">
+        <legend>Roles</legend>
+        <label v-for="r in roles.data.value ?? []" :key="r.id" class="quick-role" :class="{ off: !grantable(r.permissions) }">
+          <Checkbox
+            :model-value="quickCurrent.includes(r.id)"
+            binary
+            :input-id="`qr-${r.id}`"
+            :disabled="!grantable(r.permissions)"
+            @update:model-value="(v: boolean) => pickRole(r.id, v)"
+          />
+          <span>{{ r.name }}</span>
+        </label>
+      </fieldset>
+      <!-- hành động trên tài khoản, như nút cuối dòng; đều hỏi trước -->
+      <template #actions>
+        <Button
+          v-if="quick.status === 'invited'"
+          label="Resend invitation"
+          icon="pi pi-envelope"
+          severity="secondary"
+          outlined
+          size="small"
+          @click="actions.resendInvitation(quick)"
+        />
+        <Button
+          v-if="quick.status === 'active'"
+          label="Send reset link"
+          icon="pi pi-key"
+          severity="secondary"
+          outlined
+          size="small"
+          @click="actions.sendReset(quick)"
+        />
+        <Button
+          v-if="quick.status === 'disabled'"
+          label="Enable"
+          icon="pi pi-check-circle"
+          severity="secondary"
+          outlined
+          size="small"
+          @click="actions.enable(quick)"
+        />
+        <span v-else v-tooltip.top="actions.isSelf(quick) ? 'You can’t disable yourself' : undefined">
+          <Button
+            label="Disable"
+            icon="pi pi-ban"
+            severity="secondary"
+            outlined
+            size="small"
+            :disabled="actions.isSelf(quick)"
+            @click="actions.disable(quick)"
+          />
+        </span>
+      </template>
+    </QuickEditDrawer>
   </section>
 </template>
 
 <style scoped>
+.person-name {
+  font-weight: 600;
+  color: var(--p-text-color);
+}
+.quick-roles {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.quick-roles legend {
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color);
+  margin-bottom: 0.3rem;
+}
+.quick-role {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.quick-role.off {
+  opacity: 0.55;
+}
+/* role trên một dòng như mọi ô của bảng; nhiều role thì bảng cuộn ngang */
 .chips {
   display: flex;
-  flex-wrap: wrap;
   gap: 0.3rem;
 }
 .chips :deep(.p-chip) {

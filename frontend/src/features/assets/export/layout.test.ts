@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { AssetListItem } from '@/lib/api/types'
-import { cleanSheetName, defaultHeader, defaultReportLayout, editorColumns, fieldOptions, normalizeLayout, previewSheets, sheetNameInput, skippedKeys, type TypeInfo, withColumns } from './layout'
+import { reactive, readonly } from 'vue'
+import type { AssetListItem, ExportLayout } from '@/lib/api/types'
+import { cleanSheetName, cloneLayout, excludeFields, includeAttributes, profilePatch, dataPreviewSheets, defaultHeader, exportFileName, defaultReportLayout, editorColumns, fieldOptions, normalizeLayout, previewSheets, sheetNameInput, skippedKeys, type TypeInfo, withColumns } from './layout'
 
 const laptop: TypeInfo = { id: 'L', name: 'Laptop', code: 'LAPTOP', attributes: [{ key: 'ram_gb', label: 'RAM', data_type: 'number', unit: 'GB' }, { key: 'cpu', label: 'CPU', data_type: 'text' }] }
 const phone: TypeInfo = { id: 'P', name: 'Phone', code: 'PHONE', attributes: [{ key: 'imei', label: 'IMEI', data_type: 'text' }] }
@@ -67,5 +68,78 @@ describe('sheet names', () => {
   it('drops leading and trailing apostrophes before saving', () => {
     expect(cleanSheetName("'Quoted'")).toBe('Quoted')
     expect(cleanSheetName("  it's: ok'")).toBe("it's- ok")
+  })
+})
+
+describe('data export preview', () => {
+  it('has one sheet per type named by code, with field keys as headers', () => {
+    const sheets = dataPreviewSheets([row('P1', 'P'), row('L1', 'L')], [phone, laptop])
+    expect(sheets.map((s) => s.name)).toEqual(['LAPTOP', 'PHONE'])
+    expect(sheets[0].columns.map((c) => c.header)).toEqual(['tag', 'name', 'description', 'status', 'purchase_date', 'attr:ram_gb', 'attr:cpu'])
+    expect(sheets[0].rows.map((r) => r.tag)).toEqual(['L1'])
+  })
+})
+
+describe('exportFileName', () => {
+  it('names files like the server', () => {
+    expect(exportFileName('data', undefined, '2026-10-06')).toBe('storeit-assets-2026-10-06.xlsx')
+    expect(exportFileName('report', undefined, '2026-10-06')).toBe('storeit-report-2026-10-06.xlsx')
+    expect(exportFileName('report', 'Kiểm kê quý 3', '2026-10-06')).toBe('kiểm-kê-quý-3-2026-10-06.xlsx')
+    expect(exportFileName('report', '!!!', '2026-10-06')).toBe('storeit-report-2026-10-06.xlsx')
+  })
+})
+
+describe('cloneLayout', () => {
+  // profile lấy từ Vue Query là proxy readonly(reactive): structuredClone ném lỗi với nó
+  it('copies a layout held in a Vue Query proxy', () => {
+    const l = { ...defaultReportLayout(), columns: [{ field: 'tag', header: 'Mã' }] }
+    // Vue Query khai kiểu dữ liệu là ExportLayout thường, dù thực tế là proxy readonly
+    const proxied = readonly(reactive({ layout: l })).layout as ExportLayout
+    const copy = cloneLayout(proxied)
+    expect(copy).toEqual(l)
+    copy.columns[0].header = 'changed'
+    expect(l.columns[0].header).toBe('Mã')
+  })
+})
+
+describe('each type attributes in the column editor', () => {
+  const cols = [
+    { field: 'tag', header: '', width: 0, include: true },
+    { field: 'attr:ram_gb', header: '', width: 0, include: true },
+    { field: 'attr:cpu', header: '', width: 0, include: false },
+    { field: 'attr:imei', header: '', width: 0, include: false },
+    { field: 'attr:gone', header: '', width: 0, include: false },
+  ]
+  const opts = fieldOptions([laptop, phone])
+
+  it('ticks every available attribute column and reports which it ticked', () => {
+    const { columns, added } = includeAttributes(cols, opts)
+    expect(columns.filter((c) => c.include).map((c) => c.field)).toEqual(['tag', 'attr:ram_gb', 'attr:cpu', 'attr:imei'])
+    expect(added).toEqual(['attr:cpu', 'attr:imei'])
+  })
+
+  it('unticks only the columns it ticked', () => {
+    const { columns, added } = includeAttributes(cols, opts)
+    const back = excludeFields(columns, added)
+    expect(back.filter((c) => c.include).map((c) => c.field)).toEqual(['tag', 'attr:ram_gb'])
+  })
+})
+
+describe('profilePatch', () => {
+  const p = { name: 'Laptop chi tiết', shared: false }
+  const l = defaultReportLayout()
+
+  it('is null when nothing changed (Save stays off)', () => {
+    expect(profilePatch(p, { name: ' Laptop chi tiết ', shared: false }, null)).toBeNull()
+  })
+
+  it('sends only what changed', () => {
+    expect(profilePatch(p, { name: 'Laptop 2026', shared: false }, null)).toEqual({ name: 'Laptop 2026' })
+    expect(profilePatch(p, { name: 'Laptop chi tiết', shared: true }, null)).toEqual({ shared: true })
+    expect(profilePatch(p, { name: 'Laptop chi tiết', shared: false }, l)).toEqual({ layout: l })
+  })
+
+  it('treats a blank name as no rename', () => {
+    expect(profilePatch(p, { name: '   ', shared: false }, null)).toBeNull()
   })
 })

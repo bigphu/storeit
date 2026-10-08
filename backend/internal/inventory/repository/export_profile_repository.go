@@ -137,6 +137,35 @@ func (r *ExportProfileRepository) Delete(ctx context.Context, id uuid.UUID) erro
 	})
 }
 
+func (r *ExportProfileRepository) GetAny(ctx context.Context, id uuid.UUID) (domain.ExportProfile, error) {
+	return profileOrNotFound(r.q.GetExportProfileAny(ctx, id))
+}
+
+func (r *ExportProfileRepository) Restore(ctx context.Context, id uuid.UUID) (domain.ExportProfile, error) {
+	var out domain.ExportProfile
+	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
+		q := r.q.WithTx(tx)
+		cur, err := profileOrNotFound(q.GetExportProfileAnyForUpdate(ctx, id))
+		if err != nil {
+			return err
+		}
+		if cur.DeletedAt == nil {
+			out = cur
+			return nil
+		}
+		row, err := q.RestoreExportProfile(ctx, id)
+		if err != nil {
+			return mapWriteErr(err, "restore export profile")
+		}
+		if out, err = toExportProfile(row); err != nil {
+			return err
+		}
+		return appendEvent(ctx, tx, r.outbox, contract.EventExportProfileRestored, contract.AggregateExportProfile, id,
+			contract.ExportProfileRestored{ProfileID: id})
+	})
+	return out, err
+}
+
 func (r *ExportProfileRepository) RecordExport(ctx context.Context, rec domain.ExportRecord) error {
 	id, err := newID()
 	if err != nil {
@@ -165,6 +194,6 @@ func toExportProfile(row db.InventoryExportProfile) (domain.ExportProfile, error
 	}
 	return domain.ExportProfile{
 		ID: row.ID, OwnerID: row.OwnerID, Name: row.Name, Shared: row.Shared, Layout: l,
-		Version: row.Version, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+		Version: row.Version, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, DeletedAt: row.DeletedAt,
 	}, nil
 }

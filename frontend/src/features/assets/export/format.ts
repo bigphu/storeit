@@ -1,6 +1,6 @@
 // Ô của bản xem trước, cùng luật định dạng với server (spreadsheet/format.go)
 import type { AssetListItem, ExportLayout } from '@/lib/api/types'
-import { attrKey, type TypeInfo } from './layout'
+import { attrKey, type PreviewLayout, type TypeInfo } from './layout'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const KIND: Record<string, string> = { available: 'Available', in_use: 'In use', unavailable: 'Unavailable', retired: 'Retired' }
@@ -13,7 +13,7 @@ export function formatDate(iso: string | undefined | null, f: ExportLayout['date
   return `${d}/${m}/${y}`
 }
 
-export function formatCell(row: AssetListItem, field: string, l: ExportLayout, _types: TypeInfo[]): { text: string; align?: 'right' | 'center' } {
+export function formatCell(row: AssetListItem, field: string, l: PreviewLayout, _types: TypeInfo[]): { text: string; align?: 'right' | 'center' } {
   switch (field) {
     case 'tag':
       return { text: row.tag }
@@ -39,6 +39,7 @@ export function formatCell(row: AssetListItem, field: string, l: ExportLayout, _
     case 'date':
       return { text: formatDate(String(v.value), l.date_format), align: 'right' }
     case 'boolean':
+      if (l.bool_style === 'true_false') return { text: v.value ? 'TRUE' : 'FALSE', align: 'center' }
       return { text: l.bool_style === 'check' ? (v.value ? '✓' : '–') : v.value ? 'Yes' : 'No', align: 'center' }
     case 'select':
       return { text: v.option_label ?? '' }

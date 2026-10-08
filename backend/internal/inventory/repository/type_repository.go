@@ -236,6 +236,36 @@ func (r *TypeRepository) RemoveAttribute(ctx context.Context, typeID, attrID uui
 	})
 }
 
+func (r *TypeRepository) RestoreAttribute(ctx context.Context, typeID, attrID uuid.UUID) (domain.Attribute, error) {
+	var out domain.Attribute
+	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
+		q := r.q.WithTx(tx)
+		row, err := q.GetAttributeForUpdate(ctx, db.GetAttributeForUpdateParams{ID: attrID, AssetTypeID: typeID})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrAttributeNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("inventory: lock attribute: %w", err)
+		}
+		if row.RemovedAt == nil {
+			out = toAttribute(row)
+		} else {
+			restored, err := q.RestoreAttribute(ctx, db.RestoreAttributeParams{ID: attrID, AssetTypeID: typeID})
+			if err != nil {
+				return mapWriteErr(err, "restore attribute")
+			}
+			out = toAttribute(restored)
+			if err := r.updated(ctx, tx, typeID, []contract.FieldChange{change("attributes."+row.Key, "removed", "active")}); err != nil {
+				return err
+			}
+		}
+		// kèm option như UpdateAttribute
+		out.Options, err = attributeOptions(ctx, q, typeID, attrID)
+		return err
+	})
+	return out, err
+}
+
 func (r *TypeRepository) ReorderAttributes(ctx context.Context, typeID uuid.UUID, ids []uuid.UUID) (domain.AssetType, error) {
 	var out domain.AssetType
 	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
@@ -422,6 +452,35 @@ func (r *TypeRepository) RemoveOption(ctx context.Context, typeID, attrID, optID
 		}
 		return r.updated(ctx, tx, typeID, []contract.FieldChange{change("attributes."+a.Key+".options."+o.Label, "active", "removed")})
 	})
+}
+
+func (r *TypeRepository) RestoreOption(ctx context.Context, typeID, attrID, optID uuid.UUID) (domain.Option, error) {
+	var out domain.Option
+	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
+		q := r.q.WithTx(tx)
+		a, err := lockAttribute(ctx, q, typeID, attrID)
+		if err != nil {
+			return err
+		}
+		row, err := q.GetOptionForUpdate(ctx, db.GetOptionForUpdateParams{ID: optID, AttributeID: attrID})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrOptionNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("inventory: lock option: %w", err)
+		}
+		if row.RemovedAt == nil {
+			out = toOption(row)
+			return nil
+		}
+		restored, err := q.RestoreOption(ctx, db.RestoreOptionParams{ID: optID, AttributeID: attrID})
+		if err != nil {
+			return mapWriteErr(err, "restore option")
+		}
+		out = toOption(restored)
+		return r.updated(ctx, tx, typeID, []contract.FieldChange{change("attributes."+a.Key+".options."+row.Label, "removed", "active")})
+	})
+	return out, err
 }
 
 // updated ghi asset_type_updated nếu có thay đổi

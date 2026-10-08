@@ -28,6 +28,7 @@ type Querier interface {
 	CreateStatus(ctx context.Context, arg CreateStatusParams) (InventoryAssetStatus, error)
 	DeleteAssetValues(ctx context.Context, assetID uuid.UUID) error
 	DeleteAttributeOptions(ctx context.Context, attributeID uuid.UUID) error
+	// Xoá mềm
 	DeleteExportProfile(ctx context.Context, id uuid.UUID) (int64, error)
 	GetAsset(ctx context.Context, id uuid.UUID) (InventoryAsset, error)
 	// NO KEY UPDATE: không chặn insert tham chiếu tài sản (giá trị thuộc tính, sau này là phiếu mượn)
@@ -37,6 +38,9 @@ type Querier interface {
 	GetAttributeForUpdate(ctx context.Context, arg GetAttributeForUpdateParams) (InventoryAssetTypeAttribute, error)
 	GetDefaultStatus(ctx context.Context, kind string) (InventoryAssetStatus, error)
 	GetExportProfile(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error)
+	// Kể cả profile đã xoá (khôi phục, kiểm tra quyền khôi phục)
+	GetExportProfileAny(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error)
+	GetExportProfileAnyForUpdate(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error)
 	GetExportProfileForUpdate(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error)
 	GetOptionForUpdate(ctx context.Context, arg GetOptionForUpdateParams) (InventoryAssetAttributeOption, error)
 	GetStatus(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
@@ -63,6 +67,9 @@ type Querier interface {
 	RemoveAttribute(ctx context.Context, arg RemoveAttributeParams) (int64, error)
 	RemoveOption(ctx context.Context, arg RemoveOptionParams) (int64, error)
 	RestoreAsset(ctx context.Context, arg RestoreAssetParams) (InventoryAsset, error)
+	RestoreAttribute(ctx context.Context, arg RestoreAttributeParams) (InventoryAssetTypeAttribute, error)
+	RestoreExportProfile(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error)
+	RestoreOption(ctx context.Context, arg RestoreOptionParams) (InventoryAssetAttributeOption, error)
 	RestoreStatus(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
 	RetireAsset(ctx context.Context, arg RetireAssetParams) (InventoryAsset, error)
 	SetAssetTypeArchived(ctx context.Context, arg SetAssetTypeArchivedParams) (InventoryAssetType, error)

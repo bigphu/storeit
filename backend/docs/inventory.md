@@ -67,6 +67,12 @@ Seeded IDs are in `domain/permissions.go` (`GeneralTypeID`, `AvailableStatusID`,
 - Attributes: removing one hides it and keeps its values; changing data type or unit
   while values exist is 409 `/errors/attribute-in-use`; leaving `select` drops its options;
   `"unit": ""` removes the unit.
+- `POST /asset-types/{typeID}/attributes/{attributeID}/restore` and
+  `…/options/{optionID}/restore` undo a removal and return the attribute (with options) or
+  option; already active returns it unchanged. Keys stay unique including removed
+  attributes, so only the label can clash: 409 `/errors/attribute-label-taken` or
+  `/errors/option-label-taken`. An option's attribute must be active. Recorded on
+  `asset_type_updated` as `removed → active`.
 - Statuses: a status that is the default of its kind cannot be archived (409
   `/errors/status-is-default`); make another one default first. System statuses and the
   `GENERAL` type cannot be archived. `POST …/restore` offers an archived status again
@@ -94,11 +100,11 @@ Seeded IDs are in `domain/permissions.go` (`GeneralTypeID`, `AvailableStatusID`,
 |---|---|
 | `GET /asset-types` (`with_counts=true` adds `asset_count` and `kind_counts` for assets not retired, `attribute_count` and `attribute_labels` for active attributes), `GET /asset-types/{typeID}`, `GET /asset-statuses` (`with_counts=true` adds `asset_count`, retired assets included), `GET /assets`, `GET /assets/{assetID}` | `inventory.asset.read` |
 | `POST /assets`, `PUT /assets/{assetID}`, `POST …/retire`, `POST …/restore`, `POST /assets/bulk-retire`, `POST /assets/bulk-status` | `inventory.asset.manage` |
-| `POST /asset-types`, `PATCH /asset-types/{typeID}`, `POST …/archive`, `POST …/restore`, attributes (`POST`, `PATCH`, `DELETE`, `PUT …/attributes/order`), options (`POST`, `PATCH`, `DELETE`, `PUT …/options/order`) | `inventory.type.manage` |
+| `POST /asset-types`, `PATCH /asset-types/{typeID}`, `POST …/archive`, `POST …/restore`, attributes (`POST`, `PATCH`, `DELETE`, `POST …/restore`, `PUT …/attributes/order`), options (`POST`, `PATCH`, `DELETE`, `POST …/restore`, `PUT …/options/order`) | `inventory.type.manage` |
 | `POST /asset-statuses`, `PATCH /asset-statuses/{statusID}`, `POST …/archive`, `POST …/restore`, `PUT /asset-statuses/order` | `inventory.status.manage` |
 | `POST /assets/export` | `inventory.asset.read` + `inventory.asset.export` |
 | `GET`/`POST /export-profiles`, `GET /export-profiles/{profileID}` | `inventory.asset.export` |
-| `PATCH`/`DELETE /export-profiles/{profileID}` | `inventory.asset.export`, and the profile's owner; a shared profile of someone else also needs `inventory.export_profile.manage` |
+| `PATCH`/`DELETE /export-profiles/{profileID}`, `POST …/restore` | `inventory.asset.export`, and the profile's owner; a shared profile of someone else also needs `inventory.export_profile.manage` |
 
 Grants (migrations `00003`, `00005`): Administrator the four above + `inventory.asset.export` +
 `inventory.export_profile.manage`; Authorized Manager read + type.manage + status.manage +
@@ -132,6 +138,7 @@ nothing. Code: `service/bulk.go`.
 (including attribute and option changes), `asset_type_archived`, `asset_type_restored`;
 `inventory.status_created`, `status_updated`, `status_archived`, `status_restored`;
 `inventory.export_profile_created`, `export_profile_updated`, `export_profile_deleted`,
+`export_profile_restored`,
 `assets_exported` (see Export).
 
 ## Export (US-07 to US-09)
@@ -147,7 +154,8 @@ response; nothing is stored. Code: `service/export.go`, `service/export_profiles
 | `POST /export-profiles` | Create `{name, shared, layout}` |
 | `GET /export-profiles/{profileID}` | Read one (own or shared, else 404) |
 | `PATCH /export-profiles/{profileID}` | Change `name`, `shared`, `layout` with `version` (409 `/errors/export-profile-changed` when stale) |
-| `DELETE /export-profiles/{profileID}` | Delete |
+| `DELETE /export-profiles/{profileID}` | Delete (soft) |
+| `POST /export-profiles/{profileID}/restore` | Undo a delete; returns the profile |
 
 Permissions are in the table above. `inventory.asset.export` goes to all four roles,
 `inventory.export_profile.manage` to Administrator and Authorized Manager.
@@ -226,11 +234,15 @@ is visible to its owner and, when shared, to everyone who can export; someone el
 profile is 404 `/errors/export-profile-not-found`. Edit and delete: the owner, or for a shared
 profile also anyone with `inventory.export_profile.manage`; others get 403
 `/errors/export-profile-forbidden`. Responses carry `owner {id, name}` and `can_edit`
-for the caller. Layouts are validated on create and update; a stored layout that no longer
+for the caller. Deleting is a soft delete (`deleted_at`): a deleted profile
+is 404 everywhere, for everyone (including exports by `profile_id`), and names are unique only
+among profiles that aren't deleted. Restore follows the delete rules (someone else's private
+profile is 404, a shared one without `inventory.export_profile.manage` is 403) and is 409
+`/errors/export-profile-name-taken` if the owner reused the name. Layouts are validated on create and update; a stored layout that no longer
 validates is returned as is and rejected with 422 only when used for an export.
 
 **Events** (outbox, same transaction as the write): `export_profile_created` (`profile_id`,
 `name`, `shared`), `export_profile_updated` (field changes; a layout change is one `layout`
-change without values), `export_profile_deleted`. `inventory.assets_exported` (aggregate
+change without values), `export_profile_deleted`, `export_profile_restored`. `inventory.assets_exported` (aggregate
 `asset_export`, new id) is recorded after the file is fully built, in its own transaction, with
 `{mode, profile_id?, rows, sheets, filters}`; a failure to record is logged, not returned.

@@ -71,7 +71,7 @@ GROUP BY 1;
 -- name: ListRolesOfAccounts :many
 SELECT ar.account_id, r.id, r.name
 FROM identity.account_roles ar
-JOIN identity.roles r ON r.id = ar.role_id
+JOIN identity.roles r ON r.id = ar.role_id AND r.deleted_at IS NULL
 WHERE ar.account_id = ANY(@ids::uuid[])
 ORDER BY ar.account_id, r.name, r.id;
 
@@ -106,9 +106,11 @@ RETURNING *;
 -- name: SetAccountPassword :exec
 UPDATE identity.accounts SET password_hash = @password_hash, updated_at = now() WHERE id = @id;
 
+-- Role đã xoá không mang quyền (phòng khi còn sót trong account_roles)
 -- name: AccountPermissions :many
 SELECT DISTINCT rp.permission
 FROM identity.account_roles ar
+JOIN identity.roles r ON r.id = ar.role_id AND r.deleted_at IS NULL
 JOIN identity.role_permissions rp ON rp.role_id = ar.role_id
 WHERE ar.account_id = @account_id
 ORDER BY rp.permission;

@@ -15,11 +15,13 @@ import (
 const accountPermissions = `-- name: AccountPermissions :many
 SELECT DISTINCT rp.permission
 FROM identity.account_roles ar
+JOIN identity.roles r ON r.id = ar.role_id AND r.deleted_at IS NULL
 JOIN identity.role_permissions rp ON rp.role_id = ar.role_id
 WHERE ar.account_id = $1
 ORDER BY rp.permission
 `
 
+// Role đã xoá không mang quyền (phòng khi còn sót trong account_roles)
 func (q *Queries) AccountPermissions(ctx context.Context, accountID uuid.UUID) ([]string, error) {
 	rows, err := q.db.Query(ctx, accountPermissions, accountID)
 	if err != nil {
@@ -442,7 +444,7 @@ func (q *Queries) ListLastSignIns(ctx context.Context, ids []uuid.UUID) ([]Ident
 const listRolesOfAccounts = `-- name: ListRolesOfAccounts :many
 SELECT ar.account_id, r.id, r.name
 FROM identity.account_roles ar
-JOIN identity.roles r ON r.id = ar.role_id
+JOIN identity.roles r ON r.id = ar.role_id AND r.deleted_at IS NULL
 WHERE ar.account_id = ANY($1::uuid[])
 ORDER BY ar.account_id, r.name, r.id
 `

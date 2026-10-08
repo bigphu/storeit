@@ -18,7 +18,7 @@ const email = ref('')
 const password = ref('')
 const busy = ref(false)
 // thông báo theo mã (không hiện chữ tuỳ ý từ URL)
-const notices: Record<string, string> = { 'password-set': 'Password set. Please sign in.' }
+const notices: Record<string, string> = { 'password-set': 'Password set. Sign in with your new password.' }
 const notice = notices[String(route.query.notice)] ?? ''
 
 async function submit() {
@@ -36,17 +36,23 @@ async function submit() {
 </script>
 
 <template>
-  <form class="form" @submit.prevent="submit">
-    <h2>Sign in</h2>
+  <form class="auth-form" @submit.prevent="submit">
+    <div class="auth-head">
+      <h2>Sign in</h2>
+      <p class="auth-hint">Welcome back.</p>
+    </div>
     <Message v-if="notice" severity="success">{{ notice }}</Message>
     <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
     <div class="field">
       <label for="email">Email</label>
-      <InputText id="email" v-model="email" type="email" autocomplete="username" required />
+      <InputText id="email" v-model="email" type="email" autocomplete="username" required fluid />
       <small v-if="errors.fields.value.email" class="field-error">{{ errors.fields.value.email }}</small>
     </div>
     <div class="field">
-      <label for="password">Password</label>
+      <div class="auth-label-row">
+        <label for="password">Password</label>
+        <RouterLink to="/forgot-password" class="auth-link">Forgot password?</RouterLink>
+      </div>
       <Password
         v-model="password"
         input-id="password"
@@ -54,9 +60,10 @@ async function submit() {
         toggle-mask
         autocomplete="current-password"
         required
+        fluid
       />
     </div>
-    <Button type="submit" label="Sign in" :loading="busy" />
-    <RouterLink to="/forgot-password">Forgot password?</RouterLink>
+    <Button type="submit" label="Sign in" :loading="busy" fluid />
+    <p class="auth-foot">No account? Ask an administrator for an invitation.</p>
   </form>
 </template>

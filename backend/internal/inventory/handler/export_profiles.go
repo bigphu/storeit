@@ -51,6 +51,14 @@ func (h *Handler) UpdateExportProfile(ctx context.Context, req api.UpdateExportP
 	return api.UpdateExportProfile200JSONResponse(toAPIProfile(p)), nil
 }
 
+func (h *Handler) RestoreExportProfile(ctx context.Context, req api.RestoreExportProfileRequestObject) (api.RestoreExportProfileResponseObject, error) {
+	p, err := h.svc.RestoreExportProfile(ctx, req.ProfileID)
+	if err != nil {
+		return nil, err
+	}
+	return api.RestoreExportProfile200JSONResponse(toAPIProfile(p)), nil
+}
+
 func (h *Handler) DeleteExportProfile(ctx context.Context, req api.DeleteExportProfileRequestObject) (api.DeleteExportProfileResponseObject, error) {
 	if err := h.svc.DeleteExportProfile(ctx, req.ProfileID); err != nil {
 		return nil, err

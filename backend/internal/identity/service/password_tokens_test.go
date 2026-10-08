@@ -270,6 +270,12 @@ func TestSendAccountEmail(t *testing.T) {
 	if !strings.Contains(m.Text, "72 hours") {
 		t.Errorf("text does not say how long the link lasts:\n%s", m.Text)
 	}
+	// HTML: tên, thời hạn, nút; nút màu brand của app (#059669), không còn màu teal cũ
+	for _, want := range []string{a.Name, "72 hours", "Set your password", "#059669", `src="http://app.test/email-logo.png"`} {
+		if !strings.Contains(m.HTML, want) {
+			t.Errorf("invite html is missing %q:\n%s", want, m.HTML)
+		}
+	}
 	if m.IdempotencyKey != "identity/invite/"+call.token.ID.String() {
 		t.Errorf("idempotency key = %q", m.IdempotencyKey)
 	}
@@ -289,6 +295,11 @@ func TestSendAccountEmail(t *testing.T) {
 	m = e.mail.sent[1]
 	if !strings.Contains(m.Text, "http://app.test/reset-password#token="+reset.token.Raw) || !strings.Contains(m.Text, "1 hour") {
 		t.Errorf("reset email text:\n%s", m.Text)
+	}
+	for _, want := range []string{"http://app.test/reset-password#token=" + reset.token.Raw, "1 hour", "Choose a new password", "#059669"} {
+		if !strings.Contains(m.HTML, want) {
+			t.Errorf("reset html is missing %q:\n%s", want, m.HTML)
+		}
 	}
 }
 

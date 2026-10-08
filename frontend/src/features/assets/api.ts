@@ -13,10 +13,18 @@ export const assetKeys = {
   one: (id: string) => ['assets', id] as const,
 }
 
+// assetListQuery: khoá và hàm tải dùng chung cho useAssetList, fetchAssetPage và tải trước
+export function assetListQuery(params: ListParams) {
+  return {
+    queryKey: assetKeys.list(params),
+    queryFn: () => unwrap(inventoryApi.GET('/assets', { params: { query: params } })),
+  }
+}
+
 export function useAssetList(params: MaybeRefOrGetter<ListParams>) {
   return useQuery({
-    queryKey: computed(() => assetKeys.list(toValue(params))),
-    queryFn: () => unwrap(inventoryApi.GET('/assets', { params: { query: toValue(params) } })),
+    queryKey: computed(() => assetListQuery(toValue(params)).queryKey),
+    queryFn: () => assetListQuery(toValue(params)).queryFn(),
     placeholderData: keepPreviousData,
   })
 }
@@ -24,10 +32,7 @@ export function useAssetList(params: MaybeRefOrGetter<ListParams>) {
 // fetchAssetPage: tải một trang của danh sách (dùng cache nếu có), khi bước qua tài sản
 // sang trang bên cạnh
 export function fetchAssetPage(qc: QueryClient, params: ListParams) {
-  return qc.fetchQuery({
-    queryKey: assetKeys.list(params),
-    queryFn: () => unwrap(inventoryApi.GET('/assets', { params: { query: params } })),
-  })
+  return qc.fetchQuery(assetListQuery(params))
 }
 
 export function useAsset(id: MaybeRefOrGetter<string | undefined>) {
@@ -78,15 +83,24 @@ export function useReplaceAsset() {
 }
 
 export function useRetireAsset() {
-  return useAssetMutation(({ id, reason, version }: { id: string; reason: string; version: number }) =>
-    unwrap(inventoryApi.POST('/assets/{assetID}/retire', { ...path(id), body: { reason, version } })),
+  return useAssetMutation(
+    ({ id, reason, version }: { id: string; reason: string; version: number }) =>
+      unwrap(inventoryApi.POST('/assets/{assetID}/retire', { ...path(id), body: { reason, version } })),
+    false,
   )
 }
 
 export function useRestoreAsset() {
-  return useAssetMutation(({ id, version }: { id: string; version: number }) =>
-    unwrap(inventoryApi.POST('/assets/{assetID}/restore', { ...path(id), body: { version } })),
+  return useAssetMutation(
+    ({ id, version }: { id: string; version: number }) =>
+      unwrap(inventoryApi.POST('/assets/{assetID}/restore', { ...path(id), body: { version } })),
+    false,
   )
+}
+
+// fetchAsset: đọc một lần ngoài query (lý do retire cho Undo của restore)
+export function fetchAsset(id: string) {
+  return unwrap(inventoryApi.GET('/assets/{assetID}', path(id)))
 }
 
 // Hàng loạt: mỗi tài sản thành công hay thất bại riêng; kết quả liệt kê từng cái
@@ -96,13 +110,17 @@ export interface BulkItemRef {
 }
 
 export function useBulkRetire() {
-  return useAssetMutation(({ items, reason }: { items: BulkItemRef[]; reason: string }) =>
-    unwrap(inventoryApi.POST('/assets/bulk-retire', { body: { items, reason: reason || undefined } })),
+  return useAssetMutation(
+    ({ items, reason }: { items: BulkItemRef[]; reason: string }) =>
+      unwrap(inventoryApi.POST('/assets/bulk-retire', { body: { items, reason: reason || undefined } })),
+    false,
   )
 }
 
 export function useBulkStatus() {
-  return useAssetMutation(({ items, statusId }: { items: BulkItemRef[]; statusId: string }) =>
-    unwrap(inventoryApi.POST('/assets/bulk-status', { body: { items, status_id: statusId } })),
+  return useAssetMutation(
+    ({ items, statusId }: { items: BulkItemRef[]; statusId: string }) =>
+      unwrap(inventoryApi.POST('/assets/bulk-status', { body: { items, status_id: statusId } })),
+    false,
   )
 }

@@ -2,24 +2,25 @@
 import Button from 'primevue/button'
 import Column from 'primevue/column'
 import DataTable, { type DataTableRowReorderEvent } from 'primevue/datatable'
-import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
-import { useConfirm } from 'primevue/useconfirm'
 import { reactive, ref, watch } from 'vue'
 import type { Attribute, Option } from '@/lib/api/types'
+import EmptyState from '@/components/EmptyState.vue'
+import FormDialog from '@/components/FormDialog.vue'
 import IconAction from '@/components/IconAction.vue'
+import { runAction } from '@/lib/actions'
 import { notify } from '@/lib/notify'
-import { useAddOption, useRemoveOption, useReorderOptions, useUpdateOption } from '../api'
+import { useAddOption, useRemoveOption, useReorderOptions, useRestoreOption, useUpdateOption } from '../api'
 
 // Option của một thuộc tính select: kéo để đổi thứ tự (thứ tự trong form và khi sắp
 // theo cột), sửa nhãn, thêm, gỡ. attribute lấy từ query chi tiết loại nên tự cập nhật
 const props = defineProps<{ typeId: string; attribute: Attribute | null; canManage: boolean }>()
 const visible = defineModel<boolean>('visible', { required: true })
 
-const confirm = useConfirm()
 const add = useAddOption()
 const update = useUpdateOption()
-const remove = useRemoveOption()
+const removeOpt = useRemoveOption()
+const restoreOpt = useRestoreOption()
 const reorder = useReorderOptions()
 
 // thứ tự đang hiện: đổi ngay khi thả, không đợi tải lại
@@ -38,8 +39,17 @@ const newLabel = ref('')
 const ids = () => ({ typeId: props.typeId, attrId: props.attribute!.id })
 
 function onReorder(e: DataTableRowReorderEvent) {
+  const before = rows.value.map((o) => o.id)
   rows.value = e.value as Option[]
-  reorder.mutate({ ...ids(), ids: rows.value.map((o) => o.id) })
+  const after = rows.value.map((o) => o.id)
+  void runAction({
+    run: () => reorder.mutateAsync({ ...ids(), ids: after }),
+    done: 'Options reordered.',
+    failed: "Couldn't save the new order.",
+    undo: () => reorder.mutateAsync({ ...ids(), ids: before }),
+    undone: 'Order put back.',
+    undoFailed: "Couldn't put the order back.",
+  })
 }
 
 function save(o: Option) {
@@ -59,23 +69,21 @@ function addOption() {
     .catch(() => {})
 }
 
-function askRemove(o: Option) {
-  confirm.require({
-    message: `Remove the option ${o.label}? Assets that have it keep it, shown as removed.`,
-    header: 'Confirm',
-    acceptLabel: 'Remove',
-    rejectLabel: 'Cancel',
-    accept: () =>
-      remove
-        .mutateAsync({ ...ids(), optionId: o.id })
-        .then(() => notify.success('Option removed.'))
-        .catch(() => {}),
+function removeOption(o: Option) {
+  const ref = { ...ids(), optionId: o.id }
+  return runAction({
+    run: () => removeOpt.mutateAsync(ref),
+    done: `${o.label} removed.`,
+    failed: `Couldn't remove ${o.label}.`,
+    undo: () => restoreOpt.mutateAsync(ref),
+    undone: `${o.label} is back.`,
+    undoFailed: `Couldn't bring ${o.label} back. It stays removed.`,
   })
 }
 </script>
 
 <template>
-  <Dialog v-model:visible="visible" modal :header="`Options of ${attribute?.label ?? ''}`" :style="{ width: 'min(92vw, 34rem)' }">
+  <FormDialog v-model:visible="visible" size="l" icon="sliders" :title="`Options of ${attribute?.label ?? ''}`">
     <p v-if="canManage" class="hint">Drag the handle to change the order.</p>
     <DataTable :value="rows" data-key="id" size="small" row-hover @row-reorder="onReorder">
       <Column v-if="canManage" row-reorder header-style="width: 2.5rem" />
@@ -88,16 +96,16 @@ function askRemove(o: Option) {
       <Column v-if="canManage" header="" body-class="actions-cell">
         <template #body="{ data: o }: { data: Option }">
           <IconAction icon="pi pi-check" label="Save" :disabled="labels[o.id] === o.label" reason="No changes to save" @click="save(o)" />
-          <IconAction icon="pi pi-trash" label="Remove" danger @click="askRemove(o)" />
+          <IconAction icon="pi pi-trash" label="Remove" danger @click="removeOption(o)" />
         </template>
       </Column>
-      <template #empty>No options yet.</template>
+      <template #empty><EmptyState icon="pi pi-list" text="No options yet." /></template>
     </DataTable>
     <form v-if="canManage" class="actions add" @submit.prevent="addOption">
       <InputText v-model="newLabel" placeholder="New option" aria-label="New option" />
       <Button type="submit" label="Add" :loading="add.isPending.value" />
     </form>
-  </Dialog>
+  </FormDialog>
 </template>
 
 <style scoped>

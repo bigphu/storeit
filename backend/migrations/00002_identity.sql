@@ -38,10 +38,13 @@ CREATE TABLE identity.roles (
     is_system   boolean     NOT NULL DEFAULT false,
     created_at  timestamptz NOT NULL DEFAULT now(),
     updated_at  timestamptz NOT NULL DEFAULT now(),
+    -- Xoá mềm: giữ hàng và quyền để khôi phục; role đã xoá không cấp quyền, không gán được
+    deleted_at  timestamptz,
 
-    CONSTRAINT roles_name_key UNIQUE (name),
     CONSTRAINT roles_name_check CHECK (char_length(btrim(name)) BETWEEN 1 AND 100)
 );
+-- Tên duy nhất trong các role chưa xoá (tên của role đã xoá dùng lại được)
+CREATE UNIQUE INDEX roles_name_key ON identity.roles (name) WHERE deleted_at IS NULL;
 
 CREATE TABLE identity.role_permissions (
     role_id    uuid NOT NULL REFERENCES identity.roles (id) ON DELETE CASCADE,

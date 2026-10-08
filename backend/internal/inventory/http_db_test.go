@@ -733,3 +733,130 @@ func TestExportOverHTTP(t *testing.T) {
 		t.Errorf("problem type = %s", typ)
 	}
 }
+
+// Xoá profile là xoá mềm: ẩn với mọi người (kể cả export theo profile_id), khôi phục được
+// bởi người xoá được nó
+func TestExportProfileRestoreOverHTTP(t *testing.T) {
+	a := newApp(t)
+	owner := a.token(domain.PermAssetRead, domain.PermAssetExport)
+	other := a.token(domain.PermAssetRead, domain.PermAssetExport)
+	layout := map[string]any{
+		"columns": []map[string]any{{"field": "tag"}}, "sheets": "single", "sheet_name": "Assets",
+		"title_row": false, "summary": false, "header": "bold", "freeze": true, "filter": true, "stripes": false,
+		"date_format": "dd/mm/yyyy", "bool_style": "yes_no", "status_as": "name", "unit_in": "header",
+	}
+	name := "Kiểm kê " + uuid.NewString()[:6]
+	p := decode[struct{ ID string }](t, a.do("POST", "/api/v1/export-profiles", owner, map[string]any{"name": name, "shared": true, "layout": layout}), 201)
+
+	if rec := a.do("DELETE", "/api/v1/export-profiles/"+p.ID, owner, nil); rec.Code != 204 {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
+	}
+	if rec := a.do("GET", "/api/v1/export-profiles/"+p.ID, other, nil); rec.Code != 404 {
+		t.Errorf("deleted shared profile visible to others: %d", rec.Code)
+	}
+	if rec := a.do("POST", "/api/v1/assets/export", owner, map[string]any{"mode": "report", "profile_id": p.ID}); rec.Code != 404 {
+		t.Errorf("export with a deleted profile: %d", rec.Code)
+	} else if typ, _ := problem(t, rec); typ != "/errors/export-profile-not-found" {
+		t.Errorf("problem type = %s", typ)
+	}
+	// không phải chủ, không có quyền quản lý: không khôi phục được profile chia sẻ của người khác
+	if rec := a.do("POST", "/api/v1/export-profiles/"+p.ID+"/restore", other, nil); rec.Code != 403 {
+		t.Errorf("non-manager restores someone else's shared profile: %d", rec.Code)
+	}
+	if rec := a.do("POST", "/api/v1/export-profiles/"+p.ID+"/restore", owner, nil); rec.Code != 200 {
+		t.Fatalf("restore: %d %s", rec.Code, rec.Body)
+	}
+	if rec := a.do("GET", "/api/v1/export-profiles/"+p.ID, other, nil); rec.Code != 200 {
+		t.Errorf("restored shared profile: %d", rec.Code)
+	}
+
+	// profile riêng của người khác: 404 (không lộ là nó tồn tại)
+	priv := decode[struct{ ID string }](t, a.do("POST", "/api/v1/export-profiles", owner, map[string]any{"name": "Riêng " + uuid.NewString()[:6], "layout": layout}), 201)
+	a.do("DELETE", "/api/v1/export-profiles/"+priv.ID, owner, nil)
+	if rec := a.do("POST", "/api/v1/export-profiles/"+priv.ID+"/restore", other, nil); rec.Code != 404 {
+		t.Errorf("restore someone else's private profile: %d", rec.Code)
+	}
+
+	// tên dùng lại sau khi xoá: được; khôi phục bản cũ → 409
+	a.do("DELETE", "/api/v1/export-profiles/"+p.ID, owner, nil)
+	if rec := a.do("POST", "/api/v1/export-profiles", owner, map[string]any{"name": name, "layout": layout}); rec.Code != 201 {
+		t.Fatalf("reuse name: %d %s", rec.Code, rec.Body)
+	}
+	rec := a.do("POST", "/api/v1/export-profiles/"+p.ID+"/restore", owner, nil)
+	if rec.Code != 409 {
+		t.Errorf("restore over reused name: %d", rec.Code)
+	} else if typ, _ := problem(t, rec); typ != "/errors/export-profile-name-taken" {
+		t.Errorf("problem type = %s", typ)
+	}
+}
+
+// Bỏ thuộc tính / option đã là xoá mềm; khôi phục đưa lại, trùng nhãn với cái đang dùng thì 409
+func TestRestoreAttributeAndOption(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	code := "RS" + strings.ToUpper(uuid.NewString()[:6])
+	typ := decode[typeDetail](t, a.do("POST", "/api/v1/asset-types", tok, map[string]any{
+		"code": code, "name": "Restore " + code,
+		"attributes": []map[string]any{
+			{"key": "ram", "label": "RAM", "data_type": "number", "position": 1},
+			{"key": "os", "label": "OS", "data_type": "select", "position": 2, "options": []string{"Windows", "macOS"}},
+		},
+	}), 201)
+	var ramID, osID, winID string
+	for _, at := range typ.Attributes {
+		switch at.Key {
+		case "ram":
+			ramID = at.ID
+		case "os":
+			osID = at.ID
+			for _, o := range at.Options {
+				if o.Label == "Windows" {
+					winID = o.ID
+				}
+			}
+		}
+	}
+	if ramID == "" || osID == "" || winID == "" {
+		t.Fatalf("attributes not found in %+v", typ)
+	}
+	base := "/api/v1/asset-types/" + typ.ID + "/attributes/"
+
+	if rec := a.do("DELETE", base+ramID, tok, nil); rec.Code != 204 {
+		t.Fatalf("remove attribute: %d %s", rec.Code, rec.Body)
+	}
+	rec := a.do("POST", base+ramID+"/restore", tok, nil)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"key":"ram"`) {
+		t.Fatalf("restore attribute: %d %s", rec.Code, rec.Body)
+	}
+	// khôi phục cái chưa bỏ: không đổi gì
+	if rec := a.do("POST", base+ramID+"/restore", tok, nil); rec.Code != 200 {
+		t.Errorf("restore active attribute: %d", rec.Code)
+	}
+
+	// bỏ, thêm thuộc tính mới cùng nhãn "RAM" (khoá khác), khôi phục cái cũ → 409
+	a.do("DELETE", base+ramID, tok, nil)
+	if rec := a.do("POST", "/api/v1/asset-types/"+typ.ID+"/attributes", tok, map[string]any{"key": "ram2", "label": "RAM", "data_type": "number", "position": 3}); rec.Code != 201 {
+		t.Fatalf("add attribute with the removed label: %d %s", rec.Code, rec.Body)
+	}
+	rec = a.do("POST", base+ramID+"/restore", tok, nil)
+	if rec.Code != 409 {
+		t.Errorf("restore over a reused label: %d", rec.Code)
+	} else if typ, _ := problem(t, rec); typ != "/errors/attribute-label-taken" {
+		t.Errorf("problem type = %s", typ)
+	}
+
+	optBase := base + osID + "/options/"
+	if rec := a.do("DELETE", optBase+winID, tok, nil); rec.Code != 204 {
+		t.Fatalf("remove option: %d", rec.Code)
+	}
+	if rec := a.do("POST", optBase+winID+"/restore", tok, nil); rec.Code != 200 || !strings.Contains(rec.Body.String(), "Windows") {
+		t.Errorf("restore option: %d %s", rec.Code, rec.Body)
+	}
+	if rec := a.do("POST", optBase+uuid.NewString()+"/restore", tok, nil); rec.Code != 404 {
+		t.Errorf("restore unknown option: %d", rec.Code)
+	}
+	reader := a.token(domain.PermAssetRead)
+	if rec := a.do("POST", base+ramID+"/restore", reader, nil); rec.Code != 403 {
+		t.Errorf("restore without type manage: %d", rec.Code)
+	}
+}

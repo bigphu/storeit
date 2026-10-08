@@ -3,12 +3,11 @@ import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
 import Tabs from 'primevue/tabs'
 import { computed, ref, watch } from 'vue'
-import type { ExportLayout } from '@/lib/api/types'
 import { formatCell } from '../format'
-import type { PreviewSheet, TypeInfo } from '../layout'
+import type { PreviewLayout, PreviewSheet, TypeInfo } from '../layout'
 
 // Bản xem trước như Excel: chữ cột, số dòng, tab sheet; 20 dòng đầu mỗi sheet
-const props = defineProps<{ sheets: PreviewSheet[]; layout: ExportLayout; types: TypeInfo[]; title: string[] }>()
+const props = defineProps<{ sheets: PreviewSheet[]; layout: PreviewLayout; types: TypeInfo[]; title: string[] }>()
 const active = ref(0)
 const tabs = computed(() => [...props.sheets.map((s) => s.name), ...(props.layout.summary ? ['Summary'] : [])])
 watch(tabs, (t) => {
@@ -94,7 +93,11 @@ const summary = computed(() =>
 </template>
 
 <style scoped>
+/* Cao theo chỗ cha cho: bảng tự cuộn hai chiều, tab sheet luôn ở dưới như Excel */
 .sheet {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   border: 1px solid var(--app-line);
   border-radius: 8px;
   background: var(--p-content-background);
@@ -102,8 +105,9 @@ const summary = computed(() =>
   font: 13px/1.3 Calibri, Carlito, 'Segoe UI', sans-serif;
 }
 .sheet-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
-  max-height: 26rem;
 }
 table.xl {
   border-collapse: collapse;
@@ -181,6 +185,7 @@ td.center {
   font-size: 8px;
 }
 .sheet-tabs {
+  flex: none;
   border-top: 1px solid var(--app-line);
   background: var(--app-soft);
 }

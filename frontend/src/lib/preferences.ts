@@ -26,7 +26,8 @@ export interface Prefs {
 export const defaultPrefs = (): Prefs => ({
   theme: 'system',
   density: 'comfortable',
-  defaultPageSize: 50,
+  // 25: bảng dựng nhanh gấp đôi so với 50 lúc mở trang; ai cần nhiều hơn chọn ở dưới bảng
+  defaultPageSize: 25,
   tableSizes: {},
   recentTypes: [],
   reopenTabs: true,

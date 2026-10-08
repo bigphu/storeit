@@ -1,6 +1,7 @@
 // Giá trị thuộc tính tuỳ chỉnh: giữa API (AttributeValue, body "attributes") và form.
-import type { AttributeValue, DataType } from '@/lib/api/types'
+import type { AssetDetail, AttributeValue, DataType } from '@/lib/api/types'
 import { formatDate, fromDateString, toDateString } from '@/lib/dates'
+import type { AssetBody } from './api'
 
 // Giá trị trong form theo kiểu: text string, number number|null, date Date|null,
 // boolean 'true'|'false'|null (null là chưa đặt), select id option|null
@@ -85,5 +86,50 @@ export function formatValue(v: AttributeValue | undefined): string {
       return v.option_removed ? `${v.option_label} (removed)` : (v.option_label ?? String(v.value))
     default:
       return String(v.value)
+  }
+}
+
+// assetBodyOf: body PUT dựng lại từ tài sản đã lưu (Undo của "Save"), cùng định dạng form gửi
+export function assetBodyOf(a: AssetDetail): AssetBody {
+  return {
+    name: a.name,
+    description: a.description,
+    asset_type_id: a.asset_type.id,
+    status_id: a.status.id,
+    location_id: a.location_id,
+    holder_member_id: a.holder_member_id,
+    purchase_date: a.purchase_date,
+    attributes: toApiValues(a.attributes, fromApiValues(a.attributes, a.attributes)),
+  }
+}
+
+// attrText: giá trị thuộc tính của dòng danh sách thành chữ để sửa tại chỗ (số, ngày
+// YYYY-MM-DD, 'true'/'false', id option, chữ); trống là ''
+export function attrText(v: AttributeValue | undefined): string {
+  if (!v || v.value === null || v.value === undefined) return ''
+  return String(v.value)
+}
+
+// attrInputError: chữ gõ trong ô sửa nhanh không hợp kiểu thì trả lời nhắc (không lưu).
+// Số gõ sai mà vẫn lưu sẽ thành NaN, gửi lên thành null và xoá mất giá trị cũ
+export function attrInputError(type: DataType, text: string): string | undefined {
+  const t = text.trim()
+  if (type === 'number' && t !== '' && !Number.isFinite(Number(t))) return 'Enter a number.'
+  return undefined
+}
+
+// formValueFrom: chữ vừa sửa thành giá trị form đúng kiểu (toApiValues đổi tiếp sang API)
+export function formValueFrom(type: DataType, text: string): FormValue {
+  const t = text.trim()
+  switch (type) {
+    case 'number':
+      return t === '' ? null : Number(t)
+    case 'date':
+      return fromDateString(t)
+    case 'boolean':
+    case 'select':
+      return t === '' ? null : t
+    default:
+      return text
   }
 }

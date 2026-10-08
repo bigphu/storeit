@@ -137,7 +137,7 @@ username `resend`) with the API key in `deploy/app/secrets/smtp_password.txt`
 | `GET /accounts`, `GET /accounts/{accountID}` | `identity.account.read` |
 | `POST /accounts`, `PATCH /accounts/{accountID}`, `POST …/disable`, `POST …/enable`, `POST …/sign-out`, `POST …/invitation` (202), `POST …/password-reset` (202), `PUT …/roles` | `identity.account.manage` |
 | `GET /roles`, `GET /roles/{roleID}`, `GET /permissions` | `identity.role.read` |
-| `POST /roles`, `PATCH /roles/{roleID}`, `PUT /roles/{roleID}/permissions`, `DELETE /roles/{roleID}` | `identity.role.manage` |
+| `POST /roles`, `PATCH /roles/{roleID}`, `PUT /roles/{roleID}/permissions`, `DELETE /roles/{roleID}`, `POST /roles/{roleID}/restore` | `identity.role.manage` |
 
 `GET /roles` and `GET /roles/{id}` include `member_count`: accounts holding the role that are
 not disabled (invited ones count); list them with `GET /accounts?role_id=`.
@@ -185,13 +185,19 @@ like disable, you must hold all of that account's permissions (403 otherwise).
   lock the Administrator role row first, so two admins acting on each other at once
   cannot both pass.
 - A role still assigned to an account cannot be deleted (409).
+- Deleting is a soft delete (`deleted_at`): the role keeps its
+  permissions, is hidden from `GET /roles` and `GET /roles/{id}` (404), and can't be
+  assigned (422 `/errors/unknown-roles`). Role names are unique among roles that aren't
+  deleted, so the name can be reused. `POST /roles/{roleID}/restore` undoes the delete
+  and returns the role (200 unchanged if it wasn't deleted); 409
+  `/errors/role-name-taken` if an active role took the name meanwhile.
 
 ## Events (`contract/events.go`)
 
 `identity.account_created`, `account_updated` (field changes), `account_disabled`,
 `account_enabled`, `invitation_resent`, `invitation_accepted` (actor: the account
 itself), `password_reset_sent` (admin), `roles_assigned` (from/to), `role_created`,
-`role_updated`, `role_permissions_updated` (from/to), `role_deleted`, `account_signed_out`
+`role_updated`, `role_permissions_updated` (from/to), `role_deleted`, `role_restored`, `account_signed_out`
 (admin sign-out that ended at least one session). No events for
 sign-in, refresh, logout, the public forgot request, completing a reset, or changing
 your own password. Payloads never carry hashes or tokens.

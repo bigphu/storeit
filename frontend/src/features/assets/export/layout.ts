@@ -103,6 +103,23 @@ export function editorColumns(layout: ExportLayout, options: FieldOption[]): Edi
   return [...chosen, ...rest]
 }
 
+// includeAttributes: tick mọi cột thuộc tính mà một loại trong phạm vi có ("Add each
+// type's own attributes"); trả thêm danh sách cột vừa tick để bỏ tick lại đúng chúng
+export function includeAttributes(cols: EditorColumn[], options: FieldOption[]): { columns: EditorColumn[]; added: string[] } {
+  const added: string[] = []
+  const columns = cols.map((c) => {
+    if (c.include || !attrKey(c.field) || !options.some((o) => o.field === c.field)) return c
+    added.push(c.field)
+    return { ...c, include: true }
+  })
+  return { columns, added }
+}
+
+// excludeFields: bỏ tick các cột cho trước (cột người dùng tự tick vẫn giữ)
+export function excludeFields(cols: EditorColumn[], fields: string[]): EditorColumn[] {
+  return cols.map((c) => (fields.includes(c.field) ? { ...c, include: false } : c))
+}
+
 // withColumns: bố cục với các cột đang chọn của trình sửa cột
 export function withColumns(layout: ExportLayout, cols: EditorColumn[]): ExportLayout {
   return { ...layout, columns: cols.filter((c) => c.include).map((c) => ({ field: c.field, header: c.header.trim() || undefined, width: c.width })) }
@@ -125,6 +142,70 @@ function sheetColumns(layout: ExportLayout, types: TypeInfo[], options: FieldOpt
     }
   }
   return out
+}
+
+// cloneLayout: bản sao sâu để sửa mà không đụng profile gốc. Profile từ Vue Query là
+// proxy readonly(reactive) nên structuredClone ném DataCloneError; bố cục là JSON thuần
+export function cloneLayout(l: ExportLayout): ExportLayout {
+  return JSON.parse(JSON.stringify(l)) as ExportLayout
+}
+
+// profilePatch: phần đổi của profile để Save gửi trong một PATCH (tên, chia sẻ, bố cục).
+// layout là bố cục mới khi đã sửa, null khi chưa; tên trống coi như không đổi. null: không
+// có gì đổi, nút Save tắt
+export function profilePatch(
+  p: { name: string; shared: boolean },
+  form: { name: string; shared: boolean },
+  layout: ExportLayout | null,
+): { name?: string; shared?: boolean; layout?: ExportLayout } | null {
+  const out: { name?: string; shared?: boolean; layout?: ExportLayout } = {}
+  const name = form.name.trim()
+  if (name && name !== p.name) out.name = name
+  if (form.shared !== p.shared) out.shared = form.shared
+  if (layout) out.layout = layout
+  return Object.keys(out).length ? out : null
+}
+
+// exportFileName: tên file như server đặt (service/export.go exportFileName); day là YYYY-MM-DD
+export function exportFileName(mode: 'data' | 'report', profileName: string | undefined, day: string): string {
+  if (mode === 'data') return `storeit-assets-${day}.xlsx`
+  const slug = (profileName ?? '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '')
+  return `${slug || 'storeit-report'}-${day}.xlsx`
+}
+
+// Bố cục của bản xem trước: thêm kiểu boolean TRUE/FALSE mà chỉ export dữ liệu dùng
+export type PreviewLayout = Omit<ExportLayout, 'bool_style'> & { bool_style: ExportLayout['bool_style'] | 'true_false' }
+
+// Cột chung của export dữ liệu (khớp DataLayout ở backend); sau đó là thuộc tính của loại
+const DATA_FIELDS = ['tag', 'name', 'description', 'status', 'purchase_date']
+
+// dataPreviewLayout: định dạng của export dữ liệu (ngày ISO, TRUE/FALSE, header trơn)
+export function dataPreviewLayout(): PreviewLayout {
+  return {
+    ...defaultReportLayout(),
+    columns: DATA_FIELDS.map((field) => ({ field })),
+    sheets: 'per_type',
+    each_type_attrs: true,
+    header: 'plain',
+    filter: false,
+    date_format: 'yyyy-mm-dd',
+    bool_style: 'true_false',
+  }
+}
+
+// dataPreviewSheets: mỗi loại một sheet đặt tên theo code, tiêu đề cột là khoá trường
+export function dataPreviewSheets(rows: AssetListItem[], types: TypeInfo[]): PreviewSheet[] {
+  return [...types]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((t) => ({
+      name: t.code,
+      columns: [...DATA_FIELDS, ...t.attributes.map((a) => `attr:${a.key}`)].map((field) => ({ field, header: field })),
+      rows: rows.filter((r) => r.asset_type_id === t.id),
+    }))
+    .filter((s) => s.rows.length)
 }
 
 export function previewSheets(layout: ExportLayout, rows: AssetListItem[], types: TypeInfo[]): PreviewSheet[] {

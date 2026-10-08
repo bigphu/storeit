@@ -31,6 +31,14 @@ func (s *Service) GetRole(ctx context.Context, id uuid.UUID) (domain.Role, error
 	return s.roles.Get(ctx, id)
 }
 
+// RestoreRole: hoàn tác xoá role
+func (s *Service) RestoreRole(ctx context.Context, id uuid.UUID) (domain.Role, error) {
+	if _, err := auth.Require(ctx, domain.PermRoleManage); err != nil {
+		return domain.Role{}, err
+	}
+	return s.roles.Restore(ctx, id)
+}
+
 // CreateRole: role mới chỉ được mang quyền người tạo có
 func (s *Service) CreateRole(ctx context.Context, name, description string, perms []string) (domain.Role, error) {
 	actor, err := auth.Require(ctx, domain.PermRoleManage)

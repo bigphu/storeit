@@ -112,10 +112,24 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: 'Statuses', icon: 'pi pi-circle', perm: Perm.AssetRead },
       },
       {
+        path: 'statuses/:id',
+        name: 'status',
+        component: () => import('@/features/statuses/pages/StatusDetailPage.vue'),
+        props: true,
+        meta: { title: 'Status', icon: 'pi pi-circle', perm: Perm.AssetRead },
+      },
+      {
         path: 'export-profiles',
         name: 'export-profiles',
         component: () => import('@/features/export-profiles/pages/ExportProfilesPage.vue'),
         meta: { title: 'Export profiles', icon: 'pi pi-file-export', perm: Perm.AssetExport },
+      },
+      {
+        path: 'export-profiles/:id',
+        name: 'export-profile',
+        component: () => import('@/features/export-profiles/pages/ExportProfilePage.vue'),
+        props: true,
+        meta: { title: 'Export profile', icon: 'pi pi-file-export', perm: Perm.AssetExport },
       },
       {
         path: 'accounts',

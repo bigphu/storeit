@@ -59,6 +59,7 @@ defineExpose({
 <template>
   <Popover ref="pop">
     <form class="filter-form" @submit.prevent="add">
+      <p class="pop-lead">Show only assets whose attribute matches.</p>
       <label for="filter-attr">Attribute</label>
       <Select
         :model-value="row.key"
@@ -129,14 +130,19 @@ defineExpose({
         <InputText v-else id="filter-value" v-model="row.value" />
       </template>
       <div class="actions">
-        <Button type="submit" label="Add filter" size="small" :disabled="row.value === ''" />
         <Button label="Cancel" size="small" text severity="secondary" @click="pop?.hide()" />
+        <Button type="submit" label="Add filter" size="small" :disabled="row.value === ''" />
       </div>
     </form>
   </Popover>
 </template>
 
 <style scoped>
+.pop-lead {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color);
+}
 .filter-form {
   display: grid;
   gap: 0.35rem;

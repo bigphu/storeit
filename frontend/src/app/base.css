@@ -1,27 +1,96 @@
-/* Bố cục và định dạng chung theo demo "StoreIt Workspace"; màu giữ của theme Aura
-   (màu chính, highlight, surface), chữ là font hệ thống. */
+/* Bố cục và định dạng chung. Bảng màu thống nhất (spec "Colour") và font đóng gói
+   (Be Vietnam Pro, Bricolage Grotesque, JetBrains Mono); preset PrimeVue trong theme.ts
+   lấy màu từ đây. */
 
 :root {
-  --app-display: system-ui, 'Segoe UI', sans-serif;
-  --app-body: system-ui, 'Segoe UI', sans-serif;
-  --app-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  /* "<font> fallback": font dự phòng có số đo khớp (fontaine, vite.config.ts), giữ chữ không
+     xô lệch khi font web tải xong */
+  --app-display: 'Bricolage Grotesque Variable', 'Bricolage Grotesque Variable fallback', 'Be Vietnam Pro', system-ui, sans-serif;
+  --app-body: 'Be Vietnam Pro', 'Be Vietnam Pro fallback', system-ui, 'Segoe UI', sans-serif;
+  --app-mono: 'JetBrains Mono', 'JetBrains Mono fallback', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  /* Mỗi vai trò bốn sắc: tươi (biểu tượng, bong bóng, tiến trình, thanh cuộn, focus), đậm
+     (nền có chữ trắng: tag, nút đặc; tiêu đề màu), ink (chữ màu trên nền sáng), soft (hộp
+     thông báo, vùng chọn). Tươi và đậm giống nhau ở hai theme. brand cũng là "thành công". */
+  --app-brand: #10b981;
+  --app-brand-strong: #059669;
+  --app-brand-ink: #047857;
+  --app-brand-soft: color-mix(in srgb, #10b981 14%, transparent);
+  --app-info: #0ea5e9;
+  --app-info-strong: #0284c7;
+  --app-info-ink: #0369a1;
+  --app-info-soft: color-mix(in srgb, #0ea5e9 14%, transparent);
+  --app-warn: #f97316;
+  --app-warn-strong: #ea580c;
+  --app-warn-ink: #c2410c;
+  --app-warn-soft: color-mix(in srgb, #f97316 14%, transparent);
+  --app-danger: #ef4444;
+  --app-danger-strong: #dc2626;
+  --app-danger-ink: #b91c1c;
+  --app-danger-soft: color-mix(in srgb, #ef4444 12%, transparent);
+  --app-neutral: #94a3b8;
+  --app-neutral-strong: #64748b;
+  --app-neutral-ink: #475569;
+  --app-neutral-soft: color-mix(in srgb, #64748b 12%, transparent);
+  --app-on-color: #ffffff;
+  /* dẫn xuất: luôn tính từ bảng màu */
+  --app-row-hover: color-mix(in srgb, var(--app-brand) 8%, transparent);
+  --app-scroll-thumb: color-mix(in srgb, var(--app-brand) 38%, transparent);
+  --app-scroll-thumb-hover: color-mix(in srgb, var(--app-brand) 70%, transparent);
   /* nền dưới cùng (sau thanh trên, sidebar), màu nhấn, nền phụ */
   --app-ground: var(--p-surface-50);
   --app-soft: var(--p-surface-100);
   --app-line: var(--p-content-border-color);
-  --app-accent: var(--p-primary-color);
-  --app-link: var(--p-primary-color);
-  /* mục "đang ở đây" (sidebar, thẻ đang chọn): nền xanh nhạt của màu chính, chữ giữ màu
-     thường; rê chuột: xám trung tính */
-  --app-selected: color-mix(in srgb, var(--p-primary-color) 14%, transparent);
+  --app-accent: var(--app-brand);
+  --app-link: var(--app-brand-ink);
+  /* mục "đang ở đây" (sidebar, thẻ, dòng đang chọn): nền brand nhạt; rê chuột: xám */
+  --app-selected: var(--app-brand-soft);
   --app-hover: var(--p-surface-100);
-  /* vạch trái của dòng bảng đang chọn (checkbox) */
-  --app-bar-left: inset 3px 0 0 var(--app-accent);
 }
 :root.app-dark {
   --app-ground: var(--p-surface-950);
   --app-soft: var(--p-surface-800);
   --app-hover: var(--p-surface-800);
+  --app-brand-ink: #34d399;
+  --app-brand-soft: color-mix(in srgb, #10b981 20%, transparent);
+  --app-info-ink: #38bdf8;
+  --app-info-soft: color-mix(in srgb, #0ea5e9 20%, transparent);
+  --app-warn-ink: #fb923c;
+  --app-warn-soft: color-mix(in srgb, #f97316 20%, transparent);
+  --app-danger-ink: #f87171;
+  --app-danger-soft: color-mix(in srgb, #ef4444 20%, transparent);
+  --app-neutral-ink: #cbd5e1;
+  --app-neutral-soft: color-mix(in srgb, #94a3b8 20%, transparent);
+}
+
+/* Thanh cuộn mảnh 6px, không rãnh, nút màu brand nhạt. Chrome bỏ qua ::-webkit-scrollbar
+   khi có scrollbar-width/color, nên hai thuộc tính chuẩn chỉ dùng cho trình duyệt không có
+   ::-webkit-scrollbar (Firefox) */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--app-scroll-thumb) transparent;
+  }
+}
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--app-scroll-thumb);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--app-scroll-thumb-hover);
+}
+/* vùng có thể bắt đầu hay thôi cuộn (thân hộp thoại, các ngăn của hộp thoại báo cáo):
+   giữ sẵn chỗ để nội dung không nhảy */
+.scroll-pane,
+.p-dialog-content {
+  scrollbar-gutter: stable;
 }
 
 /* Mật độ "compact" (Preferences): bảng dùng khoảng cách của size="small" */
@@ -40,7 +109,7 @@ h1,
 h2,
 h3 {
   font-family: var(--app-display);
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: -0.01em;
   text-wrap: balance;
   margin: 0;
@@ -121,6 +190,45 @@ kbd {
   color: var(--p-red-500);
   font-size: 0.875rem;
 }
+/* Form trên trang công khai (PublicLayout): tiêu đề lớn, dòng gợi ý, nút cả bề ngang */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+.auth-head h2 {
+  margin: 0;
+  font: 800 1.65rem var(--app-display);
+  letter-spacing: -0.01em;
+}
+.auth-hint {
+  margin: 0.3rem 0 0;
+  color: var(--p-text-muted-color);
+}
+.auth-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.auth-label-row > label {
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color);
+}
+.auth-link {
+  color: var(--app-link);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.auth-link:hover {
+  text-decoration: underline;
+}
+.auth-foot {
+  margin: 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color);
+}
 .actions {
   display: flex;
   gap: 0.5rem;
@@ -155,6 +263,23 @@ section + section {
   background: var(--app-soft);
   font-size: 0.8rem;
   color: var(--p-text-muted-color);
+}
+/* Mỗi dòng của bảng nằm trên một dòng chữ: ô không xuống dòng; bảng rộng hơn chỗ thì cuộn
+   ngang trong khung (khung ngoài giữ bo góc). Bảng table-layout: fixed (làn trạng thái, cột
+   của profile) tự cắt chữ bằng "…" trong ô. */
+.p-datatable .p-datatable-table-container {
+  overflow-x: auto;
+}
+.p-datatable .p-datatable-thead > tr > th,
+.p-datatable .p-datatable-tbody > tr > td {
+  white-space: nowrap;
+}
+/* chữ tự do dài (mô tả) trong ô: cắt bằng "…" thay vì kéo bảng rộng mãi; title có đủ chữ */
+.clip-text {
+  display: block;
+  max-width: 28rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .p-datatable .p-datatable-tbody > tr:last-child > td {
   border-bottom: 0;
@@ -233,8 +358,12 @@ section + section {
   color: var(--app-link);
   text-decoration: none;
 }
+/* Tag: cùng bề rộng, chữ ở giữa, không xuống dòng (cột trạng thái thẳng hàng); nhãn dài
+   hơn bề rộng chung thì tag dài ra thay vì bị cắt */
 .p-tag {
-  font-weight: 500;
+  min-width: 7.5rem;
+  justify-content: center;
+  white-space: nowrap;
 }
 .p-chip {
   font-size: 0.85rem;
@@ -258,8 +387,4 @@ section + section {
 .p-select-option-selected:not(.p-disabled):hover,
 .p-listbox-option-selected:not(.p-disabled):hover {
   background: var(--app-hover);
-}
-/* Dòng đang chọn của bảng: giữ nền highlight, thêm vạch trái để khác với dòng đang rê chuột */
-.p-datatable-tbody > tr.p-datatable-row-selected > td:first-child {
-  box-shadow: var(--app-bar-left);
 }

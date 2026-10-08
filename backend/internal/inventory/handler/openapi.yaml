@@ -195,6 +195,21 @@ paths:
         "204": { description: Removed }
         default: { $ref: '#/components/responses/Problem' }
 
+  /asset-types/{typeID}/attributes/{attributeID}/restore:
+    parameters:
+      - $ref: '#/components/parameters/TypeID'
+      - $ref: '#/components/parameters/AttributeID'
+    post:
+      operationId: restoreAttribute
+      summary: Undo removing an attribute (inventory.type.manage)
+      responses:
+        "200":
+          description: Restored attribute
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attribute' }
+        default: { $ref: '#/components/responses/Problem' }
+
   /asset-types/{typeID}/attributes/{attributeID}/options:
     parameters:
       - $ref: '#/components/parameters/TypeID'
@@ -240,6 +255,22 @@ paths:
       summary: Remove an option; assets using it keep it (inventory.type.manage)
       responses:
         "204": { description: Removed }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /asset-types/{typeID}/attributes/{attributeID}/options/{optionID}/restore:
+    parameters:
+      - $ref: '#/components/parameters/TypeID'
+      - $ref: '#/components/parameters/AttributeID'
+      - $ref: '#/components/parameters/OptionID'
+    post:
+      operationId: restoreOption
+      summary: Undo removing an option (inventory.type.manage)
+      responses:
+        "200":
+          description: Restored option
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Option' }
         default: { $ref: '#/components/responses/Problem' }
 
   /asset-statuses:
@@ -520,6 +551,23 @@ paths:
       summary: Delete a profile (owner; shared ones also inventory.export_profile.manage)
       responses:
         "204": { description: Deleted }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /export-profiles/{profileID}/restore:
+    parameters:
+      - name: profileID
+        in: path
+        required: true
+        schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+    post:
+      operationId: restoreExportProfile
+      summary: Undo deleting a profile (owner; shared ones also inventory.export_profile.manage)
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExportProfile' }
         default: { $ref: '#/components/responses/Problem' }
 
   /assets/{assetID}:

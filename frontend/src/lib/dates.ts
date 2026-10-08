@@ -14,16 +14,31 @@ export function fromDateString(s: string | null | undefined): Date | null {
   return new Date(y, m - 1, d)
 }
 
+// Bộ định dạng dựng một lần, lần đầu cần: toLocale…String() dựng bộ mới mỗi lần gọi, tốn
+// khi bảng có hàng trăm ô ngày. Tuỳ chọn trùng mặc định của toLocaleDateString/toLocaleString
+let dayFmt: Intl.DateTimeFormat | undefined
+let dateTimeFmt: Intl.DateTimeFormat | undefined
+const day = (d: Date) => (dayFmt ??= new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'numeric', day: 'numeric' })).format(d)
+const dateTime = (d: Date) =>
+  (dateTimeFmt ??= new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+  })).format(d)
+
 export function formatDate(s: string | null | undefined): string {
   const d = fromDateString(s)
-  return d ? d.toLocaleDateString() : '—'
+  return d ? day(d) : '—'
 }
 
 export function formatDateTime(s: string | null | undefined): string {
-  return s ? new Date(s).toLocaleString() : '—'
+  return s ? dateTime(new Date(s)) : '—'
 }
 
 // formatDay: ngày (theo giờ máy) của một thời điểm ISO, vd lần đăng nhập
 export function formatDay(s: string | null | undefined): string {
-  return s ? new Date(s).toLocaleDateString() : '—'
+  return s ? day(new Date(s)) : '—'
 }

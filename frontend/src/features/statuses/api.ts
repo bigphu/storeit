@@ -3,6 +3,7 @@ import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 import { inventoryApi } from '@/lib/api/client'
 import type { Status, StatusKind } from '@/lib/api/types'
 import { unwrap } from '@/lib/errors'
+import { statusKindTone, type Tone } from '@/lib/tones'
 
 export const statusKeys = {
   all: ['statuses'] as const,
@@ -12,26 +13,30 @@ export const statusKeys = {
 export const statusKinds: StatusKind[] = ['available', 'in_use', 'unavailable', 'retired']
 
 // Màu tag theo kind
-export function kindSeverity(k: StatusKind): 'success' | 'info' | 'warn' | 'secondary' {
-  return { available: 'success', in_use: 'info', unavailable: 'warn', retired: 'secondary' }[k] as
-    | 'success'
-    | 'info'
-    | 'warn'
-    | 'secondary'
+export function kindSeverity(k: StatusKind): Tone {
+  return statusKindTone(k)
 }
 
 // withCounts: kèm asset_count (số tài sản của mỗi status, kể cả đã retire) cho trang status
-export function useStatuses(includeArchived: MaybeRefOrGetter<boolean> = false, withCounts = false) {
-  return useQuery({
-    queryKey: computed(() => statusKeys.list(toValue(includeArchived), withCounts)),
+// statusesQuery: khoá và hàm tải dùng chung cho useStatuses và tải trước (app/prefetch.ts)
+export function statusesQuery(includeArchived: boolean, withCounts: boolean) {
+  return {
+    queryKey: statusKeys.list(includeArchived, withCounts),
     queryFn: async () =>
       (
         await unwrap(
           inventoryApi.GET('/asset-statuses', {
-            params: { query: { include_archived: toValue(includeArchived), with_counts: withCounts || undefined } },
+            params: { query: { include_archived: includeArchived, with_counts: withCounts || undefined } },
           }),
         )
       ).items,
+  }
+}
+
+export function useStatuses(includeArchived: MaybeRefOrGetter<boolean> = false, withCounts = false) {
+  return useQuery({
+    queryKey: computed(() => statusesQuery(toValue(includeArchived), withCounts).queryKey),
+    queryFn: () => statusesQuery(toValue(includeArchived), withCounts).queryFn(),
   })
 }
 
@@ -61,14 +66,16 @@ export function useUpdateStatus() {
 }
 
 export function useArchiveStatus() {
-  return useStatusMutation((id: string) =>
-    unwrap(inventoryApi.POST('/asset-statuses/{statusID}/archive', { params: { path: { statusID: id } } })),
+  return useStatusMutation(
+    (id: string) => unwrap(inventoryApi.POST('/asset-statuses/{statusID}/archive', { params: { path: { statusID: id } } })),
+    false,
   )
 }
 
 export function useRestoreStatus() {
-  return useStatusMutation((id: string) =>
-    unwrap(inventoryApi.POST('/asset-statuses/{statusID}/restore', { params: { path: { statusID: id } } })),
+  return useStatusMutation(
+    (id: string) => unwrap(inventoryApi.POST('/asset-statuses/{statusID}/restore', { params: { path: { statusID: id } } })),
+    false,
   )
 }
 
@@ -78,7 +85,8 @@ export function useReorderStatuses() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (ids: string[]) => unwrap(inventoryApi.PUT('/asset-statuses/order', { body: { ids } })),
-    meta: { toast: true },
+    // lỗi do runAction báo
+    meta: { toast: false },
     onMutate: async (ids: string[]) => {
       await qc.cancelQueries({ queryKey: statusKeys.all })
       const rank = new Map(ids.map((id, i) => [id, i + 1]))

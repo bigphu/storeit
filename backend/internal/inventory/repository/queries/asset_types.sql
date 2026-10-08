@@ -62,6 +62,11 @@ RETURNING *;
 UPDATE inventory.asset_type_attributes SET removed_at = now(), updated_at = now()
 WHERE id = @id AND asset_type_id = @asset_type_id AND removed_at IS NULL;
 
+-- name: RestoreAttribute :one
+UPDATE inventory.asset_type_attributes SET removed_at = NULL, updated_at = now()
+WHERE id = @id AND asset_type_id = @asset_type_id
+RETURNING *;
+
 -- name: AttributeHasValues :one
 SELECT EXISTS (SELECT 1 FROM inventory.asset_attribute_values WHERE attribute_id = @attribute_id);
 
@@ -100,3 +105,8 @@ RETURNING *;
 -- name: RemoveOption :execrows
 UPDATE inventory.asset_attribute_options SET removed_at = now(), updated_at = now()
 WHERE id = @id AND attribute_id = @attribute_id AND removed_at IS NULL;
+
+-- name: RestoreOption :one
+UPDATE inventory.asset_attribute_options SET removed_at = NULL, updated_at = now()
+WHERE id = @id AND attribute_id = @attribute_id
+RETURNING *;

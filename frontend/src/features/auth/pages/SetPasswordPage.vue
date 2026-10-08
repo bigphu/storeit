@@ -7,6 +7,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { identityApi } from '@/lib/api/client'
 import { isApiError, unwrap } from '@/lib/errors'
 import { useFormErrors } from '@/lib/forms'
+import PublicResult from '../components/PublicResult.vue'
 
 // Một trang cho cả link mời (accept-invite) và link đặt lại mật khẩu (reset-password)
 const props = defineProps<{ mode: 'invite' | 'reset' }>()
@@ -22,6 +23,14 @@ const busy = ref(false)
 const badLink = ref(false)
 
 const title = computed(() => (props.mode === 'invite' ? 'Set up your account' : 'Reset password'))
+const hint = computed(() =>
+  props.mode === 'invite' ? 'Choose a password to finish setting up your account.' : 'Choose a new password for your account.',
+)
+const badLinkText = computed(() =>
+  props.mode === 'invite'
+    ? 'Invitation links work once and only for a limited time. Request a new link, or ask your administrator to resend the invitation.'
+    : 'Reset links work once and only for a limited time. Request a new one to try again.',
+)
 const mismatch = computed(() => confirm.value !== '' && confirm.value !== password.value)
 
 onMounted(() => {
@@ -48,32 +57,29 @@ async function submit() {
 </script>
 
 <template>
-  <div class="form">
-    <h2>{{ title }}</h2>
-    <template v-if="badLink">
-      <Message severity="error">This link is invalid or has expired.</Message>
-      <RouterLink to="/forgot-password">Request a new link</RouterLink>
+  <PublicResult v-if="badLink" icon="alert" tone="warn" title="This link no longer works">
+    {{ badLinkText }}
+    <template #actions>
+      <Button label="Request a new link" fluid @click="router.push('/forgot-password')" />
+      <Button label="Back to sign in" severity="secondary" outlined fluid @click="router.push('/login')" />
     </template>
-    <form v-else class="form" @submit.prevent="submit">
-      <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
-      <div class="field">
-        <label for="password">New password</label>
-        <Password v-model="password" input-id="password" toggle-mask autocomplete="new-password" required />
-        <small v-if="errors.fields.value.new_password" class="field-error">{{ errors.fields.value.new_password }}</small>
-      </div>
-      <div class="field">
-        <label for="confirm">Confirm password</label>
-        <Password
-          v-model="confirm"
-          input-id="confirm"
-          :feedback="false"
-          toggle-mask
-          autocomplete="new-password"
-          required
-        />
-        <small v-if="mismatch" class="field-error">Passwords don't match</small>
-      </div>
-      <Button type="submit" label="Set password" :loading="busy" :disabled="mismatch" />
-    </form>
-  </div>
+  </PublicResult>
+  <form v-else class="auth-form" @submit.prevent="submit">
+    <div class="auth-head">
+      <h2>{{ title }}</h2>
+      <p class="auth-hint">{{ hint }}</p>
+    </div>
+    <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
+    <div class="field">
+      <label for="password">New password</label>
+      <Password v-model="password" input-id="password" toggle-mask autocomplete="new-password" required fluid />
+      <small v-if="errors.fields.value.new_password" class="field-error">{{ errors.fields.value.new_password }}</small>
+    </div>
+    <div class="field">
+      <label for="confirm">Confirm password</label>
+      <Password v-model="confirm" input-id="confirm" :feedback="false" toggle-mask autocomplete="new-password" required fluid />
+      <small v-if="mismatch" class="field-error">Passwords don't match</small>
+    </div>
+    <Button type="submit" label="Set password" :loading="busy" :disabled="mismatch" fluid />
+  </form>
 </template>

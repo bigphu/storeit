@@ -1,7 +1,7 @@
 import type { DataTableRowClickEvent, DataTableRowContextMenuEvent } from 'primevue/datatable'
 import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
-import { isRowControl, onRowClick, useRowMenu } from './tableRows'
+import { isRowControl, onRowClick, useRowMenu, useActiveRow } from './tableRows'
 
 // phần tử giả: closest trả về chính nó khi selector chứa tên "thẻ" của nó
 const el = (tag: string | null) => ({ closest: (s: string) => (tag && s.split(', ').includes(tag) ? {} : null) })
@@ -55,5 +55,40 @@ describe('useRowMenu', () => {
     const m = useRowMenu<{ id: string }>(ref({ show } as never), () => [])
     m.show(event({ id: 'a' }))
     expect(show).not.toHaveBeenCalled()
+  })
+})
+
+describe('useActiveRow', () => {
+  // phần tử giả: closest('tbody tr[data-p-index]') trả về hàng có dataset.pIndex
+  const inRow = (i: number) => ({ closest: (s: string) => (s === 'tbody tr[data-p-index]' ? { dataset: { pIndex: String(i) } } : null) })
+  const outside = { closest: () => null }
+  const ev = (target: unknown, relatedTarget: unknown = null) => ({ target, relatedTarget }) as unknown as FocusEvent
+
+  it('follows the hovered row and forgets it when the pointer leaves the table', () => {
+    const r = useActiveRow(false)
+    expect(r.isActive(3)).toBe(false)
+    r.onOver(ev(inRow(3)))
+    expect(r.isActive(3)).toBe(true)
+    r.onOver(ev(inRow(5)))
+    expect(r.isActive(3)).toBe(false)
+    expect(r.isActive(5)).toBe(true)
+    r.onLeave()
+    expect(r.isActive(5)).toBe(false)
+  })
+  it('keeps the focused row active even when the pointer is elsewhere', () => {
+    const r = useActiveRow(false)
+    r.onFocusIn(ev(inRow(2)))
+    r.onOver(ev(inRow(7)))
+    expect(r.isActive(2)).toBe(true)
+    expect(r.isActive(7)).toBe(true)
+    r.onLeave()
+    expect(r.isActive(2)).toBe(true)
+    r.onFocusOut(ev(inRow(2), outside))
+    expect(r.isActive(2)).toBe(false)
+  })
+  it('treats every row as active on touch screens', () => {
+    const r = useActiveRow(true)
+    expect(r.isActive(0)).toBe(true)
+    expect(r.isActive(42)).toBe(true)
   })
 })

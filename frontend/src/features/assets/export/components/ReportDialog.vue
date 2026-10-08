@@ -1,34 +1,23 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
-import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
+import Popover from 'primevue/popover'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import { computed, ref, watch } from 'vue'
-import SegmentedFilter from '@/components/SegmentedFilter.vue'
+import FormDialog from '@/components/FormDialog.vue'
+import { announce } from '@/lib/actions'
 import type { ExportLayout, ExportProfile } from '@/lib/api/types'
 import { useSession } from '@/lib/auth/session'
 import { useFormErrors } from '@/lib/forms'
 import { notify } from '@/lib/notify'
 import { useCreateExportProfile, useExportProfiles, useUpdateExportProfile } from '../api'
-import {
-  cleanSheetName,
-  defaultReportLayout,
-  editorColumns,
-  fieldOptions,
-  normalizeLayout,
-  previewSheets,
-  sheetNameInput,
-  skippedKeys,
-  withColumns,
-  type EditorColumn,
-} from '../layout'
+import { cleanSheetName, defaultReportLayout, exportFileName, normalizeLayout, profilePatch } from '../layout'
 import { useExport } from '../useExport'
 import { type ExportScope, usePreviewData } from '../usePreviewData'
-import ColumnEditor from './ColumnEditor.vue'
-import SheetPreview from './SheetPreview.vue'
+import ReportEditor from './ReportEditor.vue'
 
 // Hộp thoại "Export report": chọn profile, chỉnh cột và định dạng, xem trước, tải về
 const props = defineProps<{ scope: ExportScope; profileId?: string }>()
@@ -40,13 +29,14 @@ const { types, rows } = usePreviewData(
   () => props.scope,
   () => visible.value,
 )
-const options = computed(() => fieldOptions(types.value))
 
 const profileId = ref<string | null>(null)
 const profile = computed<ExportProfile | undefined>(() => profiles.value?.find((p) => p.id === profileId.value))
-const layout = ref<ExportLayout>(defaultReportLayout())
-const columns = ref<EditorColumn[]>([])
-// bố cục đã lưu của profile đang mở (null khi chưa chọn profile)
+// bố cục đưa vào trình sửa (nạp lại khi sourceKey đổi) và bố cục đang sửa nó báo lên
+const source = ref<ExportLayout>(defaultReportLayout())
+const sourceKey = ref(0)
+const current = ref<ExportLayout>(defaultReportLayout())
+// bố cục đã lưu của profile// bố cục đã lưu của profile đang mở (null khi chưa chọn profile)
 const saved = ref<string | null>(null)
 // version của profile lúc nạp vào trình sửa: Save gửi version này (không phải bản mới nhất
 // của danh sách profile) nên sửa đè lên thay đổi của người khác vẫn bị 409
@@ -58,12 +48,10 @@ function load() {
   if (!visible.value) return
   const p = profile.value
   if (profileId.value && !p) return
-  layout.value = p
-    ? structuredClone(p.layout)
-    : { ...defaultReportLayout(), sheet_name: cleanSheetName(props.scope.label.slice(0, 31)) || 'Assets' }
+  source.value = p ? p.layout : { ...defaultReportLayout(), sheet_name: cleanSheetName(props.scope.label.slice(0, 31)) || 'Assets' }
   saved.value = p ? normalizeLayout(p.layout) : null
   loadedVersion.value = p?.version ?? null
-  columns.value = editorColumns(layout.value, options.value)
+  sourceKey.value++
 }
 watch(visible, (open) => {
   if (!open) return
@@ -71,244 +59,204 @@ watch(visible, (open) => {
   load()
 })
 watch([profileId, () => profile.value?.id], load)
-// khi biết thêm loại: giữ cột đang sửa, chỉ thêm trường mới (chưa chọn) và bỏ trường không còn
-watch(options, (opts) => {
-  const keep = columns.value.filter((c) => c.include || opts.some((o) => o.field === c.field))
-  const missing = opts.filter((o) => !keep.some((c) => c.field === o.field)).map((o) => ({ field: o.field, header: '', width: 0, include: false }))
-  columns.value = [...keep, ...missing]
-})
-
-// tên sheet được làm sạch lần cuối (bỏ dấu nháy đơn ở đầu/cuối) trước khi lưu hay tải
-const current = computed(() => ({ ...withColumns(layout.value, columns.value), sheet_name: cleanSheetName(layout.value.sheet_name) }))
-// ô nhập tên sheet: thay ký tự Excel cấm bằng '-' ngay khi gõ
-const sheetName = computed({
-  get: () => layout.value.sheet_name,
-  set: (v) => (layout.value = { ...layout.value, sheet_name: sheetNameInput(v ?? '') }),
-})
 const dirty = computed(() => saved.value !== null && normalizeLayout(current.value) !== saved.value)
-const sheets = computed(() => previewSheets(current.value, rows.value, types.value))
-const skipped = computed(() => skippedKeys(current.value, types.value))
-const title = computed(() =>
-  current.value.title_row ? [profile.value?.name ?? 'Asset report', `Generated ${new Date().toLocaleDateString('en-GB')} by ${session.me?.account.name ?? ''} · ${props.scope.label}`] : [],
-)
+// Có cột nào để xuất không (mỗi loại một sheet có thể chỉ dùng thuộc tính riêng của loại)
+const hasColumns = computed(() => current.value.columns.length > 0 || (current.value.sheets === 'per_type' && !!current.value.each_type_attrs))
+const fileName = computed(() => exportFileName('report', profile.value?.name, new Date().toISOString().slice(0, 10)))
 
-const sheetsOptions = [
-  { label: 'One sheet', value: 'single' as const },
-  { label: 'Sheet per type', value: 'per_type' as const },
-]
-const sheetMode = computed({ get: () => layout.value.sheets, set: (v) => (layout.value = { ...layout.value, sheets: v }) })
+// Tab cấu hình đang mở (cột, bố cục, định dạng); giữ nguyên khi đóng mở lại hộp thoại
+const tab = ref<'columns' | 'layout' | 'format'>('columns')
 
-// Lưu: sửa profile của mình (hay có quyền quản lý); "Save as…" tạo bản mới
-const update = useUpdateExportProfile()
+// Save…: một popover cho cả lưu vào profile này (tên, chia sẻ, cột và định dạng trong một
+// PATCH) và lưu bản mới. Profile không sửa được, hay chưa chọn profile: chỉ Save as new.
+const update = useUpdateExportProfile(false)
 const create = useCreateExportProfile()
 const errors = useFormErrors()
-const saveAs = ref<{ name: string; shared: boolean } | null>(null)
-async function save() {
+const saveForm = ref<{ name: string; shared: boolean; hint: string } | null>(null)
+const savePop = ref<InstanceType<typeof Popover>>()
+const canSaveHere = computed(() => !!profile.value?.can_edit)
+// thay đổi Save sẽ gửi; null thì nút Save tắt
+const patch = computed(() => {
   const p = profile.value
-  if (!p || loadedVersion.value === null) return
-  const next = await update.mutateAsync({ id: p.id, version: loadedVersion.value, layout: current.value })
-  saved.value = normalizeLayout(next.layout)
-  loadedVersion.value = next.version
-  notify.success(`Saved ${p.name}.`)
-}
-function openSaveAs() {
+  if (!p || !saveForm.value) return null
+  return profilePatch(p, saveForm.value, dirty.value ? current.value : null)
+})
+function openSave(e: Event) {
   errors.clear()
-  saveAs.value = { name: profile.value ? `${profile.value.name} (copy)` : 'New report', shared: false }
+  const p = profile.value
+  saveForm.value = p?.can_edit ? { name: p.name, shared: p.shared, hint: '' } : { name: p ? `${p.name} (copy)` : 'New report', shared: false, hint: '' }
+  savePop.value?.toggle(e)
 }
-async function submitSaveAs() {
-  if (!saveAs.value) return
+function closeSave() {
+  savePop.value?.hide()
+  saveForm.value = null
+}
+async function saveHere() {
+  const p = profile.value
+  const ch = patch.value
+  if (!p || !ch || loadedVersion.value === null) return
   errors.clear()
   try {
-    const p = await create.mutateAsync({ name: saveAs.value.name, shared: saveAs.value.shared, layout: current.value })
-    saveAs.value = null
-    profileId.value = p.id
-    notify.success(`Saved ${p.name}.`)
+    // bản trước lần lưu này, để Undo đặt lại
+    const before = { name: p.name, shared: p.shared, layout: p.layout }
+    const next = await update.mutateAsync({ id: p.id, version: loadedVersion.value, ...ch })
+    saved.value = normalizeLayout(next.layout)
+    loadedVersion.value = next.version
+    closeSave()
+    announce(next, {
+      done: ch.name ? `Saved ${next.name} (renamed).` : `Saved ${next.name}.`,
+      undo: async (n) => {
+        const back = await update.mutateAsync({ id: p.id, version: n.version, name: before.name, shared: before.shared, layout: before.layout })
+        // hộp thoại còn mở trên profile này: lấy bản vừa đặt lại
+        if (profileId.value === p.id) {
+          saved.value = normalizeLayout(back.layout)
+          loadedVersion.value = back.version
+        }
+      },
+      undone: `${before.name} put back as it was.`,
+      undoFailed: `Couldn't put ${before.name} back. The saved version stays.`,
+    })
   } catch (err) {
     errors.set(err)
   }
+}
+async function saveNew() {
+  const f = saveForm.value
+  if (!f) return
+  const p = profile.value
+  // tên chưa đổi trên profile của mình: gợi ý "(copy)" thay vì báo trùng tên
+  if (p && p.owner.id === session.me?.account.id && f.name.trim() === p.name) {
+    f.name = `${p.name} (copy)`
+    f.hint = 'Pick a name for the copy, then Save as new again.'
+    return
+  }
+  errors.clear()
+  try {
+    const np = await create.mutateAsync({ name: f.name, shared: f.shared, layout: current.value })
+    closeSave()
+    profileId.value = np.id
+    notify.success(`Saved ${np.name}.`)
+  } catch (err) {
+    errors.set(err)
+  }
+}
+// Enter trong ô tên: Save khi lưu được vào profile này, không thì Save as new
+function submitSave() {
+  if (canSaveHere.value && patch.value) saveHere()
+  else saveNew()
 }
 
 const { run, running } = useExport()
 async function download() {
   // lỗi (vd quá số dòng) thì giữ hộp thoại để không mất phần đã sửa
-  const ok = await run({ mode: 'report', filters: props.scope.filters, layout: current.value, profile_id: profileId.value ?? undefined }, 'storeit-report.xlsx')
+  const ok = await run({ mode: 'report', filters: props.scope.filters, layout: current.value, profile_id: profileId.value ?? undefined }, 'storeit-report.xlsx', {
+    rows: props.scope.count,
+  })
   if (ok) visible.value = false
 }
 
-const headerOptions = [
-  { label: 'Plain', value: 'plain' },
-  { label: 'Bold', value: 'bold' },
-  { label: 'Bold with fill', value: 'bold_fill' },
-]
-const dateOptions = [
-  { label: '06/10/2026', value: 'dd/mm/yyyy' },
-  { label: '2026-10-06', value: 'yyyy-mm-dd' },
-  { label: '6 Oct 2026', value: 'd mmm yyyy' },
-]
-const unitOptions = [
-  { label: 'In the header', value: 'header' },
-  { label: 'In each cell', value: 'cell' },
-]
-const boolOptions = [
-  { label: 'Yes / No', value: 'yes_no' },
-  { label: '✓ / –', value: 'check' },
-]
-const statusOptions = [
-  { label: 'Status name', value: 'name' },
-  { label: 'Kind', value: 'kind' },
-]
-// '' (theo sort của danh sách) đổi thành 'list' vì Select coi chuỗi rỗng là chưa chọn
-const sortOptions = [
-  { label: "List's sort", value: 'list' },
-  { label: 'Tag', value: 'tag' },
-  { label: 'Name', value: 'name' },
-  { label: 'Purchase date', value: 'purchase_date' },
-  { label: 'Type', value: 'asset_type' },
-  { label: 'Status', value: 'status' },
-]
-const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) => (layout.value.sort = v === 'list' ? '' : v) })
 </script>
 
 <template>
-  <Dialog v-model:visible="visible" modal header="Export report" :style="{ width: 'min(72rem, 96vw)' }" :content-style="{ padding: 0 }">
-    <div class="head">
-      <label for="report-profile" class="muted">Profile</label>
-      <Select v-model="profileId" input-id="report-profile" :options="profiles ?? []" option-label="name" option-value="id" placeholder="No profile" show-clear class="profile-select" />
-      <Tag v-if="profile && !profile.can_edit" :value="`Shared by ${profile.owner.name}`" icon="pi pi-lock" severity="secondary" />
-      <Tag v-else-if="profile" :value="profile.shared ? 'Shared' : 'Only you'" severity="secondary" />
-      <Tag v-if="dirty" value="Unsaved changes" severity="warn" />
-      <Button label="Save" size="small" severity="secondary" outlined :disabled="!profile?.can_edit || !dirty" :loading="update.isPending.value" @click="save" />
-      <Button label="Save as…" size="small" severity="secondary" outlined @click="openSaveAs" />
-    </div>
-    <form v-if="saveAs" class="sub" @submit.prevent="submitSaveAs">
-      <label for="save-as-name">Name</label>
-      <InputText id="save-as-name" v-model="saveAs.name" required maxlength="100" autofocus :invalid="!!errors.fields.value.name" />
-      <span class="check">
-        <Checkbox v-model="saveAs.shared" input-id="save-as-shared" binary />
-        <label for="save-as-shared">Share with everyone who can export</label>
-      </span>
-      <Button type="submit" label="Save profile" size="small" :loading="create.isPending.value" />
-      <Button label="Cancel" size="small" text severity="secondary" @click="saveAs = null" />
-      <Message v-if="errors.general.value || errors.fields.value.name" severity="error" size="small" variant="simple">{{ errors.fields.value.name ?? errors.general.value }}</Message>
-    </form>
-    <div v-else class="sub">
-      <i class="pi pi-table" /> Exporting <b>{{ scope.count }}</b> {{ scope.count === 1 ? 'asset' : 'assets' }} · {{ scope.label }}
-    </div>
-
-    <div class="body">
-      <div class="config">
-        <section>
-          <h3>Columns</h3>
-          <ColumnEditor v-model="columns" :options="options" :layout="layout" />
-          <div v-if="layout.sheets === 'per_type'" class="check">
-            <Checkbox v-model="layout.each_type_attrs" input-id="each-type" binary />
-            <label for="each-type">Add each type's own attributes</label>
-          </div>
-        </section>
-        <section>
-          <h3>Layout</h3>
-          <SegmentedFilter v-model="sheetMode" :options="sheetsOptions" label="Sheets" />
-          <div v-if="layout.sheets === 'single'" class="field">
-            <label for="sheet-name">Sheet name</label>
-            <InputText id="sheet-name" v-model="sheetName" maxlength="31" fluid />
-          </div>
-          <div class="checks">
-            <span class="check"><Checkbox v-model="layout.title_row" input-id="title-row" binary /><label for="title-row">Title row</label></span>
-            <span class="check"><Checkbox v-model="layout.summary" input-id="summary" binary /><label for="summary">Summary sheet</label></span>
-          </div>
-        </section>
-        <section>
-          <h3>Formatting</h3>
-          <div class="grid">
-            <div class="field"><label for="f-header">Header style</label><Select v-model="layout.header" input-id="f-header" :options="headerOptions" option-label="label" option-value="value" fluid /></div>
-            <div class="field"><label for="f-date">Dates</label><Select v-model="layout.date_format" input-id="f-date" :options="dateOptions" option-label="label" option-value="value" fluid /></div>
-            <div class="field"><label for="f-unit">Units</label><Select v-model="layout.unit_in" input-id="f-unit" :options="unitOptions" option-label="label" option-value="value" fluid /></div>
-            <div class="field"><label for="f-bool">Yes/no fields</label><Select v-model="layout.bool_style" input-id="f-bool" :options="boolOptions" option-label="label" option-value="value" fluid /></div>
-            <div class="field"><label for="f-status">Status shows</label><Select v-model="layout.status_as" input-id="f-status" :options="statusOptions" option-label="label" option-value="value" fluid /></div>
-            <div class="field"><label for="f-sort">Sort</label><Select v-model="sortModel" input-id="f-sort" :options="sortOptions" option-label="label" option-value="value" fluid /></div>
-          </div>
-          <div class="checks">
-            <span class="check"><Checkbox v-model="layout.freeze" input-id="f-freeze" binary /><label for="f-freeze">Freeze header</label></span>
-            <span class="check"><Checkbox v-model="layout.filter" input-id="f-filter" binary /><label for="f-filter">Filter buttons</label></span>
-            <span class="check"><Checkbox v-model="layout.stripes" input-id="f-stripes" binary /><label for="f-stripes">Striped rows</label></span>
-          </div>
-        </section>
+  <FormDialog v-model:visible="visible" icon="file" title="Export report" width="max(80rem, 88vw)" flush :dirty="dirty" class="report-dialog">
+    <!-- Cạnh tiêu đề: profile, trạng thái, lưu; không thêm hàng nào trên vùng cuộn -->
+    <template #header-extra>
+      <div class="title-bar">
+        <Select v-model="profileId" aria-label="Export profile" :options="profiles ?? []" option-label="name" option-value="id" placeholder="No profile" show-clear size="small" class="profile-select" />
+        <i v-if="profile && !profile.can_edit" v-tooltip.bottom="`Shared by ${profile.owner.name}`" class="pi pi-lock state" aria-label="Shared by someone else" />
+        <i v-else-if="profile?.shared" v-tooltip.bottom="'Shared with everyone who can export'" class="pi pi-users state" aria-label="Shared" />
+        <Tag v-if="dirty" value="Unsaved" severity="warn" class="unsaved" />
+        <Button label="Save…" size="small" text aria-haspopup="dialog" @click="openSave" />
       </div>
-      <div class="preview">
-        <h3>Preview <small class="muted">first 20 rows of each sheet</small></h3>
-        <Message v-if="skipped.length" severity="warn" :closable="false">
-          Not available for the asset types in this export: <b>{{ skipped.join(', ') }}</b>. Those columns are skipped.
-        </Message>
-        <SheetPreview :sheets="sheets" :layout="current" :types="types" :title="title" />
-      </div>
-    </div>
-    <template #footer>
-      <span class="muted foot-note">Built on the server with the same filters as the list. Up to 50,000 rows.</span>
-      <Button label="Cancel" text severity="secondary" @click="visible = false" />
-      <Button label="Download .xlsx" icon="pi pi-download" :loading="running" :disabled="!current.columns.length && !(current.sheets === 'per_type' && current.each_type_attrs)" @click="download" />
     </template>
-  </Dialog>
+    <Popover ref="savePop" @hide="saveForm = null">
+      <form v-if="saveForm" class="save-as" @submit.prevent="submitSave">
+        <label for="save-name">Name</label>
+        <InputText id="save-name" v-model="saveForm.name" required maxlength="100" autofocus fluid :invalid="!!errors.fields.value.name" @update:model-value="saveForm.hint = ''" />
+        <span class="check">
+          <Checkbox v-model="saveForm.shared" input-id="save-shared" binary />
+          <label for="save-shared">Share with everyone who can export</label>
+        </span>
+        <Message v-if="errors.general.value || errors.fields.value.name" severity="error" size="small" variant="simple">{{ errors.fields.value.name ?? errors.general.value }}</Message>
+        <small v-if="saveForm.hint" class="save-hint">{{ saveForm.hint }}</small>
+        <div class="save-as-actions">
+          <Button label="Cancel" size="small" text severity="secondary" @click="closeSave" />
+          <Button label="Save as new" size="small" :severity="canSaveHere ? 'secondary' : undefined" :outlined="canSaveHere" :loading="create.isPending.value" @click="saveNew" />
+          <Button v-if="canSaveHere" label="Save" size="small" :disabled="!patch" :loading="update.isPending.value" @click="saveHere" />
+        </div>
+      </form>
+    </Popover>
+
+    <div class="report">
+      <ReportEditor
+        v-model:tab="tab"
+        :source="source"
+        :source-key="sourceKey"
+        :types="types"
+        :rows="rows"
+        :scope-label="scope.label"
+        :row-count="scope.count"
+        :file-name="fileName"
+        :title-name="profile?.name"
+        @update:current="(l) => (current = l)"
+      />
+    </div>
+    <template #footer="{ close }">
+      <span v-tooltip.top="'Built on the server with the same filters as the list. Up to 50,000 rows.'" class="foot-note">
+        <i class="pi pi-table" aria-hidden="true" />
+        <span><b>{{ scope.count }}</b> {{ scope.count === 1 ? 'asset' : 'assets' }} · {{ scope.label }}</span>
+        <span class="muted">· {{ scope.selection ? 'only the selected assets' : 'uses the list’s current filters' }}</span>
+      </span>
+      <!-- qua FormDialog: còn thay đổi chưa lưu thì hỏi như ✕ và Esc -->
+      <Button label="Cancel" text severity="secondary" @click="close" />
+      <Button label="Download .xlsx" icon="pi pi-download" :loading="running" :disabled="!hasColumns" @click="download" />
+    </template>
+  </FormDialog>
 </template>
 
 <style scoped>
-.head,
-.sub {
+.title-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.7rem 1.1rem;
-  border-bottom: 1px solid var(--app-line);
+  gap: 0.4rem 0.6rem;
+  flex: 1;
+  min-width: 0;
 }
-.sub {
-  background: var(--app-ground);
-  font-size: 0.88rem;
+.state {
+  color: var(--p-text-muted-color);
+}
+.unsaved {
+  font-size: 0.72rem;
+}
+.save-as {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(20rem, 80vw);
+}
+.save-lead {
+  font-size: 0.84rem;
+  color: var(--p-text-muted-color);
+}
+.save-hint {
+  color: var(--p-primary-color);
+}
+.save-as-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
 }
 .profile-select {
   min-width: 13rem;
 }
-.body {
-  display: grid;
-  grid-template-columns: minmax(0, 23rem) minmax(0, 1fr);
-  max-height: 70vh;
-}
-.config {
-  overflow-y: auto;
-  padding: 0.9rem 1.1rem;
-  border-right: 1px solid var(--app-line);
+/* Chiều cao cố định: thanh profile và dòng phạm vi đứng yên, cột cấu hình và
+   bản xem trước mỗi bên tự cuộn */
+.report {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
-}
-.config h3,
-.preview h3 {
-  margin-bottom: 0.5rem;
-}
-.preview {
-  overflow: auto;
-  padding: 0.9rem 1.1rem;
-  background: var(--app-ground);
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  min-width: 0;
-}
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin-top: 0.6rem;
-}
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0 0.75rem;
-}
-.checks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 1rem;
-  margin-top: 0.6rem;
 }
 .check {
   display: inline-flex;
@@ -319,17 +267,42 @@ const sortModel = computed({ get: () => layout.value.sort || 'list', set: (v) =>
   color: var(--p-text-muted-color);
 }
 .foot-note {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
   margin-right: auto;
-  font-size: 0.85rem;
+  text-align: left;
+  font-size: 0.88rem;
+  line-height: 1.2;
+}
+/* Màn hẹp: cả hộp thoại cuộn như cũ */
+@media (max-width: 900px) {
+  .report {
+    height: auto;
+  }
+}
+</style>
+
+<style>
+/* Hộp thoại cao cố định, nội dung không cuộn: chỉ cột cấu hình và bản xem trước cuộn.
+   Dialog teleport ra body nên khối này không scoped. Màn hẹp: cả hộp thoại cuộn như cũ. */
+.p-dialog.report-dialog {
+  height: min(50rem, 94vh);
+}
+.p-dialog.report-dialog .p-dialog-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 @media (max-width: 900px) {
-  .body {
-    grid-template-columns: minmax(0, 1fr);
-    max-height: none;
+  .p-dialog.report-dialog {
+    height: auto;
   }
-  .config {
-    border-right: 0;
-    border-bottom: 1px solid var(--app-line);
+  .p-dialog.report-dialog .p-dialog-content {
+    overflow: auto;
   }
 }
 </style>

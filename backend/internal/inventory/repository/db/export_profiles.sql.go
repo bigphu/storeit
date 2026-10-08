@@ -15,7 +15,7 @@ import (
 const createExportProfile = `-- name: CreateExportProfile :one
 INSERT INTO inventory.export_profiles (id, owner_id, name, shared, layout)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, owner_id, name, shared, layout, version, created_at, updated_at
+RETURNING id, owner_id, name, shared, layout, version, created_at, updated_at, deleted_at
 `
 
 type CreateExportProfileParams struct {
@@ -44,14 +44,17 @@ func (q *Queries) CreateExportProfile(ctx context.Context, arg CreateExportProfi
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const deleteExportProfile = `-- name: DeleteExportProfile :execrows
-DELETE FROM inventory.export_profiles WHERE id = $1
+UPDATE inventory.export_profiles SET deleted_at = now(), updated_at = now()
+WHERE id = $1 AND deleted_at IS NULL
 `
 
+// Xoá mềm
 func (q *Queries) DeleteExportProfile(ctx context.Context, id uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteExportProfile, id)
 	if err != nil {
@@ -61,7 +64,7 @@ func (q *Queries) DeleteExportProfile(ctx context.Context, id uuid.UUID) (int64,
 }
 
 const getExportProfile = `-- name: GetExportProfile :one
-SELECT id, owner_id, name, shared, layout, version, created_at, updated_at FROM inventory.export_profiles WHERE id = $1
+SELECT id, owner_id, name, shared, layout, version, created_at, updated_at, deleted_at FROM inventory.export_profiles WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetExportProfile(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error) {
@@ -76,12 +79,56 @@ func (q *Queries) GetExportProfile(ctx context.Context, id uuid.UUID) (Inventory
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getExportProfileAny = `-- name: GetExportProfileAny :one
+SELECT id, owner_id, name, shared, layout, version, created_at, updated_at, deleted_at FROM inventory.export_profiles WHERE id = $1
+`
+
+// Kể cả profile đã xoá (khôi phục, kiểm tra quyền khôi phục)
+func (q *Queries) GetExportProfileAny(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error) {
+	row := q.db.QueryRow(ctx, getExportProfileAny, id)
+	var i InventoryExportProfile
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Name,
+		&i.Shared,
+		&i.Layout,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getExportProfileAnyForUpdate = `-- name: GetExportProfileAnyForUpdate :one
+SELECT id, owner_id, name, shared, layout, version, created_at, updated_at, deleted_at FROM inventory.export_profiles WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) GetExportProfileAnyForUpdate(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error) {
+	row := q.db.QueryRow(ctx, getExportProfileAnyForUpdate, id)
+	var i InventoryExportProfile
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Name,
+		&i.Shared,
+		&i.Layout,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const getExportProfileForUpdate = `-- name: GetExportProfileForUpdate :one
-SELECT id, owner_id, name, shared, layout, version, created_at, updated_at FROM inventory.export_profiles WHERE id = $1 FOR UPDATE
+SELECT id, owner_id, name, shared, layout, version, created_at, updated_at, deleted_at FROM inventory.export_profiles WHERE id = $1 AND deleted_at IS NULL FOR UPDATE
 `
 
 func (q *Queries) GetExportProfileForUpdate(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error) {
@@ -96,13 +143,14 @@ func (q *Queries) GetExportProfileForUpdate(ctx context.Context, id uuid.UUID) (
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const listExportProfiles = `-- name: ListExportProfiles :many
-SELECT id, owner_id, name, shared, layout, version, created_at, updated_at FROM inventory.export_profiles
-WHERE owner_id = $1 OR shared
+SELECT id, owner_id, name, shared, layout, version, created_at, updated_at, deleted_at FROM inventory.export_profiles
+WHERE (owner_id = $1 OR shared) AND deleted_at IS NULL
 ORDER BY lower(name), id
 `
 
@@ -125,6 +173,7 @@ func (q *Queries) ListExportProfiles(ctx context.Context, ownerID uuid.UUID) ([]
 			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -136,11 +185,34 @@ func (q *Queries) ListExportProfiles(ctx context.Context, ownerID uuid.UUID) ([]
 	return items, nil
 }
 
+const restoreExportProfile = `-- name: RestoreExportProfile :one
+UPDATE inventory.export_profiles SET deleted_at = NULL, updated_at = now()
+WHERE id = $1
+RETURNING id, owner_id, name, shared, layout, version, created_at, updated_at, deleted_at
+`
+
+func (q *Queries) RestoreExportProfile(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error) {
+	row := q.db.QueryRow(ctx, restoreExportProfile, id)
+	var i InventoryExportProfile
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Name,
+		&i.Shared,
+		&i.Layout,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const updateExportProfile = `-- name: UpdateExportProfile :one
 UPDATE inventory.export_profiles
 SET name = $1, shared = $2, layout = $3, version = version + 1, updated_at = now()
-WHERE id = $4 AND version = $5
-RETURNING id, owner_id, name, shared, layout, version, created_at, updated_at
+WHERE id = $4 AND version = $5 AND deleted_at IS NULL
+RETURNING id, owner_id, name, shared, layout, version, created_at, updated_at, deleted_at
 `
 
 type UpdateExportProfileParams struct {
@@ -170,6 +242,7 @@ func (q *Queries) UpdateExportProfile(ctx context.Context, arg UpdateExportProfi
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }

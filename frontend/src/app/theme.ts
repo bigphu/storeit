@@ -20,7 +20,17 @@ const listOption = (hover: string) => ({
 const navHover = (hover: string) => ({ item: { focusBackground: hover, focusColor: '{text.color}' } })
 
 // Rê chuột lên dòng bảng: sắc màu chính rất nhạt (người dùng chọn riêng cho bảng)
-const rowHover = 'color-mix(in srgb, {primary.color} 8%, transparent)'
+const rowHover = 'var(--app-row-hover)'
+
+// Tag đặc: nền là sắc đậm của vai trò, chữ trắng đậm, bo tròn (spec "Tags"); hai theme như nhau
+const solidTags = {
+  primary: { background: 'var(--app-brand-strong)', color: 'var(--app-on-color)' },
+  success: { background: 'var(--app-brand-strong)', color: 'var(--app-on-color)' },
+  info: { background: 'var(--app-info-strong)', color: 'var(--app-on-color)' },
+  warn: { background: 'var(--app-warn-strong)', color: 'var(--app-on-color)' },
+  danger: { background: 'var(--app-danger-strong)', color: 'var(--app-on-color)' },
+  secondary: { background: 'var(--app-neutral-strong)', color: 'var(--app-on-color)' },
+}
 
 export const StoreItPreset = definePreset(Aura, {
   semantic: {
@@ -30,6 +40,10 @@ export const StoreItPreset = definePreset(Aura, {
     },
   },
   components: {
+    tag: {
+      root: { fontSize: '0.76rem', fontWeight: '700', padding: '0.12rem 0.55rem', borderRadius: '999px' },
+      colorScheme: { light: solidTags, dark: solidTags },
+    },
     datatable: {
       row: { hoverBackground: rowHover, hoverColor: '{text.color}' },
     },
@@ -44,7 +58,7 @@ export const StoreItPreset = definePreset(Aura, {
     // Trang hiện tại: nền xanh nhạt, chữ thường
     paginator: {
       navButton: {
-        selectedBackground: 'color-mix(in srgb, {primary.color} 14%, transparent)',
+        selectedBackground: 'var(--app-selected)',
         selectedColor: '{text.color}',
       },
     },

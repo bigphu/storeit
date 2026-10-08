@@ -103,8 +103,11 @@ type RoleRepository interface {
 	Update(ctx context.Context, id uuid.UUID, name, description string) (Role, error)
 	// ReplacePermissions: ErrUnknownPermissions; event role_permissions_updated
 	ReplacePermissions(ctx context.Context, id uuid.UUID, perms []string) (Role, error)
-	// Delete: event role_deleted
+	// Delete: xoá mềm (giữ hàng và quyền); event role_deleted
 	Delete(ctx context.Context, id uuid.UUID) error
+	// Restore: khôi phục role đã xoá (chưa xoá thì trả nguyên); ErrRoleNotFound,
+	// ErrRoleNameTaken; event role_restored
+	Restore(ctx context.Context, id uuid.UUID) (Role, error)
 	CountAssignments(ctx context.Context, id uuid.UUID) (int64, error)
 	// MemberCounts: số account chưa bị khoá giữ mỗi role; role không ai giữ thì không có
 	MemberCounts(ctx context.Context) (map[uuid.UUID]int64, error)

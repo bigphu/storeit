@@ -103,3 +103,9 @@ export function initialTabs(saved: unknown, seeded: boolean, reopenAll: boolean,
     : { id: newId(), path: '/assets', pinned: true, title: 'All assets', icon: 'pi pi-th-large' }
   return [pinnedAll, ...tabs.filter((t) => t !== all)]
 }
+
+// reopenTab: Undo của đóng tab: đặt lại ở vị trí cũ, không chen vào nhóm ghim, không quá cuối
+export function reopenTab(tabs: Tab[], tab: Tab, index: number): Tab[] {
+  const at = Math.min(Math.max(index, pinnedCount(tabs)), tabs.length)
+  return [...tabs.slice(0, at), tab, ...tabs.slice(at)]
+}

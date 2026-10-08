@@ -18,6 +18,7 @@ const (
 	EventRoleUpdated            = "identity.role_updated"
 	EventRolePermissionsUpdated = "identity.role_permissions_updated"
 	EventRoleDeleted            = "identity.role_deleted"
+	EventRoleRestored           = "identity.role_restored"
 	EventAccountSignedOut       = "identity.account_signed_out"
 )
 
@@ -103,6 +104,12 @@ type RolePermissionsUpdated struct {
 }
 
 type RoleDeleted struct {
+	RoleID uuid.UUID `json:"role_id"`
+	Name   string    `json:"name"`
+}
+
+// RoleRestored: hoàn tác xoá role (xoá mềm)
+type RoleRestored struct {
 	RoleID uuid.UUID `json:"role_id"`
 	Name   string    `json:"name"`
 }

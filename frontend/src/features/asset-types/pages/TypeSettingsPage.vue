@@ -4,47 +4,54 @@ import Checkbox from 'primevue/checkbox'
 import Column from 'primevue/column'
 import ContextMenu from 'primevue/contextmenu'
 import DataTable, { type DataTableRowReorderEvent } from 'primevue/datatable'
-import InputText from 'primevue/inputtext'
-import Message from 'primevue/message'
-import Panel from 'primevue/panel'
+import Tab from 'primevue/tab'
+import TabList from 'primevue/tablist'
+import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
-import Textarea from 'primevue/textarea'
-import { useConfirm } from 'primevue/useconfirm'
-import { computed, ref, watch } from 'vue'
-import { useTabTitle } from '@/app/tabs/tabPage'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { useLeaveGuard, useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
 import DetailHeader from '@/components/DetailHeader.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
+import SaveBar from '@/components/SaveBar.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import IconAction from '@/components/IconAction.vue'
 import type { Attribute } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
-import { describeError, isApiError } from '@/lib/errors'
-import { useFormErrors } from '@/lib/forms'
+import { runAction } from '@/lib/actions'
+import { changeCount, changesOf, clearTab, discardTab, emptyDraft, isDirty, restoreTab } from '@/lib/detailDraft'
+import { describeError } from '@/lib/errors'
 import { notify } from '@/lib/notify'
 import { onRowClick, useRowMenu } from '@/lib/tableRows'
-import {
-  useArchiveAssetType,
-  useAssetType,
-  useRemoveAttribute,
-  useReorderAttributes,
-  useRestoreAssetType,
-  useUpdateAssetType,
-  useUpdateAttribute,
-} from '../api'
-import { codeMark } from '../code'
+import { useUrlState } from '@/lib/urlState'
+import { useAssetType, useAssetTypes, useRemoveAttribute, useReorderAttributes, useRestoreAttribute, useUpdateAttribute } from '../api'
+import { useTypeArchive, useTypeOverviewSave } from '../overviewSave'
 import AttributeDialog from '../components/AttributeDialog.vue'
 import OptionsDialog from '../components/OptionsDialog.vue'
 import { useListContext } from '@/features/assets/listContext'
 import { typeListLocation } from '@/features/assets/listQuery'
 
-// Cài đặt của một loại: tên, mô tả, thuộc tính và option, lưu trữ
+// Trang chi tiết của một loại: Overview (tên, mã, mô tả sửa tại chỗ) và Attributes; archive
+// ở đầu trang
 const props = defineProps<{ typeId: string }>()
 
 const session = useSession()
-const confirm = useConfirm()
 const canManage = computed(() => session.can(Perm.TypeManage))
 
-const { data: type, refetch } = useAssetType(() => props.typeId)
+const { data: type, isLoading } = useAssetType(() => props.typeId)
+// số tài sản của loại (dòng thông tin ở đầu trang)
+const { data: allTypes } = useAssetTypes(true, true)
+const assetCount = computed(() => allTypes.value?.find((t) => t.id === props.typeId)?.asset_count ?? 0)
+const activeAttributes = computed(() => (type.value?.attributes ?? []).filter((a) => !a.removed).length)
+
+type Section = 'overview' | 'attributes'
+const { state, update: updateUrl } = useUrlState(
+  (q) => ({ tab: (q.tab === 'attributes' ? 'attributes' : 'overview') as Section }),
+  (s) => ({ tab: s.tab === 'attributes' ? s.tab : undefined }),
+)
 
 const showRemoved = ref(false)
 // thứ tự đang hiện: kéo thả đổi ngay, không đợi tải lại
@@ -79,65 +86,64 @@ const activeOptions = (a: Attribute) =>
 // Kéo thả thứ tự thuộc tính (thứ tự cột trong danh sách và trong form)
 const reorder = useReorderAttributes()
 function onReorder(e: DataTableRowReorderEvent) {
+  const activeIds = (list: Attribute[]) => list.filter((a) => !a.removed).map((a) => a.id)
+  const before = activeIds(attributes.value)
   attributes.value = e.value as Attribute[]
-  reorder.mutate({ typeId: props.typeId, ids: attributes.value.filter((a) => !a.removed).map((a) => a.id) })
+  const after = activeIds(attributes.value)
+  void runAction({
+    run: () => reorder.mutateAsync({ typeId: props.typeId, ids: after }),
+    done: 'Attributes reordered.',
+    failed: "Couldn't save the new order.",
+    undo: () => reorder.mutateAsync({ typeId: props.typeId, ids: before }),
+    undone: 'Order put back.',
+    undoFailed: "Couldn't put the order back.",
+  })
 }
 const nextPosition = computed(() => Math.max(0, ...(type.value?.attributes ?? []).map((a) => a.position)) + 1)
 
-// Sửa tên, mô tả (version: 409 khi người khác vừa sửa)
-const name = ref('')
-const description = ref('')
+// Overview: sửa tại chỗ, gom vào thanh lưu (Ctrl/⌘ S); Save và Discard đều có Undo
+const fields: FieldDef[] = [
+  { key: 'name', label: 'Name', maxlength: 100 },
+  { key: 'code', label: 'Code', lock: 'Part of every asset tag, so it can’t change.' },
+  { key: 'description', label: 'Description', kind: 'textarea' },
+]
+const saved = computed(() => ({ name: type.value?.name ?? '', code: type.value?.code ?? '', description: type.value?.description ?? '' }))
+const draft = reactive(emptyDraft())
+useTabDirty(() => isDirty(draft))
+useLeaveGuard(() => isDirty(draft))
+const saveOverview = useTypeOverviewSave()
+const saving = ref(false)
+async function save() {
+  const t = type.value
+  if (!t) return
+  saving.value = true
+  try {
+    if (await saveOverview(t, changesOf(draft, 'overview'))) clearTab(draft, 'overview')
+  } finally {
+    saving.value = false
+  }
+}
+function discard() {
+  const removed = discardTab(draft, 'overview')
+  notify.success('Changes discarded.', { undo: () => restoreTab(draft, 'overview', removed) })
+}
+
+const toggleArchive = useTypeArchive()
+function toggleArchived() {
+  if (type.value) void toggleArchive(type.value)
+}
+
+// Loại vừa tạo: mở ở Attributes, nút "Add attribute" sẵn focus
+const route = useRoute()
 watch(
-  type,
-  (t) => {
-    if (!t) return
-    name.value = t.name
-    description.value = t.description
+  () => [type.value?.id, state.value.tab] as const,
+  async ([id, tab]) => {
+    if (!id || tab !== 'attributes' || route.query.new !== '1') return
+    await nextTick()
+    document.getElementById('add-attribute')?.focus()
   },
   { immediate: true },
 )
-const errors = useFormErrors()
-const update = useUpdateAssetType()
-async function saveDetails() {
-  if (!type.value) return
-  errors.clear()
-  try {
-    await update.mutateAsync({ id: props.typeId, name: name.value, description: description.value, version: type.value.version })
-    notify.success('Asset type saved.')
-  } catch (err) {
-    if (isApiError(err) && err.status === 409) {
-      notify.info('Someone else changed this type. Reloaded the latest version.')
-      await refetch()
-    } else {
-      errors.set(err)
-    }
-  }
-}
-
-const archive = useArchiveAssetType()
-const restore = useRestoreAssetType()
-function toggleArchived() {
-  const t = type.value
-  if (!t) return
-  if (t.archived_at) {
-    restore
-      .mutateAsync(t.id)
-      .then(() => notify.success('Asset type restored.'))
-      .catch(() => {})
-    return
-  }
-  confirm.require({
-    message: `Archive ${t.name}? It can't be chosen for new assets; existing assets keep it.`,
-    header: 'Confirm',
-    acceptLabel: 'Archive',
-    rejectLabel: 'Cancel',
-    accept: () =>
-      archive
-        .mutateAsync(t.id)
-        .then(() => notify.success('Asset type archived.'))
-        .catch(() => {}),
-  })
-}
 
 // Dialog thêm/sửa thuộc tính và dialog option
 const attrOpen = ref(false)
@@ -155,22 +161,21 @@ function openOptions(a: Attribute) {
 }
 
 const removeAttr = useRemoveAttribute()
-function askRemove(a: Attribute) {
-  confirm.require({
-    message: `Remove the attribute ${a.label}? Existing values are kept but hidden.`,
-    header: 'Confirm',
-    acceptLabel: 'Remove',
-    rejectLabel: 'Cancel',
-    accept: () =>
-      removeAttr
-        .mutateAsync({ typeId: props.typeId, attrId: a.id })
-        .then(() => notify.success('Attribute removed.'))
-        .catch(() => {}),
+const restoreAttr = useRestoreAttribute()
+function removeAttribute(a: Attribute) {
+  const ids = { typeId: props.typeId, attrId: a.id }
+  return runAction({
+    run: () => removeAttr.mutateAsync(ids),
+    done: `${a.label} removed.`,
+    failed: `Couldn't remove ${a.label}.`,
+    undo: () => restoreAttr.mutateAsync(ids),
+    undone: `${a.label} is back.`,
+    undoFailed: `Couldn't bring ${a.label} back. It stays removed.`,
   })
 }
 
 const listContext = useListContext()
-useTabTitle(() => type.value && `${type.value.name} settings`)
+useTabTitle(() => type.value?.name)
 const crumbs = computed<Crumb[]>(() =>
   type.value
     ? [
@@ -194,7 +199,7 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
         { label: 'Edit', icon: 'pi pi-pencil', command: () => openAttribute(a) },
         { label: 'Edit options', icon: 'pi pi-list', visible: a.data_type === 'select', command: () => openOptions(a) },
         { separator: true },
-        { label: 'Remove', icon: 'pi pi-trash', command: () => askRemove(a) },
+        { label: 'Remove', icon: 'pi pi-trash', command: () => removeAttribute(a) },
       ]
     : [],
 )
@@ -203,120 +208,103 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
 <template>
   <section v-if="type">
     <AppBreadcrumb :items="crumbs" />
-    <DetailHeader :title="type.name">
-      <template #media>
-        <span class="type-mark">{{ codeMark(type.code) }}</span>
-      </template>
+    <DetailHeader :title="type.name" icon="sitemap">
       <template #tags>
+        <Tag :value="type.archived_at ? 'Archived' : 'Active'" :severity="type.archived_at ? 'secondary' : 'success'" />
         <Tag v-if="type.is_system" value="Built-in" icon="pi pi-lock" severity="secondary" />
-        <Tag v-if="type.archived_at" value="Archived" icon="pi pi-inbox" severity="secondary" />
       </template>
-      <div><code>{{ type.code }}</code> · Type settings</div>
+      <div>Code <code>{{ type.code }}</code> · {{ assetCount }} {{ assetCount === 1 ? 'asset' : 'assets' }} · {{ activeAttributes }} {{ activeAttributes === 1 ? 'attribute' : 'attributes' }}</div>
+      <template #actions>
+        <Button v-slot="slot" as-child text>
+          <RouterLink :to="typeListLocation(type.id, listContext.views)" :class="slot.class">View {{ assetCount }} {{ assetCount === 1 ? 'asset' : 'assets' }} <i class="pi pi-arrow-right" aria-hidden="true" /></RouterLink>
+        </Button>
+        <Button v-if="canManage && !type.is_system" :label="type.archived_at ? 'Restore' : 'Archive'" severity="secondary" outlined @click="toggleArchived" />
+      </template>
     </DetailHeader>
 
-    <!-- Cài đặt chia khối như demo: Chung, Thuộc tính, Lưu trữ -->
-    <Panel header="General" class="block">
-      <form class="form" @submit.prevent="saveDetails">
-        <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
-        <div class="field-row">
-          <div class="field grow">
-            <label for="type-name">Name</label>
-            <InputText id="type-name" v-model="name" :disabled="!canManage" />
-            <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
-          </div>
-          <div class="field">
-            <label for="type-code">Code</label>
-            <InputText id="type-code" :model-value="type.code" disabled class="mono" />
-          </div>
-        </div>
-        <div class="field">
-          <label for="type-desc">Description</label>
-          <Textarea id="type-desc" v-model="description" rows="2" auto-resize :disabled="!canManage" />
-        </div>
-        <div v-if="canManage" class="actions">
-          <Button type="submit" label="Save" :loading="update.isPending.value" />
-        </div>
-      </form>
-    </Panel>
+    <Tabs :value="state.tab" class="section-tabs" @update:value="(v) => updateUrl({ tab: v as Section })">
+      <TabList>
+        <Tab value="overview">Overview<span v-if="changeCount(draft, 'overview')" class="tab-dirty" aria-label="Unsaved changes" /></Tab>
+        <Tab value="attributes">Attributes <span class="tab-count">{{ activeAttributes }}</span></Tab>
+      </TabList>
+    </Tabs>
 
-    <Panel header="Attributes" class="block">
-      <template #icons>
-        <Button v-if="canManage" label="Add attribute" icon="pi pi-plus" size="small" @click="openAttribute(null)" />
-      </template>
-      <div class="toolbar">
-        <Checkbox v-model="showRemoved" input-id="show-removed" binary />
-        <label for="show-removed">Show removed</label>
+    <template v-if="state.tab === 'overview'">
+      <OverviewFields :fields="fields" :saved="saved" :draft="draft" :readonly="!canManage" />
+      <SaveBar v-if="canManage && changeCount(draft, 'overview')" :count="changeCount(draft, 'overview')" :saving="saving" @save="save" @discard="discard" />
+    </template>
+
+    <template v-else>
+      <div class="attr-head">
+        <p class="hint">New attributes appear as columns and filters in this type's asset list right away.</p>
+        <Button v-if="canManage" id="add-attribute" label="Add attribute" icon="pi pi-plus" size="small" @click="openAttribute(null)" />
       </div>
-      <p v-if="canManage && attributes.length > 1" class="hint">Drag the handle to change the order of columns and form fields.</p>
-      <!-- Cột trải hết bề ngang; "Required" là checkbox (đổi ngay khi có quyền) -->
-      <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />
-      <DataTable
-        :value="attributes"
-        data-key="id"
-        table-style="width: 100%; table-layout: fixed"
-        row-hover
-        :row-class="(a: Attribute) => (canEditRow(a) ? 'clickable-row' : undefined)"
-        @row-reorder="onReorder"
-        @row-click="rowClick"
-        @row-contextmenu="showMenu"
-      >
-        <Column v-if="canManage && !showRemoved" row-reorder header-style="width: 2.75rem" />
-        <Column field="label" header="Label" header-style="width: 22%" />
-        <Column header="Key" header-style="width: 16%">
-          <template #body="{ data: a }: { data: Attribute }"><code>{{ a.key }}</code></template>
-        </Column>
-        <Column field="data_type" header="Type" header-style="width: 10%" />
-        <Column header="Unit" header-style="width: 9%">
-          <template #body="{ data: a }: { data: Attribute }">{{ a.unit ?? '' }}</template>
-        </Column>
-        <Column header="Required" header-style="width: 9%" body-class="center" header-class="center">
-          <template #body="{ data: a }: { data: Attribute }">
-            <Checkbox
-              :model-value="a.is_required"
-              binary
-              :disabled="!canManage || a.removed || toggling === a.id"
-              :aria-label="`${a.label} is required`"
-              @update:model-value="(v: boolean) => setRequired(a, v)"
+    <div class="toolbar">
+      <Checkbox v-model="showRemoved" input-id="show-removed" binary />
+      <label for="show-removed">Show removed</label>
+    </div>
+    <p v-if="canManage && attributes.length > 1" class="hint">Drag the handle to change the order of columns and form fields.</p>
+    <!-- Mỗi dòng một dòng chữ, cột giãn theo nội dung (bảng dài thì cuộn ngang);
+         "Required" là checkbox (đổi ngay khi có quyền) -->
+    <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />
+    <DataTable
+      :value="attributes"
+      data-key="id"
+      row-hover
+      :row-class="(a: Attribute) => (canEditRow(a) ? 'clickable-row' : undefined)"
+      @row-reorder="onReorder"
+      @row-click="rowClick"
+      @row-contextmenu="showMenu"
+    >
+      <Column v-if="canManage && !showRemoved" row-reorder header-style="width: 2.75rem" />
+      <Column field="label" header="Label" header-style="width: 22%" />
+      <Column header="Key" header-style="width: 16%">
+        <template #body="{ data: a }: { data: Attribute }"><code>{{ a.key }}</code></template>
+      </Column>
+      <Column field="data_type" header="Type" header-style="width: 10%" />
+      <Column header="Unit" header-style="width: 9%">
+        <template #body="{ data: a }: { data: Attribute }">{{ a.unit ?? '' }}</template>
+      </Column>
+      <Column header="Required" header-style="width: 9%" body-class="center" header-class="center">
+        <template #body="{ data: a }: { data: Attribute }">
+          <Checkbox
+            :model-value="a.is_required"
+            binary
+            :disabled="!canManage || a.removed || toggling === a.id"
+            :aria-label="`${a.label} is required`"
+            @update:model-value="(v: boolean) => setRequired(a, v)"
+          />
+        </template>
+      </Column>
+      <Column header="Options" header-style="width: 18%">
+        <template #body="{ data: a }: { data: Attribute }">
+          <div v-if="a.data_type === 'select'" class="opts-cell">
+            <span class="opts">{{ activeOptions(a) || 'No options yet' }}</span>
+            <IconAction
+              :icon="canManage ? 'pi pi-pencil' : 'pi pi-eye'"
+              :label="canManage ? 'Edit options' : 'View options'"
+              class="opts-btn"
+              @click="openOptions(a)"
             />
-          </template>
-        </Column>
-        <Column header="Options" header-style="width: 18%">
-          <template #body="{ data: a }: { data: Attribute }">
-            <div v-if="a.data_type === 'select'" class="opts-cell">
-              <span class="opts">{{ activeOptions(a) || 'No options yet' }}</span>
-              <IconAction
-                :icon="canManage ? 'pi pi-pencil' : 'pi pi-eye'"
-                :label="canManage ? 'Edit options' : 'View options'"
-                class="opts-btn"
-                @click="openOptions(a)"
-              />
-            </div>
-          </template>
-        </Column>
-        <Column header="" header-style="width: 6rem" body-class="row-actions-cell">
-          <template #body="{ data: a }: { data: Attribute }">
-            <Tag v-if="a.removed" value="removed" severity="secondary" />
-            <div v-else-if="canManage" class="row-actions">
-              <IconAction icon="pi pi-pencil" label="Edit" @click="openAttribute(a)" />
-              <IconAction icon="pi pi-trash" label="Remove" danger @click="askRemove(a)" />
-            </div>
-          </template>
-        </Column>
-        <template #empty>No attributes yet.</template>
-      </DataTable>
-      <p class="hint after">New attributes appear as columns and filters in this type's asset list right away.</p>
-    </Panel>
-
-    <Panel v-if="canManage && !type.is_system" :header="type.archived_at ? 'Restore this type' : 'Archive this type'" class="block">
-      <p class="hint">Archived types can't be chosen for new assets; existing assets keep them.</p>
-      <Button
-        :label="type.archived_at ? 'Restore' : 'Archive'"
-        :icon="type.archived_at ? 'pi pi-replay' : 'pi pi-inbox'"
-        :severity="type.archived_at ? 'secondary' : 'danger'"
-        outlined
-        @click="toggleArchived"
-      />
-    </Panel>
+          </div>
+        </template>
+      </Column>
+      <Column header="" header-style="width: 6rem" body-class="row-actions-cell">
+        <template #body="{ data: a }: { data: Attribute }">
+          <Tag v-if="a.removed" value="removed" severity="secondary" />
+          <div v-else-if="canManage" class="row-actions">
+            <IconAction icon="pi pi-pencil" label="Edit" @click="openAttribute(a)" />
+            <IconAction icon="pi pi-trash" label="Remove" danger @click="removeAttribute(a)" />
+          </div>
+        </template>
+      </Column>
+      <template #empty>
+        <TableSkeleton v-if="isLoading" />
+        <EmptyState v-else icon="pi pi-tag" text="No attributes yet." :action="canManage ? 'Add attribute' : undefined" @action="openAttribute(null)" />
+      </template>
+    </DataTable>
+    <p class="hint after">New attributes appear as columns and filters in this type's asset list right away.</p>
+    </template>
 
     <AttributeDialog v-model:visible="attrOpen" :type-id="type.id" :attribute="attrEditing" :next-position="nextPosition" />
     <OptionsDialog v-model:visible="optionsOpen" :type-id="type.id" :attribute="optionsAttr" :can-manage="canManage" />
@@ -324,28 +312,32 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
 </template>
 
 <style scoped>
-.type-mark {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 3rem;
-  height: 3rem;
-  border-radius: 10px;
-  background: var(--app-soft);
-  font: 700 0.9rem var(--app-mono);
-  color: var(--p-text-color);
+.section-tabs {
+  margin-bottom: 1rem;
 }
-.block + .block {
-  margin-top: 1rem;
+.tab-count {
+  font: 0.75rem var(--app-mono);
+  color: var(--p-text-muted-color);
 }
-.field-row {
+/* tab còn thay đổi chưa lưu */
+.tab-dirty {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-left: 0.4rem;
+  border-radius: 50%;
+  background: var(--app-warn);
+}
+.attr-head {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
 }
-.field-row .grow {
-  flex: 1;
-  min-width: 12rem;
+.attr-head .hint {
+  margin: 0;
 }
 :deep(.center) {
   text-align: center;
@@ -359,18 +351,17 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
   align-items: center;
   gap: 0.25rem;
 }
+/* danh sách lựa chọn dài thì cắt "…" (bấm bút chì để xem hết) */
 .opts {
   flex: 1;
   min-width: 0;
+  max-width: 18rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .opts-btn {
   flex: none;
-}
-.hint.after {
-  margin: 0.75rem 0 0;
 }
 .hint {
   margin: 0 0 0.5rem;
