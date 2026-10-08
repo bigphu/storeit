@@ -121,8 +121,7 @@ Selection styling lives in `app/theme.ts` (token preset over Aura) and `app/base
   tables without a size use the default (25).
 - Performance of long tables (measured with Lighthouse on a production build, not the dev
   server, which scores far lower):
-  - build row-action buttons only for the active row: `useActiveRow()` (`lib/tableRows.ts`)
-    tracks the hovered or focused row; touch screens build them on every row;
+  - every list table wires rows through `useListTable()` (`lib/tableRows.ts`): `v-bind="table.bind"` gives clickable rows (`open`, optional `clickable(row)`), the right-click menu (`showMenu` from `useRowMenu`) and the active row; `onHover(index)` is there for prefetching. Row buttons go in `<RowActions :count="n" :active="table.active.isActive(index)">` with `IconAction`s: it builds them only for the hovered or focused row (every row on touch screens) and always reserves room for `n` buttons, so hovering never changes a column's width or a row's height. Editing tables (OptionsDialog) leave out `active` so the buttons always show;
   - give paged tables `TableSkeleton :rows="12"` and `:paginator="!isLoading"`, so nothing
     below the table jumps when the first page arrives;
   - format dates through `lib/dates.ts` (cached `Intl.DateTimeFormat`), not

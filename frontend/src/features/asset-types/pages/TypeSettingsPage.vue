@@ -18,6 +18,7 @@ import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import SaveBar from '@/components/SaveBar.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import IconAction from '@/components/IconAction.vue'
+import RowActions from '@/components/RowActions.vue'
 import type { Attribute } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
@@ -25,7 +26,7 @@ import { runAction } from '@/lib/actions'
 import { changeCount, changesOf, clearTab, discardTab, emptyDraft, isDirty, restoreTab } from '@/lib/detailDraft'
 import { describeError } from '@/lib/errors'
 import { notify } from '@/lib/notify'
-import { onRowClick, useRowMenu } from '@/lib/tableRows'
+import { useListTable, useRowMenu } from '@/lib/tableRows'
 import { useUrlState } from '@/lib/urlState'
 import { useAssetType, useAssetTypes, useRemoveAttribute, useReorderAttributes, useRestoreAttribute, useUpdateAttribute } from '../api'
 import { useTypeArchive, useTypeOverviewSave } from '../overviewSave'
@@ -191,7 +192,6 @@ const crumbs = computed<Crumb[]>(() =>
 function canEditRow(a: Attribute) {
   return canManage.value && !a.removed
 }
-const rowClick = onRowClick((a: Attribute) => canEditRow(a) && openAttribute(a))
 const menu = ref<InstanceType<typeof ContextMenu>>()
 const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attribute>(menu, (a) =>
   canEditRow(a)
@@ -203,6 +203,8 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
       ]
     : [],
 )
+// bảng: bấm dòng mở, menu chuột phải, nút cuối dòng cho hàng đang dùng (lib/tableRows.ts)
+const table = useListTable<Attribute>({ open: (a) => openAttribute(a), clickable: canEditRow, showMenu })
 </script>
 
 <template>
@@ -250,11 +252,8 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
     <DataTable
       :value="attributes"
       data-key="id"
-      row-hover
-      :row-class="(a: Attribute) => (canEditRow(a) ? 'clickable-row' : undefined)"
+      v-bind="table.bind"
       @row-reorder="onReorder"
-      @row-click="rowClick"
-      @row-contextmenu="showMenu"
     >
       <Column v-if="canManage && !showRemoved" row-reorder header-style="width: 2.75rem" />
       <Column field="label" header="Label" header-style="width: 22%" />
@@ -290,12 +289,12 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
         </template>
       </Column>
       <Column header="" header-style="width: 6rem" body-class="row-actions-cell">
-        <template #body="{ data: a }: { data: Attribute }">
+        <template #body="{ data: a, index }: { data: Attribute; index: number }">
           <Tag v-if="a.removed" value="removed" severity="secondary" />
-          <div v-else-if="canManage" class="row-actions">
+          <RowActions v-else-if="canManage" :count="2" :active="table.active.isActive(index)">
             <IconAction icon="pi pi-pencil" label="Edit" @click="openAttribute(a)" />
             <IconAction icon="pi pi-trash" label="Remove" danger @click="removeAttribute(a)" />
-          </div>
+          </RowActions>
         </template>
       </Column>
       <template #empty>

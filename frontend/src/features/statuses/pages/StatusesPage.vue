@@ -13,6 +13,7 @@ import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import IconAction from '@/components/IconAction.vue'
+import RowActions from '@/components/RowActions.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import type { Status, StatusKind } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
@@ -24,7 +25,7 @@ import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
 import { useFormErrors } from '@/lib/forms'
 import { openLocation } from '@/lib/navigation'
 import { notify } from '@/lib/notify'
-import { onRowClick } from '@/lib/tableRows'
+import { useListTable } from '@/lib/tableRows'
 import { kindSeverity, useCreateStatus, useReorderStatuses, useStatuses } from '../api'
 import { archiveBlock, KIND_INFO, KIND_ORDER, lanes, moveBy, orderAfterMove } from '../lanes'
 import { useStatusLifecycle, useStatusOverviewSave } from '../overviewSave'
@@ -112,7 +113,11 @@ async function submitAdd() {
 const saveStatus = useStatusOverviewSave()
 const rename = (st: Status, name: string) => saveStatus(st, { name })
 const openStatus = (st: Status, e?: MouseEvent) => openLocation(router, `/statuses/${st.id}`, e)
-const rowClick = onRowClick((st: Status, e: MouseEvent) => openStatus(st, e))
+// mỗi làn một bảng: bấm dòng mở status, nút cuối dòng cho hàng đang dùng của làn đó
+const laneTables = Object.fromEntries(KIND_ORDER.map((k) => [k, useListTable<Status>({ open: (st, e) => openStatus(st, e) })])) as Record<
+  (typeof KIND_ORDER)[number],
+  ReturnType<typeof useListTable<Status>>
+>
 // thứ tự đi qua bằng ↑/↓ trong ngăn kéo: theo làn, rồi theo vị trí
 const ordered = computed(() => KIND_ORDER.flatMap((k) => activeOf(k)))
 const quick = ref<Status | null>(null)
@@ -173,12 +178,10 @@ watch(statuses, (list) => {
           :value="activeOf(k)"
           data-key="id"
           :show-headers="false"
-          row-hover
           size="small"
           class="lane-table"
           table-style="width: 100%; table-layout: fixed"
-          :row-class="() => 'clickable-row'"
-          @row-click="rowClick"
+          v-bind="laneTables[k].bind"
           @row-reorder="(e: DataTableRowReorderEvent) => onReorder(k, e)"
         >
           <Column v-if="canManage" row-reorder header-style="width: 2.5rem" body-style="width: 2.5rem" />
@@ -217,8 +220,8 @@ watch(statuses, (list) => {
             <template #body="{ data: s }: { data: Status }">{{ s.asset_count ?? '' }}</template>
           </Column>
           <Column v-if="canManage" header-style="width: 5.5rem" body-style="width: 5.5rem">
-            <template #body="{ data: s }: { data: Status }">
-              <div class="row-actions">
+            <template #body="{ data: s, index }: { data: Status; index: number }">
+              <RowActions :count="2" :active="laneTables[k].active.isActive(index)">
                 <IconAction icon="pi pi-sliders-h" label="Quick edit" @click="openQuick(s)" />
                 <IconAction
                   icon="pi pi-inbox"
@@ -227,7 +230,7 @@ watch(statuses, (list) => {
                   :reason="archiveBlock(s)"
                   @click="archiveStatus(s)"
                 />
-              </div>
+              </RowActions>
             </template>
           </Column>
           <template #empty>

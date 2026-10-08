@@ -19,6 +19,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import FormDialog from '@/components/FormDialog.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import IconAction from '@/components/IconAction.vue'
+import RowActions from '@/components/RowActions.vue'
 import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import SaveBar from '@/components/SaveBar.vue'
@@ -30,7 +31,7 @@ import { useSession } from '@/lib/auth/session'
 import { runAction } from '@/lib/actions'
 import { changeCount, changesOf, clearTab, discardTab, emptyDraft, isDirty, listOf, restoreTab, setList, pruneList } from '@/lib/detailDraft'
 import { notify } from '@/lib/notify'
-import { onRowClick } from '@/lib/tableRows'
+import { useListTable } from '@/lib/tableRows'
 import { openLocation } from '@/lib/navigation'
 import { useUrlState } from '@/lib/urlState'
 import { useRole, useSetRolePermissions } from '../api'
@@ -149,7 +150,8 @@ function removePerson(a: AccountListItem) {
     undoFailed: `Couldn't give ${a.name} ${name} again.`,
   })
 }
-const openPerson = onRowClick((a: AccountListItem, e: MouseEvent) => openLocation(router, `/accounts/${a.id}`, e))
+// bảng người giữ role: bấm dòng mở tài khoản, nút cuối dòng cho hàng đang dùng
+const membersTable = useListTable<AccountListItem>({ open: (a, e) => openLocation(router, `/accounts/${a.id}`, e) })
 
 // Thêm người: chọn trong các tài khoản chưa có role này
 const adding = ref(false)
@@ -273,9 +275,7 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
         :value="members?.items ?? []"
         :loading="membersLoading"
         data-key="id"
-        row-hover
-        :row-class="() => 'clickable-row'"
-        @row-click="openPerson"
+        v-bind="membersTable.bind"
       >
         <Column header="Person">
           <template #body="{ data: a }: { data: AccountListItem }">
@@ -296,8 +296,8 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
           </template>
         </Column>
         <Column v-if="canAssign" header="" header-style="width: 4rem">
-          <template #body="{ data: a }: { data: AccountListItem }">
-            <div class="row-actions">
+          <template #body="{ data: a, index }: { data: AccountListItem; index: number }">
+            <RowActions :count="1" :active="membersTable.active.isActive(index)">
               <IconAction
                 icon="pi pi-times"
                 label="Remove from role"
@@ -306,7 +306,7 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
                 reason="You can’t remove your own Administrator role"
                 @click="removePerson(a)"
               />
-            </div>
+            </RowActions>
           </template>
         </Column>
         <template #empty>

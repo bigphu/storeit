@@ -19,6 +19,7 @@ import TableSkeleton from '@/components/TableSkeleton.vue'
 import EntityCard from '@/components/EntityCard.vue'
 import FormDialog from '@/components/FormDialog.vue'
 import IconAction from '@/components/IconAction.vue'
+import RowActions from '@/components/RowActions.vue'
 import InlineCell from '@/components/InlineCell.vue'
 import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
@@ -35,7 +36,7 @@ import { formatDate } from '@/lib/dates'
 import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
 import { useDirty, useFormErrors } from '@/lib/forms'
 import { openLocation } from '@/lib/navigation'
-import { onRowClick, useRowMenu } from '@/lib/tableRows'
+import { useListTable, useRowMenu } from '@/lib/tableRows'
 import { queryString, useUrlState } from '@/lib/urlState'
 import { useAssetTypes, useCreateAssetType } from '../api'
 import { codeFromName, codeMark } from '../code'
@@ -104,7 +105,6 @@ const settingsPath = (t: AssetType) => `/types/${t.id}/settings`
 function openType(t: AssetType, e?: MouseEvent, newTab?: boolean) {
   openLocation(router, listOf(t), e, newTab)
 }
-const rowClick = onRowClick(openType)
 const menu = ref<InstanceType<typeof ContextMenu>>()
 // Cùng một danh sách hành động cho menu chuột phải (dòng, thẻ) và nút menu trên thẻ
 const typeMenu = (t: AssetType): MenuItem[] => [
@@ -116,6 +116,8 @@ const typeMenu = (t: AssetType): MenuItem[] => [
   { label: t.archived_at ? 'Restore' : 'Archive', icon: t.archived_at ? 'pi pi-replay' : 'pi pi-inbox', visible: canManage.value && !t.is_system, command: () => archiveType(t) },
 ]
 const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<AssetType>(menu, typeMenu)
+// bảng: bấm dòng mở, menu chuột phải, nút cuối dòng cho hàng đang dùng (lib/tableRows.ts)
+const table = useListTable<AssetType>({ open: openType, showMenu })
 function onCardMenu(t: AssetType, e: MouseEvent) {
   e.preventDefault()
   showMenu({ originalEvent: e, data: t, index: 0 } as DataTableRowContextMenuEvent)
@@ -278,10 +280,7 @@ watch(types, (list) => {
       :loading="isFetching"
       data-key="id"
       removable-sort
-      row-hover
-      :row-class="() => 'clickable-row'"
-      @row-click="rowClick"
-      @row-contextmenu="showMenu"
+      v-bind="table.bind"
     >
       <Column header="Name" sort-field="name" sortable>
         <template #body="{ data: t }: { data: AssetType }">
@@ -316,9 +315,9 @@ watch(types, (list) => {
           <KindMeter v-else :type="t" />
         </template>
       </Column>
-      <Column header="" header-style="width: 8rem">
-        <template #body="{ data: t }: { data: AssetType }">
-          <div class="row-actions">
+      <Column header="">
+        <template #body="{ data: t, index }: { data: AssetType; index: number }">
+          <RowActions :count="3" :active="table.active.isActive(index)">
             <IconAction v-if="canManage" icon="pi pi-sliders-h" label="Quick edit" @click="openQuick(t)" />
             <IconAction
               v-if="canManage && !t.is_system"
@@ -327,7 +326,7 @@ watch(types, (list) => {
               @click="archiveType(t)"
             />
             <IconAction icon="pi pi-cog" label="Type settings" :to="settingsPath(t)" />
-          </div>
+          </RowActions>
         </template>
       </Column>
       <template #empty>

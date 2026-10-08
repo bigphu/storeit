@@ -1,7 +1,7 @@
 import type { DataTableRowClickEvent, DataTableRowContextMenuEvent } from 'primevue/datatable'
 import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
-import { isRowControl, onRowClick, useRowMenu, useActiveRow } from './tableRows'
+import { isRowControl, onRowClick, useRowMenu, useActiveRow, rowActionsWidth, useListTable } from './tableRows'
 
 // phần tử giả: closest trả về chính nó khi selector chứa tên "thẻ" của nó
 const el = (tag: string | null) => ({ closest: (s: string) => (tag && s.split(', ').includes(tag) ? {} : null) })
@@ -90,5 +90,56 @@ describe('useActiveRow', () => {
     const r = useActiveRow(true)
     expect(r.isActive(0)).toBe(true)
     expect(r.isActive(42)).toBe(true)
+  })
+})
+
+describe('rowActionsWidth', () => {
+  it('reserves room for every button the column can show (2rem each, 0.25rem gaps)', () => {
+    expect(rowActionsWidth(1)).toBe('2rem')
+    expect(rowActionsWidth(3)).toBe('6.5rem')
+  })
+})
+
+describe('useListTable', () => {
+  const inRow = (i: number) => ({ closest: (s: string) => (s === 'tbody tr[data-p-index]' ? { dataset: { pIndex: String(i) } } : null) })
+  const over = (i: number) => ({ target: inRow(i) }) as unknown as MouseEvent
+
+  it('wires clickable rows, the context menu and the active row', () => {
+    const open = vi.fn()
+    const showMenu = vi.fn()
+    const t = useListTable<{ id: string }>({ open, showMenu, touch: false })
+    expect(t.bind.rowHover).toBe(true)
+    expect(t.bind.rowClass?.()).toBe('clickable-row')
+    t.bind.onRowClick?.({ data: { id: 'a' }, originalEvent: { target: null } } as unknown as DataTableRowClickEvent)
+    expect(open).toHaveBeenCalledWith({ id: 'a' }, { target: null })
+    expect(t.bind.onRowContextmenu).toBe(showMenu)
+    t.bind.onMouseover(over(2))
+    expect(t.active.isActive(2)).toBe(true)
+  })
+  it('reports the hovered row once per row and null when the pointer leaves', () => {
+    const onHover = vi.fn()
+    const t = useListTable({ onHover, touch: false })
+    t.bind.onMouseover(over(1))
+    t.bind.onMouseover(over(1))
+    t.bind.onMouseover(over(4))
+    t.bind.onMouseleave()
+    expect(onHover.mock.calls).toEqual([[1], [4], [null]])
+  })
+  it('has no click or menu wiring for read-only tables', () => {
+    const t = useListTable({ touch: false })
+    expect(t.bind.onRowClick).toBeUndefined()
+    expect(t.bind.rowClass).toBeUndefined()
+    expect(t.bind.onRowContextmenu).toBeUndefined()
+  })
+})
+
+describe('useListTable clickable', () => {
+  it('marks and opens only the rows that can be opened', () => {
+    const open = vi.fn()
+    const t = useListTable<{ removed: boolean }>({ open, clickable: (r) => !r.removed, touch: false })
+    expect(t.bind.rowClass?.({ removed: false })).toBe('clickable-row')
+    expect(t.bind.rowClass?.({ removed: true })).toBeUndefined()
+    t.bind.onRowClick?.({ data: { removed: true }, originalEvent: { target: null } } as unknown as DataTableRowClickEvent)
+    expect(open).not.toHaveBeenCalled()
   })
 })

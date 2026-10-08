@@ -8,6 +8,7 @@ import type { Attribute, Option } from '@/lib/api/types'
 import EmptyState from '@/components/EmptyState.vue'
 import FormDialog from '@/components/FormDialog.vue'
 import IconAction from '@/components/IconAction.vue'
+import RowActions from '@/components/RowActions.vue'
 import { runAction } from '@/lib/actions'
 import { notify } from '@/lib/notify'
 import { useAddOption, useRemoveOption, useReorderOptions, useRestoreOption, useUpdateOption } from '../api'
@@ -94,9 +95,12 @@ function removeOption(o: Option) {
         </template>
       </Column>
       <Column v-if="canManage" header="" body-class="actions-cell">
+        <!-- bảng sửa trong hộp thoại: nút luôn hiện (không đợi rê chuột) -->
         <template #body="{ data: o }: { data: Option }">
-          <IconAction icon="pi pi-check" label="Save" :disabled="labels[o.id] === o.label" reason="No changes to save" @click="save(o)" />
-          <IconAction icon="pi pi-trash" label="Remove" danger @click="removeOption(o)" />
+          <RowActions :count="2">
+            <IconAction icon="pi pi-check" label="Save" :disabled="labels[o.id] === o.label" reason="No changes to save" @click="save(o)" />
+            <IconAction icon="pi pi-trash" label="Remove" danger @click="removeOption(o)" />
+          </RowActions>
         </template>
       </Column>
       <template #empty><EmptyState icon="pi pi-list" text="No options yet." /></template>

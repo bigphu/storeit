@@ -330,8 +330,9 @@ section + section {
     justify-content: center;
   }
 }
-/* Dòng bấm được (lib/tableRows.ts) và nút hành động trên dòng: hiện khi rê chuột hay
-   focus vào dòng; màn hình cảm ứng luôn hiện */
+/* Dòng bấm được và ô nút cuối dòng (RowActions + useListTable trong lib/tableRows.ts): nút chỉ
+   được dựng cho hàng đang rê chuột hay có focus (màn cảm ứng: mọi hàng), nên không cần ẩn
+   bằng CSS; ô luôn giữ chỗ cho đủ số nút */
 .clickable-row {
   cursor: pointer;
 }
@@ -346,15 +347,6 @@ section + section {
    hàng không cao lên khi rê chuột */
 .p-datatable-tbody .row-actions {
   min-height: 2rem;
-}
-@media (hover: hover) {
-  .p-datatable-tbody > tr .row-actions {
-    opacity: 0;
-  }
-  .p-datatable-tbody > tr:hover .row-actions,
-  .p-datatable-tbody > tr:focus-within .row-actions {
-    opacity: 1;
-  }
 }
 /* Mã tài sản (tag): chữ mono, màu liên kết */
 .tag-cell,

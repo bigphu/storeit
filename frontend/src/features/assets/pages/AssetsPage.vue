@@ -6,7 +6,6 @@ import Column from 'primevue/column'
 import ContextMenu from 'primevue/contextmenu'
 import DataTable, {
   type DataTablePageEvent,
-  type DataTableRowClickEvent,
   type DataTableRowContextMenuEvent,
   type DataTableSortEvent,
 } from 'primevue/datatable'
@@ -19,7 +18,9 @@ import { loadRouteLocation, useRouter } from 'vue-router'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useTabId, useTabQuery, useTabTitle } from '@/app/tabs/tabPage'
 import type { AssetListItem, DataType } from '@/lib/api/types'
+import IconAction from '@/components/IconAction.vue'
 import InlineCell from '@/components/InlineCell.vue'
+import RowActions from '@/components/RowActions.vue'
 import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
 import { mayClose } from '@/lib/confirm'
@@ -31,7 +32,7 @@ import { formatDate, formatDateTime, toDateString } from '@/lib/dates'
 import { usePageKeys } from '@/lib/pageKeys'
 import { notify } from '@/lib/notify'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
-import { rowIndex, useActiveRow } from '@/lib/tableRows'
+import { useListTable } from '@/lib/tableRows'
 import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
 import { kindSeverity, statusKinds, useStatuses } from '@/features/statuses/api'
 import { assetListQuery, assetQuery, useAsset, useAssetList } from '../api'
@@ -80,8 +81,6 @@ function update(patch: Partial<AssetListState>) {
 
 // Số dòng mỗi trang: mỗi bảng (mọi loại, từng loại) nhớ số riêng
 const { size: pageSize, set: setPageSize } = usePageSize(() => `assets:${state.value.typeId ?? 'all'}`)
-// nút hành động chỉ dựng cho hàng dưới chuột / có focus (lib/tableRows.ts)
-const activeRow = useActiveRow()
 const { data, isFetching, isLoading } = useAssetList(computed(() => toApiParams(state.value, pageSize.value)))
 
 // Tải trước, không đợi người dùng bấm: trang kế tiếp khi trang này về (sang trang tức thì);
@@ -94,25 +93,16 @@ watch(data, (d) => {
   const next = d && nextPageParams(state.value, pageSize.value, d.total)
   if (next) whenIdle(() => void qc.prefetchQuery({ ...assetListQuery(next), meta: { toast: false } }))
 })
-let hoverRow: number | null = null
 let hoverTimer: ReturnType<typeof setTimeout> | undefined
-function onRowsOver(e: MouseEvent) {
-  activeRow.onOver(e)
-  const i = rowIndex(e.target)
-  if (i === null || i === hoverRow) return
-  hoverRow = i
+function prefetchHovered(i: number | null) {
   clearTimeout(hoverTimer)
+  if (i === null) return
   hoverTimer = setTimeout(() => {
     const a = data.value?.items[i]
     if (!a) return
     void qc.prefetchQuery({ ...assetQuery(a.id), meta: { toast: false } })
     loadRouteLocation(router.resolve(`/assets/${a.id}`)).catch(() => {})
   }, 120)
-}
-function onRowsLeave() {
-  activeRow.onLeave()
-  hoverRow = null
-  clearTimeout(hoverTimer)
 }
 
 // danh sách lọc gồm cả status đã lưu trữ: tài sản cũ vẫn mang chúng
@@ -274,12 +264,6 @@ function openBulk(mode: 'status' | 'retire') {
 }
 
 // Bấm dòng mở tài sản; Ctrl/⌘ mở tab mới. Bấm trúng liên kết, nút hay ô chọn thì để chúng tự xử lý
-function onRowClick(e: DataTableRowClickEvent) {
-  const target = e.originalEvent.target as HTMLElement | null
-  if (target?.closest('a, button, input, .p-checkbox, .select-cell')) return
-  actions.open(e.data as AssetListItem, e.originalEvent as MouseEvent)
-}
-
 // Menu chuột phải trên dòng
 const menu = ref<InstanceType<typeof ContextMenu>>()
 const menuRow = ref<AssetListItem | null>(null)
@@ -304,6 +288,10 @@ function onRowContextMenu(e: DataTableRowContextMenuEvent) {
   menuRow.value = e.data as AssetListItem
   menu.value?.show(e.originalEvent)
 }
+
+// bảng: bấm dòng mở tài sản (Ctrl/⌘ mở tab mới), menu chuột phải, nút cuối dòng cho hàng
+// đang dùng, tải trước tài sản khi chuột dừng trên dòng
+const table = useListTable<AssetListItem>({ open: (a, e) => actions.open(a, e), showMenu: onRowContextMenu, onHover: prefetchHovered })
 
 // Tiêu đề tab: tên loại và bộ lọc thuộc tính đầu tiên ("Laptop · RAM ≥ 16 GB +1")
 useTabTitle(() => {
@@ -552,16 +540,9 @@ watch(rows, (list) => {
       v-model:selection="selected"
       data-key="id"
       scrollable
-      row-hover
-      :row-class="() => 'clickable-row'"
+      v-bind="table.bind"
       @page="onPage"
       @sort="onSort"
-      @row-click="onRowClick"
-      @row-contextmenu="onRowContextMenu"
-      @mouseover="onRowsOver"
-      @mouseleave="onRowsLeave"
-      @focusin="activeRow.onFocusIn"
-      @focusout="activeRow.onFocusOut"
     >
       <Column v-if="canManage || canExport" selection-mode="multiple" header-style="width: 3rem" body-class="select-cell" />
       <Column header="Tag" sort-field="tag" sortable body-class="tag-cell">
@@ -629,41 +610,15 @@ watch(rows, (list) => {
       <Column header="Updated" sort-field="updated_at" sortable>
         <template #body="{ data: a }: { data: AssetListItem }">{{ formatDateTime(a.updated_at) }}</template>
       </Column>
-      <Column v-if="canManage" header="" class="row-actions-col" header-style="width: 5.5rem; min-width: 5.5rem">
+      <Column v-if="canManage" header="" class="row-actions-col">
         <template #body="{ data: a, index }: { data: AssetListItem; index: number }">
-          <div class="row-actions">
-            <template v-if="!activeRow.isActive(index)" />
-            <template v-else-if="!a.retired_at">
-              <Button
-                v-tooltip.top="'Quick edit'"
-                icon="pi pi-sliders-h"
-                size="small"
-                text
-                rounded
-                aria-label="Quick edit"
-                @click="openQuick(a)"
-              />
-              <Button
-                v-tooltip.top="'Retire'"
-                icon="pi pi-ban"
-                size="small"
-                text
-                rounded
-                aria-label="Retire"
-                @click="actions.askRetire(a)"
-              />
+          <RowActions :count="2" :active="table.active.isActive(index)">
+            <template v-if="!a.retired_at">
+              <IconAction icon="pi pi-sliders-h" label="Quick edit" @click="openQuick(a)" />
+              <IconAction icon="pi pi-ban" label="Retire" @click="actions.askRetire(a)" />
             </template>
-            <Button
-              v-else
-              v-tooltip.top="'Restore'"
-              icon="pi pi-replay"
-              size="small"
-              text
-              rounded
-              aria-label="Restore"
-              @click="actions.restore(a)"
-            />
-          </div>
+            <IconAction v-else icon="pi pi-replay" label="Restore" @click="actions.restore(a)" />
+          </RowActions>
         </template>
       </Column>
       <template #empty>
