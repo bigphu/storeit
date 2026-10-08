@@ -22,6 +22,7 @@ func (h *Handler) ExportAssets(ctx context.Context, req api.ExportAssetsRequestO
 		in.Filter = domain.AssetFilter{
 			Query: deref(p.Q), TypeID: p.TypeId, StatusID: p.StatusId, IncludeRetired: deref(p.IncludeRetired),
 			Attrs: deref(p.Attr), Sort: domain.AssetSort(deref(p.Sort)),
+			Fields: deref(p.Field),
 		}
 		if p.StatusKind != nil {
 			k := domain.StatusKind(*p.StatusKind)

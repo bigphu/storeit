@@ -1,16 +1,16 @@
 // Bộ lọc đang áp dụng dưới dạng chip (bấm ✕ để bỏ từng cái) và cách đọc một điều kiện
 // thuộc tính thành chữ ("RAM ≥ 16 GB"), dùng cho chip và tiêu đề tab.
 import type { Attribute } from '@/lib/api/types'
-import type { AssetListState, AttrFilterRow } from './listQuery'
+import { type AssetListState, type AttrFilterRow, BUILTIN_FIELDS, type FieldFilterRow } from './listQuery'
 
 export const OP_LABEL: Record<string, string> = {
-  eq: 'is',
+  eq: '=',
   contains: 'contains',
   gt: '>',
   gte: '≥',
   lt: '<',
   lte: '≤',
-  in: 'is any of',
+  in: 'any of',
 }
 
 type AttrLike = Pick<Attribute, 'key' | 'label' | 'data_type' | 'unit'> & { options: { id: string; label: string }[] }
@@ -26,9 +26,16 @@ export function attrFilterLabel(f: AttrFilterRow, attrs: readonly AttrLike[]): s
   return `${a.label} ${op} ${value}`
 }
 
+// fieldFilterLabel: điều kiện trên trường có sẵn thành chữ ("Purchase date ≥ 2026-01-01")
+export function fieldFilterLabel(f: FieldFilterRow): string {
+  const label = BUILTIN_FIELDS.find((b) => b.key === f.key)?.label ?? f.key
+  return `${label} ${OP_LABEL[f.op] ?? f.op} ${f.value}`
+}
+
 export type FilterChip =
   | { kind: 'search' | 'status' | 'statusKind' | 'retired'; label: string }
   | { kind: 'attr'; label: string; index: number }
+  | { kind: 'field'; label: string; index: number }
 
 export function filterChips(
   s: AssetListState,
@@ -41,6 +48,7 @@ export function filterChips(
   if (s.statusKind) chips.push({ kind: 'statusKind', label: `Status kind: ${s.statusKind.replace('_', ' ')}` })
   if (s.includeRetired) chips.push({ kind: 'retired', label: 'Including retired' })
   s.filters.forEach((f, index) => chips.push({ kind: 'attr', label: attrFilterLabel(f, attrs), index }))
+  s.fields.forEach((f, index) => chips.push({ kind: 'field', label: fieldFilterLabel(f), index }))
   return chips
 }
 
@@ -57,5 +65,7 @@ export function removeChip(s: AssetListState, chip: FilterChip): Partial<AssetLi
       return { includeRetired: false, page: 1 }
     case 'attr':
       return { filters: s.filters.filter((_, i) => i !== chip.index), page: 1 }
+    case 'field':
+      return { fields: s.fields.filter((_, i) => i !== chip.index), page: 1 }
   }
 }

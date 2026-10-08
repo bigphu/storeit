@@ -10,32 +10,47 @@ import { computed, ref } from 'vue'
 import type { Attribute } from '@/lib/api/types'
 import { fromDateString, toDateString } from '@/lib/dates'
 import { OP_LABEL } from '../filterChips'
-import { type AttrFilterRow, operatorsFor } from '../listQuery'
+import { type AttrFilterRow, BUILTIN_FIELDS, type FieldFilterRow, fieldOperators, operatorsFor } from '../listQuery'
 
-// "+ Filter": thêm một điều kiện "thuộc tính / toán tử / giá trị" (các điều kiện kết hợp AND)
+// "+ Filter": thêm một điều kiện "trường / toán tử / giá trị" (các điều kiện kết hợp AND).
+// Trường có sẵn (ngày mua, ngày tạo, ngày sửa, mô tả) luôn có; thuộc tính khi đang xem một loại.
+// Trường có sẵn mang khoá "field:<key>" trong ô chọn để không trùng key thuộc tính.
 const props = defineProps<{ attributes: Attribute[] }>()
-const emit = defineEmits<{ add: [filter: AttrFilterRow] }>()
+const emit = defineEmits<{ add: [filter: AttrFilterRow]; addField: [filter: FieldFilterRow] }>()
 
 const pop = ref<InstanceType<typeof Popover>>()
 const row = ref<AttrFilterRow>({ key: '', op: 'eq', value: '' })
 const attr = computed(() => props.attributes.find((a) => a.key === row.value.key))
+const builtin = computed(() => BUILTIN_FIELDS.find((b) => `field:${b.key}` === row.value.key))
+const dataType = computed(() => builtin.value?.data_type ?? attr.value?.data_type)
 
-function reset() {
-  const a = props.attributes[0]
-  row.value = { key: a?.key ?? '', op: a ? operatorsFor(a.data_type)[0] : 'eq', value: '' }
+const groups = computed(() => [
+  { label: 'Built-in', items: BUILTIN_FIELDS.map((b) => ({ label: b.label, value: `field:${b.key}` })) },
+  ...(props.attributes.length ? [{ label: 'Attributes', items: props.attributes.map((a) => ({ label: a.label, value: a.key })) }] : []),
+])
+
+function opsFor(key: string): string[] {
+  const b = BUILTIN_FIELDS.find((x) => `field:${x.key}` === key)
+  if (b) return fieldOperators(b.key)
+  const a = props.attributes.find((x) => x.key === key)
+  return a ? operatorsFor(a.data_type) : ['eq']
 }
 
-// đổi thuộc tính thì toán tử và giá trị cũ có thể không còn hợp
+function reset() {
+  const key = props.attributes[0]?.key ?? `field:${BUILTIN_FIELDS[0].key}`
+  row.value = { key, op: opsFor(key)[0], value: '' }
+}
+
+// đổi trường thì toán tử và giá trị cũ có thể không còn hợp
 function changeKey(key: string) {
-  const a = props.attributes.find((x) => x.key === key)
-  row.value = { key, op: a ? operatorsFor(a.data_type)[0] : 'eq', value: '' }
+  row.value = { key, op: opsFor(key)[0], value: '' }
 }
 function changeOp(op: string) {
   if (row.value.op === 'in' || op === 'in') row.value.value = ''
   row.value.op = op
 }
 
-const operators = computed(() => operatorsFor(attr.value?.data_type ?? 'text').map((o) => ({ label: OP_LABEL[o], value: o })))
+const operators = computed(() => opsFor(row.value.key).map((o) => ({ label: OP_LABEL[o], value: o })))
 const options = computed(() => (attr.value?.options ?? []).filter((o) => !o.removed).map((o) => ({ label: o.label, value: o.id })))
 const boolOptions = [
   { label: 'Yes', value: 'true' },
@@ -44,14 +59,16 @@ const boolOptions = [
 
 function add() {
   if (!row.value.key || row.value.value === '') return
-  emit('add', { ...row.value })
+  if (builtin.value) emit('addField', { key: builtin.value.key, op: row.value.op, value: row.value.value })
+  else emit('add', { ...row.value })
   pop.value?.hide()
 }
 
 defineExpose({
-  toggle(e: Event) {
+  // target: phần tử neo (phím F mở từ nút Filter)
+  toggle(e: Event, target?: HTMLElement) {
     reset()
-    pop.value?.toggle(e)
+    pop.value?.toggle(e, target)
   },
 })
 </script>
@@ -59,14 +76,16 @@ defineExpose({
 <template>
   <Popover ref="pop">
     <form class="filter-form" @submit.prevent="add">
-      <p class="pop-lead">Show only assets whose attribute matches.</p>
-      <label for="filter-attr">Attribute</label>
+      <p class="pop-lead">Show only assets that match.</p>
+      <label for="filter-attr">Field</label>
       <Select
         :model-value="row.key"
         input-id="filter-attr"
-        :options="attributes"
+        :options="groups"
         option-label="label"
-        option-value="key"
+        option-value="value"
+        option-group-label="label"
+        option-group-children="items"
         append-to="self"
         @update:model-value="changeKey"
       />
@@ -81,26 +100,26 @@ defineExpose({
         @update:model-value="changeOp"
       />
       <label for="filter-value">Value</label>
-      <template v-if="attr">
-        <InputNumber
-          v-if="attr.data_type === 'number'"
-          :model-value="row.value === '' ? null : Number(row.value)"
-          input-id="filter-value"
-          :max-fraction-digits="6"
-          :use-grouping="false"
-          :suffix="attr.unit ? ` ${attr.unit}` : undefined"
-          @update:model-value="(v: number | null) => (row.value = v === null ? '' : String(v))"
-        />
+      <template v-if="attr || builtin">
         <DatePicker
-          v-else-if="attr.data_type === 'date'"
+          v-if="dataType === 'date'"
           :model-value="fromDateString(row.value)"
           input-id="filter-value"
           date-format="yy-mm-dd"
           append-to="self"
           @update:model-value="(d) => (row.value = toDateString(d as Date | null) ?? '')"
         />
+        <InputNumber
+          v-else-if="attr?.data_type === 'number'"
+          :model-value="row.value === '' ? null : Number(row.value)"
+          input-id="filter-value"
+          :max-fraction-digits="6"
+          :use-grouping="false"
+          :suffix="attr?.unit ? ` ${attr.unit}` : undefined"
+          @update:model-value="(v: number | null) => (row.value = v === null ? '' : String(v))"
+        />
         <Select
-          v-else-if="attr.data_type === 'boolean'"
+          v-else-if="attr?.data_type === 'boolean'"
           v-model="row.value"
           input-id="filter-value"
           :options="boolOptions"
@@ -109,7 +128,7 @@ defineExpose({
           append-to="self"
         />
         <MultiSelect
-          v-else-if="attr.data_type === 'select' && row.op === 'in'"
+          v-else-if="attr?.data_type === 'select' && row.op === 'in'"
           :model-value="row.value ? row.value.split(',') : []"
           input-id="filter-value"
           :options="options"
@@ -119,7 +138,7 @@ defineExpose({
           @update:model-value="(v: string[]) => (row.value = v.join(','))"
         />
         <Select
-          v-else-if="attr.data_type === 'select'"
+          v-else-if="attr?.data_type === 'select'"
           v-model="row.value"
           input-id="filter-value"
           :options="options"

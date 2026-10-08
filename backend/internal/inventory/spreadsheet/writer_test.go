@@ -3,6 +3,7 @@ package spreadsheet
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -245,5 +246,77 @@ func TestWriter_TextCellNeverFormula(t *testing.T) {
 	}
 	if fm, _ := f.GetCellFormula("S", "A2"); fm != "" {
 		t.Errorf("formula = %q, want none", fm)
+	}
+}
+
+func TestWriter_AutoWidth(t *testing.T) {
+	day := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	f := build(t, func(w *Writer) {
+		s, err := w.Sheet(SheetOptions{Name: "S", AutoWidth: true, Widths: []float64{0, 0, 0, 0, 25}},
+			[]string{"Tag", "Notes", "Bought", "Very long header for a short column", "Fixed"})
+		must(t, err)
+		must(t, s.Row([]Cell{TextCell("A1"), TextCell(strings.Repeat("x", 30) + "\nshort"), {Kind: Date, Time: day, NumFmt: "dd/mm/yyyy"}, TextCell("y"), TextCell(strings.Repeat("z", 80))}))
+		must(t, s.Row([]Cell{TextCell(strings.Repeat("w", 100)), TextCell(""), {Kind: Date, Time: day, NumFmt: "dd/mm/yyyy"}, TextCell("y"), TextCell("")}))
+		must(t, s.Close())
+	})
+	want := map[string]float64{
+		"A": 60, // ô 100 ký tự, chặn ở 60
+		"B": 32, // dòng dài nhất của chữ nhiều dòng (30) + 2
+		"C": 12, // định dạng ngày dd/mm/yyyy (10) + 2
+		"D": 39, // tiêu đề 35 + 4
+		"E": 25, // độ rộng đặt tay giữ nguyên
+	}
+	for col, w := range want {
+		got, err := f.GetColWidth("S", col)
+		must(t, err)
+		if math.Abs(got-w) > 0.01 {
+			t.Errorf("column %s width = %v, want %v", col, got, w)
+		}
+	}
+}
+
+func TestWriter_AutoWidthBeyondSampleKeepsOrderAndStripes(t *testing.T) {
+	n := autoWidthSample + 20
+	f := build(t, func(w *Writer) {
+		s, err := w.Sheet(SheetOptions{Name: "S", AutoWidth: true, Stripes: true}, []string{"N"})
+		must(t, err)
+		for i := 1; i <= n; i++ {
+			must(t, s.Row([]Cell{TextCell(fmt.Sprintf("row-%d", i))}))
+		}
+		must(t, s.Close())
+	})
+	for _, i := range []int{1, autoWidthSample, autoWidthSample + 1, n} {
+		if v, _ := f.GetCellValue("S", fmt.Sprintf("A%d", i+1)); v != fmt.Sprintf("row-%d", i) {
+			t.Errorf("A%d = %q, want row-%d", i+1, v, i)
+		}
+	}
+	striped := func(cell string) bool {
+		id, err := f.GetCellStyle("S", cell)
+		must(t, err)
+		st, err := f.GetStyle(id)
+		must(t, err)
+		return st.Fill.Type == "pattern" && len(st.Fill.Color) > 0
+	}
+	// dữ liệu thứ 2, 4… có sọc, cả trước và sau mốc 500 dòng
+	// dòng Excel r là dữ liệu thứ r-1; dòng 501 (dữ liệu thứ 500, còn trong mẫu) có sọc,
+	// 502 (dòng đầu sau mẫu) không, 503 có
+	for row, want := range map[int]bool{2: false, 3: true, autoWidthSample + 1: true, autoWidthSample + 2: false, autoWidthSample + 3: true} {
+		if got := striped(fmt.Sprintf("A%d", row)); got != want {
+			t.Errorf("A%d striped = %v, want %v", row, got, want)
+		}
+	}
+}
+
+func TestWriter_AutoWidthNoRows(t *testing.T) {
+	f := build(t, func(w *Writer) {
+		s, err := w.Sheet(SheetOptions{Name: "S", AutoWidth: true, Freeze: true}, []string{"A rather long header"})
+		must(t, err)
+		must(t, s.Close())
+	})
+	if v, _ := f.GetCellValue("S", "A1"); v != "A rather long header" {
+		t.Errorf("header = %q", v)
+	}
+	if w, _ := f.GetColWidth("S", "A"); math.Abs(w-24) > 0.01 { // 20 + 4
+		t.Errorf("width = %v, want 24", w)
 	}
 }

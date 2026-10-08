@@ -7,6 +7,8 @@ import Tag from 'primevue/tag'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
+import KeyHint from '@/components/KeyHint.vue'
+import { usePageKeys } from '@/lib/pageKeys'
 import FormDialog from '@/components/FormDialog.vue'
 import RowMenuButton from '@/components/RowMenuButton.vue'
 import RowMenus from '@/components/RowMenus.vue'
@@ -127,6 +129,10 @@ const newName = ref('')
 const errors = useFormErrors()
 const form = useDirty(() => newName.value.trim())
 const create = useCreateExportProfile()
+// Phím: N tạo profile
+usePageKeys((e) => {
+  if (e.key === 'n') openCreate()
+})
 function openCreate() {
   newName.value = ''
   errors.clear()
@@ -148,7 +154,11 @@ async function submitCreate() {
 <template>
   <section>
     <PageHeader title="Export profiles" subtitle="Saved report layouts. Shared ones can be used by everyone who can export.">
-      <Button label="New profile" icon="pi pi-plus" @click="openCreate" />
+      <Button aria-label="New profile (N)" @click="openCreate">
+        <i class="pi pi-plus" aria-hidden="true" />
+        <span>New profile</span>
+        <KeyHint keys="N" />
+      </Button>
     </PageHeader>
     <div class="toolbar">
       <SegmentedFilter v-model="show" :options="showOptions" label="Show" />

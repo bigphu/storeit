@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Attribute } from '@/lib/api/types'
-import { attrFilterLabel, filterChips, removeChip } from './filterChips'
-import type { AssetListState } from './listQuery'
+import { attrFilterLabel, fieldFilterLabel, filterChips, OP_LABEL, removeChip } from './filterChips'
+import { type AssetListState, parseAssetQuery } from './listQuery'
 
 const attrs = [
   { id: 'a1', key: 'ram_gb', label: 'RAM', data_type: 'number', unit: 'GB', options: [] },
@@ -21,6 +21,7 @@ const attrs = [
 const statuses = [{ id: 's1', name: 'Under repair' }]
 
 const state: AssetListState = {
+  fields: [],
   q: 'dell',
   typeId: 'L',
   statusId: 's1',
@@ -38,9 +39,9 @@ const state: AssetListState = {
 describe('attrFilterLabel', () => {
   it('reads like the condition, with units and option labels', () => {
     expect(attrFilterLabel(state.filters[0], attrs)).toBe('RAM ≥ 16 GB')
-    expect(attrFilterLabel(state.filters[1], attrs)).toBe('OS is any of Windows, macOS')
-    expect(attrFilterLabel(state.filters[2], attrs)).toBe('Dock is Yes')
-    expect(attrFilterLabel({ key: 'gone', op: 'eq', value: 'x' }, attrs)).toBe('gone is x')
+    expect(attrFilterLabel(state.filters[1], attrs)).toBe('OS any of Windows, macOS')
+    expect(attrFilterLabel(state.filters[2], attrs)).toBe('Dock = Yes')
+    expect(attrFilterLabel({ key: 'gone', op: 'eq', value: 'x' }, attrs)).toBe('gone = x')
   })
 })
 
@@ -52,13 +53,13 @@ describe('filterChips', () => {
       'Status kind: in use',
       'Including retired',
       'RAM ≥ 16 GB',
-      'OS is any of Windows, macOS',
-      'Dock is Yes',
+      'OS any of Windows, macOS',
+      'Dock = Yes',
     ])
   })
 
   it('is empty without filters', () => {
-    expect(filterChips({ q: '', includeRetired: false, filters: [], page: 1 }, attrs, statuses)).toEqual([])
+    expect(filterChips({ q: '', includeRetired: false, filters: [], fields: [], page: 1 }, attrs, statuses)).toEqual([])
   })
 })
 
@@ -69,5 +70,22 @@ describe('removeChip', () => {
     expect(removeChip(state, chips[1])).toEqual({ statusId: undefined, page: 1 })
     expect(removeChip(state, chips[3])).toEqual({ includeRetired: false, page: 1 })
     expect(removeChip(state, chips[5])).toEqual({ filters: [state.filters[0], state.filters[2]], page: 1 })
+  })
+})
+
+describe('v1.0.2 labels and built-in chips', () => {
+  it('uses = and any of', () => {
+    expect(OP_LABEL.eq).toBe('=')
+    expect(OP_LABEL.in).toBe('any of')
+  })
+  it('labels built-in conditions', () => {
+    expect(fieldFilterLabel({ key: 'purchase_date', op: 'gte', value: '2026-01-01' })).toBe('Purchase date ≥ 2026-01-01')
+    expect(fieldFilterLabel({ key: 'description', op: 'contains', value: 'dock' })).toBe('Description contains dock')
+  })
+  it('adds a removable chip per built-in condition', () => {
+    const s = parseAssetQuery({ field: ['created_at:eq:2026-10-08', 'description:contains:dock'] })
+    const chips = filterChips(s, [], [])
+    expect(chips.map((c) => c.label)).toEqual(['Created = 2026-10-08', 'Description contains dock'])
+    expect(removeChip(s, chips[0])).toEqual({ fields: [{ key: 'description', op: 'contains', value: 'dock' }], page: 1 })
   })
 })

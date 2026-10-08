@@ -860,3 +860,56 @@ func TestRestoreAttributeAndOption(t *testing.T) {
 		t.Errorf("restore without type manage: %d", rec.Code)
 	}
 }
+
+func TestListByBuiltinFieldOverHTTP(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	code := "BF" + strings.ToUpper(uuid.NewString()[:6])
+	typ := decode[typeDetail](t, a.do("POST", "/api/v1/asset-types", tok, map[string]any{"code": code, "name": "Builtin " + code}), 201)
+	for i, bought := range []string{"2026-01-10", "2026-03-01"} {
+		decode[assetDetail](t, a.do("POST", "/api/v1/assets", tok, map[string]any{
+			"tag": fmt.Sprintf("%s-%d", code, i), "name": "x", "asset_type_id": typ.ID,
+			"purchase_date": bought, "description": fmt.Sprintf("dock %d", i),
+		}), 201)
+	}
+	type page struct{ Total int64 }
+	q := func(extra string) string { return "/api/v1/assets?q=" + code + extra }
+	// không cần type_id
+	if p := decode[page](t, a.do("GET", q("&field=purchase_date:gte:2026-02-01"), tok, nil), 200); p.Total != 1 {
+		t.Errorf("purchase_date filter total = %d, want 1", p.Total)
+	}
+	if p := decode[page](t, a.do("GET", q("&field=description:contains:dock%201"), tok, nil), 200); p.Total != 1 {
+		t.Errorf("description filter total = %d, want 1", p.Total)
+	}
+	if p := decode[page](t, a.do("GET", q("&field=created_at:eq:2999-01-01&tz=Asia/Ho_Chi_Minh"), tok, nil), 200); p.Total != 0 {
+		t.Errorf("created_at in the future total = %d, want 0", p.Total)
+	}
+	// tz lạ: 422; field sai dạng: 400 (pattern của OpenAPI)
+	if rec := a.do("GET", q("&tz=Mars/Base"), tok, nil); rec.Code != 422 {
+		t.Errorf("bad tz = %d, want 422", rec.Code)
+	}
+	if rec := a.do("GET", q("&field=location:eq:x"), tok, nil); rec.Code != 400 {
+		t.Errorf("unknown field = %d, want 400", rec.Code)
+	}
+	if rec := a.do("GET", q("&field=description:eq:dock"), tok, nil); rec.Code != 422 {
+		t.Errorf("bad operator = %d, want 422", rec.Code)
+	}
+
+	// export: field thu hẹp số dòng
+	exp := a.token(domain.PermAssetRead, domain.PermAssetExport)
+	rec := a.do("POST", "/api/v1/assets/export", exp, map[string]any{
+		"mode": "data", "tz": "Asia/Ho_Chi_Minh",
+		"filters": map[string]any{"q": code, "field": []string{"purchase_date:lt:2026-02-01"}},
+	})
+	if rec.Code != 200 {
+		t.Fatalf("export: %d %s", rec.Code, rec.Body)
+	}
+	x, err := excelize.OpenReader(rec.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := x.GetRows(code)
+	if len(rows) != 2 { // dòng tên cột + 1 tài sản
+		t.Errorf("exported rows = %d, want 2: %v", len(rows), rows)
+	}
+}

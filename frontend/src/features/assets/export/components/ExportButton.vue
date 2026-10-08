@@ -3,14 +3,16 @@ import SplitButton from 'primevue/splitbutton'
 import type { MenuItem } from 'primevue/menuitem'
 import { computed, ref, type ButtonHTMLAttributes } from 'vue'
 import { useRouter } from 'vue-router'
+import KeyHint from '@/components/KeyHint.vue'
 import { useSession } from '@/lib/auth/session'
+import { usePageKeys } from '@/lib/pageKeys'
 import { useExportProfiles } from '../api'
 import { useExport } from '../useExport'
 import type { ExportScope } from '../usePreviewData'
 import DataExportDialog from './DataExportDialog.vue'
 
-// Nút Export: bấm chính tải export dữ liệu theo bộ lọc hiện tại; mũi tên mở báo cáo,
-// profile gần đây (tải ngay) và trang quản lý profile
+// Nút Export: bấm chính (phím X) tải export dữ liệu theo bộ lọc hiện tại; mũi tên mở báo cáo
+// (phím R), profile gần đây (tải ngay) và trang quản lý profile
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{ scope: ExportScope }>()
 const emit = defineEmits<{ report: [profileId?: string] }>()
@@ -33,12 +35,18 @@ function dataExport() {
   run({ mode: 'data', filters: scope.filters }, 'storeit-assets.xlsx', { rows: scope.count, inside: () => (insideScope.value = scope) })
 }
 // SplitButton không có prop loading: chuyển xuống nút chính (PrimeVue Button) qua buttonProps
-const mainButtonProps = computed(() => ({ loading: running.value }) as ButtonHTMLAttributes)
+const mainButtonProps = computed(() => ({ loading: running.value, 'aria-label': 'Export data (X)' }) as ButtonHTMLAttributes)
+// Phím: X tải export dữ liệu, R mở báo cáo (như hai mục đầu của menu)
+usePageKeys((e) => {
+  if (running.value) return
+  if (e.key === 'x') dataExport()
+  else if (e.key === 'r') emit('report')
+})
 // ba profile mới sửa gần nhất
 const recent = computed(() => [...(profiles.value ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 3))
 const items = computed<MenuItem[]>(() => [
-  { label: 'Export report…', icon: 'pi pi-file-edit', disabled: running.value, command: () => emit('report') },
-  { label: 'Data export (.xlsx)', icon: 'pi pi-table', meta: 're-importable', disabled: running.value, command: dataExport },
+  { label: 'Export report…', icon: 'pi pi-file-edit', shortcut: 'R', disabled: running.value, command: () => emit('report') },
+  { label: 'Data export (.xlsx)', icon: 'pi pi-table', meta: 're-importable', shortcut: 'X', disabled: running.value, command: dataExport },
   ...(recent.value.length ? [{ separator: true }, { label: 'Profiles', heading: true, disabled: true }] : []),
   ...recent.value.map((p) => ({
     label: p.name,
@@ -54,12 +62,16 @@ const items = computed<MenuItem[]>(() => [
 
 <template>
   <SplitButton v-bind="$attrs" label="Export" icon="pi pi-download" severity="secondary" outlined :model="items" :button-props="mainButtonProps" @click="dataExport">
+    <i :class="running ? 'pi pi-spin pi-spinner' : 'pi pi-download'" aria-hidden="true" />
+    <span>Export</span>
+    <KeyHint keys="X" />
     <template #item="{ item, props: p }">
       <div v-if="item.heading" class="menu-heading">{{ item.label }}</div>
       <a v-else v-bind="p.action" class="menu-link">
         <span :class="['menu-icon', item.icon]" aria-hidden="true" />
         <span class="menu-label">{{ item.label }}</span>
         <span v-if="item.meta" class="menu-meta">{{ item.meta }}</span>
+        <KeyHint v-if="item.shortcut" :keys="item.shortcut" />
       </a>
     </template>
   </SplitButton>

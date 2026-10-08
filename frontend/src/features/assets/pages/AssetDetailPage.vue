@@ -12,6 +12,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTabId, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
+import KeyHint from '@/components/KeyHint.vue'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { formatDate, formatDateTime } from '@/lib/dates'
@@ -101,10 +102,10 @@ usePageKeys((e) => {
 
     <div v-if="canManage" class="actions page-actions">
       <template v-if="!retired">
-        <Button @click="(e: MouseEvent) => actions.edit(asset!, e)">
-          <i class="pi pi-pencil" />
+        <Button aria-label="Edit (E)" @click="(e: MouseEvent) => actions.edit(asset!, e)">
+          <i class="pi pi-pencil" aria-hidden="true" />
           <span>Edit</span>
-          <kbd>E</kbd>
+          <KeyHint keys="E" />
         </Button>
         <Button label="Retire" icon="pi pi-ban" severity="secondary" outlined @click="actions.askRetire(asset)" />
       </template>

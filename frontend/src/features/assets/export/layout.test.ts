@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { reactive, readonly } from 'vue'
 import type { AssetListItem, ExportLayout } from '@/lib/api/types'
-import { cleanSheetName, cloneLayout, excludeFields, includeAttributes, profilePatch, dataPreviewSheets, defaultHeader, exportFileName, defaultReportLayout, editorColumns, fieldOptions, normalizeLayout, previewSheets, sheetNameInput, skippedKeys, type TypeInfo, withColumns } from './layout'
+import { cleanSheetName, cloneLayout, excludeFields, includeAttributes, profilePatch, dataPreviewSheets, defaultHeader, exportFileName, defaultReportLayout, editorColumns, editorRowsFor, type EditorColumn, fieldOptions, reorderVisible, normalizeLayout, previewSheets, sheetNameInput, skippedKeys, type TypeInfo, withColumns } from './layout'
 
 const laptop: TypeInfo = { id: 'L', name: 'Laptop', code: 'LAPTOP', attributes: [{ key: 'ram_gb', label: 'RAM', data_type: 'number', unit: 'GB' }, { key: 'cpu', label: 'CPU', data_type: 'text' }] }
 const phone: TypeInfo = { id: 'P', name: 'Phone', code: 'PHONE', attributes: [{ key: 'imei', label: 'IMEI', data_type: 'text' }] }
@@ -141,5 +141,42 @@ describe('profilePatch', () => {
 
   it('treats a blank name as no rename', () => {
     expect(profilePatch(p, { name: '   ', shared: false }, null)).toBeNull()
+  })
+})
+
+describe('v1.0.2 report defaults and scoped column editor', () => {
+  const laptop: TypeInfo = { id: 't1', name: 'Laptop', code: 'LAP', attributes: [{ key: 'ram_gb', label: 'RAM', data_type: 'number' }] }
+  const monitor: TypeInfo = { id: 't2', name: 'Monitor', code: 'MON', attributes: [{ key: 'size_in', label: 'Size', data_type: 'number' }] }
+  const col = (field: string, include = true): EditorColumn => ({ field, header: '', width: 0, include })
+  const cols = [col('tag'), col('attr:ram_gb'), col('name'), col('attr:size_in', false), col('attr:gone')]
+
+  it('starts new reports with one sheet per type', () => {
+    expect(defaultReportLayout().sheets).toBe('per_type')
+  })
+
+  it('tags each per-type preview sheet with its type', () => {
+    const rows = [
+      { asset_type_id: 't1' },
+      { asset_type_id: 't2' },
+    ] as unknown as Parameters<typeof previewSheets>[1]
+    const sheets = previewSheets(defaultReportLayout(), rows, [laptop, monitor])
+    expect(sheets.map((s) => [s.name, s.typeId])).toEqual([
+      ['Laptop', 't1'],
+      ['Monitor', 't2'],
+    ])
+  })
+
+  it('shows built-in fields plus the scoped type attributes; null shows every row', () => {
+    expect(editorRowsFor(cols, [laptop]).map((c) => c.field)).toEqual(['tag', 'attr:ram_gb', 'name'])
+    expect(editorRowsFor(cols, [monitor]).map((c) => c.field)).toEqual(['tag', 'name', 'attr:size_in'])
+    expect(editorRowsFor(cols, null)).toBe(cols)
+  })
+
+  it('reorders visible rows and keeps hidden rows in place', () => {
+    // all: tag, attr:ram_gb, name, attr:size_in (ẩn), attr:gone (ẩn)
+    const visible = editorRowsFor(cols, [laptop]) // tag, attr:ram_gb, name
+    const reordered = [visible[2], visible[0], visible[1]] // name, tag, attr:ram_gb
+    // ô của dòng hiện (0, 1, 2) được lấp theo thứ tự mới; ô 3, 4 giữ nguyên
+    expect(reorderVisible(cols, reordered).map((c) => c.field)).toEqual(['name', 'tag', 'attr:ram_gb', 'attr:size_in', 'attr:gone'])
   })
 })

@@ -8,7 +8,7 @@ import { usePreferences } from '@/lib/preferences'
 import { readJSON, writeJSON } from '@/lib/storage'
 import { closeOthers as closeOthersOf, closeTab, initialTabs, openTab, pushBack, reopenTab, type Tab, togglePin as togglePinOf } from './tabList'
 
-const HOME = '/assets'
+const EMPTY = '/empty'
 let seq = 0
 const newId = () => `t${Date.now().toString(36)}${(++seq).toString(36)}`
 
@@ -61,8 +61,13 @@ export const useTabs = defineStore('tabs', () => {
   const active = computed(() => tabs.value.find((t) => t.id === activeId.value) ?? null)
   const byId = (id: string) => tabs.value.find((t) => t.id === id)
 
-  // sync: sau mỗi lần điều hướng, vị trí mới thuộc về tab đang mở
-  function sync(path: string, title: string | undefined, icon: string | undefined) {
+  // sync: sau mỗi lần điều hướng, vị trí mới thuộc về tab đang mở. track false (trang
+  // meta.tab false như /empty) thì không thành tab và không thuộc tab nào
+  function sync(path: string, title: string | undefined, icon: string | undefined, track = true) {
+    if (!track) {
+      routeTabId.value = null
+      return
+    }
     syncPath(path, title, icon)
     routeTabId.value = activeId.value
   }
@@ -151,8 +156,9 @@ export const useTabs = defineStore('tabs', () => {
     tabs.value = r.tabs
     dirty.delete(id)
     if (!tabs.value.length) {
+      // đóng hết: vùng làm việc trống, trang kế tiếp mở ra sẽ thành tab mới
       activeId.value = null
-      return open(HOME, { background: false })
+      return router.replace(EMPTY).then(() => undefined)
     }
     if (wasActive && r.activeId) {
       activeId.value = null

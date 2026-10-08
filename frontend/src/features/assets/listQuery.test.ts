@@ -13,9 +13,11 @@ import {
   toTableSort,
   typeListLocation,
   nextPageParams,
+  fieldOperators,
+  toExportFilters,
 } from './listQuery'
 
-const base: AssetListState = { q: '', includeRetired: false, filters: [], page: 1 }
+const base: AssetListState = { q: '', includeRetired: false, filters: [], fields: [], page: 1 }
 
 describe('URL <-> state', () => {
   it('parses and serializes every field', () => {
@@ -41,6 +43,7 @@ describe('URL <-> state', () => {
         { key: 'ram_gb', op: 'gte', value: '16' },
         { key: 'note', op: 'contains', value: 'a:b' },
       ],
+      fields: [],
       sort: '-attributes.ram_gb',
       page: 3,
     })
@@ -206,5 +209,44 @@ describe('nextPageParams', () => {
   it('is undefined on the last page', () => {
     expect(nextPageParams(s, 25, 50)).toBeUndefined()
     expect(nextPageParams(s, 25, 0)).toBeUndefined()
+  })
+})
+
+describe('built-in field filters', () => {
+  it('round-trips through the URL and drops malformed values', () => {
+    const s = parseAssetQuery({ field: ['purchase_date:gte:2026-01-01', 'description:contains:dock', 'location:eq:x', 'description:eq:dock'] })
+    expect(s.fields).toEqual([
+      { key: 'purchase_date', op: 'gte', value: '2026-01-01' },
+      { key: 'description', op: 'contains', value: 'dock' },
+    ])
+    expect(serializeAssetQuery(s).field).toEqual(['purchase_date:gte:2026-01-01', 'description:contains:dock'])
+  })
+
+  it('sends field with the browser time zone, with or without a type', () => {
+    const s = parseAssetQuery({ field: 'created_at:eq:2026-10-08' })
+    const p = toApiParams(s, 25)
+    expect(p.field).toEqual(['created_at:eq:2026-10-08'])
+    expect(p.tz).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone)
+    expect(toApiParams(parseAssetQuery({}), 25).tz).toBeUndefined()
+  })
+
+  it('keeps built-in filters when the type changes', () => {
+    const s = parseAssetQuery({ field: 'purchase_date:gte:2026-01-01', attr: 'ram_gb:gte:16' })
+    const next = changeType({ ...s, typeId: 't1' }, 't2')
+    expect(next.fields).toHaveLength(1)
+    expect(next.filters).toHaveLength(0)
+  })
+
+  it('export filters never carry tz, page or page_size', () => {
+    const f = toExportFilters(parseAssetQuery({ field: 'created_at:eq:2026-10-08', page: '3' }), 25)
+    expect(f).not.toHaveProperty('tz')
+    expect(f).not.toHaveProperty('page')
+    expect(f).not.toHaveProperty('page_size')
+    expect(f.field).toEqual(['created_at:eq:2026-10-08'])
+  })
+
+  it('description only offers contains', () => {
+    expect(fieldOperators('description')).toEqual(['contains'])
+    expect(fieldOperators('purchase_date')).toEqual(['eq', 'gt', 'gte', 'lt', 'lte'])
   })
 })

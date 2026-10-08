@@ -85,6 +85,22 @@ WHERE ($1::text IS NULL
         WHEN 'select_eq' THEN v.value_option_id = ($11::text[])[f.i]::uuid
         WHEN 'select_in' THEN v.value_option_id = ANY(string_to_array(($11::text[])[f.i], ',')::uuid[])
       END))
+  AND NOT EXISTS (
+    -- điều kiện trên trường có sẵn (b_fields[i], b_ops[i], b_vals[i]), giá trị đã kiểm ở Go.
+    -- COALESCE: so với NULL (chưa có ngày mua) là không khớp, không được lọt qua
+    SELECT 1 FROM generate_subscripts($12::text[], 1) AS b(i)
+    WHERE NOT COALESCE(CASE ($13::text[])[b.i] || '_' || ($12::text[])[b.i]
+        WHEN 'purchase_date_eq' THEN a.purchase_date = ($14::text[])[b.i]::date
+        WHEN 'purchase_date_gt' THEN a.purchase_date > ($14::text[])[b.i]::date
+        WHEN 'purchase_date_gte' THEN a.purchase_date >= ($14::text[])[b.i]::date
+        WHEN 'purchase_date_lt' THEN a.purchase_date < ($14::text[])[b.i]::date
+        WHEN 'purchase_date_lte' THEN a.purchase_date <= ($14::text[])[b.i]::date
+        WHEN 'created_at_gte' THEN a.created_at >= ($14::text[])[b.i]::timestamptz
+        WHEN 'created_at_lt' THEN a.created_at < ($14::text[])[b.i]::timestamptz
+        WHEN 'updated_at_gte' THEN a.updated_at >= ($14::text[])[b.i]::timestamptz
+        WHEN 'updated_at_lt' THEN a.updated_at < ($14::text[])[b.i]::timestamptz
+        WHEN 'description_contains' THEN a.description ILIKE '%' || ($14::text[])[b.i] || '%'
+      END, false))
 `
 
 type CountAssetsParams struct {
@@ -99,6 +115,9 @@ type CountAssetsParams struct {
 	FOps           []string
 	FAttrs         []uuid.UUID
 	FVals          []string
+	BOps           []string
+	BFields        []string
+	BVals          []string
 }
 
 func (q *Queries) CountAssets(ctx context.Context, arg CountAssetsParams) (int64, error) {
@@ -114,6 +133,9 @@ func (q *Queries) CountAssets(ctx context.Context, arg CountAssetsParams) (int64
 		arg.FOps,
 		arg.FAttrs,
 		arg.FVals,
+		arg.BOps,
+		arg.BFields,
+		arg.BVals,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -387,34 +409,50 @@ WHERE ($2::text IS NULL
         WHEN 'select_eq' THEN v.value_option_id = ($12::text[])[f.i]::uuid
         WHEN 'select_in' THEN v.value_option_id = ANY(string_to_array(($12::text[])[f.i], ',')::uuid[])
       END))
+  AND NOT EXISTS (
+    -- điều kiện trên trường có sẵn (b_fields[i], b_ops[i], b_vals[i]), giá trị đã kiểm ở Go.
+    -- COALESCE: so với NULL (chưa có ngày mua) là không khớp, không được lọt qua
+    SELECT 1 FROM generate_subscripts($13::text[], 1) AS b(i)
+    WHERE NOT COALESCE(CASE ($14::text[])[b.i] || '_' || ($13::text[])[b.i]
+        WHEN 'purchase_date_eq' THEN a.purchase_date = ($15::text[])[b.i]::date
+        WHEN 'purchase_date_gt' THEN a.purchase_date > ($15::text[])[b.i]::date
+        WHEN 'purchase_date_gte' THEN a.purchase_date >= ($15::text[])[b.i]::date
+        WHEN 'purchase_date_lt' THEN a.purchase_date < ($15::text[])[b.i]::date
+        WHEN 'purchase_date_lte' THEN a.purchase_date <= ($15::text[])[b.i]::date
+        WHEN 'created_at_gte' THEN a.created_at >= ($15::text[])[b.i]::timestamptz
+        WHEN 'created_at_lt' THEN a.created_at < ($15::text[])[b.i]::timestamptz
+        WHEN 'updated_at_gte' THEN a.updated_at >= ($15::text[])[b.i]::timestamptz
+        WHEN 'updated_at_lt' THEN a.updated_at < ($15::text[])[b.i]::timestamptz
+        WHEN 'description_contains' THEN a.description ILIKE '%' || ($15::text[])[b.i] || '%'
+      END, false))
 ORDER BY
-  CASE WHEN $13::text = 'tag' THEN a.tag END ASC,
-  CASE WHEN $13::text = '-tag' THEN a.tag END DESC,
-  CASE WHEN $13::text = 'name' THEN lower(a.name) END ASC,
-  CASE WHEN $13::text = '-name' THEN lower(a.name) END DESC,
-  CASE WHEN $13::text = 'purchase_date' THEN a.purchase_date END ASC NULLS LAST,
-  CASE WHEN $13::text = '-purchase_date' THEN a.purchase_date END DESC NULLS LAST,
-  CASE WHEN $13::text = 'updated_at' THEN a.updated_at END ASC,
-  CASE WHEN $13::text = '-updated_at' THEN a.updated_at END DESC,
-  CASE WHEN $13::text = 'asset_type' THEN lower(t.name) END ASC,
-  CASE WHEN $13::text = '-asset_type' THEN lower(t.name) END DESC,
-  CASE WHEN $13::text = 'status' THEN s.position END ASC,
-  CASE WHEN $13::text = 'status' THEN lower(s.name) END ASC,
-  CASE WHEN $13::text = '-status' THEN s.position END DESC,
-  CASE WHEN $13::text = '-status' THEN lower(s.name) END DESC,
+  CASE WHEN $16::text = 'tag' THEN a.tag END ASC,
+  CASE WHEN $16::text = '-tag' THEN a.tag END DESC,
+  CASE WHEN $16::text = 'name' THEN lower(a.name) END ASC,
+  CASE WHEN $16::text = '-name' THEN lower(a.name) END DESC,
+  CASE WHEN $16::text = 'purchase_date' THEN a.purchase_date END ASC NULLS LAST,
+  CASE WHEN $16::text = '-purchase_date' THEN a.purchase_date END DESC NULLS LAST,
+  CASE WHEN $16::text = 'updated_at' THEN a.updated_at END ASC,
+  CASE WHEN $16::text = '-updated_at' THEN a.updated_at END DESC,
+  CASE WHEN $16::text = 'asset_type' THEN lower(t.name) END ASC,
+  CASE WHEN $16::text = '-asset_type' THEN lower(t.name) END DESC,
+  CASE WHEN $16::text = 'status' THEN s.position END ASC,
+  CASE WHEN $16::text = 'status' THEN lower(s.name) END ASC,
+  CASE WHEN $16::text = '-status' THEN s.position END DESC,
+  CASE WHEN $16::text = '-status' THEN lower(s.name) END DESC,
   -- theo thuộc tính: không có giá trị luôn ở cuối
-  CASE WHEN $13::text = 'attr_text' THEN lower(sv.value_text) END ASC NULLS LAST,
-  CASE WHEN $13::text = '-attr_text' THEN lower(sv.value_text) END DESC NULLS LAST,
-  CASE WHEN $13::text = 'attr_number' THEN sv.value_number END ASC NULLS LAST,
-  CASE WHEN $13::text = '-attr_number' THEN sv.value_number END DESC NULLS LAST,
-  CASE WHEN $13::text = 'attr_date' THEN sv.value_date END ASC NULLS LAST,
-  CASE WHEN $13::text = '-attr_date' THEN sv.value_date END DESC NULLS LAST,
-  CASE WHEN $13::text = 'attr_boolean' THEN sv.value_bool END ASC NULLS LAST,
-  CASE WHEN $13::text = '-attr_boolean' THEN sv.value_bool END DESC NULLS LAST,
-  CASE WHEN $13::text = 'attr_select' THEN so.position END ASC NULLS LAST,
-  CASE WHEN $13::text = '-attr_select' THEN so.position END DESC NULLS LAST,
+  CASE WHEN $16::text = 'attr_text' THEN lower(sv.value_text) END ASC NULLS LAST,
+  CASE WHEN $16::text = '-attr_text' THEN lower(sv.value_text) END DESC NULLS LAST,
+  CASE WHEN $16::text = 'attr_number' THEN sv.value_number END ASC NULLS LAST,
+  CASE WHEN $16::text = '-attr_number' THEN sv.value_number END DESC NULLS LAST,
+  CASE WHEN $16::text = 'attr_date' THEN sv.value_date END ASC NULLS LAST,
+  CASE WHEN $16::text = '-attr_date' THEN sv.value_date END DESC NULLS LAST,
+  CASE WHEN $16::text = 'attr_boolean' THEN sv.value_bool END ASC NULLS LAST,
+  CASE WHEN $16::text = '-attr_boolean' THEN sv.value_bool END DESC NULLS LAST,
+  CASE WHEN $16::text = 'attr_select' THEN so.position END ASC NULLS LAST,
+  CASE WHEN $16::text = '-attr_select' THEN so.position END DESC NULLS LAST,
   a.tag
-LIMIT $15 OFFSET $14
+LIMIT $18 OFFSET $17
 `
 
 type ListAssetsParams struct {
@@ -430,6 +468,9 @@ type ListAssetsParams struct {
 	FOps           []string
 	FAttrs         []uuid.UUID
 	FVals          []string
+	BOps           []string
+	BFields        []string
+	BVals          []string
 	Sort           string
 	Off            int32
 	Lim            int32
@@ -470,6 +511,9 @@ func (q *Queries) ListAssets(ctx context.Context, arg ListAssetsParams) ([]ListA
 		arg.FOps,
 		arg.FAttrs,
 		arg.FVals,
+		arg.BOps,
+		arg.BFields,
+		arg.BVals,
 		arg.Sort,
 		arg.Off,
 		arg.Lim,

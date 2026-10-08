@@ -5,6 +5,7 @@ package spreadsheet
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf16"
@@ -44,7 +45,13 @@ type SheetOptions struct {
 	Filter  bool // nút lọc: một bảng Excel bao tiêu đề và các dòng
 	Stripes bool
 	Title   []string // các dòng tiêu đề trên dòng tên cột (0, 1 hoặc 2)
+	// AutoWidth: cột có Widths 0 (hay thiếu) rộng theo tiêu đề và autoWidthSample dòng đầu
+	AutoWidth bool
 }
+
+// autoWidthSample: số dòng đầu giữ trong bộ nhớ để tính độ rộng cột (StreamWriter cần độ
+// rộng trước dòng đầu tiên)
+const autoWidthSample = 500
 
 // Writer ghi một file nhiều sheet; mỗi sheet ghi từng dòng (StreamWriter của excelize).
 // Sheet trước phải Close xong mới mở sheet sau.
@@ -81,10 +88,14 @@ type Sheet struct {
 	w         *Writer
 	sw        *excelize.StreamWriter
 	opts      SheetOptions
+	headers   []string
 	cols      int
 	hasCols   bool // có ít nhất một tên cột; không thì không dựng được bảng
 	headerRow int
 	row       int
+	data      int      // số dòng dữ liệu đã ghi (sọc xen kẽ)
+	started   bool     // đã ghi độ rộng, khung cố định, tiêu đề và dòng tên cột
+	pending   [][]Cell // dòng chờ tính độ rộng (AutoWidth)
 }
 
 func (w *Writer) Sheet(o SheetOptions, headers []string) (*Sheet, error) {
@@ -102,61 +113,128 @@ func (w *Writer) Sheet(o SheetOptions, headers []string) (*Sheet, error) {
 	if err != nil {
 		return nil, fmt.Errorf("spreadsheet: stream %s: %w", name, err)
 	}
-	s := &Sheet{w: w, sw: sw, opts: o, cols: max(len(headers), 1), hasCols: len(headers) > 0, headerRow: len(o.Title) + 1}
-	headers = uniqueHeaders(headers)
-	// độ rộng và khung cố định phải đặt trước dòng đầu tiên
-	for i, h := range headers {
+	s := &Sheet{w: w, sw: sw, opts: o, headers: uniqueHeaders(headers), cols: max(len(headers), 1), hasCols: len(headers) > 0, headerRow: len(o.Title) + 1}
+	if o.AutoWidth {
+		return s, nil // phần đầu ghi khi đủ mẫu hay khi Close
+	}
+	return s, s.start(nil)
+}
+
+// start ghi phần đầu sheet: độ rộng và khung cố định (phải trước dòng đầu tiên), các dòng
+// tiêu đề, dòng tên cột
+func (s *Sheet) start(sample [][]Cell) error {
+	s.started = true
+	for i, h := range s.headers {
 		width := 0.0
-		if i < len(o.Widths) {
-			width = o.Widths[i]
+		if i < len(s.opts.Widths) {
+			width = s.opts.Widths[i]
 		}
 		if width == 0 {
-			width = float64(min(max(utf8.RuneCountInString(h)+4, 10), 40))
+			if s.opts.AutoWidth {
+				width = autoWidth(h, i, sample)
+			} else {
+				width = float64(min(max(utf8.RuneCountInString(h)+4, 10), 40))
+			}
 		}
-		if err := sw.SetColWidth(i+1, i+1, width); err != nil {
-			return nil, err
+		if err := s.sw.SetColWidth(i+1, i+1, width); err != nil {
+			return err
 		}
 	}
-	if o.Freeze {
-		if err := sw.SetPanes(&excelize.Panes{
+	if s.opts.Freeze {
+		if err := s.sw.SetPanes(&excelize.Panes{
 			Freeze: true, YSplit: s.headerRow, TopLeftCell: fmt.Sprintf("A%d", s.headerRow+1), ActivePane: "bottomLeft",
 		}); err != nil {
-			return nil, err
+			return err
 		}
 	}
-	for i, line := range o.Title {
+	for i, line := range s.opts.Title {
 		role := "title"
 		if i > 0 {
 			role = "subtitle"
 		}
-		st, err := w.style(styleKey{role: role})
+		st, err := s.w.style(styleKey{role: role})
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if err := s.set([]any{excelize.Cell{StyleID: st, Value: line}}); err != nil {
-			return nil, err
+			return err
 		}
 		last, _ := excelize.CoordinatesToCellName(s.cols, s.row)
 		if s.cols > 1 {
-			if err := sw.MergeCell(fmt.Sprintf("A%d", s.row), last); err != nil {
-				return nil, err
+			if err := s.sw.MergeCell(fmt.Sprintf("A%d", s.row), last); err != nil {
+				return err
 			}
 		}
 	}
-	hs, err := w.style(styleKey{role: "header:" + string(o.Header)})
+	hs, err := s.w.style(styleKey{role: "header:" + string(s.opts.Header)})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	cells := make([]any, len(headers))
-	for i, h := range headers {
+	cells := make([]any, len(s.headers))
+	for i, h := range s.headers {
 		cells[i] = excelize.Cell{StyleID: hs, Value: h}
 	}
-	return s, s.set(cells)
+	return s.set(cells)
 }
 
-// Row ghi một dòng dữ liệu
+// autoWidth: rộng theo tiêu đề (+4 cho nút lọc) và ô dài nhất của mẫu (+2), trong 10..60
+func autoWidth(header string, col int, sample [][]Cell) float64 {
+	w := utf8.RuneCountInString(header) + 4
+	for _, row := range sample {
+		if col < len(row) {
+			w = max(w, cellLen(row[col])+2)
+		}
+	}
+	return float64(min(max(w, 10), 60))
+}
+
+// cellLen: ước lượng số ký tự Excel hiện cho ô
+func cellLen(c Cell) int {
+	switch c.Kind {
+	case Number:
+		return len(strconv.FormatFloat(c.Num, 'f', -1, 64))
+	case Date:
+		return len(c.NumFmt)
+	case Bool:
+		return len("FALSE")
+	default:
+		n := 0
+		for _, line := range strings.Split(c.Text, "\n") {
+			n = max(n, utf8.RuneCountInString(line))
+		}
+		return n
+	}
+}
+
+// Row ghi một dòng dữ liệu; với AutoWidth, các dòng đầu chờ trong bộ nhớ tới khi đủ mẫu
 func (s *Sheet) Row(cells []Cell) error {
-	striped := s.opts.Stripes && (s.row-s.headerRow)%2 == 1
+	if !s.started {
+		s.pending = append(s.pending, cells)
+		if len(s.pending) < autoWidthSample {
+			return nil
+		}
+		return s.flushPending()
+	}
+	return s.write(cells)
+}
+
+// flushPending: tính độ rộng từ các dòng đang chờ, ghi phần đầu rồi ghi các dòng đó
+func (s *Sheet) flushPending() error {
+	if err := s.start(s.pending); err != nil {
+		return err
+	}
+	for _, c := range s.pending {
+		if err := s.write(c); err != nil {
+			return err
+		}
+	}
+	s.pending = nil
+	return nil
+}
+
+func (s *Sheet) write(cells []Cell) error {
+	striped := s.opts.Stripes && s.data%2 == 1
+	s.data++
 	out := make([]any, len(cells))
 	for i, c := range cells {
 		st, err := s.w.style(styleKey{role: "cell", numFmt: c.NumFmt, striped: striped})
@@ -181,6 +259,11 @@ func (s *Sheet) Row(cells []Cell) error {
 
 // Close thêm bảng (nút lọc) nếu cần và kết thúc sheet
 func (s *Sheet) Close() error {
+	if !s.started {
+		if err := s.flushPending(); err != nil {
+			return err
+		}
+	}
 	if s.opts.Filter && s.hasCols && s.row > s.headerRow {
 		s.w.tables++
 		last, _ := excelize.CoordinatesToCellName(s.cols, s.row)

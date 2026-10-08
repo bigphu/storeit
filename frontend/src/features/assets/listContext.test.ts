@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { type ListContext, position, stepFrom } from './listContext'
+import { type ListContext, normalizeContexts, position, stepFrom } from './listContext'
+import { listLocation } from './listQuery'
 
 const ctx = (page: number, ids: string[], total: number): ListContext => ({
-  state: { q: '', includeRetired: false, filters: [], page },
+  state: { q: '', includeRetired: false, filters: [], fields: [], page },
   pageSize: 3,
   ids,
   total,
@@ -30,5 +31,14 @@ describe('stepFrom', () => {
     expect(stepFrom(ctx(1, ['a', 'b', 'c'], 7), 'a', -1)).toBeNull()
     expect(stepFrom(ctx(3, ['g'], 7), 'g', 1)).toBeNull()
     expect(stepFrom(ctx(1, ['a', 'b', 'c'], 7), 'x', 1)).toBeNull()
+  })
+})
+
+describe('normalizeContexts', () => {
+  it('fills fields in contexts saved before built-in filters existed', () => {
+    const saved = { t1: { state: { q: '', includeRetired: false, filters: [], page: 2 }, pageSize: 25, ids: ['a'], total: 30 } }
+    const ctxs = normalizeContexts(saved as unknown as Record<string, ListContext>)
+    expect(ctxs.t1.state.fields).toEqual([])
+    expect(() => listLocation(ctxs.t1.state)).not.toThrow()
   })
 })

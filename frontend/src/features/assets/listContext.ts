@@ -34,13 +34,19 @@ export function stepFrom(ctx: ListContext, id: string, dir: 1 | -1): Step {
   return { page: ctx.state.page + dir, pick: dir > 0 ? 'first' : 'last' }
 }
 
+// normalizeContexts: danh sách đã lưu từ bản trước (chưa có lọc trường có sẵn) thiếu fields;
+// điền mảng rỗng để các hàm của listQuery dùng được
+export function normalizeContexts(saved: Record<string, ListContext>): Record<string, ListContext> {
+  return Object.fromEntries(Object.entries(saved).map(([k, c]) => [k, { ...c, state: { ...c.state, fields: c.state?.fields ?? [] } }]))
+}
+
 const CTX_KEY = 'storeit.assets.listContexts'
 const VIEWS_KEY = 'storeit.assets.typeViews'
 
 // Mỗi tab trong app có danh sách "vừa xem" riêng (khoá: id tab); view đã nhớ của
 // từng loại dùng chung mọi tab
 export const useListContext = defineStore('assetListContext', () => {
-  const ctxs = ref<Record<string, ListContext>>(readJSON<Record<string, ListContext>>('session', CTX_KEY, {}))
+  const ctxs = ref<Record<string, ListContext>>(normalizeContexts(readJSON<Record<string, ListContext>>('session', CTX_KEY, {})))
   const views = ref<TypeViews>(readJSON<TypeViews>('session', VIEWS_KEY, {}))
   watch(ctxs, (v) => writeJSON('session', CTX_KEY, v), { deep: true })
   watch(views, (v) => writeJSON('session', VIEWS_KEY, v), { deep: true })

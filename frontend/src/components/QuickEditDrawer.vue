@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
-import { onActivated, onDeactivated, onMounted, onUnmounted } from 'vue'
+import { nextTick, onActivated, onDeactivated, onMounted, onUnmounted, watch } from 'vue'
 import { isPageClickOutside } from '@/lib/clickAway'
 import { closeGuard } from '@/lib/confirm'
+import { quickEditKey, saveNextTracker } from '@/lib/quickDrawer'
 import AppIcon from './AppIcon.vue'
+import KeyHint from './KeyHint.vue'
 import SideDrawer from './SideDrawer.vue'
 import type { IconName } from './icons'
 
 // Sửa nhanh từ danh sách: ngăn kéo bên phải (chuột ít phải di), cùng form với Overview của
-// trang chi tiết. ↑/↓ (khi không đang gõ) sang dòng trước/sau; Ctrl/⌘ S lưu; còn thay đổi
+// trang chi tiết. J/K (khi không đang gõ) sang dòng trước/sau; Ctrl/⌘ S lưu; Ctrl/⌘ Enter lưu rồi sang dòng sau; còn thay đổi
 // chưa lưu thì hỏi trước khi đóng (cha tự hỏi khi chuyển dòng)
 // actionsLabel: nhãn của khối nút hành động (slot #actions), ví dụ "Account"
 const props = defineProps<{
@@ -31,28 +33,56 @@ async function requestClose() {
   if (props.busy) return
   if (await mayClose(props.dirty)) visible.value = false
 }
+// Ctrl Enter đang chờ lần lưu chạy xong để sang dòng sau
+const saveNext = saveNextTracker()
+watch(
+  () => props.busy,
+  async (b) => {
+    if (!saveNext.pending()) return
+    if (!b) await nextTick() // cha cập nhật dirty sau khi lưu
+    if (saveNext.onBusy({ busy: !!props.busy, dirty: props.dirty, canNext: props.canNext }) === 'next') emit('next')
+  },
+)
+// đóng ngăn kéo thì thôi chờ
+watch(visible, (v) => {
+  if (!v) saveNext.cancel()
+})
+
 function onKey(e: KeyboardEvent) {
   if (!visible.value) return
-  // Esc: tự xử lý thay closeOnEscape của Drawer để Esc trên hộp xác nhận (mở từ nút trong
-  // ngăn kéo) chỉ đóng hộp xác nhận
-  if (e.key === 'Escape') {
-    if (!(e.target as HTMLElement | null)?.closest?.('.p-dialog')) void requestClose()
-    return
-  }
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-    e.preventDefault()
-    if (props.dirty && !props.busy) emit('save')
-    return
-  }
-  const typing = (e.target as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable], .p-select-overlay, .p-datepicker-panel')
-  if (typing) return
-  if (e.key === 'ArrowDown' && props.canNext) {
-    e.preventDefault()
-    emit('next')
-  }
-  if (e.key === 'ArrowUp' && props.canPrev) {
-    e.preventDefault()
-    emit('prev')
+  const target = e.target as HTMLElement | null
+  const action = quickEditKey(e, {
+    dirty: props.dirty,
+    busy: !!props.busy,
+    canPrev: props.canPrev,
+    canNext: props.canNext,
+    typing: !!target?.closest?.('input, textarea, select, [contenteditable], .p-select-overlay, .p-datepicker-panel'),
+    // Esc trên hộp xác nhận (mở từ nút trong ngăn kéo) chỉ đóng hộp xác nhận
+    inDialog: !!target?.closest?.('.p-dialog'),
+  })
+  if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 's' || e.key === 'Enter')) e.preventDefault()
+  switch (action) {
+    case 'close':
+      void requestClose()
+      break
+    case 'save':
+      emit('save')
+      break
+    case 'saveNext':
+      saveNext.start()
+      emit('save')
+      void nextTick(() => saveNext.settle(!!props.busy))
+      break
+    case 'prev':
+      e.preventDefault()
+      saveNext.cancel()
+      emit('prev')
+      break
+    case 'next':
+      e.preventDefault()
+      saveNext.cancel()
+      emit('next')
+      break
   }
 }
 // Bấm ra ngoài: tự nghe thay cho dismissable của Drawer, vì Drawer coi cả việc chọn trong
@@ -105,11 +135,15 @@ onUnmounted(unlisten)
       <span class="qe-actions-label">{{ actionsLabel ?? 'Actions' }}</span>
       <div class="qe-actions-buttons"><slot name="actions" /></div>
     </section>
-    <p class="qe-hint">↑/↓ moves to the previous or next row.</p>
+    <p class="qe-hint">J / K moves to the previous or next row. Ctrl Enter saves and moves on.</p>
     <template #footer>
       <Button label="Open full page" icon="pi pi-arrow-right" icon-pos="right" text @click="emit('openPage')" />
       <span class="qe-grow" />
-      <Button label="Save" :loading="busy" :disabled="!dirty" @click="emit('save')" />
+      <Button :disabled="!dirty || busy" aria-label="Save (Ctrl S)" @click="emit('save')">
+        <i v-if="busy" class="pi pi-spin pi-spinner" aria-hidden="true" />
+        <span>Save</span>
+        <KeyHint keys="Ctrl S" />
+      </Button>
     </template>
   </SideDrawer>
 </template>

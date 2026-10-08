@@ -4,7 +4,7 @@ import type ContextMenu from 'primevue/contextmenu'
 import type Menu from 'primevue/menu'
 import type { DataTableRowClickEvent, DataTableRowContextMenuEvent } from 'primevue/datatable'
 import type { MenuItem } from 'primevue/menuitem'
-import { computed, ref, shallowRef } from 'vue'
+import { computed, type MaybeRefOrGetter, nextTick, ref, shallowRef, toValue, watch, type WatchSource } from 'vue'
 
 // Bấm trúng liên kết, nút, ô nhập, checkbox (cả ô chứa checkbox chọn dòng) hay tay kéo thì
 // để phần tử đó tự xử lý
@@ -127,4 +127,52 @@ export function useListTable<T>(o: {
     onFocusout: active.onFocusOut,
   }
   return { bind, active }
+}
+
+// J/K ở bảng có phân trang: số trang trước/sau, null khi đã ở trang đầu/cuối
+export function stepPage(page: number, pageSize: number, total: number, dir: -1 | 1): number | null {
+  const last = Math.max(1, Math.ceil(total / pageSize))
+  const next = page + dir
+  return next < 1 || next > last ? null : next
+}
+
+interface ScrollBox {
+  scrollTop: number
+  scrollLeft: number
+}
+export interface TableRoot {
+  querySelector(selector: string): unknown
+  closest(selector: string): unknown
+}
+
+// captureScroll: chụp vị trí cuộn dọc của vùng nội dung (.content) và cuộn ngang của bảng;
+// hàm trả về đặt lại đúng vị trí đó
+export function captureScroll(el: TableRoot | null | undefined): (() => void) | null {
+  if (!el) return null
+  const table = el.querySelector('.p-datatable-table-container') as ScrollBox | null
+  const page = el.closest('.content') as ScrollBox | null
+  const top = page?.scrollTop ?? 0
+  const left = table?.scrollLeft ?? 0
+  return () => {
+    if (page) page.scrollTop = top
+    if (table) table.scrollLeft = left
+  }
+}
+
+// Đổi trang bảng mà không mất chỗ đang xem: gọi beforePageChange() ngay trước khi đổi trang,
+// vị trí được trả lại khi dữ liệu của trang mới về và bảng vẽ xong
+export function useKeepScrollOnPage(root: MaybeRefOrGetter<TableRoot | null | undefined>, data: WatchSource<unknown>) {
+  let restore: (() => void) | null = null
+  watch(data, async () => {
+    const r = restore
+    restore = null
+    if (!r) return
+    await nextTick()
+    r()
+  })
+  return {
+    beforePageChange() {
+      restore = captureScroll(toValue(root))
+    },
+  }
 }

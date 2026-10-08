@@ -1,6 +1,7 @@
 import type { DataTableRowClickEvent, DataTableRowContextMenuEvent } from 'primevue/datatable'
 import { describe, expect, it, vi } from 'vitest'
-import { isRowControl, onRowClick, useRowMenu, useActiveRow, rowActionsWidth, useListTable } from './tableRows'
+import { nextTick, ref } from 'vue'
+import { captureScroll, isRowControl, onRowClick, useRowMenu, useActiveRow, rowActionsWidth, stepPage, useKeepScrollOnPage, useListTable } from './tableRows'
 
 // phần tử giả: closest trả về chính nó khi selector chứa tên "thẻ" của nó
 const el = (tag: string | null) => ({ closest: (s: string) => (tag && s.split(', ').includes(tag) ? {} : null) })
@@ -150,5 +151,58 @@ describe('useListTable clickable', () => {
     expect(t.bind.rowClass?.({ removed: true })).toBeUndefined()
     t.bind.onRowClick?.({ data: { removed: true }, originalEvent: { target: null } } as unknown as DataTableRowClickEvent)
     expect(open).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('stepPage', () => {
+  it('moves within bounds', () => {
+    expect(stepPage(2, 25, 100, 1)).toBe(3)
+    expect(stepPage(2, 25, 100, -1)).toBe(1)
+  })
+  it('stays put on the first and last page', () => {
+    expect(stepPage(1, 25, 100, -1)).toBeNull()
+    expect(stepPage(4, 25, 100, 1)).toBeNull()
+    expect(stepPage(1, 25, 0, 1)).toBeNull()
+  })
+})
+
+describe('keeping the scroll position across pages', () => {
+  const fake = () => {
+    const table = { scrollLeft: 120, scrollTop: 0 }
+    const page = { scrollTop: 640, scrollLeft: 0 }
+    const root = { querySelector: () => table, closest: () => page }
+    return { table, page, root }
+  }
+  it('captureScroll restores both positions', () => {
+    const { table, page, root } = fake()
+    const restore = captureScroll(root)!
+    table.scrollLeft = 0
+    page.scrollTop = 0
+    restore()
+    expect(page.scrollTop).toBe(640)
+    expect(table.scrollLeft).toBe(120)
+  })
+  it('restores after the next page of data arrives', async () => {
+    const { table, page, root } = fake()
+    const data = ref(1)
+    const keep = useKeepScrollOnPage(() => root, data)
+    keep.beforePageChange()
+    table.scrollLeft = 0 // bảng tự cuộn về đầu khi đổi trang
+    page.scrollTop = 0
+    data.value = 2
+    await nextTick()
+    await new Promise((r) => setTimeout(r))
+    expect(page.scrollTop).toBe(640)
+    expect(table.scrollLeft).toBe(120)
+  })
+  it('does nothing when the data changes without a page change', async () => {
+    const { page, root } = fake()
+    const data = ref(1)
+    useKeepScrollOnPage(() => root, data)
+    page.scrollTop = 10
+    data.value = 2
+    await new Promise((r) => setTimeout(r))
+    expect(page.scrollTop).toBe(10)
   })
 })

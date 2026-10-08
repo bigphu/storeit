@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
-import { useQuickDrawer } from './quickDrawer'
+import { afterSaveNext, quickEditKey, saveNextTracker, useQuickDrawer } from './quickDrawer'
 
 describe('useQuickDrawer', () => {
   it('keeps the item while the drawer slides out, then clears it and the draft', () => {
@@ -29,5 +29,79 @@ describe('useQuickDrawer', () => {
     d.closed()
     expect(item.value).toBe('b')
     expect(clear).not.toHaveBeenCalled()
+  })
+})
+
+describe('quickEditKey', () => {
+  const key = (k: string, mods: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean }> = {}) => ({
+    key: k, ctrlKey: false, metaKey: false, altKey: false, ...mods,
+  })
+  const s = { dirty: false, busy: false, canPrev: true, canNext: true, typing: false, inDialog: false }
+  it('J and K move between rows; arrows no longer do', () => {
+    expect(quickEditKey(key('j'), s)).toBe('prev')
+    expect(quickEditKey(key('k'), s)).toBe('next')
+    expect(quickEditKey(key('ArrowDown'), s)).toBeNull()
+    expect(quickEditKey(key('ArrowUp'), s)).toBeNull()
+  })
+  it('ignores J/K while typing or at the ends', () => {
+    expect(quickEditKey(key('k'), { ...s, typing: true })).toBeNull()
+    expect(quickEditKey(key('k'), { ...s, canNext: false })).toBeNull()
+    expect(quickEditKey(key('j'), { ...s, canPrev: false })).toBeNull()
+  })
+  it('Ctrl S saves only with changes', () => {
+    expect(quickEditKey(key('s', { ctrlKey: true }), { ...s, dirty: true })).toBe('save')
+    expect(quickEditKey(key('s', { ctrlKey: true }), s)).toBeNull()
+  })
+  it('Ctrl Enter saves then moves on, or just moves on when nothing changed, even while typing', () => {
+    expect(quickEditKey(key('Enter', { ctrlKey: true }), { ...s, dirty: true, typing: true })).toBe('saveNext')
+    expect(quickEditKey(key('Enter', { metaKey: true }), s)).toBe('next')
+    expect(quickEditKey(key('Enter', { ctrlKey: true }), { ...s, busy: true, dirty: true })).toBeNull()
+  })
+  it('Esc closes unless it came from a confirmation dialog', () => {
+    expect(quickEditKey(key('Escape'), s)).toBe('close')
+    expect(quickEditKey(key('Escape'), { ...s, inDialog: true })).toBeNull()
+  })
+})
+
+describe('afterSaveNext', () => {
+  it('waits while saving, moves on after a clean save, stays after a failed one', () => {
+    expect(afterSaveNext(true, { busy: true, dirty: true, canNext: true })).toBe('wait')
+    expect(afterSaveNext(false, { busy: false, dirty: true, canNext: true })).toBe('wait')
+    expect(afterSaveNext(true, { busy: false, dirty: false, canNext: true })).toBe('next')
+    expect(afterSaveNext(true, { busy: false, dirty: true, canNext: true })).toBe('stay')
+    expect(afterSaveNext(true, { busy: false, dirty: false, canNext: false })).toBe('stay')
+  })
+})
+
+describe('saveNextTracker', () => {
+  const state = (busy: boolean, dirty: boolean) => ({ busy, dirty, canNext: true })
+  it('moves on after a clean save even when the row title changed while saving', () => {
+    const t = saveNextTracker()
+    t.start()
+    t.settle(true) // cha đã bật busy
+    expect(t.onBusy(state(true, true))).toBeNull()
+    // tên đổi trong lúc lưu: không còn huỷ việc chờ
+    expect(t.onBusy(state(false, false))).toBe('next')
+    expect(t.pending()).toBe(false)
+  })
+  it('gives up when the parent never started saving (validation error)', () => {
+    const t = saveNextTracker()
+    t.start()
+    t.settle(false) // một nhịp sau emit('save') vẫn chưa busy
+    expect(t.pending()).toBe(false)
+    // lần lưu sau (Ctrl S thường) không kéo sang dòng sau
+    expect(t.onBusy(state(true, true))).toBeNull()
+    expect(t.onBusy(state(false, false))).toBeNull()
+  })
+  it('stays after a failed save and forgets on cancel', () => {
+    const t = saveNextTracker()
+    t.start()
+    t.settle(true)
+    t.onBusy(state(true, true))
+    expect(t.onBusy(state(false, true))).toBeNull()
+    expect(t.pending()).toBe(false)
+    t.start()
+    t.cancel()
+    expect(t.pending()).toBe(false)
   })
 })

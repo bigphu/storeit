@@ -9,6 +9,7 @@ var (
 
 	// Lọc/sắp theo thuộc tính sai (ResolveAttrQuery): field "attr[i]", "sort" hoặc "type_id"
 	ErrInvalidAttributeQuery = errs.Unprocessable("/errors/invalid-attribute-query", "Invalid attribute filter or sort")
+	ErrInvalidFieldQuery     = errs.Unprocessable("/errors/invalid-field-query", "Invalid built-in field filter")
 
 	ErrInvalidBulk = errs.Unprocessable("/errors/invalid-bulk", "Invalid selection",
 		errs.WithFields(errs.FieldError{Field: "items", Detail: "choose between 1 and 200 assets"}))

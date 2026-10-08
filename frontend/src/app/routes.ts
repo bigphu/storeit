@@ -12,6 +12,8 @@ declare module 'vue-router' {
     title?: string
     // biểu tượng PrimeIcons của tab
     icon?: string
+    // false: trang không thành tab (/empty, khi đã đóng hết tab)
+    tab?: boolean
   }
 }
 
@@ -47,6 +49,8 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('./layouts/AppLayout.vue'),
     children: [
       { path: '', redirect: '/assets' },
+      // vùng làm việc trống khi đã đóng mọi tab; AppLayout hiện thông báo thay trang
+      { path: 'empty', name: 'empty', component: { render: () => null }, meta: { tab: false, title: 'No open tabs' } },
       {
         path: 'assets',
         name: 'assets',

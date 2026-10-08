@@ -521,3 +521,67 @@ func TestAssets_StreamMatchesListAndIDs(t *testing.T) {
 		t.Errorf("count by ids = %d, want 2", n)
 	}
 }
+
+func TestAssets_ListByBuiltinField(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	typ := laptop(t, r)
+	day := func(s string) *time.Time { d, _ := time.Parse(time.DateOnly, s); return &d }
+	prefix := "BF-" + uniq() + "-"
+	create := func(name, desc string, bought *time.Time) {
+		t.Helper()
+		if _, err := r.assets.Create(ctx, prefix+name, domain.AssetFields{
+			Name: name, Description: desc, TypeID: typ.ID, StatusID: domain.AvailableStatusID, PurchaseDate: bought,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	create("A", "Dock 100% included", day("2026-01-10"))
+	create("B", "no dock", day("2026-03-01"))
+	create("C", "", nil) // không có ngày mua: không bao giờ khớp điều kiện purchase_date
+
+	list := func(conds ...domain.FieldFilter) string {
+		t.Helper()
+		items, total, err := r.assets.List(context.Background(), domain.AssetFilter{Query: prefix, FieldFilters: conds, Limit: 50})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if int(total) != len(items) {
+			t.Errorf("total %d != %d rows", total, len(items))
+		}
+		var names []string
+		for _, it := range items {
+			names = append(names, it.Name)
+		}
+		return strings.Join(names, ",")
+	}
+	ff := func(f domain.BuiltinField, op domain.AttrOp, v string) domain.FieldFilter {
+		return domain.FieldFilter{Field: f, Op: op, Value: v}
+	}
+	hourAgo := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
+	inHour := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
+	cases := []struct {
+		name  string
+		conds []domain.FieldFilter
+		want  string
+	}{
+		{"purchase gte", []domain.FieldFilter{ff(domain.FieldPurchaseDate, domain.OpGte, "2026-02-01")}, "B"},
+		{"purchase lt skips no date", []domain.FieldFilter{ff(domain.FieldPurchaseDate, domain.OpLt, "2026-02-01")}, "A"},
+		{"purchase eq", []domain.FieldFilter{ff(domain.FieldPurchaseDate, domain.OpEq, "2026-01-10")}, "A"},
+		{"purchase gt", []domain.FieldFilter{ff(domain.FieldPurchaseDate, domain.OpGt, "2026-01-10")}, "B"},
+		{"purchase lte", []domain.FieldFilter{ff(domain.FieldPurchaseDate, domain.OpLte, "2026-03-01")}, "A,B"},
+		{"description contains, case-insensitive", []domain.FieldFilter{ff(domain.FieldDescription, domain.OpContains, "DOCK")}, "A,B"},
+		{"description % is literal", []domain.FieldFilter{ff(domain.FieldDescription, domain.OpContains, "100%")}, "A"},
+		{"created since an hour ago", []domain.FieldFilter{ff(domain.FieldCreatedAt, domain.OpGte, hourAgo)}, "A,B,C"},
+		{"created before an hour ago", []domain.FieldFilter{ff(domain.FieldCreatedAt, domain.OpLt, hourAgo)}, ""},
+		{"updated within the hour", []domain.FieldFilter{ff(domain.FieldUpdatedAt, domain.OpGte, hourAgo), ff(domain.FieldUpdatedAt, domain.OpLt, inHour)}, "A,B,C"},
+		{"combined AND", []domain.FieldFilter{ff(domain.FieldDescription, domain.OpContains, "dock"), ff(domain.FieldPurchaseDate, domain.OpGte, "2026-02-01")}, "B"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := list(c.conds...); got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}

@@ -424,6 +424,24 @@ paths:
             items:
               type: string
               pattern: '^[a-z][a-z0-9_]{0,31}:(eq|gt|gte|lt|lte|contains|in):.+$'
+        - name: field
+          in: query
+          description: |
+            Lọc theo trường có sẵn của mọi tài sản, không cần `type_id`; lặp lại để kết hợp
+            (AND). Dạng `<field>:<op>:<value>`: `purchase_date`, `created_at`, `updated_at`
+            với `eq`, `gt`, `gte`, `lt`, `lte` và ngày `YYYY-MM-DD` (created_at/updated_at so
+            theo ngày của `tz`); `description` với `contains`. Ví dụ
+            `field=purchase_date:gte:2026-01-01`.
+          schema:
+            type: array
+            maxItems: 10
+            items:
+              type: string
+              pattern: '^(purchase_date|created_at|updated_at|description):(eq|gt|gte|lt|lte|contains):.+$'
+        - name: tz
+          in: query
+          description: Múi giờ IANA của người dùng (Asia/Ho_Chi_Minh) để so created_at/updated_at theo ngày; rỗng là UTC.
+          schema: { type: string, maxLength: 64 }
         - name: sort
           in: query
           description: |
@@ -1123,6 +1141,10 @@ components:
         attr:
           type: array
           maxItems: 20
+          items: { type: string, maxLength: 300 }
+        field:
+          type: array
+          maxItems: 10
           items: { type: string, maxLength: 300 }
         sort: { type: string, maxLength: 60 }
         ids:

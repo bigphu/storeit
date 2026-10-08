@@ -30,11 +30,12 @@ import { formatDate, formatDateTime, toDateString } from '@/lib/dates'
 import { usePageKeys } from '@/lib/pageKeys'
 import { notify } from '@/lib/notify'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
-import { useListTable, useRowMenu } from '@/lib/tableRows'
+import { stepPage, useKeepScrollOnPage, useListTable, useRowMenu } from '@/lib/tableRows'
 import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
 import { kindSeverity, statusKinds, useStatuses } from '@/features/statuses/api'
 import { assetListQuery, assetQuery, useAsset, useAssetList } from '../api'
 import EmptyState from '@/components/EmptyState.vue'
+import KeyHint from '@/components/KeyHint.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import AttributeFilterPopover from '../components/AttributeFilterPopover.vue'
 import BulkActionDialog from '../components/BulkActionDialog.vue'
@@ -49,11 +50,13 @@ import { useListContext } from '../listContext'
 import {
   type AssetListState,
   type AttrFilterRow,
+  type FieldFilterRow,
   fromTableSort,
   listLocation,
   nextPageParams,
   parseAssetQuery,
   toApiParams,
+  toExportFilters,
   toTableSort,
 } from '../listQuery'
 import { useAssetActions } from '../useAssetActions'
@@ -80,6 +83,9 @@ function update(patch: Partial<AssetListState>) {
 // Số dòng mỗi trang: mỗi bảng (mọi loại, từng loại) nhớ số riêng
 const { size: pageSize, set: setPageSize } = usePageSize(() => `assets:${state.value.typeId ?? 'all'}`)
 const { data, isFetching, isLoading } = useAssetList(computed(() => toApiParams(state.value, pageSize.value)))
+// đổi trang (phân trang hay J/K): giữ chỗ đang cuộn tới, dọc lẫn ngang
+const tableRef = ref<{ $el: HTMLElement }>()
+const keepScroll = useKeepScrollOnPage(() => tableRef.value?.$el, data)
 
 // Tải trước, không đợi người dùng bấm: trang kế tiếp khi trang này về (sang trang tức thì);
 // dòng chuột dừng trên đó một lúc thì tải dữ liệu và code của trang tài sản đó (mở nhanh hơn)
@@ -143,11 +149,18 @@ watch(
 const chips = computed(() => filterChips(state.value, attributes.value, statuses.value ?? []))
 const chipKey = (c: FilterChip) => `${c.kind}:${c.label}`
 function clearAll() {
-  update({ q: '', statusId: undefined, statusKind: undefined, includeRetired: false, filters: [], page: 1 })
+  update({ q: '', statusId: undefined, statusKind: undefined, includeRetired: false, filters: [], fields: [], page: 1 })
 }
 const filterPop = ref<InstanceType<typeof AttributeFilterPopover>>()
 function addFilter(f: AttrFilterRow) {
   update({ filters: [...state.value.filters, f], page: 1 })
+}
+// API nhận tối đa 10 điều kiện mỗi loại tham số (attr, field); không chọn loại thì chỉ có field
+const filterFull = computed(() =>
+  props.typeId ? state.value.filters.length >= 10 && state.value.fields.length >= 10 : state.value.fields.length >= 10,
+)
+function addField(f: FieldFilterRow) {
+  update({ fields: [...state.value.fields, f], page: 1 })
 }
 
 // "48 of 312 assets": tổng của phạm vi (chưa retire) lấy từ số đếm theo loại
@@ -165,14 +178,24 @@ const countText = computed(() => {
     : `${total} ${noun}`
 })
 
-// Phím: / tìm kiếm, N tạo tài sản (của loại đang xem)
+// Phím: / tìm kiếm, N tạo tài sản (của loại đang xem), F thêm bộ lọc, J/K trang trước/sau
 const newPath = computed(() => (props.typeId ? `/types/${props.typeId}/assets/new` : '/assets/new'))
+const newLabel = computed(() => (selectedType.value ? `New ${selectedType.value.name.toLowerCase()}` : 'New asset'))
 usePageKeys((e) => {
   if (e.key === '/') {
     e.preventDefault()
     document.getElementById('asset-search')?.focus()
   } else if (e.key === 'n' && canManage.value) {
     router.push(newPath.value)
+  } else if (e.key === 'f' && !filterFull.value) {
+    e.preventDefault()
+    filterPop.value?.toggle(e, document.getElementById('asset-filter-btn') ?? undefined)
+  } else if (e.key === 'j' || e.key === 'k') {
+    const p = stepPage(state.value.page, pageSize.value, data.value?.total ?? 0, e.key === 'j' ? -1 : 1)
+    if (p) {
+      keepScroll.beforePageChange()
+      update({ page: p })
+    }
   }
 })
 
@@ -183,8 +206,7 @@ const reportOpen = ref(false)
 const reportProfile = ref<string | undefined>()
 const reportSelection = ref(false)
 const listFilters = computed(() => {
-  const { page: _p, page_size: _s, ...filters } = toApiParams(state.value, pageSize.value)
-  return filters
+  return toExportFilters(state.value, pageSize.value)
 })
 const listLabel = computed(() => {
   const name = selectedType.value?.name ?? 'All assets'
@@ -245,6 +267,7 @@ function onPage(e: DataTablePageEvent) {
     update({ page: 1 })
     return
   }
+  keepScroll.beforePageChange()
   update({ page: e.page + 1 })
 }
 
@@ -427,14 +450,11 @@ watch(rows, (list) => {
           severity="secondary"
           outlined
         />
-        <Button
-          v-if="canManage"
-          as="router-link"
-          :to="newPath"
-          :label="selectedType ? `New ${selectedType.name.toLowerCase()}` : 'New asset'"
-          style="text-decoration: none"
-          icon="pi pi-plus"
-        />
+        <Button v-if="canManage" as="router-link" :to="newPath" style="text-decoration: none" :aria-label="`${newLabel} (N)`">
+          <i class="pi pi-plus" aria-hidden="true" />
+          <span>{{ newLabel }}</span>
+          <KeyHint keys="N" />
+        </Button>
       </div>
     </div>
 
@@ -476,20 +496,23 @@ watch(rows, (list) => {
         @remove="update(removeChip(state, c))"
       />
       <Button
-        v-if="typeId"
-        label="Filter"
-        icon="pi pi-plus"
+        id="asset-filter-btn"
         size="small"
         text
-        :disabled="state.filters.length >= 10 || !attributes.length"
-        :title="attributes.length ? 'Filter by an attribute of this type' : 'This type has no attributes yet'"
+        :disabled="filterFull"
+        aria-label="Add filter (F)"
+        :title="typeId ? 'Filter by a built-in field or an attribute of this type' : 'Filter by a built-in field'"
         @click="(e: MouseEvent) => filterPop?.toggle(e)"
-      />
-      <span v-else class="hint">Open a type to filter by its attributes.</span>
+      >
+        <i class="pi pi-plus" aria-hidden="true" />
+        <span>Filter</span>
+        <KeyHint keys="F" />
+      </Button>
+      <span v-if="!typeId" class="hint">Open a type to also filter by its attributes.</span>
       <Button v-if="chips.length" label="Clear all" size="small" text severity="secondary" @click="clearAll" />
       <span class="count">{{ countText }}</span>
     </div>
-    <AttributeFilterPopover ref="filterPop" :attributes="attributes" @add="addFilter" />
+    <AttributeFilterPopover ref="filterPop" :attributes="attributes" @add="addFilter" @add-field="addField" />
 
     <div v-if="selected.length" class="selection-bar" role="region" aria-label="Selected assets">
       <span class="selection-count">{{ selected.length }} selected</span>
@@ -514,6 +537,7 @@ watch(rows, (list) => {
 
     <RowMenus :menu="rowMenu" />
     <DataTable
+      ref="tableRef"
       :value="data?.items ?? []"
       lazy
       :paginator="!isLoading"
@@ -651,7 +675,8 @@ watch(rows, (list) => {
   font-weight: 600;
   margin-right: 0.5rem;
 }
-.export-btn {
+/* ExportButton có hai gốc nên style scoped không tới: chọn qua hàng công cụ */
+.toolbar :deep(.export-btn) {
   margin-left: auto;
 }
 .chips {

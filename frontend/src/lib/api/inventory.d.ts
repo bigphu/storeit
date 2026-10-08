@@ -832,6 +832,7 @@ export interface components {
             status_kind?: components["schemas"]["StatusKind"];
             include_retired?: boolean;
             attr?: string[];
+            field?: string[];
             sort?: string;
             ids?: components["schemas"]["ID"][];
         };
@@ -1507,6 +1508,16 @@ export interface operations {
                  *     bằng dấu phẩy). Ví dụ `attr=ram_gb:gte:16&attr=os:eq:<option id>`.
                  */
                 attr?: string[];
+                /**
+                 * @description Lọc theo trường có sẵn của mọi tài sản, không cần `type_id`; lặp lại để kết hợp
+                 *     (AND). Dạng `<field>:<op>:<value>`: `purchase_date`, `created_at`, `updated_at`
+                 *     với `eq`, `gt`, `gte`, `lt`, `lte` và ngày `YYYY-MM-DD` (created_at/updated_at so
+                 *     theo ngày của `tz`); `description` với `contains`. Ví dụ
+                 *     `field=purchase_date:gte:2026-01-01`.
+                 */
+                field?: string[];
+                /** @description Múi giờ IANA của người dùng (Asia/Ho_Chi_Minh) để so created_at/updated_at theo ngày; rỗng là UTC. */
+                tz?: string;
                 /**
                  * @description `tag`, `name`, `purchase_date`, `updated_at`, `asset_type` (tên loại),
                  *     `status` (thứ tự status như `GET /asset-statuses`) hoặc `attributes.<key>`
