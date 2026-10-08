@@ -11,6 +11,20 @@ export interface AttrFilterRow {
   value: string
 }
 
+// Trường có sẵn của mọi tài sản, lọc được cả khi không chọn loại (tham số field của API)
+export type BuiltinFieldKey = 'purchase_date' | 'created_at' | 'updated_at' | 'description'
+export interface FieldFilterRow {
+  key: BuiltinFieldKey
+  op: string
+  value: string
+}
+export const BUILTIN_FIELDS: { key: BuiltinFieldKey; label: string; data_type: Extract<DataType, 'date' | 'text'> }[] = [
+  { key: 'purchase_date', label: 'Purchase date', data_type: 'date' },
+  { key: 'created_at', label: 'Created', data_type: 'date' },
+  { key: 'updated_at', label: 'Updated', data_type: 'date' },
+  { key: 'description', label: 'Description', data_type: 'text' },
+]
+
 export interface AssetListState {
   q: string
   typeId?: string
@@ -18,6 +32,7 @@ export interface AssetListState {
   statusKind?: StatusKind
   includeRetired: boolean
   filters: AttrFilterRow[]
+  fields: FieldFilterRow[]
   // giá trị sort của API: "name", "-updated_at", "attributes.ram_gb"...
   sort?: string
   page: number
@@ -38,6 +53,20 @@ export function operatorsFor(t: DataType): string[] {
   return ops[t]
 }
 
+// Toán tử của trường có sẵn, khớp backend (domain/field_query.go): mô tả chỉ "chứa"
+export function fieldOperators(key: BuiltinFieldKey): string[] {
+  return key === 'description' ? ['contains'] : ops.date
+}
+
+function parseField(raw: string): FieldFilterRow | undefined {
+  const m = /^(purchase_date|created_at|updated_at|description):([a-z]+):(.+)$/.exec(raw)
+  if (!m) return undefined
+  const key = m[1] as BuiltinFieldKey
+  return fieldOperators(key).includes(m[2]) ? { key, op: m[2], value: m[3] } : undefined
+}
+const fieldString = (f: FieldFilterRow) => `${f.key}:${f.op}:${f.value}`
+const browserTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone
+
 // "<key>:<op>:<value>"; giá trị có thể chứa ':'
 function parseFilter(raw: string): AttrFilterRow | undefined {
   const m = /^([a-z][a-z0-9_]{0,31}):([a-z]+):(.+)$/.exec(raw)
@@ -46,6 +75,7 @@ function parseFilter(raw: string): AttrFilterRow | undefined {
 
 export function parseAssetQuery(q: LocationQuery): AssetListState {
   const attr = q.attr === undefined ? [] : Array.isArray(q.attr) ? q.attr : [q.attr]
+  const field = q.field === undefined ? [] : Array.isArray(q.field) ? q.field : [q.field]
   const kind = queryString(q.status_kind)
   return {
     q: queryString(q.q) ?? '',
@@ -54,6 +84,7 @@ export function parseAssetQuery(q: LocationQuery): AssetListState {
     statusKind: statusKinds.includes(kind as StatusKind) ? (kind as StatusKind) : undefined,
     includeRetired: queryString(q.include_retired) === 'true',
     filters: attr.flatMap((a) => (typeof a === 'string' ? (parseFilter(a) ?? []) : [])),
+    fields: field.flatMap((f) => (typeof f === 'string' ? (parseField(f) ?? []) : [])),
     sort: queryString(q.sort),
     page: queryInt(q.page, 1),
   }
@@ -69,6 +100,7 @@ export function serializeAssetQuery(s: AssetListState): LocationQueryRaw {
   if (s.statusKind) out.status_kind = s.statusKind
   if (s.includeRetired) out.include_retired = 'true'
   if (s.filters.length) out.attr = s.filters.map(filterString)
+  if (s.fields.length) out.field = s.fields.map(fieldString)
   if (s.sort) out.sort = s.sort
   if (s.page > 1) out.page = String(s.page)
   return out
@@ -86,10 +118,20 @@ export function toApiParams(s: AssetListState, pageSize: number) {
     status_kind: s.statusKind,
     include_retired: s.includeRetired,
     attr: filters.length ? filters : undefined,
+    field: s.fields.length ? s.fields.map(fieldString) : undefined,
+    // created_at/updated_at so theo ngày của múi giờ người dùng
+    tz: s.fields.length ? browserTimeZone() : undefined,
     sort: s.typeId || !isAttrSort(s.sort) ? s.sort : undefined,
     page: s.page,
     page_size: pageSize,
   }
+}
+
+// toExportFilters: bộ lọc của danh sách cho POST /assets/export. Không gửi trang, số dòng,
+// và tz (ExportFilters không có tz; export gửi tz ở cấp request)
+export function toExportFilters(s: AssetListState, pageSize: number) {
+  const { page: _p, page_size: _s, tz: _tz, ...filters } = toApiParams(s, pageSize)
+  return filters
 }
 
 // nextPageParams: tham số của trang kế tiếp (để tải trước); trang cuối thì undefined
@@ -137,7 +179,7 @@ export function listLocation(s: AssetListState): ListLocation {
 // typeListLocation: mở danh sách của một loại với view đã nhớ (sidebar, breadcrumb)
 export function typeListLocation(typeId: string, views: TypeViews): ListLocation {
   const v = views[typeId]
-  return listLocation({ q: '', includeRetired: false, typeId, filters: v?.filters ?? [], sort: v?.sort, page: v?.page ?? 1 })
+  return listLocation({ q: '', includeRetired: false, typeId, filters: v?.filters ?? [], fields: [], sort: v?.sort, page: v?.page ?? 1 })
 }
 
 // legacyListRedirect: link cũ /assets?type_id=… sang /types/…/assets

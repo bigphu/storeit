@@ -31,7 +31,7 @@ export function useTypeNav() {
     const current = LIST_ROUTES.includes(String(route.name)) ? listContext.ctxFor(tabs.activeId)?.state : undefined
     if (current) return listLocation(switchType(current, typeId, views).state)
     const v = views[typeId ?? '']
-    return listLocation({ q: '', includeRetired: false, typeId, filters: v?.filters ?? [], sort: v?.sort, page: v?.page ?? 1 })
+    return listLocation({ q: '', includeRetired: false, typeId, filters: v?.filters ?? [], fields: [], sort: v?.sort, page: v?.page ?? 1 })
   }
 
   // locationFor: chọn loại trong bộ chọn: giữ mục đang mở

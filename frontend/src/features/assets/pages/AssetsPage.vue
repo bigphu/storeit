@@ -50,11 +50,13 @@ import { useListContext } from '../listContext'
 import {
   type AssetListState,
   type AttrFilterRow,
+  type FieldFilterRow,
   fromTableSort,
   listLocation,
   nextPageParams,
   parseAssetQuery,
   toApiParams,
+  toExportFilters,
   toTableSort,
 } from '../listQuery'
 import { useAssetActions } from '../useAssetActions'
@@ -147,11 +149,18 @@ watch(
 const chips = computed(() => filterChips(state.value, attributes.value, statuses.value ?? []))
 const chipKey = (c: FilterChip) => `${c.kind}:${c.label}`
 function clearAll() {
-  update({ q: '', statusId: undefined, statusKind: undefined, includeRetired: false, filters: [], page: 1 })
+  update({ q: '', statusId: undefined, statusKind: undefined, includeRetired: false, filters: [], fields: [], page: 1 })
 }
 const filterPop = ref<InstanceType<typeof AttributeFilterPopover>>()
 function addFilter(f: AttrFilterRow) {
   update({ filters: [...state.value.filters, f], page: 1 })
+}
+// API nhận tối đa 10 điều kiện mỗi loại tham số (attr, field); không chọn loại thì chỉ có field
+const filterFull = computed(() =>
+  props.typeId ? state.value.filters.length >= 10 && state.value.fields.length >= 10 : state.value.fields.length >= 10,
+)
+function addField(f: FieldFilterRow) {
+  update({ fields: [...state.value.fields, f], page: 1 })
 }
 
 // "48 of 312 assets": tổng của phạm vi (chưa retire) lấy từ số đếm theo loại
@@ -169,7 +178,7 @@ const countText = computed(() => {
     : `${total} ${noun}`
 })
 
-// Phím: / tìm kiếm, N tạo tài sản (của loại đang xem), J/K trang trước/sau
+// Phím: / tìm kiếm, N tạo tài sản (của loại đang xem), F thêm bộ lọc, J/K trang trước/sau
 const newPath = computed(() => (props.typeId ? `/types/${props.typeId}/assets/new` : '/assets/new'))
 const newLabel = computed(() => (selectedType.value ? `New ${selectedType.value.name.toLowerCase()}` : 'New asset'))
 usePageKeys((e) => {
@@ -178,6 +187,9 @@ usePageKeys((e) => {
     document.getElementById('asset-search')?.focus()
   } else if (e.key === 'n' && canManage.value) {
     router.push(newPath.value)
+  } else if (e.key === 'f' && !filterFull.value) {
+    e.preventDefault()
+    filterPop.value?.toggle(e, document.getElementById('asset-filter-btn') ?? undefined)
   } else if (e.key === 'j' || e.key === 'k') {
     const p = stepPage(state.value.page, pageSize.value, data.value?.total ?? 0, e.key === 'j' ? -1 : 1)
     if (p) {
@@ -194,8 +206,7 @@ const reportOpen = ref(false)
 const reportProfile = ref<string | undefined>()
 const reportSelection = ref(false)
 const listFilters = computed(() => {
-  const { page: _p, page_size: _s, ...filters } = toApiParams(state.value, pageSize.value)
-  return filters
+  return toExportFilters(state.value, pageSize.value)
 })
 const listLabel = computed(() => {
   const name = selectedType.value?.name ?? 'All assets'
@@ -485,20 +496,23 @@ watch(rows, (list) => {
         @remove="update(removeChip(state, c))"
       />
       <Button
-        v-if="typeId"
-        label="Filter"
-        icon="pi pi-plus"
+        id="asset-filter-btn"
         size="small"
         text
-        :disabled="state.filters.length >= 10 || !attributes.length"
-        :title="attributes.length ? 'Filter by an attribute of this type' : 'This type has no attributes yet'"
+        :disabled="filterFull"
+        aria-label="Add filter (F)"
+        :title="typeId ? 'Filter by a built-in field or an attribute of this type' : 'Filter by a built-in field'"
         @click="(e: MouseEvent) => filterPop?.toggle(e)"
-      />
-      <span v-else class="hint">Open a type to filter by its attributes.</span>
+      >
+        <i class="pi pi-plus" aria-hidden="true" />
+        <span>Filter</span>
+        <KeyHint keys="F" />
+      </Button>
+      <span v-if="!typeId" class="hint">Open a type to also filter by its attributes.</span>
       <Button v-if="chips.length" label="Clear all" size="small" text severity="secondary" @click="clearAll" />
       <span class="count">{{ countText }}</span>
     </div>
-    <AttributeFilterPopover ref="filterPop" :attributes="attributes" @add="addFilter" />
+    <AttributeFilterPopover ref="filterPop" :attributes="attributes" @add="addFilter" @add-field="addField" />
 
     <div v-if="selected.length" class="selection-bar" role="region" aria-label="Selected assets">
       <span class="selection-count">{{ selected.length }} selected</span>

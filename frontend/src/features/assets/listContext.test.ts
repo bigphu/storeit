@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { type ListContext, position, stepFrom } from './listContext'
 
 const ctx = (page: number, ids: string[], total: number): ListContext => ({
-  state: { q: '', includeRetired: false, filters: [], page },
+  state: { q: '', includeRetired: false, filters: [], fields: [], page },
   pageSize: 3,
   ids,
   total,
