@@ -30,8 +30,8 @@ import { openLocation } from '@/lib/navigation'
 import { onRowClick, useRowMenu } from '@/lib/tableRows'
 import { useProfileDelete, useProfileOverviewSave, useProfileShare } from '../overviewSave'
 
-// Profile export: của mình và được chia sẻ. Bấm dòng mở trang profile; nhấp đúp tên để đổi
-// tại chỗ; bút chì mở ngăn kéo sửa nhanh; xuất, chia sẻ, xoá ngay trên dòng (có Undo)
+// Profile export: của mình và được chia sẻ. Bấm dòng mở trang profile; bút chì cạnh tên để đổi
+// tại chỗ; nút thanh trượt (pi-sliders-h) mở ngăn kéo sửa nhanh; xuất, chia sẻ, xoá ngay trên dòng (có Undo)
 const session = useSession()
 const router = useRouter()
 const { data: profiles, isFetching, isLoading } = useExportProfiles(true)
@@ -78,7 +78,7 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Export
   { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => openProfile(p, undefined, true) },
   { label: 'Export all assets', icon: 'pi pi-download', command: () => exportAll(p) },
   { separator: true },
-  { label: 'Quick edit', icon: 'pi pi-pencil', disabled: !p.can_edit, command: () => openQuick(p) },
+  { label: 'Quick edit', icon: 'pi pi-sliders-h', disabled: !p.can_edit, command: () => openQuick(p) },
   { label: p.shared ? 'Make private' : 'Share', icon: p.shared ? 'pi pi-lock' : 'pi pi-share-alt', disabled: !p.can_edit, command: () => toggleShare(p) },
   { label: 'Delete', icon: 'pi pi-trash', disabled: !p.can_edit, command: () => deleteProfile(p) },
 ])
@@ -187,7 +187,7 @@ async function submitCreate() {
         <template #body="{ data: p }: { data: ExportProfile }">
           <div class="row-actions">
             <IconAction icon="pi pi-download" label="Export all assets with this profile" @click="exportAll(p)" />
-            <IconAction icon="pi pi-pencil" label="Quick edit" :disabled="!p.can_edit" :reason="why(p)" @click="openQuick(p)" />
+            <IconAction icon="pi pi-sliders-h" label="Quick edit" :disabled="!p.can_edit" :reason="why(p)" @click="openQuick(p)" />
             <IconAction
               :icon="p.shared ? 'pi pi-lock' : 'pi pi-share-alt'"
               :label="p.shared ? 'Make private' : 'Share'"

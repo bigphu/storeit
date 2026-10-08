@@ -320,7 +320,7 @@ function cell(row: AssetListItem, key: string) {
 }
 
 
-// Sửa nhanh: nhấp đúp tên, status, ngày mua để đổi tại chỗ; bút chì mở ngăn kéo (các trường
+// Sửa nhanh: bút chì cạnh tên, status, ngày mua để đổi tại chỗ; nút thanh trượt (pi-sliders-h) mở ngăn kéo (các trường
 // của tài sản và thuộc tính của loại). Tài sản đã retire không sửa nhanh được
 const statusChoices = computed(() =>
   (statuses.value ?? []).filter((x) => !x.archived_at && x.kind !== 'retired').map((x) => ({ label: x.name, value: x.id })),
@@ -636,7 +636,7 @@ watch(rows, (list) => {
             <template v-else-if="!a.retired_at">
               <Button
                 v-tooltip.top="'Quick edit'"
-                icon="pi pi-pencil"
+                icon="pi pi-sliders-h"
                 size="small"
                 text
                 rounded

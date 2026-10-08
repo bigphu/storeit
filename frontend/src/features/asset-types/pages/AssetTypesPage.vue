@@ -112,7 +112,7 @@ const typeMenu = (t: AssetType): MenuItem[] => [
   { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => openType(t, undefined, true) },
   { separator: true },
   { label: 'Type settings', icon: 'pi pi-cog', command: () => openLocation(router, settingsPath(t)) },
-  { label: 'Quick edit', icon: 'pi pi-pencil', visible: canManage.value, command: () => openQuick(t) },
+  { label: 'Quick edit', icon: 'pi pi-sliders-h', visible: canManage.value, command: () => openQuick(t) },
   { label: t.archived_at ? 'Restore' : 'Archive', icon: t.archived_at ? 'pi pi-replay' : 'pi pi-inbox', visible: canManage.value && !t.is_system, command: () => archiveType(t) },
 ]
 const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<AssetType>(menu, typeMenu)
@@ -163,7 +163,7 @@ async function submit() {
   }
 }
 
-// Sửa nhanh từ danh sách: nhấp đúp tên để đổi tại chỗ; bút chì mở ngăn kéo (tên, mô tả)
+// Sửa nhanh từ danh sách: bút chì cạnh tên để đổi tại chỗ; nút thanh trượt (pi-sliders-h) mở ngăn kéo (tên, mô tả)
 const saveType = useTypeOverviewSave()
 const archiveType = useTypeArchive()
 const rename = (t: AssetType, name: string) => saveType(t, { name })
@@ -319,7 +319,7 @@ watch(types, (list) => {
       <Column header="" header-style="width: 8rem">
         <template #body="{ data: t }: { data: AssetType }">
           <div class="row-actions">
-            <IconAction v-if="canManage" icon="pi pi-pencil" label="Quick edit" @click="openQuick(t)" />
+            <IconAction v-if="canManage" icon="pi pi-sliders-h" label="Quick edit" @click="openQuick(t)" />
             <IconAction
               v-if="canManage && !t.is_system"
               :icon="t.archived_at ? 'pi pi-replay' : 'pi pi-inbox'"

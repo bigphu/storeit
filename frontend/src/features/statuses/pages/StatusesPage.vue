@@ -30,7 +30,7 @@ import { archiveBlock, KIND_INFO, KIND_ORDER, lanes, moveBy, orderAfterMove } fr
 import { useStatusLifecycle, useStatusOverviewSave } from '../overviewSave'
 
 // Status chia theo kind thành bốn làn; kéo thả (hay Alt+↑/↓ trên tên) đổi thứ tự trong làn.
-// Bấm dòng mở trang của status; nhấp đúp tên để đổi tại chỗ; bút chì mở ngăn kéo sửa nhanh
+// Bấm dòng mở trang của status; bút chì cạnh tên để đổi tại chỗ; nút thanh trượt (pi-sliders-h) mở ngăn kéo sửa nhanh
 const session = useSession()
 const router = useRouter()
 const canManage = computed(() => session.can(Perm.StatusManage))
@@ -108,7 +108,7 @@ async function submitAdd() {
   }
 }
 
-// Sửa nhanh: nhấp đúp tên để đổi tại chỗ; bút chì mở ngăn kéo (tên, kind khoá)
+// Sửa nhanh: bút chì cạnh tên để đổi tại chỗ; nút thanh trượt (pi-sliders-h) mở ngăn kéo (tên, kind khoá)
 const saveStatus = useStatusOverviewSave()
 const rename = (st: Status, name: string) => saveStatus(st, { name })
 const openStatus = (st: Status, e?: MouseEvent) => openLocation(router, `/statuses/${st.id}`, e)
@@ -219,7 +219,7 @@ watch(statuses, (list) => {
           <Column v-if="canManage" header-style="width: 5.5rem" body-style="width: 5.5rem">
             <template #body="{ data: s }: { data: Status }">
               <div class="row-actions">
-                <IconAction icon="pi pi-pencil" label="Quick edit" @click="openQuick(s)" />
+                <IconAction icon="pi pi-sliders-h" label="Quick edit" @click="openQuick(s)" />
                 <IconAction
                   icon="pi pi-inbox"
                   label="Archive"

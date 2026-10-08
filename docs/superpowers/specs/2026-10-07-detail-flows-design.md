@@ -32,7 +32,7 @@ Out of scope:
 6. **Rows mirror the header.** Every one-click header action is also on the list row, in the same order.
 7. **Quick edits stay on the list.**
    - Hovering a row or card shows a small pencil next to its name (and an asset's status and purchase date); clicking it edits that value inline.
-   - The pencil opens a side drawer with the item's Overview.
+   - The sliders icon (`pi pi-sliders-h`) opens a side drawer with the item's Overview; the pencil only edits one value in place.
    - The detail page is for everything else.
 
 ## The detail page
@@ -178,7 +178,7 @@ The commonest small edits never leave the list. There are two ways in, and the d
 ### Side drawer (pencil icon)
 
 **What it is:**
-- The row's pencil icon opens a PrimeVue Drawer on the right, so the list stays visible.
+- The row's sliders icon (`pi pi-sliders-h`, distinct from the in-place pencil) opens a PrimeVue Drawer on the right, so the list stays visible.
 - It shows the same Overview form as the detail page: one `OverviewFields` component on the same `detailDraft` model.
 - Save, or Ctrl/⌘ S, saves through `runAction` with Undo.
 - "Open full page" goes to the detail page.

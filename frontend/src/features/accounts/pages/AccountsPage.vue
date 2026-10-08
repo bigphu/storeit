@@ -130,7 +130,7 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
   ]
   if (!canManage.value) return items
   items.push({ separator: true })
-  items.push({ label: 'Quick edit', icon: 'pi pi-pencil', command: () => openQuick(a) })
+  items.push({ label: 'Quick edit', icon: 'pi pi-sliders-h', command: () => openQuick(a) })
   if (a.status === 'invited') items.push({ label: 'Resend invitation', icon: 'pi pi-envelope', command: () => actions.resendInvitation(a) })
   if (a.status === 'active') items.push({ label: 'Send reset link', icon: 'pi pi-key', command: () => actions.sendReset(a) })
   if (a.status === 'disabled') items.push({ label: 'Enable', icon: 'pi pi-check-circle', command: () => actions.enable(a) })
@@ -138,7 +138,7 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
   return items
 })
 
-// Sửa nhanh: nhấp đúp tên để đổi tại chỗ; bút chì mở ngăn kéo (tên, role)
+// Sửa nhanh: bút chì cạnh tên để đổi tại chỗ; nút thanh trượt (pi-sliders-h) mở ngăn kéo (tên, role)
 const saveAccount = useAccountOverviewSave()
 const saveRoles = useAccountRolesSave()
 const rename = (a: AccountListItem, name: string) => saveAccount(a, { name })
@@ -273,7 +273,7 @@ watch(rows, (list) => {
         <template #body="{ data: a, index }: { data: AccountListItem; index: number }">
           <div class="row-actions">
             <template v-if="activeRow.isActive(index)">
-              <IconAction icon="pi pi-pencil" label="Quick edit" @click="openQuick(a)" />
+              <IconAction icon="pi pi-sliders-h" label="Quick edit" @click="openQuick(a)" />
               <IconAction v-if="a.status === 'invited'" icon="pi pi-envelope" label="Resend invitation" @click="actions.resendInvitation(a)" />
               <IconAction v-if="a.status === 'active'" icon="pi pi-key" label="Send reset link" @click="actions.sendReset(a)" />
               <IconAction v-if="a.status === 'disabled'" icon="pi pi-check-circle" label="Enable" @click="actions.enable(a)" />
