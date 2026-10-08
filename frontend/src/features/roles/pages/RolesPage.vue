@@ -12,6 +12,8 @@ import { useRouter } from 'vue-router'
 import AddCard from '@/components/AddCard.vue'
 import CardGrid from '@/components/CardGrid.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import KeyHint from '@/components/KeyHint.vue'
+import { usePageKeys } from '@/lib/pageKeys'
 import EntityCard from '@/components/EntityCard.vue'
 import FormDialog from '@/components/FormDialog.vue'
 import IconAction from '@/components/IconAction.vue'
@@ -73,6 +75,10 @@ const copyOptions = computed(() => [
     .filter((r) => r.permissions.every((p) => session.can(p)))
     .map((r) => ({ label: `Copy ${r.name}`, value: r.id })),
 ])
+// Phím: N tạo role
+usePageKeys((e) => {
+  if (e.key === 'n' && canManage.value) openCreate()
+})
 function openCreate() {
   name.value = description.value = ''
   // bắt đầu từ Employee khi được phép chép quyền của nó (ít bấm nhất cho role mới thường gặp)
@@ -163,7 +169,11 @@ const toggleCardMenu = (r: Role, e: MouseEvent) => rowMenu.toggle(r, e)
 <template>
   <section>
     <PageHeader title="Roles" subtitle="A role is a set of permissions. People get everything their roles allow.">
-      <Button v-if="canManage" label="New role" icon="pi pi-plus" @click="openCreate" />
+      <Button v-if="canManage" aria-label="New role (N)" @click="openCreate">
+        <i class="pi pi-plus" aria-hidden="true" />
+        <span>New role</span>
+        <KeyHint keys="N" />
+      </Button>
     </PageHeader>
     <div class="toolbar">
       <SegmentedFilter v-model="layout" :options="layoutOptions" label="Layout" />

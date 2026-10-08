@@ -13,6 +13,8 @@ import { useRouter } from 'vue-router'
 import AddCard from '@/components/AddCard.vue'
 import CardGrid from '@/components/CardGrid.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import KeyHint from '@/components/KeyHint.vue'
+import { usePageKeys } from '@/lib/pageKeys'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import EntityCard from '@/components/EntityCard.vue'
 import FormDialog from '@/components/FormDialog.vue'
@@ -138,6 +140,15 @@ watch(name, (n) => {
   if (!codeTouched.value) code.value = codeFromName(n)
 })
 
+// Phím: / tìm kiếm, N tạo loại
+usePageKeys((e) => {
+  if (e.key === '/') {
+    e.preventDefault()
+    document.getElementById('types-search')?.focus()
+  } else if (e.key === 'n' && canManage.value) {
+    openCreate()
+  }
+})
 function openCreate() {
   code.value = name.value = description.value = ''
   codeTouched.value = false
@@ -202,14 +213,18 @@ watch(types, (list) => {
 <template>
   <section>
     <PageHeader title="Asset types" subtitle="What kinds of things you track, and which fields each one has.">
-      <Button v-if="canManage" label="New type" icon="pi pi-plus" @click="openCreate" />
+      <Button v-if="canManage" aria-label="New type (N)" @click="openCreate">
+        <i class="pi pi-plus" aria-hidden="true" />
+        <span>New type</span>
+        <KeyHint keys="N" />
+      </Button>
     </PageHeader>
 
     <div class="toolbar">
       <SegmentedFilter v-model="show" :options="showOptions" label="Show" />
       <IconField>
         <InputIcon class="pi pi-search" />
-        <InputText v-model="search" placeholder="Search name or code" aria-label="Search asset types" />
+        <InputText id="types-search" v-model="search" placeholder="Search name or code  ( / )" aria-label="Search asset types" />
       </IconField>
       <SegmentedFilter v-model="layout" :options="layoutOptions" label="Layout" icon-only class="end" />
     </div>

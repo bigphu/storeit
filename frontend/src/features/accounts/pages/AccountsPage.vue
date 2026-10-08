@@ -13,6 +13,7 @@ import type { MenuItem } from 'primevue/menuitem'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
+import KeyHint from '@/components/KeyHint.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import RowMenuButton from '@/components/RowMenuButton.vue'
 import RowMenus from '@/components/RowMenus.vue'
@@ -34,7 +35,8 @@ import { changeCount, changesOf, clearTab, emptyDraft, isDirty, listOf, setList,
 import { openLocation } from '@/lib/navigation'
 import { inviteNote } from '@/lib/people'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
-import { useListTable, useRowMenu } from '@/lib/tableRows'
+import { usePageKeys } from '@/lib/pageKeys'
+import { stepPage, useKeepScrollOnPage, useListTable, useRowMenu } from '@/lib/tableRows'
 import { queryInt, queryString, useUrlState } from '@/lib/urlState'
 import { type AccountStatus, useAccounts } from '../api'
 import CreateAccountDialog from '../components/CreateAccountDialog.vue'
@@ -77,6 +79,9 @@ const params = computed(() => ({
   page_size: pageSize.value,
 }))
 const { data, isFetching, isLoading } = useAccounts(params)
+// đổi trang (phân trang hay J/K): giữ chỗ đang cuộn tới, dọc lẫn ngang
+const tableRef = ref<{ $el: HTMLElement }>()
+const keepScroll = useKeepScrollOnPage(() => tableRef.value?.$el, data)
 
 // Ô tìm kiếm: đợi gõ xong rồi mới đổi URL
 const search = ref(state.value.q)
@@ -107,10 +112,26 @@ function onPage(e: DataTablePageEvent) {
     update({ page: 1 })
     return
   }
+  keepScroll.beforePageChange()
   update({ page: e.page + 1 })
 }
 
 const creating = ref(false)
+// Phím: / tìm kiếm, N mời tài khoản, J/K trang trước/sau
+usePageKeys((e) => {
+  if (e.key === '/') {
+    e.preventDefault()
+    document.getElementById('accounts-search')?.focus()
+  } else if (e.key === 'n' && canManage.value) {
+    creating.value = true
+  } else if (e.key === 'j' || e.key === 'k') {
+    const p = stepPage(state.value.page, pageSize.value, data.value?.total ?? 0, e.key === 'j' ? -1 : 1)
+    if (p) {
+      keepScroll.beforePageChange()
+      update({ page: p })
+    }
+  }
+})
 const actions = useAccountActions()
 const label = (s: AccountStatus) => s[0].toUpperCase() + s.slice(1)
 
@@ -194,13 +215,17 @@ watch(rows, (list) => {
 <template>
   <section>
     <PageHeader title="Accounts" subtitle="People who can sign in to StoreIt and the roles they hold.">
-      <Button v-if="canManage" label="Invite account" icon="pi pi-envelope" @click="creating = true" />
+      <Button v-if="canManage" aria-label="Invite account (N)" @click="creating = true">
+        <i class="pi pi-envelope" aria-hidden="true" />
+        <span>Invite account</span>
+        <KeyHint keys="N" />
+      </Button>
     </PageHeader>
     <div class="toolbar">
       <SegmentedFilter v-model="status" :options="statusOptions" label="Status" />
       <IconField>
         <InputIcon class="pi pi-search" />
-        <InputText v-model="search" placeholder="Search name or email" aria-label="Search accounts" />
+        <InputText id="accounts-search" v-model="search" placeholder="Search name or email  ( / )" aria-label="Search accounts" />
       </IconField>
       <Select
         :model-value="state.role || 'all'"
@@ -213,6 +238,7 @@ watch(rows, (list) => {
     </div>
     <RowMenus :menu="rowMenu" />
     <DataTable
+      ref="tableRef"
       :value="data?.items ?? []"
       lazy
       :paginator="!isLoading"

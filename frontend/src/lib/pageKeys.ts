@@ -1,4 +1,4 @@
-// Phím tắt một chữ của một trang (J/K, E, /, N). Chỉ nghe khi trang đang hiện: trang
+// Phím tắt một chữ của một trang (J/K, E, /, N, F). Chỉ nghe khi trang đang hiện: trang
 // ở tab nền vẫn được giữ sống (KeepAlive) nhưng không được nhận phím. Bỏ qua khi đang
 // gõ trong ô nhập, khi giữ Ctrl/Alt/⌘, hay khi có hộp thoại/menu đang mở.
 import { onActivated, onBeforeUnmount, onDeactivated, onMounted } from 'vue'
@@ -8,10 +8,17 @@ export function isTyping(e: KeyboardEvent): boolean {
   return !!t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)
 }
 
+// Lớp phủ đang mở thì phím của trang nhường cho nó; ngăn sửa nhanh có J/K riêng
+const BLOCKERS = '.p-dialog-mask, .p-popover, .p-contextmenu, .p-tieredmenu-overlay, .quick-edit'
+
+export function pageKeysBlocked(query: (selector: string) => unknown = (s) => document.querySelector(s)): boolean {
+  return !!query(BLOCKERS)
+}
+
 export function usePageKeys(handler: (e: KeyboardEvent) => void) {
   function onKey(e: KeyboardEvent) {
     if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e)) return
-    if (document.querySelector('.p-dialog-mask, .p-popover, .p-contextmenu, .p-tieredmenu-overlay')) return
+    if (pageKeysBlocked()) return
     handler(e)
   }
   let bound = false

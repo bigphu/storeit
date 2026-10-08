@@ -30,11 +30,12 @@ import { formatDate, formatDateTime, toDateString } from '@/lib/dates'
 import { usePageKeys } from '@/lib/pageKeys'
 import { notify } from '@/lib/notify'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
-import { useListTable, useRowMenu } from '@/lib/tableRows'
+import { stepPage, useKeepScrollOnPage, useListTable, useRowMenu } from '@/lib/tableRows'
 import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
 import { kindSeverity, statusKinds, useStatuses } from '@/features/statuses/api'
 import { assetListQuery, assetQuery, useAsset, useAssetList } from '../api'
 import EmptyState from '@/components/EmptyState.vue'
+import KeyHint from '@/components/KeyHint.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import AttributeFilterPopover from '../components/AttributeFilterPopover.vue'
 import BulkActionDialog from '../components/BulkActionDialog.vue'
@@ -80,6 +81,9 @@ function update(patch: Partial<AssetListState>) {
 // Số dòng mỗi trang: mỗi bảng (mọi loại, từng loại) nhớ số riêng
 const { size: pageSize, set: setPageSize } = usePageSize(() => `assets:${state.value.typeId ?? 'all'}`)
 const { data, isFetching, isLoading } = useAssetList(computed(() => toApiParams(state.value, pageSize.value)))
+// đổi trang (phân trang hay J/K): giữ chỗ đang cuộn tới, dọc lẫn ngang
+const tableRef = ref<{ $el: HTMLElement }>()
+const keepScroll = useKeepScrollOnPage(() => tableRef.value?.$el, data)
 
 // Tải trước, không đợi người dùng bấm: trang kế tiếp khi trang này về (sang trang tức thì);
 // dòng chuột dừng trên đó một lúc thì tải dữ liệu và code của trang tài sản đó (mở nhanh hơn)
@@ -165,14 +169,21 @@ const countText = computed(() => {
     : `${total} ${noun}`
 })
 
-// Phím: / tìm kiếm, N tạo tài sản (của loại đang xem)
+// Phím: / tìm kiếm, N tạo tài sản (của loại đang xem), J/K trang trước/sau
 const newPath = computed(() => (props.typeId ? `/types/${props.typeId}/assets/new` : '/assets/new'))
+const newLabel = computed(() => (selectedType.value ? `New ${selectedType.value.name.toLowerCase()}` : 'New asset'))
 usePageKeys((e) => {
   if (e.key === '/') {
     e.preventDefault()
     document.getElementById('asset-search')?.focus()
   } else if (e.key === 'n' && canManage.value) {
     router.push(newPath.value)
+  } else if (e.key === 'j' || e.key === 'k') {
+    const p = stepPage(state.value.page, pageSize.value, data.value?.total ?? 0, e.key === 'j' ? -1 : 1)
+    if (p) {
+      keepScroll.beforePageChange()
+      update({ page: p })
+    }
   }
 })
 
@@ -245,6 +256,7 @@ function onPage(e: DataTablePageEvent) {
     update({ page: 1 })
     return
   }
+  keepScroll.beforePageChange()
   update({ page: e.page + 1 })
 }
 
@@ -427,14 +439,11 @@ watch(rows, (list) => {
           severity="secondary"
           outlined
         />
-        <Button
-          v-if="canManage"
-          as="router-link"
-          :to="newPath"
-          :label="selectedType ? `New ${selectedType.name.toLowerCase()}` : 'New asset'"
-          style="text-decoration: none"
-          icon="pi pi-plus"
-        />
+        <Button v-if="canManage" as="router-link" :to="newPath" style="text-decoration: none" :aria-label="`${newLabel} (N)`">
+          <i class="pi pi-plus" aria-hidden="true" />
+          <span>{{ newLabel }}</span>
+          <KeyHint keys="N" />
+        </Button>
       </div>
     </div>
 
@@ -514,6 +523,7 @@ watch(rows, (list) => {
 
     <RowMenus :menu="rowMenu" />
     <DataTable
+      ref="tableRef"
       :value="data?.items ?? []"
       lazy
       :paginator="!isLoading"
