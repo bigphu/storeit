@@ -99,6 +99,22 @@ WHERE (sqlc.narg('q')::text IS NULL
         WHEN 'select_eq' THEN v.value_option_id = (@f_vals::text[])[f.i]::uuid
         WHEN 'select_in' THEN v.value_option_id = ANY(string_to_array((@f_vals::text[])[f.i], ',')::uuid[])
       END))
+  AND NOT EXISTS (
+    -- điều kiện trên trường có sẵn (b_fields[i], b_ops[i], b_vals[i]), giá trị đã kiểm ở Go.
+    -- COALESCE: so với NULL (chưa có ngày mua) là không khớp, không được lọt qua
+    SELECT 1 FROM generate_subscripts(@b_ops::text[], 1) AS b(i)
+    WHERE NOT COALESCE(CASE (@b_fields::text[])[b.i] || '_' || (@b_ops::text[])[b.i]
+        WHEN 'purchase_date_eq' THEN a.purchase_date = (@b_vals::text[])[b.i]::date
+        WHEN 'purchase_date_gt' THEN a.purchase_date > (@b_vals::text[])[b.i]::date
+        WHEN 'purchase_date_gte' THEN a.purchase_date >= (@b_vals::text[])[b.i]::date
+        WHEN 'purchase_date_lt' THEN a.purchase_date < (@b_vals::text[])[b.i]::date
+        WHEN 'purchase_date_lte' THEN a.purchase_date <= (@b_vals::text[])[b.i]::date
+        WHEN 'created_at_gte' THEN a.created_at >= (@b_vals::text[])[b.i]::timestamptz
+        WHEN 'created_at_lt' THEN a.created_at < (@b_vals::text[])[b.i]::timestamptz
+        WHEN 'updated_at_gte' THEN a.updated_at >= (@b_vals::text[])[b.i]::timestamptz
+        WHEN 'updated_at_lt' THEN a.updated_at < (@b_vals::text[])[b.i]::timestamptz
+        WHEN 'description_contains' THEN a.description ILIKE '%' || (@b_vals::text[])[b.i] || '%'
+      END, false))
 ORDER BY
   CASE WHEN @sort::text = 'tag' THEN a.tag END ASC,
   CASE WHEN @sort::text = '-tag' THEN a.tag END DESC,
@@ -178,4 +194,20 @@ WHERE (sqlc.narg('q')::text IS NULL
         WHEN 'boolean_eq' THEN v.value_bool = (@f_vals::text[])[f.i]::boolean
         WHEN 'select_eq' THEN v.value_option_id = (@f_vals::text[])[f.i]::uuid
         WHEN 'select_in' THEN v.value_option_id = ANY(string_to_array((@f_vals::text[])[f.i], ',')::uuid[])
-      END));
+      END))
+  AND NOT EXISTS (
+    -- điều kiện trên trường có sẵn (b_fields[i], b_ops[i], b_vals[i]), giá trị đã kiểm ở Go.
+    -- COALESCE: so với NULL (chưa có ngày mua) là không khớp, không được lọt qua
+    SELECT 1 FROM generate_subscripts(@b_ops::text[], 1) AS b(i)
+    WHERE NOT COALESCE(CASE (@b_fields::text[])[b.i] || '_' || (@b_ops::text[])[b.i]
+        WHEN 'purchase_date_eq' THEN a.purchase_date = (@b_vals::text[])[b.i]::date
+        WHEN 'purchase_date_gt' THEN a.purchase_date > (@b_vals::text[])[b.i]::date
+        WHEN 'purchase_date_gte' THEN a.purchase_date >= (@b_vals::text[])[b.i]::date
+        WHEN 'purchase_date_lt' THEN a.purchase_date < (@b_vals::text[])[b.i]::date
+        WHEN 'purchase_date_lte' THEN a.purchase_date <= (@b_vals::text[])[b.i]::date
+        WHEN 'created_at_gte' THEN a.created_at >= (@b_vals::text[])[b.i]::timestamptz
+        WHEN 'created_at_lt' THEN a.created_at < (@b_vals::text[])[b.i]::timestamptz
+        WHEN 'updated_at_gte' THEN a.updated_at >= (@b_vals::text[])[b.i]::timestamptz
+        WHEN 'updated_at_lt' THEN a.updated_at < (@b_vals::text[])[b.i]::timestamptz
+        WHEN 'description_contains' THEN a.description ILIKE '%' || (@b_vals::text[])[b.i] || '%'
+      END, false));

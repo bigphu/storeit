@@ -109,6 +109,7 @@ func (r *AssetRepository) page(ctx context.Context, q *db.Queries, f domain.Asse
 		Q: args.q, TypeID: f.TypeID, StatusID: f.StatusID, StatusKind: args.kind, LocationID: f.LocationID,
 		HolderMemberID: f.HolderMemberID, IncludeRetired: f.IncludeRetired, Ids: f.IDs,
 		FAttrs: args.fAttrs, FOps: args.fOps, FVals: args.fVals,
+		BFields: args.bFields, BOps: args.bOps, BVals: args.bVals,
 		SortAttr: args.sortAttr, Sort: args.sort, Lim: f.Limit, Off: f.Offset,
 	})
 	if err != nil {
@@ -140,6 +141,7 @@ func (r *AssetRepository) count(ctx context.Context, q *db.Queries, f domain.Ass
 		Q: args.q, TypeID: f.TypeID, StatusID: f.StatusID, StatusKind: args.kind, LocationID: f.LocationID,
 		HolderMemberID: f.HolderMemberID, IncludeRetired: f.IncludeRetired, Ids: f.IDs,
 		FAttrs: args.fAttrs, FOps: args.fOps, FVals: args.fVals,
+		BFields: args.bFields, BOps: args.bOps, BVals: args.bVals,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("inventory: count assets: %w", err)
@@ -153,6 +155,8 @@ type listArguments struct {
 	sortAttr    *uuid.UUID
 	fAttrs      []uuid.UUID
 	fOps, fVals []string
+	// điều kiện trên trường có sẵn (FieldFilters)
+	bFields, bOps, bVals []string
 }
 
 // listArgs đổi bộ lọc thành tham số chung của ListAssets và CountAssets
@@ -175,6 +179,7 @@ func listArgs(f domain.AssetFilter) listArguments {
 		a.sort = string(domain.SortTag)
 	}
 	a.fAttrs, a.fOps, a.fVals = attrFilterArgs(f.AttrFilters)
+	a.bFields, a.bOps, a.bVals = fieldFilterArgs(f.FieldFilters)
 	return a
 }
 
@@ -192,6 +197,22 @@ func attrFilterArgs(filters []domain.AttrFilter) (attrs []uuid.UUID, ops, vals [
 		vals = append(vals, val)
 	}
 	return attrs, ops, vals
+}
+
+// fieldFilterArgs đổi điều kiện trên trường có sẵn thành ba mảng song song; contains
+// escape ký tự LIKE như thuộc tính chữ
+func fieldFilterArgs(filters []domain.FieldFilter) (fields, ops, vals []string) {
+	fields, ops, vals = []string{}, []string{}, []string{}
+	for _, f := range filters {
+		val := f.Value
+		if f.Op == domain.OpContains {
+			val = likeEscaper.Replace(val)
+		}
+		fields = append(fields, string(f.Field))
+		ops = append(ops, string(f.Op))
+		vals = append(vals, val)
+	}
+	return fields, ops, vals
 }
 
 func (r *AssetRepository) CountByType(ctx context.Context) (map[uuid.UUID]domain.TypeCounts, error) {
