@@ -118,3 +118,46 @@ func TestRole_DeletedRoleGrantsNothing(t *testing.T) {
 		}
 	}
 }
+
+// Xoá role chưa commit rồi đổi tên / đổi quyền: phải đợi và thấy role đã xoá (404), không
+// ghi vào hàng đã xoá rồi trả 200
+func TestRole_UpdateWaitsForUncommittedDelete(t *testing.T) {
+	r := newRepos(t)
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name string
+		do   func(id uuid.UUID) error
+	}{
+		{"rename", func(id uuid.UUID) error {
+			_, err := r.roles.Update(ctx, id, "Renamed", "")
+			return err
+		}},
+		{"permissions", func(id uuid.UUID) error {
+			_, err := r.roles.ReplacePermissions(ctx, id, []string{domain.PermAccountRead})
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			role := customRole(t, r, domain.PermAccountRead)
+			tx, err := r.pool.Begin(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback(ctx) //nolint:errcheck
+			if _, err := tx.Exec(ctx, `UPDATE identity.roles SET deleted_at = now() WHERE id = $1`, role.ID); err != nil {
+				t.Fatal(err)
+			}
+			done := make(chan error, 1)
+			go func() { done <- tc.do(role.ID) }()
+			if !blocked(done) {
+				t.Fatal("update did not wait for the uncommitted delete")
+			}
+			if err := tx.Commit(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if err := <-done; !errors.Is(err, domain.ErrRoleNotFound) {
+				t.Errorf("%s after delete = %v, want ErrRoleNotFound", tc.name, err)
+			}
+		})
+	}
+}

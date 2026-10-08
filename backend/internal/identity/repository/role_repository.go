@@ -70,7 +70,9 @@ func (r *RoleRepository) Update(ctx context.Context, id uuid.UUID, name, descrip
 	var out domain.Role
 	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
 		q := r.q.WithTx(tx)
-		cur, err := getRole(ctx, q, id)
+		// khoá hàng: xoá đang dở thì đợi, xoá xong thì không thấy role (404) thay vì ghi vào
+		// hàng đã xoá
+		cur, err := lockRole(ctx, q, id)
 		if err != nil {
 			return err
 		}
@@ -100,7 +102,7 @@ func (r *RoleRepository) ReplacePermissions(ctx context.Context, id uuid.UUID, p
 	var out domain.Role
 	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
 		q := r.q.WithTx(tx)
-		cur, err := getRole(ctx, q, id)
+		cur, err := lockRole(ctx, q, id)
 		if err != nil {
 			return err
 		}
@@ -215,6 +217,22 @@ func (r *RoleRepository) append(ctx context.Context, tx pgx.Tx, typ string, id u
 		return err
 	}
 	return r.outbox.Append(ctx, tx, e)
+}
+
+// lockRole: như getRole nhưng khoá hàng (FOR UPDATE, chỉ role chưa xoá) cho đến hết tx
+func lockRole(ctx context.Context, q *db.Queries, id uuid.UUID) (domain.Role, error) {
+	row, err := q.LockActiveRole(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Role{}, domain.ErrRoleNotFound
+	}
+	if err != nil {
+		return domain.Role{}, fmt.Errorf("identity: lock role: %w", err)
+	}
+	perms, err := q.RolePermissions(ctx, id)
+	if err != nil {
+		return domain.Role{}, fmt.Errorf("identity: role permissions: %w", err)
+	}
+	return toRole(row, perms), nil
 }
 
 func getRole(ctx context.Context, q *db.Queries, id uuid.UUID) (domain.Role, error) {

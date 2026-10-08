@@ -23,11 +23,11 @@ RETURNING *;
 
 -- name: UpdateRole :one
 UPDATE identity.roles SET name = @name, description = @description, updated_at = now()
-WHERE id = @id
+WHERE id = @id AND deleted_at IS NULL
 RETURNING *;
 
 -- name: TouchRole :exec
-UPDATE identity.roles SET updated_at = now() WHERE id = @id;
+UPDATE identity.roles SET updated_at = now() WHERE id = @id AND deleted_at IS NULL;
 
 -- Xoá mềm; không xoá nếu còn account giữ role (service đã kiểm tra, đây là lớp chặn cuối)
 -- name: DeleteRole :execrows
