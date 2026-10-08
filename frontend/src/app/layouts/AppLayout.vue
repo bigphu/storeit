@@ -204,6 +204,10 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 0.25rem;
 }
+/* bảng tra cứu đọc từ trên xuống: chữ dài xuống dòng (bảng dữ liệu khác giữ một dòng) */
+.shortcut-table :deep(.p-datatable-tbody > tr > td) {
+  white-space: normal;
+}
 /* bảng tra cứu: không tô dòng khi rê chuột */
 .shortcut-table :deep(.p-datatable-tbody > tr:hover) {
   background: inherit;

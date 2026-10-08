@@ -94,6 +94,16 @@ Seeded IDs are in `domain/permissions.go` (`GeneralTypeID`, `AvailableStatusID`,
   `sort` or `type_id` (missing or unknown type). A malformed `attr`/`sort` is a 400 from
   the request validator. SQL: the filters reach `ListAssets`/`CountAssets` as three
   parallel arrays (attribute, `<data type>_<op>`, value) checked with `NOT EXISTS`.
+- `field=<key>:<op>:<value>` (repeatable, AND) filters the fields every asset has and works
+  without `type_id`: `purchase_date`, `created_at`, `updated_at` with `eq|gt|gte|lt|lte` and
+  a `YYYY-MM-DD` day; `description` with `contains`. `created_at`/`updated_at` compare whole
+  days in `tz` (IANA, default UTC). The service turns each day into `[start, next start)`
+  instants (`domain.ResolveFieldQuery`), so SQL only compares timestamps. Assets with no
+  purchase date never match a `purchase_date` condition. Errors are 422
+  `/errors/invalid-field-query` with fields `field[i]`, and an unknown `tz` is 422
+  `/errors/invalid-time-zone`. Export filters accept the same `field` list and use the request
+  `tz`. SQL: three more parallel arrays (`b_fields`, `b_ops`, `b_vals`), each condition wrapped
+  in `COALESCE(…, false)` so a `NULL` column never matches.
 
 ## API (`/api/v1`) and permissions
 
@@ -212,6 +222,12 @@ at once, paths like `layout.columns[3].field`): 1 to 60 columns (0 allowed when 
 characters, no control characters; `width` 0 or 4 to 80; `sheet_name` 1 to 31 UTF-16 units
 (Excel's count, so an emoji is 2) without `[ ] : * ? / \` and not starting or ending with
 `'`; the problem's `detail` names the first bad field (`layout.sheet_name: ...`); enums must hold one of their values; `sort` must be valid.
+
+**Column widths:** a `width` set in the layout wins. Every other column is sized from its
+header (+4 for the filter button) and the longest cell among the first 500 rows (+2),
+clamped to 10–60 characters (`spreadsheet.SheetOptions.AutoWidth`). The writer buffers those
+rows before streaming, because excelize needs widths before the first row. New reports in the
+UI start with one sheet per type.
 
 **Attributes and skipped columns:** an `attr:<key>` column is resolved per sheet. In
 `per_type` mode it appears only on sheets whose type has an active attribute with that key;
