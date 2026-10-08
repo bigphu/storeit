@@ -10,6 +10,7 @@
     "test": "vitest run",
     "typecheck": "vue-tsc -b",
     "check": "npm run typecheck && npm run test && vite build",
+    "perf": "node scripts/perf.mjs",
     "gen:api": "openapi-typescript ../backend/internal/identity/handler/openapi.yaml -o src/lib/api/identity.d.ts && openapi-typescript ../backend/internal/inventory/handler/openapi.yaml -o src/lib/api/inventory.d.ts"
   },
   "dependencies": {

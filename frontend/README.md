@@ -40,6 +40,7 @@ TLS is the job of the reverse proxy in front. The build puts bundles under `/sta
 | `npm run gen:api` | Regenerate `src/lib/api/{identity,inventory}.d.ts` from the backend OpenAPI specs. Run after changing a spec; commit the output. |
 | `npm run check` | Type-check (`vue-tsc`), unit tests (Vitest), production build |
 | `npm test` | Unit tests only |
+| `npm run perf` | Lighthouse on the production build (`vite preview`): /login and a signed-in /assets, mobile and desktop, median of 3. Needs the backend with seed data and `SEED_PASSWORD` (from `../.env`); options `--runs N`, `--pages login,assets`, `--no-build`. Reports go to `.perf/`. Don't measure the dev server. |
 | `docker build --target prod .` | Production image (the root `make images` builds it with the backend image) |
 
 ## Layout

@@ -56,7 +56,9 @@ export default defineConfig({
     port: 3000,
     strictPort: true,
     proxy: {
-      '/api': { target: process.env.API_URL ?? 'http://localhost:8080', changeOrigin: false },
+      // 127.0.0.1, không phải localhost: trên Windows localhost thử IPv6 trước, mỗi request
+      // mất thêm khoảng 200 ms vì Docker chỉ nghe trên IPv4
+      '/api': { target: process.env.API_URL ?? 'http://127.0.0.1:8080', changeOrigin: false },
     },
     // Trong container (compose.yml): bind mount không phát sự kiện file, nên dùng
     // polling; HMR nối về port publish trên host

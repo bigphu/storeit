@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+# báo cáo Lighthouse của npm run perf
+.perf
 *.local
 
 # Editor directories and files
