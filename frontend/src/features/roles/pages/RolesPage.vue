@@ -142,7 +142,7 @@ const roleMenu = (r: Role): MenuItem[] => [
   { label: 'Open', icon: 'pi pi-arrow-right', command: () => openRole(r) },
   { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => openRole(r, true) },
   { separator: true, visible: canManage.value },
-  { label: 'Quick edit', icon: 'pi pi-pencil', visible: canManage.value, command: () => openQuick(r) },
+  { label: 'Quick edit', icon: 'pi pi-sliders-h', visible: canManage.value, command: () => openQuick(r) },
   {
     label: people(r) > 0 ? `Delete (held by ${peopleLabel(people(r))})` : 'Delete',
     icon: 'pi pi-trash',

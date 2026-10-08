@@ -180,7 +180,7 @@ Spec: `docs/superpowers/specs/2026-10-07-detail-flows-design.md`.
 - **Each area has one save path** (`use…OverviewSave` in `features/<area>/overviewSave.ts`), shared by the page, the quick edit drawer and inline cells.
 - **Lists:**
   - `InlineCell` shows a pencil next to a name (or an asset's status or purchase date) while its row or card is hovered or focused; the pencil edits it in place. Clicking the value itself still opens the item.
-  - `QuickEditDrawer` (the pencil) shows the Overview fields; ↑/↓ moves between rows. Its `#actions` slot (label from `actions-label`) holds the row's actions as buttons that run at once, not through Save (accounts, export profiles).
+  - `QuickEditDrawer` (the sliders icon, `pi pi-sliders-h`, on row buttons, card buttons and menus) shows the Overview fields; the pencil is only for editing one value in place; ↑/↓ moves between rows. Its `#actions` slot (label from `actions-label`) holds the row's actions as buttons that run at once, not through Save (accounts, export profiles).
   - Drawers are built on `SideDrawer` (position, width, part classes, `closed` once the slide-out has finished); the narrow-screen navigation drawer uses it too. A list opens and closes its quick edit drawer through `useQuickDrawer(item, clearDraft)` (`lib/quickDrawer.ts`): closing only hides it, and the item and draft are cleared on `@closed`, so the closing animation runs with the content still there. Keep `v-if="quick"` on the drawer.
 - **Asset quick saves** read the full asset and PUT it with its version (`features/assets/quickEdit.ts`, `useAssetActions().quickSave`).
 - **The report editor** (`ReportEditor.vue`) is shared by the Export report dialog and the export profile page.
