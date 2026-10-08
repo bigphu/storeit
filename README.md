@@ -70,4 +70,6 @@ docker compose -f compose.prod.yml up -d
 ```
 
 `web` (nginx) is the only published service, on `127.0.0.1:${WEB_PORT}`: it serves the
-SPA and proxies `/api` to the app. Put a reverse proxy with HTTPS in front of it.
+SPA and proxies `/api` to the app. Put a reverse proxy with HTTPS in front of it:
+`deploy/nginx/storeit.bigphu.io.vn.conf` is the host nginx site for
+`storeit.bigphu.io.vn` (Let's Encrypt via certbot; install steps in the file).
