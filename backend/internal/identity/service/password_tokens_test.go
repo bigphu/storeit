@@ -271,7 +271,7 @@ func TestSendAccountEmail(t *testing.T) {
 		t.Errorf("text does not say how long the link lasts:\n%s", m.Text)
 	}
 	// HTML: tên, thời hạn, nút; nút màu brand của app (#059669), không còn màu teal cũ
-	for _, want := range []string{a.Name, "72 hours", "Set your password", "#059669"} {
+	for _, want := range []string{a.Name, "72 hours", "Set your password", "#059669", `src="http://app.test/email-logo.png"`} {
 		if !strings.Contains(m.HTML, want) {
 			t.Errorf("invite html is missing %q:\n%s", want, m.HTML)
 		}
