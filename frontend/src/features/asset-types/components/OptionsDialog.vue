@@ -70,12 +70,12 @@ function addOption() {
 }
 
 function removeOption(o: Option) {
-  const ref = { ...ids(), optionId: o.id }
+  const target = { ...ids(), optionId: o.id }
   return runAction({
-    run: () => removeOpt.mutateAsync(ref),
+    run: () => removeOpt.mutateAsync(target),
     done: `${o.label} removed.`,
     failed: `Couldn't remove ${o.label}.`,
-    undo: () => restoreOpt.mutateAsync(ref),
+    undo: () => restoreOpt.mutateAsync(target),
     undone: `${o.label} is back.`,
     undoFailed: `Couldn't bring ${o.label} back. It stays removed.`,
   })
