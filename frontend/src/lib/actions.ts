@@ -1,6 +1,6 @@
 // Hành động thay đổi dữ liệu theo spec "Act now, offer Undo": chạy ngay, báo kết quả, cho
 // Undo trong 8 giây. Mutation dùng qua đây phải có meta toast: false (lỗi do đây báo)
-import { describeError } from '@/lib/errors'
+import { ApiError, describeError } from '@/lib/errors'
 import { notify } from '@/lib/notify'
 
 export interface UndoOptions<T> {
@@ -44,13 +44,26 @@ export function announce<T>(result: T, o: UndoOptions<T>): void {
   })
 }
 
+// worthRetrying: lỗi mạng, lỗi server (5xx) và 429 thì thử lại có thể được; lỗi khác của phía
+// gọi (trùng tên, version cũ, dữ liệu sai) thử lại vẫn y như cũ nên không mời
+export function worthRetrying(err: unknown): boolean {
+  return !(err instanceof ApiError) || err.status >= 500 || err.status === 429
+}
+
 export async function runAction<T>(o: ActionOptions<T>): Promise<boolean> {
   let result: T
   try {
     result = await o.run()
   } catch (err) {
     const why = describeError(err)
-    notify.error(o.failed ?? why, { detail: o.failed ? why : undefined, retry: () => void runAction(o) })
+    // Retry chạy một lần (bấm hai lần lúc thông báo đang mờ đi không chạy hai lần)
+    let retried = false
+    const retry = () => {
+      if (retried) return
+      retried = true
+      void runAction(o)
+    }
+    notify.error(o.failed ?? why, { detail: o.failed ? why : undefined, retry: worthRetrying(err) ? retry : undefined })
     return false
   }
   announce(result, o)

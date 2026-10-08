@@ -78,3 +78,27 @@ describe('announce', () => {
     expect(undo).toHaveBeenCalledOnce()
   })
 })
+
+describe('runAction Retry', () => {
+  it('retries once even if Retry is clicked twice (the toast is still fading out)', async () => {
+    const run = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(1)
+    await runAction({ run, done: 'Sent.' })
+    seen[0].retry!()
+    seen[0].retry!()
+    await flush()
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+  it('offers no Retry for client errors that would fail the same way again', async () => {
+    const taken = new ApiError({ type: '/errors/name-taken', title: 'Name taken', status: 409 })
+    await runAction({ run: () => Promise.reject(taken), done: 'Saved.' })
+    expect(seen[0].retry).toBeUndefined()
+  })
+  it('offers Retry for server errors and rate limits', async () => {
+    const down = new ApiError({ type: '/errors/internal', title: 'Server error', status: 503 })
+    const busy = new ApiError({ type: '/errors/rate-limited', title: 'Too many requests', status: 429 })
+    await runAction({ run: () => Promise.reject(down), done: 'Saved.' })
+    await runAction({ run: () => Promise.reject(busy), done: 'Saved.' })
+    expect(seen[0].retry).toBeTypeOf('function')
+    expect(seen[1].retry).toBeTypeOf('function')
+  })
+})
