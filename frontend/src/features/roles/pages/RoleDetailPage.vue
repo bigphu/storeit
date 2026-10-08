@@ -89,6 +89,7 @@ async function savePermissions() {
     done: `Permissions of ${role.value?.name ?? 'the role'} saved.`,
     failed: "Couldn't save the permissions.",
     undo: () => setPerms.mutateAsync({ id: props.id, permissions: before }),
+    undoKey: `role-perms:${props.id}`,
     undone: 'Permissions put back.',
     undoFailed: "Couldn't put the permissions back. The new permissions stay.",
     after: () => clearTab(draft, 'permissions'),
@@ -141,6 +142,7 @@ function removePerson(a: AccountListItem) {
     done: `${a.name} removed from ${name}.`,
     failed: `Couldn't remove ${a.name} from ${name}.`,
     undo: () => assign.mutateAsync({ id: a.id, roleIds: before }),
+    undoKey: `account-roles:${a.id}`,
     undone: `${a.name} has ${name} again.`,
     undoFailed: `Couldn't give ${a.name} ${name} again.`,
   })
@@ -164,6 +166,7 @@ async function addPerson() {
     done: `${a.name} now has ${name}.`,
     failed: `Couldn't give ${a.name} ${name}.`,
     undo: () => assign.mutateAsync({ id: a.id, roleIds: before }),
+    undoKey: `account-roles:${a.id}`,
     undone: `${a.name} removed from ${name} again.`,
     undoFailed: `Couldn't remove ${a.name} from ${name} again.`,
     after: () => {

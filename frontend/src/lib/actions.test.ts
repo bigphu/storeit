@@ -102,3 +102,28 @@ describe('runAction Retry', () => {
     expect(seen[1].retry).toBeTypeOf('function')
   })
 })
+
+// Undo đặt lại cả danh sách (quyền, role): đã có thay đổi mới hơn trên cùng thứ thì không đè
+describe('undoKey', () => {
+  it('refuses to undo an older change once a newer one on the same thing exists', async () => {
+    const undoOld = vi.fn().mockResolvedValue(undefined)
+    const undoNew = vi.fn().mockResolvedValue(undefined)
+    await runAction({ run: async () => 1, done: 'Roles saved.', undo: undoOld, undoKey: 'account-roles:a1' })
+    await runAction({ run: async () => 2, done: 'Roles saved.', undo: undoNew, undoKey: 'account-roles:a1' })
+    seen[0].undo!()
+    await flush()
+    expect(undoOld).not.toHaveBeenCalled()
+    expect(seen.at(-1)).toMatchObject({ severity: 'error' })
+    seen[1].undo!()
+    await flush()
+    expect(undoNew).toHaveBeenCalledOnce()
+  })
+  it('keeps undo for changes to different things', async () => {
+    const undoA = vi.fn().mockResolvedValue(undefined)
+    await runAction({ run: async () => 1, done: 'Saved.', undo: undoA, undoKey: 'account-roles:a1' })
+    await runAction({ run: async () => 2, done: 'Saved.', undo: async () => {}, undoKey: 'account-roles:a2' })
+    seen[0].undo!()
+    await flush()
+    expect(undoA).toHaveBeenCalledOnce()
+  })
+})

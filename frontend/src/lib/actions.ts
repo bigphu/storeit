@@ -12,6 +12,9 @@ export interface UndoOptions<T> {
   undone?: string
   // nói điều đang đúng: "Couldn't restore Laptop. It is still archived."
   undoFailed?: string
+  // Undo đặt lại cả một danh sách (quyền của role, role của tài khoản): khoá của thứ bị đổi.
+  // Đã có thay đổi mới hơn cùng khoá thì Undo cũ không chạy (sẽ đè mất thay đổi mới)
+  undoKey?: string
 }
 
 export interface ActionOptions<T> extends UndoOptions<T> {
@@ -23,9 +26,15 @@ export interface ActionOptions<T> extends UndoOptions<T> {
 }
 
 // announce: báo thành công (kèm Undo) cho việc đã chạy xong ở chỗ khác (form tự báo lỗi)
+// undoKey → lượt thay đổi mới nhất của thứ đó
+const latestChange = new Map<string, number>()
+let changeSeq = 0
+
 export function announce<T>(result: T, o: UndoOptions<T>): void {
   const done = typeof o.done === 'function' ? o.done(result) : o.done
   const undo = o.undo
+  const mine = ++changeSeq
+  if (o.undoKey) latestChange.set(o.undoKey, mine)
   if (!undo) {
     notify.success(done)
     return
@@ -36,8 +45,16 @@ export function announce<T>(result: T, o: UndoOptions<T>): void {
       // bấm hai lần (nút và Ctrl+Z) chỉ đảo một lần
       if (used) return
       used = true
+      if (o.undoKey && latestChange.get(o.undoKey) !== mine) {
+        notify.error("Can't undo this. It was changed again since.")
+        return
+      }
       undo(result).then(
-        () => notify.success(o.undone ?? 'Undone.'),
+        () => {
+          // chính lần Undo cũng là một thay đổi: các Undo cũ hơn vẫn không chạy
+          if (o.undoKey) latestChange.set(o.undoKey, ++changeSeq)
+          notify.success(o.undone ?? 'Undone.')
+        },
         (err) => notify.error(o.undoFailed ?? "Couldn't undo that.", { detail: describeError(err) }),
       )
     },

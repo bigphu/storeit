@@ -28,6 +28,8 @@ export function useAccountRolesSave() {
       done: `Roles of ${a.name} saved.`,
       failed: "Couldn't save the roles.",
       undo: () => assign.mutateAsync({ id: a.id, roleIds: before }),
+      // Undo đặt lại cả danh sách role: thay đổi mới hơn trên tài khoản này thì không đè
+      undoKey: `account-roles:${a.id}`,
       undone: 'Roles put back.',
       undoFailed: "Couldn't put the roles back. The new roles stay.",
     })
