@@ -12,8 +12,8 @@ import InlineCell from '@/components/InlineCell.vue'
 import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
-import IconAction from '@/components/IconAction.vue'
-import RowActions from '@/components/RowActions.vue'
+import RowMenuButton from '@/components/RowMenuButton.vue'
+import RowMenus from '@/components/RowMenus.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import type { Status, StatusKind } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
@@ -25,7 +25,7 @@ import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
 import { useFormErrors } from '@/lib/forms'
 import { openLocation } from '@/lib/navigation'
 import { notify } from '@/lib/notify'
-import { useListTable } from '@/lib/tableRows'
+import { useListTable, useRowMenu } from '@/lib/tableRows'
 import { kindSeverity, useCreateStatus, useReorderStatuses, useStatuses } from '../api'
 import { archiveBlock, KIND_INFO, KIND_ORDER, lanes, moveBy, orderAfterMove } from '../lanes'
 import { useStatusLifecycle, useStatusOverviewSave } from '../overviewSave'
@@ -114,7 +114,24 @@ const saveStatus = useStatusOverviewSave()
 const rename = (st: Status, name: string) => saveStatus(st, { name })
 const openStatus = (st: Status, e?: MouseEvent) => openLocation(router, `/statuses/${st.id}`, e)
 // mỗi làn một bảng: bấm dòng mở status, nút cuối dòng cho hàng đang dùng của làn đó
-const laneTables = Object.fromEntries(KIND_ORDER.map((k) => [k, useListTable<Status>({ open: (st, e) => openStatus(st, e) })])) as Record<
+// menu của dòng (chuột phải và nút ☰): mở, sửa nhanh, archive (bị chặn thì nói lý do)
+const rowMenu = useRowMenu<Status>((st) => {
+  const block = archiveBlock(st)
+  return [
+    { label: 'Open', icon: 'pi pi-arrow-right', command: () => openStatus(st) },
+    { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => openLocation(router, `/statuses/${st.id}`, undefined, true) },
+    ...(canManage.value
+      ? [
+          { separator: true },
+          { label: 'Quick edit', icon: 'pi pi-sliders-h', command: () => openQuick(st) },
+          { label: block ? `Archive (${block.toLowerCase()})` : 'Archive', icon: 'pi pi-inbox', disabled: !!block, command: () => archiveStatus(st) },
+        ]
+      : []),
+  ]
+})
+const laneTables = Object.fromEntries(
+  KIND_ORDER.map((k) => [k, useListTable<Status>({ open: (st, e) => openStatus(st, e), showMenu: rowMenu.showContext })]),
+) as Record<
   (typeof KIND_ORDER)[number],
   ReturnType<typeof useListTable<Status>>
 >
@@ -165,6 +182,7 @@ watch(statuses, (list) => {
     </div>
 
     <div class="lanes">
+      <RowMenus :menu="rowMenu" />
       <section v-for="k in KIND_ORDER" :key="k" class="lane" :aria-label="KIND_INFO[k].label">
         <header>
           <div class="lane-top">
@@ -181,10 +199,11 @@ watch(statuses, (list) => {
           size="small"
           class="lane-table"
           table-style="width: 100%; table-layout: fixed"
+          scrollable
           v-bind="laneTables[k].bind"
           @row-reorder="(e: DataTableRowReorderEvent) => onReorder(k, e)"
         >
-          <Column v-if="canManage" row-reorder header-style="width: 2.5rem" body-style="width: 2.5rem" />
+          <Column v-if="canManage" row-reorder row-reorder-icon="pi pi-grip-vertical" header-style="width: 2.5rem" body-style="width: 2.5rem" />
           <Column>
             <template #body="{ data: s }: { data: Status }">
               <div class="name-cell">
@@ -219,18 +238,10 @@ watch(statuses, (list) => {
           <Column header-style="width: 3.5rem" body-style="width: 3.5rem" body-class="num-cell">
             <template #body="{ data: s }: { data: Status }">{{ s.asset_count ?? '' }}</template>
           </Column>
-          <Column v-if="canManage" header-style="width: 5.5rem" body-style="width: 5.5rem">
+          <!-- nút ☰ ở mép phải của làn -->
+          <Column frozen align-frozen="right" header-style="width: 3rem" body-style="width: 3rem" header-class="row-menu-col" body-class="row-menu-col">
             <template #body="{ data: s, index }: { data: Status; index: number }">
-              <RowActions :count="2" :active="laneTables[k].active.isActive(index)">
-                <IconAction icon="pi pi-sliders-h" label="Quick edit" @click="openQuick(s)" />
-                <IconAction
-                  icon="pi pi-inbox"
-                  label="Archive"
-                  :disabled="!!archiveBlock(s)"
-                  :reason="archiveBlock(s)"
-                  @click="archiveStatus(s)"
-                />
-              </RowActions>
+              <RowMenuButton :active="laneTables[k].active.isActive(index)" @open="(e) => rowMenu.toggle(s, e)" />
             </template>
           </Column>
           <template #empty>

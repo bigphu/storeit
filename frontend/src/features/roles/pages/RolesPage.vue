@@ -1,15 +1,13 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Column from 'primevue/column'
-import ContextMenu from 'primevue/contextmenu'
 import DataTable, { type DataTableRowContextMenuEvent } from 'primevue/datatable'
 import InputText from 'primevue/inputtext'
-import Menu from 'primevue/menu'
 import type { MenuItem } from 'primevue/menuitem'
 import Select from 'primevue/select'
 import Skeleton from 'primevue/skeleton'
 import Textarea from 'primevue/textarea'
-import { computed, reactive, ref, shallowRef, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AddCard from '@/components/AddCard.vue'
 import CardGrid from '@/components/CardGrid.vue'
@@ -17,6 +15,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import EntityCard from '@/components/EntityCard.vue'
 import FormDialog from '@/components/FormDialog.vue'
 import IconAction from '@/components/IconAction.vue'
+import RowMenus from '@/components/RowMenus.vue'
 import InlineCell from '@/components/InlineCell.vue'
 import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
@@ -151,21 +150,14 @@ const roleMenu = (r: Role): MenuItem[] => [
     command: () => deleteRole(r),
   },
 ]
-const menu = ref<InstanceType<typeof ContextMenu>>()
-const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Role>(menu, roleMenu)
+// Menu của thẻ / dòng (chuột phải và nút ☰): cùng một danh sách; đổi thẻ khi menu đang mở
+// thì menu chuyển sang thẻ mới
+const rowMenu = useRowMenu<Role>(roleMenu)
 function onCardMenu(r: Role, e: MouseEvent) {
   e.preventDefault()
-  showMenu({ originalEvent: e, data: r, index: 0 } as DataTableRowContextMenuEvent)
+  rowMenu.showContext({ originalEvent: e, data: r, index: 0 } as DataTableRowContextMenuEvent)
 }
-// không xoá role đang chọn khi menu đóng: Menu báo đóng sau hiệu ứng, lúc đó có thể đã mở
-// cho thẻ khác
-const cardMenu = ref<InstanceType<typeof Menu>>()
-const cardMenuRole = shallowRef<Role | null>(null)
-const cardMenuItems = computed(() => (cardMenuRole.value ? roleMenu(cardMenuRole.value) : []))
-function toggleCardMenu(r: Role, e: MouseEvent) {
-  cardMenuRole.value = r
-  cardMenu.value?.toggle(e)
-}
+const toggleCardMenu = (r: Role, e: MouseEvent) => rowMenu.toggle(r, e)
 </script>
 
 <template>
@@ -177,8 +169,7 @@ function toggleCardMenu(r: Role, e: MouseEvent) {
       <SegmentedFilter v-model="layout" :options="layoutOptions" label="Layout" />
     </div>
 
-    <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />
-    <Menu ref="cardMenu" :model="cardMenuItems" popup />
+    <RowMenus :menu="rowMenu" />
 
     <CardGrid v-if="state.layout === 'cards'">
       <!-- đang tải: thẻ giả cùng cỡ; không có role nào (lỗi, dữ liệu lạ): nói rõ -->

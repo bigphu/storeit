@@ -39,7 +39,7 @@ function set(i: number, patch: Partial<EditorColumn>) {
 <template>
   <div ref="root">
     <DataTable :value="columns" data-key="field" :show-headers="false" size="small" class="col-editor" table-style="width: 100%; table-layout: fixed" @row-reorder="onReorder">
-      <Column row-reorder header-style="width: 2rem" body-style="width: 2rem" />
+      <Column row-reorder row-reorder-icon="pi pi-grip-vertical" header-style="width: 2rem" body-style="width: 2rem" />
       <Column header-style="width: 2rem" body-style="width: 2rem">
         <template #body="{ data: c, index: i }: { data: EditorColumn; index: number }">
           <Checkbox :model-value="c.include" binary :aria-label="`Include ${option(c.field)?.label ?? c.field}`" @update:model-value="(v: boolean) => set(i, { include: v })" />

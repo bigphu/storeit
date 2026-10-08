@@ -1,6 +1,5 @@
 import type { DataTableRowClickEvent, DataTableRowContextMenuEvent } from 'primevue/datatable'
 import { describe, expect, it, vi } from 'vitest'
-import { ref } from 'vue'
 import { isRowControl, onRowClick, useRowMenu, useActiveRow, rowActionsWidth, useListTable } from './tableRows'
 
 // phần tử giả: closest trả về chính nó khi selector chứa tên "thẻ" của nó
@@ -40,20 +39,30 @@ describe('onRowClick', () => {
 describe('useRowMenu', () => {
   const event = (data: object) => ({ originalEvent: {}, data, index: 0 }) as unknown as DataTableRowContextMenuEvent
 
-  it('builds items for the clicked row and clears on hide', () => {
+  it('opens the right-click menu with the items of the clicked row', () => {
+    const m = useRowMenu<{ id: string }>((r) => [{ label: `Open ${r.id}` }])
     const show = vi.fn()
-    const m = useRowMenu<{ id: string }>(ref({ show } as never), (r) => [{ label: `Open ${r.id}` }])
-    m.show(event({ id: 'a' }))
+    m.context.value = { show } as never
+    m.showContext(event({ id: 'a' }))
     expect(show).toHaveBeenCalled()
     expect(m.items.value).toEqual([{ label: 'Open a' }])
-    m.clear()
-    expect(m.items.value).toEqual([])
+  })
+
+  it('toggles the row menu button popup for that row', () => {
+    const m = useRowMenu<{ id: string }>((r) => [{ label: `Open ${r.id}` }])
+    const toggle = vi.fn()
+    m.popup.value = { toggle } as never
+    const click = {} as MouseEvent
+    m.toggle({ id: 'b' }, click)
+    expect(toggle).toHaveBeenCalledWith(click)
+    expect(m.items.value).toEqual([{ label: 'Open b' }])
   })
 
   it('does not open for rows without items', () => {
+    const m = useRowMenu<{ id: string }>(() => [])
     const show = vi.fn()
-    const m = useRowMenu<{ id: string }>(ref({ show } as never), () => [])
-    m.show(event({ id: 'a' }))
+    m.context.value = { show } as never
+    m.showContext(event({ id: 'a' }))
     expect(show).not.toHaveBeenCalled()
   })
 })

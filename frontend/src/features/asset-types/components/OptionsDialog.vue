@@ -87,7 +87,7 @@ function removeOption(o: Option) {
   <FormDialog v-model:visible="visible" size="l" icon="sliders" :title="`Options of ${attribute?.label ?? ''}`">
     <p v-if="canManage" class="hint">Drag the handle to change the order.</p>
     <DataTable :value="rows" data-key="id" size="small" row-hover @row-reorder="onReorder">
-      <Column v-if="canManage" row-reorder header-style="width: 2.5rem" />
+      <Column v-if="canManage" row-reorder row-reorder-icon="pi pi-grip-vertical" header-style="width: 2.5rem" />
       <Column header="Label">
         <template #body="{ data: o }: { data: Option }">
           <InputText v-if="canManage" v-model="labels[o.id]" aria-label="Label" fluid @keydown.enter="save(o)" />

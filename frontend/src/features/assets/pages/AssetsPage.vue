@@ -3,10 +3,8 @@ import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import Chip from 'primevue/chip'
 import Column from 'primevue/column'
-import ContextMenu from 'primevue/contextmenu'
 import DataTable, {
   type DataTablePageEvent,
-  type DataTableRowContextMenuEvent,
   type DataTableSortEvent,
 } from 'primevue/datatable'
 import InputText from 'primevue/inputtext'
@@ -18,9 +16,9 @@ import { loadRouteLocation, useRouter } from 'vue-router'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useTabId, useTabQuery, useTabTitle } from '@/app/tabs/tabPage'
 import type { AssetListItem, DataType } from '@/lib/api/types'
-import IconAction from '@/components/IconAction.vue'
 import InlineCell from '@/components/InlineCell.vue'
-import RowActions from '@/components/RowActions.vue'
+import RowMenuButton from '@/components/RowMenuButton.vue'
+import RowMenus from '@/components/RowMenus.vue'
 import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
 import { mayClose } from '@/lib/confirm'
@@ -32,7 +30,7 @@ import { formatDate, formatDateTime, toDateString } from '@/lib/dates'
 import { usePageKeys } from '@/lib/pageKeys'
 import { notify } from '@/lib/notify'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
-import { useListTable } from '@/lib/tableRows'
+import { useListTable, useRowMenu } from '@/lib/tableRows'
 import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
 import { kindSeverity, statusKinds, useStatuses } from '@/features/statuses/api'
 import { assetListQuery, assetQuery, useAsset, useAssetList } from '../api'
@@ -263,13 +261,8 @@ function openBulk(mode: 'status' | 'retire') {
   bulkOpen.value = true
 }
 
-// Bấm dòng mở tài sản; Ctrl/⌘ mở tab mới. Bấm trúng liên kết, nút hay ô chọn thì để chúng tự xử lý
-// Menu chuột phải trên dòng
-const menu = ref<InstanceType<typeof ContextMenu>>()
-const menuRow = ref<AssetListItem | null>(null)
-const menuItems = computed<MenuItem[]>(() => {
-  const a = menuRow.value
-  if (!a) return []
+// Menu của dòng (chuột phải và nút ☰ cuối dòng): mở, sửa nhanh, sửa, retire / restore
+const rowMenu = useRowMenu<AssetListItem>((a) => {
   const items: MenuItem[] = [
     { label: 'Open', icon: 'pi pi-arrow-right', command: () => actions.open(a) },
     { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => actions.open(a, undefined, true) },
@@ -278,20 +271,17 @@ const menuItems = computed<MenuItem[]>(() => {
     items.push({ separator: true })
     if (a.retired_at) items.push({ label: 'Restore', icon: 'pi pi-replay', command: () => actions.restore(a) })
     else {
+      items.push({ label: 'Quick edit', icon: 'pi pi-sliders-h', command: () => openQuick(a) })
       items.push({ label: 'Edit', icon: 'pi pi-pencil', command: () => actions.edit(a) })
       items.push({ label: 'Retire', icon: 'pi pi-ban', command: () => actions.askRetire(a) })
     }
   }
   return items
 })
-function onRowContextMenu(e: DataTableRowContextMenuEvent) {
-  menuRow.value = e.data as AssetListItem
-  menu.value?.show(e.originalEvent)
-}
 
-// bảng: bấm dòng mở tài sản (Ctrl/⌘ mở tab mới), menu chuột phải, nút cuối dòng cho hàng
-// đang dùng, tải trước tài sản khi chuột dừng trên dòng
-const table = useListTable<AssetListItem>({ open: (a, e) => actions.open(a, e), showMenu: onRowContextMenu, onHover: prefetchHovered })
+// bảng: bấm dòng mở tài sản (Ctrl/⌘ mở tab mới), menu của dòng, nút ☰ cho hàng đang dùng,
+// tải trước tài sản khi chuột dừng trên dòng
+const table = useListTable<AssetListItem>({ open: (a, e) => actions.open(a, e), showMenu: rowMenu.showContext, onHover: prefetchHovered })
 
 // Tiêu đề tab: tên loại và bộ lọc thuộc tính đầu tiên ("Laptop · RAM ≥ 16 GB +1")
 useTabTitle(() => {
@@ -522,7 +512,7 @@ watch(rows, (list) => {
     <ReportDialog v-if="canExport" v-model:visible="reportOpen" :scope="exportScope" :profile-id="reportProfile" />
     <DataExportDialog v-if="insideScope" v-model:visible="insideOpen" :scope="insideScope" />
 
-    <ContextMenu ref="menu" :model="menuItems" @hide="menuRow = null" />
+    <RowMenus :menu="rowMenu" />
     <DataTable
       :value="data?.items ?? []"
       lazy
@@ -610,15 +600,10 @@ watch(rows, (list) => {
       <Column header="Updated" sort-field="updated_at" sortable>
         <template #body="{ data: a }: { data: AssetListItem }">{{ formatDateTime(a.updated_at) }}</template>
       </Column>
-      <Column v-if="canManage" header="" class="row-actions-col">
+      <!-- nút ☰ luôn ở mép phải của bảng, kể cả khi bảng cuộn ngang -->
+      <Column frozen align-frozen="right" header-class="row-menu-col" body-class="row-menu-col">
         <template #body="{ data: a, index }: { data: AssetListItem; index: number }">
-          <RowActions :count="2" :active="table.active.isActive(index)">
-            <template v-if="!a.retired_at">
-              <IconAction icon="pi pi-sliders-h" label="Quick edit" @click="openQuick(a)" />
-              <IconAction icon="pi pi-ban" label="Retire" @click="actions.askRetire(a)" />
-            </template>
-            <IconAction v-else icon="pi pi-replay" label="Restore" @click="actions.restore(a)" />
-          </RowActions>
+          <RowMenuButton :active="table.active.isActive(index)" @open="(e) => rowMenu.toggle(a, e)" />
         </template>
       </Column>
       <template #empty>

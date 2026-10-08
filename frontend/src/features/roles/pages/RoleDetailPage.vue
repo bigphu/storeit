@@ -18,8 +18,8 @@ import DetailHeader from '@/components/DetailHeader.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import FormDialog from '@/components/FormDialog.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
-import IconAction from '@/components/IconAction.vue'
-import RowActions from '@/components/RowActions.vue'
+import RowMenuButton from '@/components/RowMenuButton.vue'
+import RowMenus from '@/components/RowMenus.vue'
 import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import SaveBar from '@/components/SaveBar.vue'
@@ -31,7 +31,7 @@ import { useSession } from '@/lib/auth/session'
 import { runAction } from '@/lib/actions'
 import { changeCount, changesOf, clearTab, discardTab, emptyDraft, isDirty, listOf, restoreTab, setList, pruneList } from '@/lib/detailDraft'
 import { notify } from '@/lib/notify'
-import { useListTable } from '@/lib/tableRows'
+import { useListTable, useRowMenu } from '@/lib/tableRows'
 import { openLocation } from '@/lib/navigation'
 import { useUrlState } from '@/lib/urlState'
 import { useRole, useSetRolePermissions } from '../api'
@@ -151,7 +151,26 @@ function removePerson(a: AccountListItem) {
   })
 }
 // bảng người giữ role: bấm dòng mở tài khoản, nút cuối dòng cho hàng đang dùng
-const membersTable = useListTable<AccountListItem>({ open: (a, e) => openLocation(router, `/accounts/${a.id}`, e) })
+// menu của dòng người giữ role: mở tài khoản, bỏ khỏi role (chính mình khỏi Administrator thì không)
+const memberMenu = useRowMenu<AccountListItem>((a) => {
+  const selfAdmin = isSelf(a) && role.value?.id === ADMINISTRATOR_ROLE_ID
+  return [
+    { label: 'Open account', icon: 'pi pi-arrow-right', command: () => openLocation(router, `/accounts/${a.id}`) },
+    { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => openLocation(router, `/accounts/${a.id}`, undefined, true) },
+    ...(canAssign.value
+      ? [
+          { separator: true },
+          {
+            label: selfAdmin ? 'Remove from role (not your own Administrator role)' : 'Remove from role',
+            icon: 'pi pi-times',
+            disabled: selfAdmin,
+            command: () => removePerson(a),
+          },
+        ]
+      : []),
+  ]
+})
+const membersTable = useListTable<AccountListItem>({ open: (a, e) => openLocation(router, `/accounts/${a.id}`, e), showMenu: memberMenu.showContext })
 
 // Thêm người: chọn trong các tài khoản chưa có role này
 const adding = ref(false)
@@ -271,10 +290,12 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
         <span class="muted">{{ peopleLabel(people) }} {{ people === 1 ? 'has' : 'have' }} this role (disabled accounts not counted).</span>
         <Button v-if="canAssign" label="Add people" icon="pi pi-plus" size="small" severity="secondary" outlined class="end" @click="adding = true" />
       </div>
+      <RowMenus :menu="memberMenu" />
       <DataTable
         :value="members?.items ?? []"
         :loading="membersLoading"
         data-key="id"
+        scrollable
         v-bind="membersTable.bind"
       >
         <Column header="Person">
@@ -295,18 +316,10 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
             </div>
           </template>
         </Column>
-        <Column v-if="canAssign" header="" header-style="width: 4rem">
+        <!-- nút ☰ luôn ở mép phải của bảng -->
+        <Column frozen align-frozen="right" header-class="row-menu-col" body-class="row-menu-col">
           <template #body="{ data: a, index }: { data: AccountListItem; index: number }">
-            <RowActions :count="1" :active="membersTable.active.isActive(index)">
-              <IconAction
-                icon="pi pi-times"
-                label="Remove from role"
-                danger
-                :disabled="isSelf(a) && role!.id === ADMINISTRATOR_ROLE_ID"
-                reason="You can’t remove your own Administrator role"
-                @click="removePerson(a)"
-              />
-            </RowActions>
+            <RowMenuButton :active="membersTable.active.isActive(index)" @open="(e) => memberMenu.toggle(a, e)" />
           </template>
         </Column>
         <template #empty>
