@@ -152,11 +152,12 @@ func (s *Service) Export(ctx context.Context, req ExportRequest) (ExportFile, er
 		cols := layout.SheetColumns(g.types)
 		headers, widths := make([]string, len(cols)), make([]float64, len(cols))
 		for i, c := range cols {
-			headers[i], widths[i] = c.Header, columnWidth(c)
+			// độ rộng đặt tay giữ nguyên, còn lại writer tự tính theo dữ liệu
+			headers[i], widths[i] = c.Header, c.Width
 		}
 		sh, err := w.Sheet(spreadsheet.SheetOptions{
 			Name: g.name, Widths: widths, Header: layout.Header, Freeze: layout.Freeze,
-			Filter: layout.Filter, Stripes: layout.Stripes, Title: title,
+			Filter: layout.Filter, Stripes: layout.Stripes, Title: title, AutoWidth: true,
 		}, headers)
 		if err != nil {
 			return ExportFile{}, err
@@ -437,22 +438,6 @@ func filterRecord(f domain.AssetFilter) map[string]any {
 		m["include_retired"] = true
 	}
 	return m
-}
-
-// columnWidth: độ rộng người dùng chọn, hay mặc định theo trường; 0 để writer tự tính
-func columnWidth(c domain.SheetColumn) float64 {
-	if c.Width != 0 {
-		return c.Width
-	}
-	switch c.Field {
-	case "name":
-		return 32
-	case "description":
-		return 40
-	case "tag":
-		return 14
-	}
-	return 0
 }
 
 func writeSummary(w *spreadsheet.Writer, types []domain.AssetType, counts map[uuid.UUID]map[domain.StatusKind]int64) error {
