@@ -105,9 +105,11 @@ services:
     entrypoint: ["/app/worker"]
     environment:
       <<: *go-env
-      # Gửi thư qua SMTP của Resend: username là "resend", mật khẩu là API key.
+      # Gửi thư qua Resend, cùng một API key (secret smtp_password) cho hai cách:
+      # smtp (mặc định): username là "resend", mật khẩu là API key;
+      # resend: gọi HTTPS API (cổng 443), dùng khi nhà cung cấp chặn cổng SMTP.
       # MAIL_FROM phải thuộc domain đã xác thực ở Resend
-      MAIL_TRANSPORT: smtp
+      MAIL_TRANSPORT: ${MAIL_TRANSPORT:-smtp}
       MAIL_FROM: ${MAIL_FROM:?set MAIL_FROM, ví dụ StoreIt <no-reply@storeit.example.com>}
       MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
       MAIL_SMTP_HOST: ${MAIL_SMTP_HOST:-smtp.resend.com}
@@ -115,6 +117,7 @@ services:
       MAIL_SMTP_TLS: ${MAIL_SMTP_TLS:-tls}
       MAIL_SMTP_USERNAME: ${MAIL_SMTP_USERNAME:-resend}
       MAIL_SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+      MAIL_RESEND_API_KEY_FILE: /run/secrets/smtp_password
     secrets: [pg_app_pw, jwt_keys, smtp_password]
     depends_on:
       migrate: { condition: service_completed_successfully }
