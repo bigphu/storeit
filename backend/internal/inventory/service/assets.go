@@ -44,6 +44,9 @@ func (s *Service) ListAssets(ctx context.Context, f domain.AssetFilter) ([]domai
 			return nil, 0, err
 		}
 	}
+	if err := resolveFieldQuery(&f); err != nil {
+		return nil, 0, err
+	}
 	return s.assets.List(ctx, f)
 }
 
@@ -64,6 +67,20 @@ func (s *Service) resolveAttrQuery(ctx context.Context, f *domain.AssetFilter) e
 		return err
 	}
 	f.AttrFilters, f.AttrOrder, err = domain.ResolveAttrQuery(t, f.Attrs, f.Sort)
+	return err
+}
+
+// resolveFieldQuery kiểm Fields theo múi giờ f.TZ và điền FieldFilters. TZ lạ là 422 kể cả
+// khi không có điều kiện nào
+func resolveFieldQuery(f *domain.AssetFilter) error {
+	loc, err := exportLocation(f.TZ)
+	if err != nil {
+		return err
+	}
+	if len(f.Fields) == 0 {
+		return nil
+	}
+	f.FieldFilters, err = domain.ResolveFieldQuery(f.Fields, loc)
 	return err
 }
 

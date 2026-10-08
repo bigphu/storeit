@@ -88,6 +88,10 @@ func (s *Service) Export(ctx context.Context, req ExportRequest) (ExportFile, er
 			return ExportFile{}, err
 		}
 	}
+	f.TZ = req.TZ
+	if err := resolveFieldQuery(&f); err != nil {
+		return ExportFile{}, err
+	}
 	total, err := s.assets.Count(ctx, f)
 	if err != nil {
 		return ExportFile{}, err
@@ -309,7 +313,7 @@ func (s *Service) exportTitle(ctx context.Context, actor auth.Actor, req ExportR
 	if err != nil || by == "" {
 		by = "unknown"
 	}
-	summary, err := s.filterSummary(ctx, f, types)
+	summary, err := s.filterSummary(ctx, f, types, l.DateFormat.GoLayout())
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +322,7 @@ func (s *Service) exportTitle(ctx context.Context, actor auth.Actor, req ExportR
 }
 
 // filterSummary: mô tả bộ lọc cho người đọc ("Laptop · In use · search \"think\"")
-func (s *Service) filterSummary(ctx context.Context, f domain.AssetFilter, types []domain.AssetType) (string, error) {
+func (s *Service) filterSummary(ctx context.Context, f domain.AssetFilter, types []domain.AssetType, dateLayout string) (string, error) {
 	var parts []string
 	if f.TypeID != nil && len(types) == 1 {
 		parts = append(parts, types[0].Name)
@@ -338,6 +342,9 @@ func (s *Service) filterSummary(ctx context.Context, f domain.AssetFilter, types
 	}
 	for _, af := range f.AttrFilters {
 		parts = append(parts, attrFilterText(types, af))
+	}
+	for _, c := range f.Fields {
+		parts = append(parts, fieldFilterText(c, dateLayout))
 	}
 	if f.IDs != nil {
 		parts = append(parts, fmt.Sprintf("%d selected", len(f.IDs)))
@@ -383,6 +390,26 @@ func filterValueText(a domain.Attribute, value string) string {
 	return strings.Join(parts, ", ")
 }
 
+var fieldLabels = map[string]string{
+	"purchase_date": "Purchase date", "created_at": "Created", "updated_at": "Updated", "description": "Description",
+}
+
+// fieldFilterText: một điều kiện trên trường có sẵn cho người đọc ("Purchase date ≥ 01/01/2026");
+// cond đã được ResolveFieldQuery kiểm
+func fieldFilterText(cond, dateLayout string) string {
+	parts := strings.SplitN(cond, ":", 3)
+	if len(parts) != 3 {
+		return cond
+	}
+	value := strings.TrimSpace(parts[2])
+	if parts[0] == "description" {
+		value = fmt.Sprintf("%q", value)
+	} else if d, err := time.Parse(time.DateOnly, value); err == nil {
+		value = d.Format(dateLayout)
+	}
+	return fmt.Sprintf("%s %s %s", fieldLabels[parts[0]], opSymbols[domain.AttrOp(parts[1])], value)
+}
+
 func filterRecord(f domain.AssetFilter) map[string]any {
 	m := map[string]any{}
 	if f.Query != "" {
@@ -399,6 +426,9 @@ func filterRecord(f domain.AssetFilter) map[string]any {
 	}
 	if len(f.Attrs) > 0 {
 		m["attr"] = f.Attrs
+	}
+	if len(f.Fields) > 0 {
+		m["field"] = f.Fields
 	}
 	if f.IDs != nil {
 		m["ids"] = len(f.IDs)
