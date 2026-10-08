@@ -13,10 +13,18 @@ export const assetKeys = {
   one: (id: string) => ['assets', id] as const,
 }
 
+// assetListQuery: khoá và hàm tải dùng chung cho useAssetList, fetchAssetPage và tải trước
+export function assetListQuery(params: ListParams) {
+  return {
+    queryKey: assetKeys.list(params),
+    queryFn: () => unwrap(inventoryApi.GET('/assets', { params: { query: params } })),
+  }
+}
+
 export function useAssetList(params: MaybeRefOrGetter<ListParams>) {
   return useQuery({
-    queryKey: computed(() => assetKeys.list(toValue(params))),
-    queryFn: () => unwrap(inventoryApi.GET('/assets', { params: { query: toValue(params) } })),
+    queryKey: computed(() => assetListQuery(toValue(params)).queryKey),
+    queryFn: () => assetListQuery(toValue(params)).queryFn(),
     placeholderData: keepPreviousData,
   })
 }
@@ -24,10 +32,7 @@ export function useAssetList(params: MaybeRefOrGetter<ListParams>) {
 // fetchAssetPage: tải một trang của danh sách (dùng cache nếu có), khi bước qua tài sản
 // sang trang bên cạnh
 export function fetchAssetPage(qc: QueryClient, params: ListParams) {
-  return qc.fetchQuery({
-    queryKey: assetKeys.list(params),
-    queryFn: () => unwrap(inventoryApi.GET('/assets', { params: { query: params } })),
-  })
+  return qc.fetchQuery(assetListQuery(params))
 }
 
 export function useAsset(id: MaybeRefOrGetter<string | undefined>) {

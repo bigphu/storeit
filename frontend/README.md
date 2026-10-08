@@ -128,6 +128,11 @@ Selection styling lives in `app/theme.ts` (token preset over Aura) and `app/base
     `toLocaleDateString()` per cell;
   - don't use PrimeVue's tab navigators (`show-navigators`) on bars that update while a
     page renders: they measure the layout on every update.
+- Loading a page: the router guard starts the page's code (`loadRouteLocation`) while the
+  session is checked, then starts its data (`prefetchRoute`, `app/prefetch.ts`) while the
+  code downloads. A prefetched query must use the page's own definition (`assetTypesQuery`,
+  `statusesQuery`, `assetListQuery`), or the page fetches again; add a page there when its
+  first request is worth starting early.
 - **Stay on PrimeVue 4.x, `@primeuix/themes` 2.x and `primeicons` 7.x (MIT).** From
   PrimeVue 5 / primeicons 8 (July 2026) PrimeTek ships them under a commercial "PrimeUI"
   license that needs a license key (a free Community key exists for eligible users);

@@ -11,17 +11,25 @@ export const typeKeys = {
 }
 
 // withCounts: kèm asset_count (tài sản chưa retire) cho sidebar và bộ chọn loại
-export function useAssetTypes(includeArchived: MaybeRefOrGetter<boolean> = false, withCounts = false) {
-  return useQuery({
-    queryKey: computed(() => [...typeKeys.list(toValue(includeArchived)), withCounts] as const),
+// assetTypesQuery: khoá và hàm tải dùng chung cho useAssetTypes và tải trước (app/prefetch.ts)
+export function assetTypesQuery(includeArchived: boolean, withCounts: boolean) {
+  return {
+    queryKey: [...typeKeys.list(includeArchived), withCounts] as const,
     queryFn: async () =>
       (
         await unwrap(
           inventoryApi.GET('/asset-types', {
-            params: { query: { include_archived: toValue(includeArchived), with_counts: withCounts || undefined } },
+            params: { query: { include_archived: includeArchived, with_counts: withCounts || undefined } },
           }),
         )
       ).items,
+  }
+}
+
+export function useAssetTypes(includeArchived: MaybeRefOrGetter<boolean> = false, withCounts = false) {
+  return useQuery({
+    queryKey: computed(() => assetTypesQuery(toValue(includeArchived), withCounts).queryKey),
+    queryFn: () => assetTypesQuery(toValue(includeArchived), withCounts).queryFn(),
   })
 }
 

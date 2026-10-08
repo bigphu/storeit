@@ -18,17 +18,25 @@ export function kindSeverity(k: StatusKind): Tone {
 }
 
 // withCounts: kèm asset_count (số tài sản của mỗi status, kể cả đã retire) cho trang status
-export function useStatuses(includeArchived: MaybeRefOrGetter<boolean> = false, withCounts = false) {
-  return useQuery({
-    queryKey: computed(() => statusKeys.list(toValue(includeArchived), withCounts)),
+// statusesQuery: khoá và hàm tải dùng chung cho useStatuses và tải trước (app/prefetch.ts)
+export function statusesQuery(includeArchived: boolean, withCounts: boolean) {
+  return {
+    queryKey: statusKeys.list(includeArchived, withCounts),
     queryFn: async () =>
       (
         await unwrap(
           inventoryApi.GET('/asset-statuses', {
-            params: { query: { include_archived: toValue(includeArchived), with_counts: withCounts || undefined } },
+            params: { query: { include_archived: includeArchived, with_counts: withCounts || undefined } },
           }),
         )
       ).items,
+  }
+}
+
+export function useStatuses(includeArchived: MaybeRefOrGetter<boolean> = false, withCounts = false) {
+  return useQuery({
+    queryKey: computed(() => statusesQuery(toValue(includeArchived), withCounts).queryKey),
+    queryFn: () => statusesQuery(toValue(includeArchived), withCounts).queryFn(),
   })
 }
 
