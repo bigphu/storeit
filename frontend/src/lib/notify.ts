@@ -64,8 +64,13 @@ export function latestUndo(): (() => void) | undefined {
   return undos.at(-1)?.run
 }
 
-// isUndoShortcut: Ctrl/⌘ Z (không Shift, không Alt) và không đang gõ trong ô nhập
-export function isUndoShortcut(e: KeyboardEvent): boolean {
+// hộp thoại modal đang mở (PrimeVue Dialog, ConfirmDialog)
+const modalOpen = () => typeof document !== 'undefined' && !!document.querySelector('.p-dialog-mask')
+
+// isUndoShortcut: Ctrl/⌘ Z (không Shift, không Alt), không đang gõ trong ô nhập, và không có
+// hộp thoại modal đang mở (Undo sẽ đảo một việc nằm sau hộp thoại mà người dùng không thấy)
+export function isUndoShortcut(e: KeyboardEvent, dialogOpen = modalOpen()): boolean {
+  if (dialogOpen) return false
   if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'z') return false
   const t = e.target as { closest?: (s: string) => unknown } | null
   return !t?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')

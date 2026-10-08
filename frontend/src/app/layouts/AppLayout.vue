@@ -80,6 +80,7 @@ const SHORTCUTS: [string, string][] = [
   ['N', 'New asset of the type you are viewing'],
   ['J / K', 'Previous / next asset, on an asset page'],
   ['E', 'Edit the open asset'],
+  ['Ctrl Z', 'Undo the change in the latest message'],
   ['Alt 1–9', 'Go to tab 1–9'],
   ['Ctrl-click, middle-click', 'Open a link in a new tab'],
   ['Esc', 'Close a dialog or menu'],
