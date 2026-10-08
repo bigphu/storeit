@@ -17,7 +17,7 @@ import type { MenuItem } from 'primevue/menuitem'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTabId, useTabQuery, useTabTitle } from '@/app/tabs/tabPage'
-import type { AssetListItem } from '@/lib/api/types'
+import type { AssetListItem, DataType } from '@/lib/api/types'
 import InlineCell from '@/components/InlineCell.vue'
 import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
@@ -27,6 +27,7 @@ import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { formatDate, formatDateTime, toDateString } from '@/lib/dates'
 import { usePageKeys } from '@/lib/pageKeys'
+import { notify } from '@/lib/notify'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
 import { useActiveRow } from '@/lib/tableRows'
 import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
@@ -54,7 +55,7 @@ import {
   toTableSort,
 } from '../listQuery'
 import { useAssetActions } from '../useAssetActions'
-import { attrText, type FormValues, formatValue, formValueFrom, fromApiValues } from '../values'
+import { attrInputError, attrText, type FormValues, formatValue, formValueFrom, fromApiValues } from '../values'
 
 // typeId (từ /types/:typeId/assets): danh sách của một loại; không có là mọi loại
 const props = defineProps<{ typeId?: string }>()
@@ -298,6 +299,12 @@ const quickDraft = reactive(emptyDraft())
 const quickSaving = ref(false)
 const { data: quickAsset } = useAsset(() => quick.value?.id)
 const { data: quickType } = useAssetType(() => quickAsset.value?.asset_type.id)
+// Lưu một ô thuộc tính sửa tại chỗ; gõ sai kiểu (chữ trong ô số) thì báo, không lưu
+function saveAttr(a: AssetListItem, attr: { key: string; label: string; data_type: DataType }, text: string) {
+  const err = attrInputError(attr.data_type, text)
+  if (err) return notify.error(`${attr.label}: ${err}`)
+  return actions.quickSave(a, {}, `${attr.label} changed`, { [attr.key]: formValueFrom(attr.data_type, text) })
+}
 // Ô thuộc tính: kiểu ô nhập theo kiểu dữ liệu; có/không và lựa chọn dùng danh sách thả xuống
 type AttrDef = { data_type: string; options: { id: string; label: string; removed?: boolean }[] }
 const attrKind = (x: AttrDef) => (x.data_type === 'date' ? 'date' : x.data_type === 'select' || x.data_type === 'boolean' ? 'select' : 'text')
@@ -382,7 +389,11 @@ async function saveQuick() {
   for (const k of Object.keys(ch).filter((x) => x.startsWith('attr:'))) {
     const key = k.slice(5)
     const def = a.attributes.find((x) => x.key === key)
-    if (def) attrPatch[key] = formValueFrom(def.data_type, String(ch[k] ?? ''))
+    if (!def) continue
+    // gõ sai kiểu thì không lưu gì, bản nháp giữ nguyên để sửa lại
+    const err = attrInputError(def.data_type, String(ch[k] ?? ''))
+    if (err) return notify.error(`${def.label}: ${err}`)
+    attrPatch[key] = formValueFrom(def.data_type, String(ch[k] ?? ''))
   }
   quickSaving.value = true
   try {
@@ -568,7 +579,7 @@ watch(rows, (list) => {
             :editable="canQuick(a)"
             :kind="attrKind(attr)"
             :options="attrOptions(attr)"
-            @save="(v) => actions.quickSave(a, {}, `${attr.label} changed`, { [attr.key]: formValueFrom(attr.data_type, v) })"
+            @save="(v) => saveAttr(a, attr, v)"
           >
             {{ cell(a, attr.key) }}
           </InlineCell>

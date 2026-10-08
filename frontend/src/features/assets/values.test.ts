@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AssetDetail, AttributeValue } from '@/lib/api/types'
-import { assetBodyOf, attrText, formatValue, formValueFrom, fromApiValues, toApiValues, type FormValues } from './values'
+import { assetBodyOf, attrInputError, attrText, formatValue, formValueFrom, fromApiValues, toApiValues, type FormValues } from './values'
 
 const attrs = [
   { key: 'serial', data_type: 'text' },
@@ -118,5 +118,18 @@ describe('attrText / formValueFrom', () => {
     expect(formValueFrom('boolean', '')).toBeNull()
     expect(formValueFrom('select', 'opt-2')).toBe('opt-2')
     expect(formValueFrom('text', 'Xám')).toBe('Xám')
+  })
+})
+
+// Ô sửa nhanh là ô chữ: số gõ sai không được thành NaN (gửi lên thành null, xoá mất giá trị)
+describe('attrInputError', () => {
+  it('rejects text that is not a number for number attributes', () => {
+    expect(attrInputError('number', '12kg')).toBe('Enter a number.')
+    expect(attrInputError('number', ' 1e3 ')).toBeUndefined()
+    expect(attrInputError('number', '-2.5')).toBeUndefined()
+    expect(attrInputError('number', '')).toBeUndefined()
+  })
+  it('accepts any text for other types', () => {
+    expect(attrInputError('text', '12kg')).toBeUndefined()
   })
 })

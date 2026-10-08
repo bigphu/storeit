@@ -110,6 +110,14 @@ export function attrText(v: AttributeValue | undefined): string {
   return String(v.value)
 }
 
+// attrInputError: chữ gõ trong ô sửa nhanh không hợp kiểu thì trả lời nhắc (không lưu).
+// Số gõ sai mà vẫn lưu sẽ thành NaN, gửi lên thành null và xoá mất giá trị cũ
+export function attrInputError(type: DataType, text: string): string | undefined {
+  const t = text.trim()
+  if (type === 'number' && t !== '' && !Number.isFinite(Number(t))) return 'Enter a number.'
+  return undefined
+}
+
 // formValueFrom: chữ vừa sửa thành giá trị form đúng kiểu (toApiValues đổi tiếp sang API)
 export function formValueFrom(type: DataType, text: string): FormValue {
   const t = text.trim()
