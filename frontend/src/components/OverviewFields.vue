@@ -16,8 +16,9 @@ import DatePicker from 'primevue/datepicker'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Textarea from 'primevue/textarea'
+import { watch } from 'vue'
 import { formatDate, fromDateString, toDateString } from '@/lib/dates'
-import { type Draft, type DraftValue, setEdit, valueOf } from '@/lib/detailDraft'
+import { type Draft, type DraftValue, setEdit, valueOf, pruneTab } from '@/lib/detailDraft'
 
 // Lưới nhãn/giá trị; trường sửa được là ô nhập ngay từ đầu (không có nút Edit). Đổi giá trị
 // ghi vào bản nháp; trường đã đổi tô nền cam nhạt. Chỉ xem: mọi trường là chữ
@@ -34,6 +35,12 @@ const props = withDefaults(
   { tab: 'overview' },
 )
 const savedOf = (f: FieldDef) => props.saved[f.key] ?? ''
+// giá trị đã lưu đổi (lưu ở chỗ khác, dữ liệu nạp lại): thay đổi nay trùng thì không còn đếm
+watch(
+  () => props.saved,
+  (s) => pruneTab(props.draft, props.tab, s),
+  { deep: true },
+)
 const val = (f: FieldDef) => valueOf(props.draft, props.tab, f.key, savedOf(f))
 const changed = (f: FieldDef) => val(f) !== savedOf(f)
 const set = (f: FieldDef, v: DraftValue | undefined) => setEdit(props.draft, props.tab, f.key, v ?? '', savedOf(f))

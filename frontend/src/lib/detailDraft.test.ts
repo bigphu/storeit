@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  changeCount, changesOf, clearTab, discardTab, emptyDraft, isDirty, listOf, previousOf, restoreTab, setEdit, setList, valueOf,
-} from './detailDraft'
+import { changeCount, changesOf, clearTab, discardTab, emptyDraft, isDirty, listOf, previousOf, restoreTab, setEdit, setList, valueOf, pruneTab, pruneList } from './detailDraft'
 
 describe('detailDraft', () => {
   it('counts edits per tab and drops an edit set back to the saved value', () => {
@@ -44,5 +42,23 @@ describe('detailDraft', () => {
     expect(listOf(d, 'permissions', saved, ['assets.read', 'types.read', 'types.manage', 'roles.read'])).toEqual(['assets.read', 'types.read', 'types.manage'])
     setList(d, 'permissions', saved, ['assets.read'])
     expect(changeCount(d, 'permissions')).toBe(0)
+  })
+})
+
+// Giá trị đã lưu đổi (lưu ở chỗ khác, nạp lại) mà trùng thay đổi trong bản nháp thì thay đổi đó
+// không còn là "chưa lưu"
+describe('pruneTab / pruneList', () => {
+  it('drops edits that now equal the saved values', () => {
+    const d = emptyDraft()
+    setEdit(d, 'overview', 'name', 'Laptops', 'Laptop')
+    setEdit(d, 'overview', 'description', 'New', 'Old')
+    pruneTab(d, 'overview', { name: 'Laptops', description: 'Old' })
+    expect(changesOf(d, 'overview')).toEqual({ description: 'New' })
+  })
+  it('drops ticks that now match the saved list', () => {
+    const d = emptyDraft()
+    setList(d, 'roles', ['a'], ['a', 'b', 'c'])
+    pruneList(d, 'roles', ['a', 'b'])
+    expect(changesOf(d, 'roles')).toEqual({ c: true })
   })
 })

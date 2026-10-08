@@ -11,7 +11,7 @@ import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
 import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useLeaveGuard, useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb from '@/components/AppBreadcrumb.vue'
 import DetailHeader from '@/components/DetailHeader.vue'
@@ -23,7 +23,7 @@ import type { Role } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { formatDateTime } from '@/lib/dates'
-import { changeCount, changesOf, clearTab, discardTab, emptyDraft, isDirty, listOf, restoreTab, setList } from '@/lib/detailDraft'
+import { changeCount, changesOf, clearTab, discardTab, emptyDraft, isDirty, listOf, restoreTab, setList, pruneList } from '@/lib/detailDraft'
 import { notify } from '@/lib/notify'
 import { initials, inviteNote, relativeTime } from '@/lib/people'
 import { useUrlState } from '@/lib/urlState'
@@ -64,6 +64,8 @@ const savedFields = computed(() => ({ name: account.value?.name ?? '', email: ac
 const saved = computed(() => account.value?.roles.map((r) => r.id) ?? [])
 const allRoleIds = computed(() => (roles.data.value ?? []).map((r) => r.id))
 const current = computed(() => listOf(draft, 'roles', saved.value, allRoleIds.value))
+// danh sách đã lưu đổi: tick nay trùng thì không còn là thay đổi
+watch(saved, (s) => pruneList(draft, 'roles', s))
 function pick(id: string, on: boolean) {
   const next = on ? [...current.value, id] : current.value.filter((x) => x !== id)
   setList(draft, 'roles', saved.value, next)

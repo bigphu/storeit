@@ -30,7 +30,7 @@ import { useSession } from '@/lib/auth/session'
 import { mayClose } from '@/lib/confirm'
 import { useQuickDrawer } from '@/lib/quickDrawer'
 import { formatDay } from '@/lib/dates'
-import { changeCount, changesOf, clearTab, emptyDraft, isDirty, listOf, setList } from '@/lib/detailDraft'
+import { changeCount, changesOf, clearTab, emptyDraft, isDirty, listOf, setList, pruneList } from '@/lib/detailDraft'
 import { openLocation } from '@/lib/navigation'
 import { inviteNote } from '@/lib/people'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
@@ -152,6 +152,7 @@ const quickFields: FieldDef[] = [
 ]
 const quickSaved = computed(() => ({ name: quick.value?.name ?? '', email: quick.value?.email ?? '' }))
 const quickRoles = computed(() => quick.value?.roles.map((r) => r.id) ?? [])
+watch(quickRoles, (s) => pruneList(quickDraft, 'roles', s))
 const allRoleIds = computed(() => (roles.data.value ?? []).map((r) => r.id))
 const quickCurrent = computed(() => listOf(quickDraft, 'roles', quickRoles.value, allRoleIds.value))
 const grantable = (permissions: string[]) => permissions.every((p) => session.can(p))

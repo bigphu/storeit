@@ -10,7 +10,7 @@ import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
 import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLeaveGuard, useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb from '@/components/AppBreadcrumb.vue'
@@ -28,7 +28,7 @@ import type { AccountListItem } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { runAction } from '@/lib/actions'
-import { changeCount, changesOf, clearTab, discardTab, emptyDraft, isDirty, listOf, restoreTab, setList } from '@/lib/detailDraft'
+import { changeCount, changesOf, clearTab, discardTab, emptyDraft, isDirty, listOf, restoreTab, setList, pruneList } from '@/lib/detailDraft'
 import { notify } from '@/lib/notify'
 import { onRowClick } from '@/lib/tableRows'
 import { openLocation } from '@/lib/navigation'
@@ -69,6 +69,8 @@ const savedFields = computed(() => ({ name: role.value?.name ?? '', description:
 // Quyền: bản nháp theo từng quyền so với bản đã lưu; bật Quản lý kéo theo Xem (catalog.toggle)
 const saved = computed(() => role.value?.permissions ?? [])
 const current = computed(() => listOf(draft, 'permissions', saved.value, ALL_PERMS))
+// danh sách đã lưu đổi: tick nay trùng thì không còn là thay đổi
+watch(saved, (s) => pruneList(draft, 'permissions', s))
 const changed = computed(() => ALL_PERMS.filter((p) => current.value.includes(p) !== saved.value.includes(p)))
 function set(code: string, on: boolean) {
   setList(draft, 'permissions', saved.value, toggle(current.value, code, on))
