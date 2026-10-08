@@ -1,10 +1,28 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { inventoryApi } from '@/lib/api/client'
-import type { ExportLayout, ExportRequest } from '@/lib/api/types'
+import type { ExportFilters, ExportLayout, ExportRequest } from '@/lib/api/types'
 import { fileNameFrom, saveBlob } from '@/lib/download'
 import { unwrap } from '@/lib/errors'
 
 export const exportProfileKeys = { all: ['export-profiles'] as const }
+
+// previewListQuery: tham số GET /assets cho bản xem trước của một loại, cùng bộ lọc với file
+// export, kể cả trường có sẵn và múi giờ của chúng. Thuộc tính chỉ áp khi bộ lọc có loại
+export function previewListQuery(f: ExportFilters, typeId: string) {
+  return {
+    q: f.q,
+    type_id: typeId,
+    status_id: f.status_id,
+    status_kind: f.status_kind,
+    include_retired: f.include_retired,
+    attr: f.type_id ? f.attr : undefined,
+    field: f.field,
+    tz: f.field?.length ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined,
+    sort: f.sort,
+    page: 1,
+    page_size: 20,
+  }
+}
 
 export function useExportProfiles(enabled = true) {
   return useQuery({

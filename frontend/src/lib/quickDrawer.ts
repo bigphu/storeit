@@ -55,3 +55,40 @@ export function afterSaveNext(sawBusy: boolean, s: { busy: boolean; dirty: boole
   if (s.busy || !sawBusy) return 'wait'
   return !s.dirty && s.canNext ? 'next' : 'stay'
 }
+
+// saveNextTracker: Ctrl Enter đang chờ lần lưu chạy xong để sang dòng sau. Chờ theo busy của
+// cha, không theo tiêu đề (đổi tên thì tiêu đề đổi ngay khi lưu xong, trước khi busy về
+// false). settle() một nhịp sau khi phát save: cha chưa bật busy là không lưu (lỗi kiểm
+// tra) nên thôi chờ, để lần lưu sau không kéo sang dòng khác
+export function saveNextTracker() {
+  let pending = false
+  let sawBusy = false
+  const cancel = () => {
+    pending = false
+    sawBusy = false
+  }
+  return {
+    pending: () => pending,
+    start() {
+      pending = true
+      sawBusy = false
+    },
+    cancel,
+    settle(busy: boolean) {
+      if (!pending) return
+      if (busy) sawBusy = true
+      else if (!sawBusy) cancel()
+    },
+    onBusy(s: { busy: boolean; dirty: boolean; canNext: boolean }): 'next' | null {
+      if (!pending) return null
+      if (s.busy) {
+        sawBusy = true
+        return null
+      }
+      const r = afterSaveNext(sawBusy, s)
+      if (r === 'wait') return null
+      cancel()
+      return r === 'next' ? 'next' : null
+    },
+  }
+}

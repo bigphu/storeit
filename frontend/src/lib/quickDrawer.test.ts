@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
-import { afterSaveNext, quickEditKey, useQuickDrawer } from './quickDrawer'
+import { afterSaveNext, quickEditKey, saveNextTracker, useQuickDrawer } from './quickDrawer'
 
 describe('useQuickDrawer', () => {
   it('keeps the item while the drawer slides out, then clears it and the draft', () => {
@@ -70,5 +70,38 @@ describe('afterSaveNext', () => {
     expect(afterSaveNext(true, { busy: false, dirty: false, canNext: true })).toBe('next')
     expect(afterSaveNext(true, { busy: false, dirty: true, canNext: true })).toBe('stay')
     expect(afterSaveNext(true, { busy: false, dirty: false, canNext: false })).toBe('stay')
+  })
+})
+
+describe('saveNextTracker', () => {
+  const state = (busy: boolean, dirty: boolean) => ({ busy, dirty, canNext: true })
+  it('moves on after a clean save even when the row title changed while saving', () => {
+    const t = saveNextTracker()
+    t.start()
+    t.settle(true) // cha đã bật busy
+    expect(t.onBusy(state(true, true))).toBeNull()
+    // tên đổi trong lúc lưu: không còn huỷ việc chờ
+    expect(t.onBusy(state(false, false))).toBe('next')
+    expect(t.pending()).toBe(false)
+  })
+  it('gives up when the parent never started saving (validation error)', () => {
+    const t = saveNextTracker()
+    t.start()
+    t.settle(false) // một nhịp sau emit('save') vẫn chưa busy
+    expect(t.pending()).toBe(false)
+    // lần lưu sau (Ctrl S thường) không kéo sang dòng sau
+    expect(t.onBusy(state(true, true))).toBeNull()
+    expect(t.onBusy(state(false, false))).toBeNull()
+  })
+  it('stays after a failed save and forgets on cancel', () => {
+    const t = saveNextTracker()
+    t.start()
+    t.settle(true)
+    t.onBusy(state(true, true))
+    expect(t.onBusy(state(false, true))).toBeNull()
+    expect(t.pending()).toBe(false)
+    t.start()
+    t.cancel()
+    expect(t.pending()).toBe(false)
   })
 })

@@ -8,6 +8,7 @@ import { inventoryApi } from '@/lib/api/client'
 import type { AssetListItem, ExportFilters } from '@/lib/api/types'
 import { unwrap } from '@/lib/errors'
 import type { TypeInfo } from './layout'
+import { previewListQuery } from './api'
 
 export interface ExportScope {
   filters: ExportFilters
@@ -43,21 +44,7 @@ export function usePreviewData(scope: () => ExportScope, enabled: () => boolean)
           queryFn: async () =>
             (
               await unwrap(
-                inventoryApi.GET('/assets', {
-                  params: {
-                    query: {
-                      q: f.q,
-                      type_id: id,
-                      status_id: f.status_id,
-                      status_kind: f.status_kind,
-                      include_retired: f.include_retired,
-                      attr: f.type_id ? f.attr : undefined,
-                      sort: f.sort,
-                      page: 1,
-                      page_size: 20,
-                    },
-                  },
-                }),
+                inventoryApi.GET('/assets', { params: { query: previewListQuery(f, id) } }),
               )
             ).items,
           enabled: enabled() && !scope().selection,

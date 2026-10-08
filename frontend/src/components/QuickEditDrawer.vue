@@ -3,7 +3,7 @@ import Button from 'primevue/button'
 import { nextTick, onActivated, onDeactivated, onMounted, onUnmounted, watch } from 'vue'
 import { isPageClickOutside } from '@/lib/clickAway'
 import { closeGuard } from '@/lib/confirm'
-import { afterSaveNext, quickEditKey } from '@/lib/quickDrawer'
+import { quickEditKey, saveNextTracker } from '@/lib/quickDrawer'
 import AppIcon from './AppIcon.vue'
 import KeyHint from './KeyHint.vue'
 import SideDrawer from './SideDrawer.vue'
@@ -34,32 +34,19 @@ async function requestClose() {
   if (await mayClose(props.dirty)) visible.value = false
 }
 // Ctrl Enter đang chờ lần lưu chạy xong để sang dòng sau
-let saveNextPending = false
-let sawBusy = false
+const saveNext = saveNextTracker()
 watch(
   () => props.busy,
   async (b) => {
-    if (!saveNextPending) return
-    if (b) {
-      sawBusy = true
-      return
-    }
-    await nextTick() // cha cập nhật dirty sau khi lưu
-    const r = afterSaveNext(sawBusy, { busy: !!props.busy, dirty: props.dirty, canNext: props.canNext })
-    if (r === 'wait') return
-    saveNextPending = false
-    sawBusy = false
-    if (r === 'next') emit('next')
+    if (!saveNext.pending()) return
+    if (!b) await nextTick() // cha cập nhật dirty sau khi lưu
+    if (saveNext.onBusy({ busy: !!props.busy, dirty: props.dirty, canNext: props.canNext }) === 'next') emit('next')
   },
 )
-// sang dòng khác bằng cách nào cũng được thì thôi chờ
-watch(
-  () => props.title,
-  () => {
-    saveNextPending = false
-    sawBusy = false
-  },
-)
+// đóng ngăn kéo thì thôi chờ
+watch(visible, (v) => {
+  if (!v) saveNext.cancel()
+})
 
 function onKey(e: KeyboardEvent) {
   if (!visible.value) return
@@ -82,16 +69,18 @@ function onKey(e: KeyboardEvent) {
       emit('save')
       break
     case 'saveNext':
-      saveNextPending = true
-      sawBusy = false
+      saveNext.start()
       emit('save')
+      void nextTick(() => saveNext.settle(!!props.busy))
       break
     case 'prev':
       e.preventDefault()
+      saveNext.cancel()
       emit('prev')
       break
     case 'next':
       e.preventDefault()
+      saveNext.cancel()
       emit('next')
       break
   }
