@@ -21,7 +21,19 @@ import { router } from './app/router'
 import { StoreItPreset } from './app/theme'
 import { queryClient } from './lib/query'
 
-createApp(App)
+// CSS chính tải không chặn (vite.config.ts: nonBlockingCss); đợi nó xong rồi mới mount để app
+// không hiện khi chưa có style. Trong lúc đợi, khung tĩnh của index.html vẫn hiện; router đã
+// bắt đầu tải code và dữ liệu của trang từ lúc .use(router)
+function appCssReady(): Promise<void> {
+  const link = document.getElementById('app-css') as HTMLLinkElement | null
+  if (!link || link.sheet) return Promise.resolve()
+  return new Promise((resolve) => {
+    link.addEventListener('load', () => resolve(), { once: true })
+    link.addEventListener('error', () => resolve(), { once: true })
+  })
+}
+
+const app = createApp(App)
   .use(createPinia())
   .use(router)
   .use(VueQueryPlugin, { queryClient })
@@ -30,4 +42,4 @@ createApp(App)
   .use(ConfirmationService)
   // v-tooltip: nhãn cho các nút chỉ có biểu tượng (hành động trên dòng của bảng)
   .directive('tooltip', Tooltip)
-  .mount('#app')
+void appCssReady().then(() => app.mount('#app'))

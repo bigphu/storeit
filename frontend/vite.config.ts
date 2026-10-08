@@ -4,6 +4,25 @@ import { FontaineTransform } from 'fontaine'
 import type { Plugin } from 'vite'
 import { defineConfig } from 'vitest/config'
 
+// CSS chính không chặn lần vẽ đầu: khung tĩnh trong index.html có style riêng nên vẽ ngay;
+// CSS tải song song (media="print" rồi đổi sang all khi tải xong) và main.ts chỉ mount app
+// khi CSS đã có (appCssReady), nên app không bao giờ hiện khi chưa có style. Chỉ khi build
+function nonBlockingCss(): Plugin {
+  return {
+    name: 'storeit-non-blocking-css',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler: (html) =>
+        html.replace(
+          /<link rel="stylesheet" crossorigin href="([^"]+\.css)">/,
+          `<link rel="stylesheet" crossorigin href="$1" id="app-css" media="print" onload="this.media='all'">` +
+            '<noscript><link rel="stylesheet" href="$1"></noscript>',
+        ),
+    },
+  }
+}
+
 // Preload font mà lần vẽ đầu tiên đã cần (chữ thường, tiêu đề), để trình duyệt tải ngay
 // cùng CSS thay vì đợi dựng xong trang mới phát hiện. Chỉ khi build: tên file có hash
 function preloadFonts(patterns: RegExp[]): Plugin {
@@ -45,6 +64,7 @@ export default defineConfig({
       skipFontFaceGeneration: (name) => name.startsWith('primeicons'),
     }),
     preloadFonts([/be-vietnam-pro-latin-400-normal-[\w-]+\.woff2$/, /bricolage-grotesque-latin-wght-normal-[\w-]+\.woff2$/]),
+    nonBlockingCss(),
   ],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
