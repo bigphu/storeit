@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Column from 'primevue/column'
-import ContextMenu from 'primevue/contextmenu'
 import DataTable from 'primevue/datatable'
 import InputText from 'primevue/inputtext'
 import Tag from 'primevue/tag'
@@ -9,7 +8,8 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
 import FormDialog from '@/components/FormDialog.vue'
-import IconAction from '@/components/IconAction.vue'
+import RowMenuButton from '@/components/RowMenuButton.vue'
+import RowMenus from '@/components/RowMenus.vue'
 import InlineCell from '@/components/InlineCell.vue'
 import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -27,7 +27,7 @@ import { formatDay } from '@/lib/dates'
 import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
 import { useDirty, useFormErrors } from '@/lib/forms'
 import { openLocation } from '@/lib/navigation'
-import { onRowClick, useRowMenu } from '@/lib/tableRows'
+import { useListTable, useRowMenu } from '@/lib/tableRows'
 import { useProfileDelete, useProfileOverviewSave, useProfileShare } from '../overviewSave'
 
 // Profile export: của mình và được chia sẻ. Bấm dòng mở trang profile; bút chì cạnh tên để đổi
@@ -71,9 +71,8 @@ function summary(p: ExportProfile) {
 }
 
 // Bấm dòng mở trang profile; menu chuột phải có cùng các hành động như nút ở cuối dòng
-const rowClick = onRowClick<ExportProfile>((p, e) => openProfile(p, e))
-const menu = ref<InstanceType<typeof ContextMenu>>()
-const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<ExportProfile>(menu, (p) => [
+// menu của dòng: chuột phải và nút ☰ cuối dòng
+const rowMenu = useRowMenu<ExportProfile>((p) => [
   { label: 'Open', icon: 'pi pi-arrow-right', command: () => openProfile(p) },
   { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => openProfile(p, undefined, true) },
   { label: 'Export all assets', icon: 'pi pi-download', command: () => exportAll(p) },
@@ -81,7 +80,11 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Export
   { label: 'Quick edit', icon: 'pi pi-sliders-h', disabled: !p.can_edit, command: () => openQuick(p) },
   { label: p.shared ? 'Make private' : 'Share', icon: p.shared ? 'pi pi-lock' : 'pi pi-share-alt', disabled: !p.can_edit, command: () => toggleShare(p) },
   { label: 'Delete', icon: 'pi pi-trash', disabled: !p.can_edit, command: () => deleteProfile(p) },
+  // không sửa được: nói lý do (mục không bấm được)
+  ...(p.can_edit ? [] : [{ separator: true }, { label: why(p), icon: 'pi pi-lock', disabled: true }]),
 ])
+// bảng: bấm dòng mở, menu chuột phải, nút cuối dòng cho hàng đang dùng (lib/tableRows.ts)
+const table = useListTable<ExportProfile>({ open: (p, e) => openProfile(p, e), showMenu: rowMenu.showContext })
 
 // Sửa nhanh: ngăn kéo với tên, chủ (khoá); bên dưới là nút xuất, chia sẻ, xoá như cuối dòng
 const quick = ref<ExportProfile | null>(null)
@@ -151,16 +154,14 @@ async function submitCreate() {
       <SegmentedFilter v-model="show" :options="showOptions" label="Show" />
     </div>
 
-    <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />
+    <RowMenus :menu="rowMenu" />
 
     <DataTable
       :value="visible"
       :loading="isFetching"
       data-key="id"
-      row-hover
-      :row-class="() => 'clickable-row'"
-      @row-click="rowClick"
-      @row-contextmenu="showMenu"
+      scrollable
+      v-bind="table.bind"
     >
       <Column header="Name">
         <template #body="{ data: p }: { data: ExportProfile }">
@@ -183,20 +184,10 @@ async function submitCreate() {
       <Column header="Updated">
         <template #body="{ data: p }: { data: ExportProfile }">{{ formatDay(p.updated_at) }}</template>
       </Column>
-      <Column header="" header-style="width: 10rem">
-        <template #body="{ data: p }: { data: ExportProfile }">
-          <div class="row-actions">
-            <IconAction icon="pi pi-download" label="Export all assets with this profile" @click="exportAll(p)" />
-            <IconAction icon="pi pi-sliders-h" label="Quick edit" :disabled="!p.can_edit" :reason="why(p)" @click="openQuick(p)" />
-            <IconAction
-              :icon="p.shared ? 'pi pi-lock' : 'pi pi-share-alt'"
-              :label="p.shared ? 'Make private' : 'Share'"
-              :disabled="!p.can_edit"
-              :reason="why(p)"
-              @click="toggleShare(p)"
-            />
-            <IconAction icon="pi pi-trash" label="Delete" danger :disabled="!p.can_edit" :reason="why(p)" @click="deleteProfile(p)" />
-          </div>
+      <!-- nút ☰ luôn ở mép phải của bảng, kể cả khi bảng cuộn ngang -->
+      <Column frozen align-frozen="right" header-class="row-menu-col" body-class="row-menu-col">
+        <template #body="{ data: p, index }: { data: ExportProfile; index: number }">
+          <RowMenuButton :active="table.active.isActive(index)" @open="(e) => rowMenu.toggle(p, e)" />
         </template>
       </Column>
       <template #empty>

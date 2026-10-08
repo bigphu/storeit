@@ -3,7 +3,6 @@ import Button from 'primevue/button'
 import Chip from 'primevue/chip'
 import Checkbox from 'primevue/checkbox'
 import Column from 'primevue/column'
-import ContextMenu from 'primevue/contextmenu'
 import DataTable, { type DataTablePageEvent } from 'primevue/datatable'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
@@ -15,7 +14,8 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
-import IconAction from '@/components/IconAction.vue'
+import RowMenuButton from '@/components/RowMenuButton.vue'
+import RowMenus from '@/components/RowMenus.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import InlineCell from '@/components/InlineCell.vue'
 import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
@@ -34,7 +34,7 @@ import { changeCount, changesOf, clearTab, emptyDraft, isDirty, listOf, setList,
 import { openLocation } from '@/lib/navigation'
 import { inviteNote } from '@/lib/people'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
-import { onRowClick, useActiveRow, useRowMenu } from '@/lib/tableRows'
+import { useListTable, useRowMenu } from '@/lib/tableRows'
 import { queryInt, queryString, useUrlState } from '@/lib/urlState'
 import { type AccountStatus, useAccounts } from '../api'
 import CreateAccountDialog from '../components/CreateAccountDialog.vue'
@@ -119,11 +119,8 @@ const router = useRouter()
 function openAccount(a: AccountListItem, e?: MouseEvent, newTab?: boolean) {
   openLocation(router, `/accounts/${a.id}`, e, newTab)
 }
-const rowClick = onRowClick(openAccount)
-// nút cuối dòng chỉ dựng cho hàng dưới chuột / có focus (lib/tableRows.ts)
-const activeRow = useActiveRow()
-const menu = ref<InstanceType<typeof ContextMenu>>()
-const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<AccountListItem>(menu, (a) => {
+// menu của dòng: chuột phải và nút ☰ cuối dòng
+const rowMenu = useRowMenu<AccountListItem>((a) => {
   const items: MenuItem[] = [
     { label: 'Open', icon: 'pi pi-arrow-right', command: () => openAccount(a) },
     { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => openAccount(a, undefined, true) },
@@ -137,6 +134,8 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Accoun
   else items.push({ label: 'Disable', icon: 'pi pi-ban', disabled: actions.isSelf(a), command: () => actions.disable(a) })
   return items
 })
+// bảng: bấm dòng mở tài khoản, menu chuột phải, nút cuối dòng cho hàng đang dùng
+const table = useListTable({ open: openAccount, showMenu: rowMenu.showContext })
 
 // Sửa nhanh: bút chì cạnh tên để đổi tại chỗ; nút thanh trượt (pi-sliders-h) mở ngăn kéo (tên, role)
 const saveAccount = useAccountOverviewSave()
@@ -212,7 +211,7 @@ watch(rows, (list) => {
         @update:model-value="(v: string) => update({ role: v === 'all' ? '' : v, page: 1 })"
       />
     </div>
-    <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />
+    <RowMenus :menu="rowMenu" />
     <DataTable
       :value="data?.items ?? []"
       lazy
@@ -225,15 +224,9 @@ watch(rows, (list) => {
       :total-records="data?.total ?? 0"
       :loading="isFetching"
       data-key="id"
-      row-hover
-      :row-class="() => 'clickable-row'"
+      scrollable
+      v-bind="table.bind"
       @page="onPage"
-      @row-click="rowClick"
-      @row-contextmenu="showMenu"
-      @mouseover="activeRow.onOver"
-      @mouseleave="activeRow.onLeave"
-      @focusin="activeRow.onFocusIn"
-      @focusout="activeRow.onFocusOut"
     >
       <Column header="Person">
         <template #body="{ data: a }: { data: AccountListItem }">
@@ -269,24 +262,10 @@ watch(rows, (list) => {
       <Column header="Created">
         <template #body="{ data: a }: { data: AccountListItem }">{{ formatDay(a.created_at) }}</template>
       </Column>
-      <Column v-if="canManage" header="" header-style="width: 6rem; min-width: 6rem">
+      <!-- nút ☰ luôn ở mép phải của bảng, kể cả khi bảng cuộn ngang -->
+      <Column frozen align-frozen="right" header-class="row-menu-col" body-class="row-menu-col">
         <template #body="{ data: a, index }: { data: AccountListItem; index: number }">
-          <div class="row-actions">
-            <template v-if="activeRow.isActive(index)">
-              <IconAction icon="pi pi-sliders-h" label="Quick edit" @click="openQuick(a)" />
-              <IconAction v-if="a.status === 'invited'" icon="pi pi-envelope" label="Resend invitation" @click="actions.resendInvitation(a)" />
-              <IconAction v-if="a.status === 'active'" icon="pi pi-key" label="Send reset link" @click="actions.sendReset(a)" />
-              <IconAction v-if="a.status === 'disabled'" icon="pi pi-check-circle" label="Enable" @click="actions.enable(a)" />
-              <IconAction
-                v-else
-                icon="pi pi-ban"
-                label="Disable"
-                :disabled="actions.isSelf(a)"
-                reason="You can’t disable yourself"
-                @click="actions.disable(a)"
-              />
-            </template>
-          </div>
+          <RowMenuButton :active="table.active.isActive(index)" @open="(e) => rowMenu.toggle(a, e)" />
         </template>
       </Column>
       <template #empty>

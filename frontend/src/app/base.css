@@ -330,8 +330,9 @@ section + section {
     justify-content: center;
   }
 }
-/* Dòng bấm được (lib/tableRows.ts) và nút hành động trên dòng: hiện khi rê chuột hay
-   focus vào dòng; màn hình cảm ứng luôn hiện */
+/* Dòng bấm được và ô nút cuối dòng (RowActions + useListTable trong lib/tableRows.ts): nút chỉ
+   được dựng cho hàng đang rê chuột hay có focus (màn cảm ứng: mọi hàng), nên không cần ẩn
+   bằng CSS; ô luôn giữ chỗ cho đủ số nút */
 .clickable-row {
   cursor: pointer;
 }
@@ -347,14 +348,17 @@ section + section {
 .p-datatable-tbody .row-actions {
   min-height: 2rem;
 }
-@media (hover: hover) {
-  .p-datatable-tbody > tr .row-actions {
-    opacity: 0;
-  }
-  .p-datatable-tbody > tr:hover .row-actions,
-  .p-datatable-tbody > tr:focus-within .row-actions {
-    opacity: 1;
-  }
+/* Cột ☰ cố định ở mép phải (RowMenuButton, <Column frozen align-frozen="right">): nền đặc theo
+   nền của hàng (cả khi rê chuột, khi chọn) để nội dung cuộn ngang bên dưới không lộ ra; không
+   kẻ đường ngăn với các cột khác */
+.p-datatable .p-datatable-tbody > tr > td.row-menu-col {
+  background: var(--p-datatable-row-background, var(--p-content-background));
+}
+.p-datatable .p-datatable-tbody > tr:hover > td.row-menu-col {
+  background: linear-gradient(var(--app-row-hover), var(--app-row-hover)), var(--p-datatable-row-background, var(--p-content-background));
+}
+.p-datatable .p-datatable-tbody > tr.p-datatable-row-selected > td.row-menu-col {
+  background: linear-gradient(var(--app-selected), var(--app-selected)), var(--p-datatable-row-background, var(--p-content-background));
 }
 /* Mã tài sản (tag): chữ mono, màu liên kết */
 .tag-cell,

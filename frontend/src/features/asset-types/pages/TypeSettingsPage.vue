@@ -2,7 +2,6 @@
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import Column from 'primevue/column'
-import ContextMenu from 'primevue/contextmenu'
 import DataTable, { type DataTableRowReorderEvent } from 'primevue/datatable'
 import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
@@ -18,6 +17,8 @@ import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import SaveBar from '@/components/SaveBar.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import IconAction from '@/components/IconAction.vue'
+import RowMenuButton from '@/components/RowMenuButton.vue'
+import RowMenus from '@/components/RowMenus.vue'
 import type { Attribute } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
@@ -25,7 +26,7 @@ import { runAction } from '@/lib/actions'
 import { changeCount, changesOf, clearTab, discardTab, emptyDraft, isDirty, restoreTab } from '@/lib/detailDraft'
 import { describeError } from '@/lib/errors'
 import { notify } from '@/lib/notify'
-import { onRowClick, useRowMenu } from '@/lib/tableRows'
+import { useListTable, useRowMenu } from '@/lib/tableRows'
 import { useUrlState } from '@/lib/urlState'
 import { useAssetType, useAssetTypes, useRemoveAttribute, useReorderAttributes, useRestoreAttribute, useUpdateAttribute } from '../api'
 import { useTypeArchive, useTypeOverviewSave } from '../overviewSave'
@@ -191,9 +192,8 @@ const crumbs = computed<Crumb[]>(() =>
 function canEditRow(a: Attribute) {
   return canManage.value && !a.removed
 }
-const rowClick = onRowClick((a: Attribute) => canEditRow(a) && openAttribute(a))
-const menu = ref<InstanceType<typeof ContextMenu>>()
-const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attribute>(menu, (a) =>
+// menu của dòng: chuột phải và nút ☰ cuối dòng
+const rowMenu = useRowMenu<Attribute>((a) =>
   canEditRow(a)
     ? [
         { label: 'Edit', icon: 'pi pi-pencil', command: () => openAttribute(a) },
@@ -203,6 +203,8 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
       ]
     : [],
 )
+// bảng: bấm dòng mở, menu chuột phải, nút cuối dòng cho hàng đang dùng (lib/tableRows.ts)
+const table = useListTable<Attribute>({ open: (a) => openAttribute(a), clickable: canEditRow, showMenu: rowMenu.showContext })
 </script>
 
 <template>
@@ -246,17 +248,15 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
     <p v-if="canManage && attributes.length > 1" class="hint">Drag the handle to change the order of columns and form fields.</p>
     <!-- Mỗi dòng một dòng chữ, cột giãn theo nội dung (bảng dài thì cuộn ngang);
          "Required" là checkbox (đổi ngay khi có quyền) -->
-    <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />
+    <RowMenus :menu="rowMenu" />
     <DataTable
       :value="attributes"
       data-key="id"
-      row-hover
-      :row-class="(a: Attribute) => (canEditRow(a) ? 'clickable-row' : undefined)"
+      scrollable
+      v-bind="table.bind"
       @row-reorder="onReorder"
-      @row-click="rowClick"
-      @row-contextmenu="showMenu"
     >
-      <Column v-if="canManage && !showRemoved" row-reorder header-style="width: 2.75rem" />
+      <Column v-if="canManage && !showRemoved" row-reorder row-reorder-icon="pi pi-arrows-v" header-style="width: 2.75rem" />
       <Column field="label" header="Label" header-style="width: 22%" />
       <Column header="Key" header-style="width: 16%">
         <template #body="{ data: a }: { data: Attribute }"><code>{{ a.key }}</code></template>
@@ -289,13 +289,15 @@ const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<Attrib
           </div>
         </template>
       </Column>
-      <Column header="" header-style="width: 6rem" body-class="row-actions-cell">
+      <Column header="">
         <template #body="{ data: a }: { data: Attribute }">
           <Tag v-if="a.removed" value="removed" severity="secondary" />
-          <div v-else-if="canManage" class="row-actions">
-            <IconAction icon="pi pi-pencil" label="Edit" @click="openAttribute(a)" />
-            <IconAction icon="pi pi-trash" label="Remove" danger @click="removeAttribute(a)" />
-          </div>
+        </template>
+      </Column>
+      <!-- nút ☰ luôn ở mép phải của bảng, kể cả khi bảng cuộn ngang -->
+      <Column frozen align-frozen="right" header-class="row-menu-col" body-class="row-menu-col">
+        <template #body="{ data: a, index }: { data: Attribute; index: number }">
+          <RowMenuButton :active="table.active.isActive(index) && canEditRow(a)" @open="(e) => rowMenu.toggle(a, e)" />
         </template>
       </Column>
       <template #empty>

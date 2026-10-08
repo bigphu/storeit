@@ -1,16 +1,14 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Column from 'primevue/column'
-import ContextMenu from 'primevue/contextmenu'
 import DataTable, { type DataTableRowContextMenuEvent } from 'primevue/datatable'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import InputText from 'primevue/inputtext'
-import Menu from 'primevue/menu'
 import type { MenuItem } from 'primevue/menuitem'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
-import { computed, reactive, ref, shallowRef, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AddCard from '@/components/AddCard.vue'
 import CardGrid from '@/components/CardGrid.vue'
@@ -19,6 +17,8 @@ import TableSkeleton from '@/components/TableSkeleton.vue'
 import EntityCard from '@/components/EntityCard.vue'
 import FormDialog from '@/components/FormDialog.vue'
 import IconAction from '@/components/IconAction.vue'
+import RowMenuButton from '@/components/RowMenuButton.vue'
+import RowMenus from '@/components/RowMenus.vue'
 import InlineCell from '@/components/InlineCell.vue'
 import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
@@ -35,7 +35,7 @@ import { formatDate } from '@/lib/dates'
 import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
 import { useDirty, useFormErrors } from '@/lib/forms'
 import { openLocation } from '@/lib/navigation'
-import { onRowClick, useRowMenu } from '@/lib/tableRows'
+import { useListTable, useRowMenu } from '@/lib/tableRows'
 import { queryString, useUrlState } from '@/lib/urlState'
 import { useAssetTypes, useCreateAssetType } from '../api'
 import { codeFromName, codeMark } from '../code'
@@ -104,8 +104,6 @@ const settingsPath = (t: AssetType) => `/types/${t.id}/settings`
 function openType(t: AssetType, e?: MouseEvent, newTab?: boolean) {
   openLocation(router, listOf(t), e, newTab)
 }
-const rowClick = onRowClick(openType)
-const menu = ref<InstanceType<typeof ContextMenu>>()
 // Cùng một danh sách hành động cho menu chuột phải (dòng, thẻ) và nút menu trên thẻ
 const typeMenu = (t: AssetType): MenuItem[] => [
   { label: 'Open assets', icon: 'pi pi-arrow-right', command: () => openType(t) },
@@ -115,20 +113,17 @@ const typeMenu = (t: AssetType): MenuItem[] => [
   { label: 'Quick edit', icon: 'pi pi-sliders-h', visible: canManage.value, command: () => openQuick(t) },
   { label: t.archived_at ? 'Restore' : 'Archive', icon: t.archived_at ? 'pi pi-replay' : 'pi pi-inbox', visible: canManage.value && !t.is_system, command: () => archiveType(t) },
 ]
-const { items: menuItems, show: showMenu, clear: clearMenu } = useRowMenu<AssetType>(menu, typeMenu)
+// Menu của thẻ / dòng (chuột phải và nút ☰): cùng một danh sách; đổi thẻ khi menu đang mở
+// thì menu chuyển sang thẻ mới
+const rowMenu = useRowMenu<AssetType>(typeMenu)
+// bảng: bấm dòng mở, menu chuột phải, nút cuối dòng cho hàng đang dùng (lib/tableRows.ts)
+const table = useListTable<AssetType>({ open: openType, showMenu: rowMenu.showContext })
 function onCardMenu(t: AssetType, e: MouseEvent) {
   e.preventDefault()
-  showMenu({ originalEvent: e, data: t, index: 0 } as DataTableRowContextMenuEvent)
+  rowMenu.showContext({ originalEvent: e, data: t, index: 0 } as DataTableRowContextMenuEvent)
 }
-// Nút menu (☰) trên đầu thẻ: thay cho hàng nút hành động để thẻ gọn. Không xoá thẻ đang
-// chọn khi menu đóng: Menu báo đóng sau hiệu ứng, lúc đó có thể đã mở cho thẻ khác.
-const cardMenu = ref<InstanceType<typeof Menu>>()
-const cardMenuType = shallowRef<AssetType | null>(null)
-const cardMenuItems = computed(() => (cardMenuType.value ? typeMenu(cardMenuType.value) : []))
-function toggleCardMenu(t: AssetType, e: MouseEvent) {
-  cardMenuType.value = t
-  cardMenu.value?.toggle(e)
-}
+// Nút menu (☰) trên đầu thẻ: thay cho hàng nút hành động để thẻ gọn
+const toggleCardMenu = (t: AssetType, e: MouseEvent) => rowMenu.toggle(t, e)
 
 // Loại mới: mã tự điền theo tên cho đến khi người dùng tự sửa mã
 const creating = ref(false)
@@ -220,8 +215,7 @@ watch(types, (list) => {
     </div>
     <KindMeter v-if="state.show === 'active'" legend class="legend-row" />
 
-    <ContextMenu ref="menu" :model="menuItems" @hide="clearMenu" />
-    <Menu ref="cardMenu" :model="cardMenuItems" popup />
+    <RowMenus :menu="rowMenu" />
 
     <CardGrid v-if="state.layout === 'cards'">
       <EntityCard
@@ -278,10 +272,8 @@ watch(types, (list) => {
       :loading="isFetching"
       data-key="id"
       removable-sort
-      row-hover
-      :row-class="() => 'clickable-row'"
-      @row-click="rowClick"
-      @row-contextmenu="showMenu"
+      scrollable
+      v-bind="table.bind"
     >
       <Column header="Name" sort-field="name" sortable>
         <template #body="{ data: t }: { data: AssetType }">
@@ -316,18 +308,10 @@ watch(types, (list) => {
           <KindMeter v-else :type="t" />
         </template>
       </Column>
-      <Column header="" header-style="width: 8rem">
-        <template #body="{ data: t }: { data: AssetType }">
-          <div class="row-actions">
-            <IconAction v-if="canManage" icon="pi pi-sliders-h" label="Quick edit" @click="openQuick(t)" />
-            <IconAction
-              v-if="canManage && !t.is_system"
-              :icon="t.archived_at ? 'pi pi-replay' : 'pi pi-inbox'"
-              :label="t.archived_at ? 'Restore' : 'Archive'"
-              @click="archiveType(t)"
-            />
-            <IconAction icon="pi pi-cog" label="Type settings" :to="settingsPath(t)" />
-          </div>
+      <!-- nút ☰ luôn ở mép phải của bảng, kể cả khi bảng cuộn ngang -->
+      <Column frozen align-frozen="right" header-class="row-menu-col" body-class="row-menu-col">
+        <template #body="{ data: t, index }: { data: AssetType; index: number }">
+          <RowMenuButton :active="table.active.isActive(index)" @open="(e) => rowMenu.toggle(t, e)" />
         </template>
       </Column>
       <template #empty>
