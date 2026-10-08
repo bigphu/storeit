@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -72,7 +73,7 @@ func TestExportProfiles_CRUD(t *testing.T) {
 	if err != nil || got.DeletedAt == nil {
 		t.Errorf("GetAny after delete = %+v, %v", got, err)
 	}
-	back, err := r.profiles.Restore(ctx, p.ID)
+	back, err := r.profiles.Restore(ctx, p.ID, nil)
 	if err != nil || back.DeletedAt != nil {
 		t.Fatalf("restore = %+v, %v", back, err)
 	}
@@ -81,5 +82,52 @@ func TestExportProfiles_CRUD(t *testing.T) {
 	}
 	if err := r.profiles.RecordExport(ctx, domain.ExportRecord{Mode: "data", Rows: 3, Sheets: 1, Filters: map[string]any{"q": "x"}}); err != nil {
 		t.Errorf("record export: %v", err)
+	}
+}
+
+// Chủ làm profile riêng tư (chưa commit) đúng lúc người khác khôi phục nó: khôi phục phải đợi,
+// kiểm tra trên hàng đã khoá thấy riêng tư, và không khôi phục
+func TestExportProfiles_RestoreChecksTheLockedRow(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	p, err := r.profiles.Create(ctx, domain.NewExportProfile{OwnerID: uuid.New(), Name: "Shared " + uniq(), Shared: true, Layout: domain.DefaultReportLayout()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.profiles.Delete(ctx, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	if _, err := tx.Exec(ctx, `UPDATE inventory.export_profiles SET shared = false WHERE id = $1`, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	onlyShared := func(cur domain.ExportProfile) error {
+		if !cur.Shared {
+			return domain.ErrExportProfileNotFound
+		}
+		return nil
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := r.profiles.Restore(ctx, p.ID, onlyShared)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("restore did not wait for the uncommitted change (err %v)", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; !errors.Is(err, domain.ErrExportProfileNotFound) {
+		t.Errorf("restore = %v, want ErrExportProfileNotFound", err)
+	}
+	if cur, err := r.profiles.GetAny(ctx, p.ID); err != nil || cur.DeletedAt == nil {
+		t.Errorf("profile after refused restore: deleted_at %v, err %v; want still deleted", cur.DeletedAt, err)
 	}
 }

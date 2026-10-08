@@ -58,8 +58,10 @@ type ExportProfileRepository interface {
 	// GetAny: kể cả đã xoá (để kiểm tra quyền khôi phục); ErrExportProfileNotFound
 	GetAny(ctx context.Context, id uuid.UUID) (ExportProfile, error)
 	// Restore: khôi phục profile đã xoá (chưa xoá thì trả nguyên); ErrExportProfileNotFound,
-	// ErrExportProfileNameTaken; event export_profile_restored
-	Restore(ctx context.Context, id uuid.UUID) (ExportProfile, error)
+	// ErrExportProfileNameTaken; event export_profile_restored. check (có thể nil) chạy trên
+	// hàng đã khoá, trong cùng tx: trả lỗi thì không khôi phục (quyền xem/sửa không đổi giữa
+	// lúc kiểm tra và lúc khôi phục)
+	Restore(ctx context.Context, id uuid.UUID, check func(ExportProfile) error) (ExportProfile, error)
 	// RecordExport ghi event assets_exported trong transaction riêng
 	RecordExport(ctx context.Context, r ExportRecord) error
 }
