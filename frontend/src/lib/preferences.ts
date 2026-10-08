@@ -92,6 +92,13 @@ export const usePreferences = defineStore('preferences', () => {
       const root = document.documentElement
       root.classList.toggle('app-dark', isDark(theme, sys))
       root.classList.toggle('density-compact', density === 'compact')
+      // khung tĩnh trong index.html đọc lại lúc tải trang sau, để vẽ đúng màu ngay từ đầu
+      // (lưu lựa chọn, không lưu kết quả: "system" thì khung theo máy lúc đó)
+      try {
+        localStorage.setItem('storeit.theme', theme)
+      } catch {
+        // không lưu được (chế độ riêng tư): khung tĩnh theo theme của máy
+      }
     },
     { immediate: true },
   )

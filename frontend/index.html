@@ -5,9 +5,145 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>StoreIt</title>
+    <!--
+      Khung tĩnh vẽ ngay khi HTML tới, trước khi JavaScript chạy (Vue thay nội dung #app khi
+      mount). Chọn khung theo đường dẫn (trang công khai hay app) và bật màu tối ngay từ đầu
+      theo theme đã lưu ("storeit.theme", lib/preferences.ts) hoặc theo máy. Kích thước, màu
+      khớp AppLayout và PublicLayout để lúc thay không xô lệch.
+    -->
+    <script>
+      ;(function () {
+        var root = document.documentElement
+        try {
+          // light / dark đã chọn trong app; "system" hay chưa có thì theo máy
+          var t = localStorage.getItem('storeit.theme')
+          if (t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)) root.classList.add('app-dark')
+        } catch (e) {}
+        var pub = /^\/(login|forgot-password|accept-invite|reset-password)(\/|$)/.test(location.pathname)
+        root.setAttribute('data-shell', pub ? 'public' : 'app')
+      })()
+    </script>
+    <style>
+      :root {
+        --boot-ground: #f8fafc;
+        --boot-surface: #ffffff;
+        --boot-tabs: #f1f5f9;
+        --boot-line: #e2e8f0;
+        --boot-text: #334155;
+      }
+      :root.app-dark {
+        --boot-ground: #09090b;
+        --boot-surface: #18181b;
+        --boot-tabs: #27272a;
+        --boot-line: #3f3f46;
+        --boot-text: #ffffff;
+      }
+      body {
+        margin: 0;
+        background: var(--boot-ground);
+      }
+      .boot {
+        display: none;
+        min-height: 100vh;
+        font-family: 'Bricolage Grotesque Variable', 'Be Vietnam Pro', system-ui, sans-serif;
+      }
+      [data-shell='app'] .boot-app,
+      [data-shell='public'] .boot-public {
+        display: grid;
+      }
+      .boot-app {
+        grid-template-columns: 15.5rem 1fr;
+        grid-template-rows: 57px 47px 1fr;
+      }
+      .boot-top {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        background: var(--boot-surface);
+        border-bottom: 1px solid var(--boot-line);
+        box-sizing: border-box;
+        color: var(--boot-text);
+        font-weight: 800;
+        font-size: 17.6px;
+        letter-spacing: -0.01em;
+      }
+      .boot-side {
+        grid-row: 2 / 4;
+        background: var(--boot-ground);
+        border-right: 1px solid var(--boot-line);
+      }
+      .boot-tabs {
+        background: var(--boot-tabs);
+        border-bottom: 1px solid var(--boot-line);
+      }
+      .boot-main {
+        background: var(--boot-surface);
+      }
+      .boot-public {
+        grid-template-columns: 1fr 1fr;
+        background: var(--boot-surface);
+      }
+      .boot-art {
+        background: #0a0a0a;
+        padding: 2rem 2.25rem;
+      }
+      .boot-logo {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: #ffffff;
+        font-weight: 800;
+        font-size: 1.45rem;
+        letter-spacing: -0.02em;
+      }
+      .boot-logo svg {
+        width: 1.7rem;
+        height: 1.7rem;
+      }
+      @media (max-width: 760px) {
+        .boot-app {
+          grid-template-columns: 1fr;
+          grid-template-rows: 57px 1fr;
+        }
+        .boot-side,
+        .boot-tabs {
+          display: none;
+        }
+        .boot-public {
+          grid-template-columns: 1fr;
+          grid-template-rows: auto 1fr;
+        }
+        .boot-art {
+          padding: 1rem 1.25rem;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <div class="boot boot-app" aria-hidden="true">
+        <div class="boot-top">StoreIt</div>
+        <div class="boot-side"></div>
+        <div class="boot-tabs"></div>
+        <div class="boot-main"></div>
+      </div>
+      <div class="boot boot-public" aria-hidden="true">
+        <div class="boot-art">
+          <span class="boot-logo">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <g stroke-linejoin="round" stroke-width="1.2">
+                <path d="M12 1.8 21.2 6.9 12 12 2.8 6.9Z" fill="#34d399" stroke="#34d399" />
+                <path d="M2.8 6.9 12 12v10.2L2.8 17.1Z" fill="#10b981" stroke="#10b981" />
+                <path d="M21.2 6.9V17.1L12 22.2V12Z" fill="#059669" stroke="#059669" />
+              </g>
+            </svg>
+            StoreIt
+          </span>
+        </div>
+        <div></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
