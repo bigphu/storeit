@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
+import Column from 'primevue/column'
+import DataTable from 'primevue/datatable'
 import Dialog from 'primevue/dialog'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -7,6 +9,7 @@ import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { setNewTabHandler } from '@/lib/navigation'
 import { isTyping } from '@/lib/pageKeys'
+import { SHORTCUTS, type Shortcut } from '@/lib/shortcuts'
 import NoAccessPage from '../pages/NoAccessPage.vue'
 import { useTabs } from '../tabs/useTabs'
 import AccountMenu from './AccountMenu.vue'
@@ -74,17 +77,6 @@ function onLinkOpen(e: MouseEvent) {
 // Phím: Ctrl K bộ chọn loại; Alt 1–9 sang tab thứ n; ? bảng phím tắt
 const switcherOpen = ref(false)
 const helpOpen = ref(false)
-const SHORTCUTS: [string, string][] = [
-  ['Ctrl K', 'Go to an asset type (keeps the section you are in)'],
-  ['/', 'Search the asset list'],
-  ['N', 'New asset of the type you are viewing'],
-  ['J / K', 'Previous / next asset, on an asset page'],
-  ['E', 'Edit the open asset'],
-  ['Ctrl Z', 'Undo the change in the latest message'],
-  ['Alt 1–9', 'Go to tab 1–9'],
-  ['Ctrl-click, middle-click', 'Open a link in a new tab'],
-  ['Esc', 'Close a dialog or menu'],
-]
 function onKey(e: KeyboardEvent) {
   if (e.key === '?' && !isTyping(e) && !e.ctrlKey && !e.metaKey && !e.altKey) {
     helpOpen.value = !helpOpen.value
@@ -173,26 +165,34 @@ onBeforeUnmount(() => {
       </main>
     </div>
     <TypeSwitcher v-model:visible="switcherOpen" />
-    <Dialog v-model:visible="helpOpen" modal header="Keyboard shortcuts" :style="{ width: 'min(92vw, 30rem)' }">
-      <dl class="shortcuts">
-        <template v-for="[k, what] in SHORTCUTS" :key="k">
-          <dt><kbd>{{ k }}</kbd></dt>
-          <dd>{{ what }}</dd>
+    <Dialog v-model:visible="helpOpen" modal header="Keyboard shortcuts" :style="{ width: 'min(92vw, 36rem)' }">
+      <DataTable :value="[...SHORTCUTS]" row-group-mode="subheader" group-rows-by="group" size="small" scrollable scroll-height="70vh" class="shortcut-table">
+        <template #groupheader="{ data }: { data: Shortcut }">
+          <span class="shortcut-group">{{ data.group }}</span>
         </template>
-      </dl>
+        <Column header="Keys" header-style="width: 11rem">
+          <template #body="{ data }: { data: Shortcut }">
+            <span class="shortcut-keys"><kbd v-for="k in data.keys" :key="k">{{ k }}</kbd></span>
+          </template>
+        </Column>
+        <Column field="action" header="Action" />
+      </DataTable>
     </Dialog>
   </div>
 </template>
 
 <style scoped>
-.shortcuts {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0.5rem 1rem;
-  margin: 0;
+.shortcut-group {
+  font-weight: 700;
 }
-.shortcuts dd {
-  margin: 0;
+.shortcut-keys {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+/* bảng tra cứu: không tô dòng khi rê chuột */
+.shortcut-table :deep(.p-datatable-tbody > tr:hover) {
+  background: inherit;
 }
 .shell {
   display: grid;
