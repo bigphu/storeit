@@ -17,7 +17,7 @@ describe('shortcuts', () => {
 
   it('includes the new list keys and sideways scrolling', () => {
     const lists = SHORTCUTS.filter((s) => s.group === 'Lists').map((s) => s.keys.join(' '))
-    expect(lists).toEqual(expect.arrayContaining(['J K', '/', 'N', 'F', 'Shift + wheel']))
+    expect(lists).toEqual(expect.arrayContaining(['J K', '/', 'N', 'F', 'X', 'R', 'Shift + wheel']))
   })
 
   it('quick edit uses J/K and Ctrl Enter', () => {

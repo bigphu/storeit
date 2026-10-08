@@ -450,6 +450,7 @@ watch(rows, (list) => {
           severity="secondary"
           outlined
         />
+        <ExportButton v-if="canExport" :scope="listScope" @report="(id) => openReport(false, id)" />
         <Button v-if="canManage" as="router-link" :to="newPath" style="text-decoration: none" :aria-label="`${newLabel} (N)`">
           <i class="pi pi-plus" aria-hidden="true" />
           <span>{{ newLabel }}</span>
@@ -483,7 +484,6 @@ watch(rows, (list) => {
         @update:model-value="(v: boolean) => update({ includeRetired: v, page: 1 })"
       />
       <label for="include-retired">Include retired</label>
-      <ExportButton v-if="canExport" class="export-btn" :scope="listScope" @report="(id) => openReport(false, id)" />
     </div>
 
     <div class="chips">
@@ -674,9 +674,6 @@ watch(rows, (list) => {
 .selection-count {
   font-weight: 600;
   margin-right: 0.5rem;
-}
-.export-btn {
-  margin-left: auto;
 }
 .chips {
   display: flex;

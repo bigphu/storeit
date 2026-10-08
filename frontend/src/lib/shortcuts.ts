@@ -21,6 +21,8 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { group: 'Lists', keys: ['/'], action: 'Search the list' },
   { group: 'Lists', keys: ['N'], action: 'New item (asset, type, role, export profile, or invite an account)' },
   { group: 'Lists', keys: ['F'], action: 'Add a filter (asset list)' },
+  { group: 'Lists', keys: ['X'], action: 'Export the list (data .xlsx, asset list)' },
+  { group: 'Lists', keys: ['R'], action: 'Customize a report of the list (asset list)' },
   { group: 'Lists', keys: ['Shift + wheel'], action: 'Scroll a wide table sideways' },
   { group: 'Asset page', keys: ['J', 'K'], action: 'Previous / next asset' },
   { group: 'Asset page', keys: ['E'], action: 'Edit the asset' },
