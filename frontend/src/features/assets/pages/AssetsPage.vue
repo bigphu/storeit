@@ -86,9 +86,12 @@ const { data, isFetching, isLoading } = useAssetList(computed(() => toApiParams(
 // Tải trước, không đợi người dùng bấm: trang kế tiếp khi trang này về (sang trang tức thì);
 // dòng chuột dừng trên đó một lúc thì tải dữ liệu và code của trang tài sản đó (mở nhanh hơn)
 const qc = useQueryClient()
+// trang kế tiếp đợi lúc trình duyệt rảnh (sau khi bảng vẽ xong): không giành CPU với lần vẽ đầu
+const whenIdle = (fn: () => void) =>
+  typeof window.requestIdleCallback === 'function' ? window.requestIdleCallback(fn, { timeout: 3000 }) : setTimeout(fn, 1000)
 watch(data, (d) => {
   const next = d && nextPageParams(state.value, pageSize.value, d.total)
-  if (next) void qc.prefetchQuery({ ...assetListQuery(next), meta: { toast: false } })
+  if (next) whenIdle(() => void qc.prefetchQuery({ ...assetListQuery(next), meta: { toast: false } }))
 })
 let hoverRow: number | null = null
 let hoverTimer: ReturnType<typeof setTimeout> | undefined
