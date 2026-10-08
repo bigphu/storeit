@@ -150,6 +150,13 @@ type AssetFilter struct {
 	Limit, Offset int32
 	// Attrs: điều kiện "<key>:<op>:<value>" trên thuộc tính tuỳ chỉnh (AND), cần TypeID
 	Attrs []string
+	// Fields: điều kiện "<field>:<op>:<value>" trên trường có sẵn của mọi tài sản
+	// (purchase_date, created_at, updated_at, description), không cần TypeID. TZ: múi
+	// giờ IANA để so created_at/updated_at theo ngày; rỗng là UTC
+	Fields []string
+	TZ     string
+	// Service điền từ Fields (ResolveFieldQuery); repository chỉ đọc trường này
+	FieldFilters []FieldFilter
 	// Service điền từ Attrs và Sort "attributes.<key>" (ResolveAttrQuery);
 	// repository chỉ đọc hai trường này
 	AttrFilters []AttrFilter
