@@ -170,6 +170,11 @@ kbd {
   align-items: center;
   margin-bottom: 0.75rem;
 }
+/* ô tìm có kính lúp: đủ rộng cho cả chữ gợi ý kèm phím tắt ("… ( / )") */
+.toolbar .p-iconfield .p-inputtext {
+  width: 19rem;
+  max-width: 100%;
+}
 .form {
   display: flex;
   flex-direction: column;
