@@ -126,17 +126,16 @@ func (s *Service) RestoreExportProfile(ctx context.Context, id uuid.UUID) (Expor
 	if err != nil {
 		return ExportProfileView{}, err
 	}
-	cur, err := s.profiles.GetAny(ctx, id)
-	if err != nil {
-		return ExportProfileView{}, err
-	}
-	if cur.OwnerID != actor.AccountID && !cur.Shared {
-		return ExportProfileView{}, domain.ErrExportProfileNotFound
-	}
-	if !canEditProfile(actor, cur) {
-		return ExportProfileView{}, domain.ErrExportProfileForbidden
-	}
-	p, err := s.profiles.Restore(ctx, id)
+	// kiểm tra trên hàng đã khoá: chủ làm riêng tư đúng lúc này thì người khác không khôi phục được
+	p, err := s.profiles.Restore(ctx, id, func(cur domain.ExportProfile) error {
+		if cur.OwnerID != actor.AccountID && !cur.Shared {
+			return domain.ErrExportProfileNotFound
+		}
+		if !canEditProfile(actor, cur) {
+			return domain.ErrExportProfileForbidden
+		}
+		return nil
+	})
 	if err != nil {
 		return ExportProfileView{}, err
 	}

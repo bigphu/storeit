@@ -141,13 +141,18 @@ func (r *ExportProfileRepository) GetAny(ctx context.Context, id uuid.UUID) (dom
 	return profileOrNotFound(r.q.GetExportProfileAny(ctx, id))
 }
 
-func (r *ExportProfileRepository) Restore(ctx context.Context, id uuid.UUID) (domain.ExportProfile, error) {
+func (r *ExportProfileRepository) Restore(ctx context.Context, id uuid.UUID, check func(domain.ExportProfile) error) (domain.ExportProfile, error) {
 	var out domain.ExportProfile
 	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
 		q := r.q.WithTx(tx)
 		cur, err := profileOrNotFound(q.GetExportProfileAnyForUpdate(ctx, id))
 		if err != nil {
 			return err
+		}
+		if check != nil {
+			if err := check(cur); err != nil {
+				return err
+			}
 		}
 		if cur.DeletedAt == nil {
 			out = cur

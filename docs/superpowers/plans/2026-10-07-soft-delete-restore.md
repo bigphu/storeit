@@ -22,7 +22,7 @@
 - **Permissions:**
   - restore role: `identity.role.manage`;
   - restore attribute or option: `inventory.type.manage`;
-  - restore export profile: only someone who could delete it, i.e. the owner, or for shared profiles also a holder of `inventory.export_profile.manage`. Anyone else gets 404.
+  - restore export profile: only someone who could delete it, i.e. the owner, or for shared profiles also a holder of `inventory.export_profile.manage`. Someone else's private profile is 404 (it doesn't exist for them); someone else's shared profile without the manage permission is 403, as for update and delete. The check runs on the locked row inside the restore transaction.
 - **Restore results:**
   - Restoring something that isn't deleted is a no-op that returns it.
   - Restoring something that doesn't exist is a 404, with the module's existing not-found error.

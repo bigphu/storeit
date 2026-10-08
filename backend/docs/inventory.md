@@ -69,7 +69,8 @@ Seeded IDs are in `domain/permissions.go` (`GeneralTypeID`, `AvailableStatusID`,
   `"unit": ""` removes the unit.
 - `POST /asset-types/{typeID}/attributes/{attributeID}/restore` and
   `…/options/{optionID}/restore` undo a removal and return the attribute (with options) or
-  option; already active returns it unchanged. Keys stay unique including removed
+  option; already active returns it unchanged. A restored item goes to the end of its list
+  (its old position may belong to one added since). Keys stay unique including removed
   attributes, so only the label can clash: 409 `/errors/attribute-label-taken` or
   `/errors/option-label-taken`. An option's attribute must be active. Recorded on
   `asset_type_updated` as `removed → active`.
@@ -237,7 +238,8 @@ profile also anyone with `inventory.export_profile.manage`; others get 403
 for the caller. Deleting is a soft delete (`deleted_at`): a deleted profile
 is 404 everywhere, for everyone (including exports by `profile_id`), and names are unique only
 among profiles that aren't deleted. Restore follows the delete rules (someone else's private
-profile is 404, a shared one without `inventory.export_profile.manage` is 403) and is 409
+profile is 404, a shared one without `inventory.export_profile.manage` is 403, checked on the
+row locked inside the restore transaction) and is 409
 `/errors/export-profile-name-taken` if the owner reused the name. Layouts are validated on create and update; a stored layout that no longer
 validates is returned as is and rejected with 422 only when used for an export.
 

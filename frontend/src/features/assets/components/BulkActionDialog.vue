@@ -3,12 +3,13 @@ import Message from 'primevue/message'
 import Select from 'primevue/select'
 import Textarea from 'primevue/textarea'
 import { computed, ref, watch } from 'vue'
+import { useQueryClient } from '@tanstack/vue-query'
 import FormDialog from '@/components/FormDialog.vue'
 import { announce } from '@/lib/actions'
 import { useDirty, useFormErrors } from '@/lib/forms'
 import { useStatuses } from '@/features/statuses/api'
-import { type BulkItemRef, useBulkRetire, useBulkStatus, useRestoreAsset } from '../api'
-import { type BulkSummary, retiredItems, statusGroups, summarizeBulk } from '../bulk'
+import { type BulkItemRef, refreshAssetLists, restoreAssetRequest, useBulkRetire, useBulkStatus } from '../api'
+import { type BulkSummary, mapLimit, retiredItems, statusGroups, summarizeBulk } from '../bulk'
 
 // Đổi status hay retire các tài sản đã chọn, một Undo cho cả lô. Sau khi chạy: tài sản
 // không làm được được liệt kê kèm lý do (người khác vừa sửa, đã retire...)
@@ -18,7 +19,7 @@ const emit = defineEmits<{ done: [] }>()
 
 const retire = useBulkRetire()
 const setStatus = useBulkStatus()
-const restore = useRestoreAsset()
+const qc = useQueryClient()
 const busy = computed(() => retire.isPending.value || setStatus.isPending.value)
 const errors = useFormErrors()
 
@@ -46,8 +47,11 @@ const header = computed(() =>
   summary.value ? 'Some assets were not changed' : props.mode === 'retire' ? `Retire ${count.value}` : `Change status of ${count.value}`,
 )
 
+// Undo của retire hàng loạt: tối đa 6 yêu cầu cùng lúc (không bắn 200 yêu cầu một lượt), nạp
+// lại danh sách một lần ở cuối thay vì sau mỗi tài sản
 async function restoreEach(items: BulkItemRef[]) {
-  const results = await Promise.allSettled(items.map((it) => restore.mutateAsync(it)))
+  const results = await mapLimit(items, 6, restoreAssetRequest)
+  await refreshAssetLists(qc)
   const failed = results.filter((x) => x.status === 'rejected').length
   if (failed) throw new Error(`${failed} of ${items.length} could not be restored.`)
 }

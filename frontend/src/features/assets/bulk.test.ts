@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { retiredItems, statusGroups, summarizeBulk } from './bulk'
+import { mapLimit, retiredItems, statusGroups, summarizeBulk } from './bulk'
 
 describe('summarizeBulk', () => {
   const rows = [
@@ -54,5 +54,22 @@ describe('bulk undo', () => {
       { statusId: 's1', items: [{ id: 'a', version: 4 }] },
       { statusId: 's2', items: [{ id: 'b', version: 2 }] },
     ])
+  })
+})
+
+describe('mapLimit', () => {
+  it('runs at most the limit at a time and settles every item in order', async () => {
+    let running = 0
+    let most = 0
+    const results = await mapLimit([1, 2, 3, 4, 5, 6, 7], 3, async (n) => {
+      running++
+      most = Math.max(most, running)
+      await new Promise((r) => setTimeout(r, 5))
+      running--
+      if (n === 4) throw new Error('four')
+      return n * 10
+    })
+    expect(most).toBe(3)
+    expect(results.map((r) => (r.status === 'fulfilled' ? r.value : 'x'))).toEqual([10, 20, 30, 'x', 50, 60, 70])
   })
 })

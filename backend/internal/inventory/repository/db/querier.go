@@ -67,8 +67,10 @@ type Querier interface {
 	RemoveAttribute(ctx context.Context, arg RemoveAttributeParams) (int64, error)
 	RemoveOption(ctx context.Context, arg RemoveOptionParams) (int64, error)
 	RestoreAsset(ctx context.Context, arg RestoreAssetParams) (InventoryAsset, error)
+	// Khôi phục về cuối danh sách: vị trí cũ có thể đã thuộc về thuộc tính thêm sau khi xoá
 	RestoreAttribute(ctx context.Context, arg RestoreAttributeParams) (InventoryAssetTypeAttribute, error)
 	RestoreExportProfile(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error)
+	// Khôi phục về cuối danh sách, như thuộc tính
 	RestoreOption(ctx context.Context, arg RestoreOptionParams) (InventoryAssetAttributeOption, error)
 	RestoreStatus(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
 	RetireAsset(ctx context.Context, arg RetireAssetParams) (InventoryAsset, error)

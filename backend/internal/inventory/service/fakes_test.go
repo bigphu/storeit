@@ -547,12 +547,18 @@ func (f *fakeProfiles) GetAny(_ context.Context, id uuid.UUID) (domain.ExportPro
 	return p, nil
 }
 
-func (f *fakeProfiles) Restore(_ context.Context, id uuid.UUID) (domain.ExportProfile, error) {
+func (f *fakeProfiles) Restore(_ context.Context, id uuid.UUID, check func(domain.ExportProfile) error) (domain.ExportProfile, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	p, ok := f.profiles[id]
 	if !ok {
 		return p, domain.ErrExportProfileNotFound
+	}
+	// như repository thật: kiểm tra trên bản đang giữ trước khi khôi phục
+	if check != nil {
+		if err := check(p); err != nil {
+			return domain.ExportProfile{}, err
+		}
 	}
 	for _, o := range f.profiles {
 		if o.ID != id && o.DeletedAt == nil && o.OwnerID == p.OwnerID && strings.EqualFold(o.Name, p.Name) {

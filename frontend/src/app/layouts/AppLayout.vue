@@ -10,6 +10,7 @@ import { isTyping } from '@/lib/pageKeys'
 import NoAccessPage from '../pages/NoAccessPage.vue'
 import { useTabs } from '../tabs/useTabs'
 import AccountMenu from './AccountMenu.vue'
+import SideDrawer from '@/components/SideDrawer.vue'
 import AppSidebar from './AppSidebar.vue'
 import TabBar from './TabBar.vue'
 import TypeSwitcher from './TypeSwitcher.vue'
@@ -19,6 +20,26 @@ const route = useRoute()
 const tabs = useTabs()
 
 const allowed = computed(() => !route.meta.perm || session.can(route.meta.perm))
+
+// Màn hẹp (điện thoại): sidebar không nằm trên trang (đẩy nội dung xuống và xô lệch khi danh
+// sách loại tải xong) mà mở bằng nút ☰ thành ngăn kéo bên trái; chọn trang xong thì đóng
+const narrowQuery = typeof window !== 'undefined' ? window.matchMedia('(max-width: 760px)') : null
+const narrow = ref(narrowQuery?.matches ?? false)
+const onNarrowChange = (e: MediaQueryListEvent) => (narrow.value = e.matches)
+narrowQuery?.addEventListener('change', onNarrowChange)
+onBeforeUnmount(() => narrowQuery?.removeEventListener('change', onNarrowChange))
+const navOpen = ref(false)
+watch(
+  () => route.fullPath,
+  () => (navOpen.value = false),
+)
+watch(narrow, (n) => {
+  if (!n) navOpen.value = false
+})
+function switchTypeFromNav() {
+  navOpen.value = false
+  switcherOpen.value = true
+}
 
 // Mỗi lần điều hướng: vị trí mới thuộc về tab đang mở
 watch(
@@ -59,6 +80,7 @@ const SHORTCUTS: [string, string][] = [
   ['N', 'New asset of the type you are viewing'],
   ['J / K', 'Previous / next asset, on an asset page'],
   ['E', 'Edit the open asset'],
+  ['Ctrl Z', 'Undo the change in the latest message'],
   ['Alt 1–9', 'Go to tab 1–9'],
   ['Ctrl-click, middle-click', 'Open a link in a new tab'],
   ['Esc', 'Close a dialog or menu'],
@@ -99,9 +121,20 @@ onBeforeUnmount(() => {
 <template>
   <div class="shell">
     <header class="topbar">
+      <Button v-if="narrow" icon="pi pi-bars" text rounded class="nav-toggle" aria-label="Open navigation" @click="navOpen = true" />
       <RouterLink to="/assets" class="brand">StoreIt</RouterLink>
+      <!-- màn hẹp: nút biểu tượng gọn thay cho ô "Go to asset type… Ctrl K" -->
       <Button
-        v-if="session.can(Perm.AssetRead)"
+        v-if="session.can(Perm.AssetRead) && narrow"
+        icon="pi pi-search"
+        text
+        rounded
+        aria-label="Go to asset type"
+        title="Go to asset type"
+        @click="switcherOpen = true"
+      />
+      <Button
+        v-else-if="session.can(Perm.AssetRead)"
         severity="secondary"
         outlined
         size="small"
@@ -115,7 +148,18 @@ onBeforeUnmount(() => {
       <span class="spacer" />
       <AccountMenu />
     </header>
-    <AppSidebar @switch-type="switcherOpen = true" />
+    <AppSidebar v-if="!narrow" @switch-type="switcherOpen = true" />
+    <SideDrawer
+      v-else
+      v-model:visible="navOpen"
+      position="left"
+      width="min(18rem, 85vw)"
+      header="StoreIt"
+      root-class="nav-drawer"
+      content-class="nav-drawer-content"
+    >
+      <AppSidebar @switch-type="switchTypeFromNav" />
+    </SideDrawer>
     <div class="work">
       <TabBar @switch="switchTo" />
       <main ref="content" class="content">
@@ -184,6 +228,10 @@ onBeforeUnmount(() => {
 .spacer {
   flex: 1;
 }
+.nav-toggle {
+  flex: none;
+  margin-left: -0.5rem;
+}
 .work {
   display: flex;
   flex-direction: column;
@@ -198,17 +246,27 @@ onBeforeUnmount(() => {
   background: var(--p-content-background);
 }
 @media (max-width: 760px) {
+  /* sidebar ở trong ngăn kéo: chỉ còn thanh trên và phần làm việc */
   .shell {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     height: auto;
     min-height: 100vh;
   }
-  .go-type {
-    min-width: 0;
-  }
-  .go-type span {
-    display: none;
-  }
+}
+</style>
+<style>
+/* ngăn kéo điều hướng trên màn hẹp (dựng ngoài cây component): sidebar chiếm hết */
+.nav-drawer .p-drawer-header {
+  font: 800 1.1rem var(--app-display);
+  letter-spacing: -0.01em;
+}
+.nav-drawer .nav-drawer-content {
+  padding: 0;
+  display: flex;
+}
+.nav-drawer .nav-drawer-content > .sidebar {
+  flex: 1;
+  border-right: 0;
 }
 </style>

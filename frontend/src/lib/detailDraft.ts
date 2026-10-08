@@ -55,3 +55,18 @@ export function setList(d: Draft, tab: string, saved: string[], next: string[]) 
 export function listOf(d: Draft, tab: string, saved: string[], all: string[]): string[] {
   return all.filter((k) => valueOf(d, tab, k, saved.includes(k)) === true)
 }
+
+// pruneTab: bỏ các thay đổi nay đã trùng giá trị đã lưu (lưu ở chỗ khác, dữ liệu nạp lại),
+// để số "chưa lưu" không đếm chúng
+export function pruneTab(d: Draft, tab: string, saved: Record<string, DraftValue>) {
+  const t = d[tab]
+  if (!t) return
+  for (const k of Object.keys(t)) if (k in saved && t[k] === saved[k]) delete t[k]
+}
+
+// pruneList: như pruneTab cho danh sách tick (quyền, role) so với danh sách đã lưu
+export function pruneList(d: Draft, tab: string, saved: string[]) {
+  const t = d[tab]
+  if (!t) return
+  for (const k of Object.keys(t)) if (t[k] === saved.includes(k)) delete t[k]
+}

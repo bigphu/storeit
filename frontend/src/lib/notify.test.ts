@@ -43,6 +43,14 @@ describe('undo registry', () => {
   })
 })
 
+describe('isUndoShortcut with a dialog open', () => {
+  const ctrlZ = { key: 'z', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false, target: { closest: () => null } } as unknown as KeyboardEvent
+  it('leaves Ctrl/⌘ Z alone while a modal dialog is open (the undo would act behind it)', () => {
+    expect(isUndoShortcut(ctrlZ, true)).toBe(false)
+    expect(isUndoShortcut(ctrlZ, false)).toBe(true)
+  })
+})
+
 describe('isUndoShortcut', () => {
   const key = (o: Partial<{ key: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }>, target: unknown = null) =>
     ({ key: 'z', ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, ...o, target }) as unknown as KeyboardEvent

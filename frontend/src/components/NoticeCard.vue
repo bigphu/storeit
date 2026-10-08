@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import { onMounted, onUnmounted, ref } from 'vue'
-import { countdown } from '@/lib/countdown'
+import { countdown, holds } from '@/lib/countdown'
 import { forgetUndo, type Notice, trackUndo } from '@/lib/notify'
 import AppIcon from './AppIcon.vue'
 import type { IconName } from './icons'
@@ -23,8 +23,11 @@ function tick(now: number) {
   if (left.value <= 0) emit('close')
   else raf = requestAnimationFrame(tick)
 }
-const pause = () => timer?.pause(performance.now())
-const resume = () => timer?.resume(performance.now())
+// chuột và focus là hai lý do dừng riêng: chỉ chạy lại khi không còn cái nào
+const hold = holds(
+  () => timer?.pause(performance.now()),
+  () => timer?.resume(performance.now()),
+)
 
 function undo() {
   emit('close')
@@ -54,10 +57,10 @@ onUnmounted(() => {
     :class="['notice', notice.severity, { timed: !!notice.undo }]"
     :role="notice.severity === 'error' ? 'alert' : 'status'"
     :tabindex="notice.detail ? 0 : undefined"
-    @mouseenter="pause"
-    @mouseleave="resume"
-    @focusin="pause"
-    @focusout="resume"
+    @mouseenter="hold.hold('hover')"
+    @mouseleave="hold.release('hover')"
+    @focusin="hold.hold('focus')"
+    @focusout="(e: FocusEvent) => !(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node) && hold.release('focus')"
   >
     <svg v-if="notice.undo" class="edge" aria-hidden="true">
       <rect class="track" x="0" y="0" width="100%" height="100%" rx="12" />

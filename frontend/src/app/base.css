@@ -342,6 +342,11 @@ section + section {
   align-items: center;
   white-space: nowrap;
 }
+/* nút cuối dòng chỉ dựng cho hàng đang dùng (useActiveRow): ô luôn giữ chiều cao của nút để
+   hàng không cao lên khi rê chuột */
+.p-datatable-tbody .row-actions {
+  min-height: 2rem;
+}
 @media (hover: hover) {
   .p-datatable-tbody > tr .row-actions {
     opacity: 0;

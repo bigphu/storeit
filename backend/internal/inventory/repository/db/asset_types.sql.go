@@ -425,18 +425,21 @@ func (q *Queries) RemoveOption(ctx context.Context, arg RemoveOptionParams) (int
 }
 
 const restoreAttribute = `-- name: RestoreAttribute :one
-UPDATE inventory.asset_type_attributes SET removed_at = NULL, updated_at = now()
-WHERE id = $1 AND asset_type_id = $2
-RETURNING id, asset_type_id, key, label, data_type, unit, is_required, position, removed_at, created_at, updated_at
+UPDATE inventory.asset_type_attributes AS t SET removed_at = NULL, updated_at = now(),
+    position = (SELECT COALESCE(MAX(a.position) + 1, 0) FROM inventory.asset_type_attributes a
+                WHERE a.asset_type_id = $1 AND a.removed_at IS NULL)
+WHERE t.id = $2 AND t.asset_type_id = $1
+RETURNING t.id, t.asset_type_id, t.key, t.label, t.data_type, t.unit, t.is_required, t.position, t.removed_at, t.created_at, t.updated_at
 `
 
 type RestoreAttributeParams struct {
-	ID          uuid.UUID
 	AssetTypeID uuid.UUID
+	ID          uuid.UUID
 }
 
+// Khôi phục về cuối danh sách: vị trí cũ có thể đã thuộc về thuộc tính thêm sau khi xoá
 func (q *Queries) RestoreAttribute(ctx context.Context, arg RestoreAttributeParams) (InventoryAssetTypeAttribute, error) {
-	row := q.db.QueryRow(ctx, restoreAttribute, arg.ID, arg.AssetTypeID)
+	row := q.db.QueryRow(ctx, restoreAttribute, arg.AssetTypeID, arg.ID)
 	var i InventoryAssetTypeAttribute
 	err := row.Scan(
 		&i.ID,
@@ -455,18 +458,21 @@ func (q *Queries) RestoreAttribute(ctx context.Context, arg RestoreAttributePara
 }
 
 const restoreOption = `-- name: RestoreOption :one
-UPDATE inventory.asset_attribute_options SET removed_at = NULL, updated_at = now()
-WHERE id = $1 AND attribute_id = $2
-RETURNING id, attribute_id, data_type, label, position, removed_at, created_at, updated_at
+UPDATE inventory.asset_attribute_options AS t SET removed_at = NULL, updated_at = now(),
+    position = (SELECT COALESCE(MAX(o.position) + 1, 0) FROM inventory.asset_attribute_options o
+                WHERE o.attribute_id = $1 AND o.removed_at IS NULL)
+WHERE t.id = $2 AND t.attribute_id = $1
+RETURNING t.id, t.attribute_id, t.data_type, t.label, t.position, t.removed_at, t.created_at, t.updated_at
 `
 
 type RestoreOptionParams struct {
-	ID          uuid.UUID
 	AttributeID uuid.UUID
+	ID          uuid.UUID
 }
 
+// Khôi phục về cuối danh sách, như thuộc tính
 func (q *Queries) RestoreOption(ctx context.Context, arg RestoreOptionParams) (InventoryAssetAttributeOption, error) {
-	row := q.db.QueryRow(ctx, restoreOption, arg.ID, arg.AttributeID)
+	row := q.db.QueryRow(ctx, restoreOption, arg.AttributeID, arg.ID)
 	var i InventoryAssetAttributeOption
 	err := row.Scan(
 		&i.ID,

@@ -10,7 +10,7 @@ import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
 import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLeaveGuard, useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb from '@/components/AppBreadcrumb.vue'
@@ -28,7 +28,7 @@ import type { AccountListItem } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { runAction } from '@/lib/actions'
-import { changeCount, changesOf, clearTab, discardTab, emptyDraft, isDirty, listOf, restoreTab, setList } from '@/lib/detailDraft'
+import { changeCount, changesOf, clearTab, discardTab, emptyDraft, isDirty, listOf, restoreTab, setList, pruneList } from '@/lib/detailDraft'
 import { notify } from '@/lib/notify'
 import { onRowClick } from '@/lib/tableRows'
 import { openLocation } from '@/lib/navigation'
@@ -69,6 +69,8 @@ const savedFields = computed(() => ({ name: role.value?.name ?? '', description:
 // Quyền: bản nháp theo từng quyền so với bản đã lưu; bật Quản lý kéo theo Xem (catalog.toggle)
 const saved = computed(() => role.value?.permissions ?? [])
 const current = computed(() => listOf(draft, 'permissions', saved.value, ALL_PERMS))
+// danh sách đã lưu đổi: tick nay trùng thì không còn là thay đổi
+watch(saved, (s) => pruneList(draft, 'permissions', s))
 const changed = computed(() => ALL_PERMS.filter((p) => current.value.includes(p) !== saved.value.includes(p)))
 function set(code: string, on: boolean) {
   setList(draft, 'permissions', saved.value, toggle(current.value, code, on))
@@ -89,6 +91,7 @@ async function savePermissions() {
     done: `Permissions of ${role.value?.name ?? 'the role'} saved.`,
     failed: "Couldn't save the permissions.",
     undo: () => setPerms.mutateAsync({ id: props.id, permissions: before }),
+    undoKey: `role-perms:${props.id}`,
     undone: 'Permissions put back.',
     undoFailed: "Couldn't put the permissions back. The new permissions stay.",
     after: () => clearTab(draft, 'permissions'),
@@ -141,6 +144,7 @@ function removePerson(a: AccountListItem) {
     done: `${a.name} removed from ${name}.`,
     failed: `Couldn't remove ${a.name} from ${name}.`,
     undo: () => assign.mutateAsync({ id: a.id, roleIds: before }),
+    undoKey: `account-roles:${a.id}`,
     undone: `${a.name} has ${name} again.`,
     undoFailed: `Couldn't give ${a.name} ${name} again.`,
   })
@@ -164,6 +168,7 @@ async function addPerson() {
     done: `${a.name} now has ${name}.`,
     failed: `Couldn't give ${a.name} ${name}.`,
     undo: () => assign.mutateAsync({ id: a.id, roleIds: before }),
+    undoKey: `account-roles:${a.id}`,
     undone: `${a.name} removed from ${name} again.`,
     undoFailed: `Couldn't remove ${a.name} from ${name} again.`,
     after: () => {

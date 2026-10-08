@@ -28,8 +28,9 @@ import type { AccountListItem } from '@/lib/api/types'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { mayClose } from '@/lib/confirm'
+import { useQuickDrawer } from '@/lib/quickDrawer'
 import { formatDay } from '@/lib/dates'
-import { changeCount, changesOf, clearTab, emptyDraft, isDirty, listOf, setList } from '@/lib/detailDraft'
+import { changeCount, changesOf, clearTab, emptyDraft, isDirty, listOf, setList, pruneList } from '@/lib/detailDraft'
 import { openLocation } from '@/lib/navigation'
 import { inviteNote } from '@/lib/people'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
@@ -151,6 +152,7 @@ const quickFields: FieldDef[] = [
 ]
 const quickSaved = computed(() => ({ name: quick.value?.name ?? '', email: quick.value?.email ?? '' }))
 const quickRoles = computed(() => quick.value?.roles.map((r) => r.id) ?? [])
+watch(quickRoles, (s) => pruneList(quickDraft, 'roles', s))
 const allRoleIds = computed(() => (roles.data.value ?? []).map((r) => r.id))
 const quickCurrent = computed(() => listOf(quickDraft, 'roles', quickRoles.value, allRoleIds.value))
 const grantable = (permissions: string[]) => permissions.every((p) => session.can(p))
@@ -162,18 +164,11 @@ function clearQuick() {
   clearTab(quickDraft, 'overview')
   clearTab(quickDraft, 'roles')
 }
-const quickOpen = computed({
-  get: () => quick.value !== null,
-  set: (v) => {
-    if (!v) {
-      quick.value = null
-      clearQuick()
-    }
-  },
-})
+// mở/đóng ngăn kéo: mục giữ lại đến khi trượt ra xong rồi mới xoá cùng bản nháp
+const quickDrawer = useQuickDrawer(quick, clearQuick)
+const quickOpen = quickDrawer.visible
 function openQuick(a: AccountListItem) {
-  clearQuick()
-  quick.value = a
+  quickDrawer.open(a)
 }
 const quickIndex = computed(() => (quick.value ? rows.value.findIndex((x) => x.id === quick.value!.id) : -1))
 async function moveQuick(step: number) {
@@ -276,19 +271,21 @@ watch(rows, (list) => {
       </Column>
       <Column v-if="canManage" header="" header-style="width: 6rem; min-width: 6rem">
         <template #body="{ data: a, index }: { data: AccountListItem; index: number }">
-          <div v-if="activeRow.isActive(index)" class="row-actions">
-            <IconAction icon="pi pi-pencil" label="Quick edit" @click="openQuick(a)" />
-            <IconAction v-if="a.status === 'invited'" icon="pi pi-envelope" label="Resend invitation" @click="actions.resendInvitation(a)" />
-            <IconAction v-if="a.status === 'active'" icon="pi pi-key" label="Send reset link" @click="actions.sendReset(a)" />
-            <IconAction v-if="a.status === 'disabled'" icon="pi pi-check-circle" label="Enable" @click="actions.enable(a)" />
-            <IconAction
-              v-else
-              icon="pi pi-ban"
-              label="Disable"
-              :disabled="actions.isSelf(a)"
-              reason="You can’t disable yourself"
-              @click="actions.disable(a)"
-            />
+          <div class="row-actions">
+            <template v-if="activeRow.isActive(index)">
+              <IconAction icon="pi pi-pencil" label="Quick edit" @click="openQuick(a)" />
+              <IconAction v-if="a.status === 'invited'" icon="pi pi-envelope" label="Resend invitation" @click="actions.resendInvitation(a)" />
+              <IconAction v-if="a.status === 'active'" icon="pi pi-key" label="Send reset link" @click="actions.sendReset(a)" />
+              <IconAction v-if="a.status === 'disabled'" icon="pi pi-check-circle" label="Enable" @click="actions.enable(a)" />
+              <IconAction
+                v-else
+                icon="pi pi-ban"
+                label="Disable"
+                :disabled="actions.isSelf(a)"
+                reason="You can’t disable yourself"
+                @click="actions.disable(a)"
+              />
+            </template>
           </div>
         </template>
       </Column>
@@ -301,6 +298,7 @@ watch(rows, (list) => {
     <QuickEditDrawer
       v-if="quick"
       v-model:visible="quickOpen"
+      @closed="quickDrawer.closed()"
       :title="quick.name"
       icon="user-plus"
       :dirty="isDirty(quickDraft)"

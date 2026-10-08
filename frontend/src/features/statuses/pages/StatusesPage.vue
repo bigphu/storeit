@@ -19,6 +19,7 @@ import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { runAction } from '@/lib/actions'
 import { mayClose } from '@/lib/confirm'
+import { useQuickDrawer } from '@/lib/quickDrawer'
 import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
 import { useFormErrors } from '@/lib/forms'
 import { openLocation } from '@/lib/navigation'
@@ -122,18 +123,11 @@ const quickFields: FieldDef[] = [
   { key: 'kind', label: 'Kind', lock: 'The kind decides how assets behave, so it can’t change.' },
 ]
 const quickSaved = computed(() => ({ name: quick.value?.name ?? '', kind: quick.value ? KIND_INFO[quick.value.kind].label : '' }))
-const quickOpen = computed({
-  get: () => quick.value !== null,
-  set: (v) => {
-    if (!v) {
-      quick.value = null
-      clearTab(quickDraft, 'overview')
-    }
-  },
-})
+// mở/đóng ngăn kéo: mục giữ lại đến khi trượt ra xong rồi mới xoá cùng bản nháp
+const quickDrawer = useQuickDrawer(quick, () => clearTab(quickDraft, 'overview'))
+const quickOpen = quickDrawer.visible
 function openQuick(st: Status) {
-  clearTab(quickDraft, 'overview')
-  quick.value = st
+  quickDrawer.open(st)
 }
 const quickIndex = computed(() => (quick.value ? ordered.value.findIndex((x) => x.id === quick.value!.id) : -1))
 async function moveQuick(step: number) {
@@ -276,6 +270,7 @@ watch(statuses, (list) => {
     <QuickEditDrawer
       v-if="quick"
       v-model:visible="quickOpen"
+      @closed="quickDrawer.closed()"
       :title="quick.name"
       icon="tag"
       :dirty="isDirty(quickDraft)"

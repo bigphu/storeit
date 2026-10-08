@@ -25,3 +25,19 @@ export function countdown(life: number, start: number): Countdown {
     },
   }
 }
+
+// holds: dừng khi có ít nhất một lý do (chuột ở trên, focus ở trong), chạy lại khi không còn
+// lý do nào; rời chuột khi focus vẫn ở trong thì vẫn dừng
+export function holds(pause: () => void, resume: () => void) {
+  const reasons = new Set<string>()
+  return {
+    hold(reason: string) {
+      if (reasons.size === 0) pause()
+      reasons.add(reason)
+    },
+    release(reason: string) {
+      if (!reasons.delete(reason)) return
+      if (reasons.size === 0) resume()
+    },
+  }
+}

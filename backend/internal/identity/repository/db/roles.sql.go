@@ -375,7 +375,7 @@ func (q *Queries) RolesPermissions(ctx context.Context, roleIds []uuid.UUID) ([]
 }
 
 const touchRole = `-- name: TouchRole :exec
-UPDATE identity.roles SET updated_at = now() WHERE id = $1
+UPDATE identity.roles SET updated_at = now() WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) TouchRole(ctx context.Context, id uuid.UUID) error {
@@ -385,7 +385,7 @@ func (q *Queries) TouchRole(ctx context.Context, id uuid.UUID) error {
 
 const updateRole = `-- name: UpdateRole :one
 UPDATE identity.roles SET name = $1, description = $2, updated_at = now()
-WHERE id = $3
+WHERE id = $3 AND deleted_at IS NULL
 RETURNING id, name, description, is_system, created_at, updated_at, deleted_at
 `
 

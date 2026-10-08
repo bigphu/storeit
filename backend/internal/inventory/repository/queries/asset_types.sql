@@ -62,10 +62,13 @@ RETURNING *;
 UPDATE inventory.asset_type_attributes SET removed_at = now(), updated_at = now()
 WHERE id = @id AND asset_type_id = @asset_type_id AND removed_at IS NULL;
 
+-- Khôi phục về cuối danh sách: vị trí cũ có thể đã thuộc về thuộc tính thêm sau khi xoá
 -- name: RestoreAttribute :one
-UPDATE inventory.asset_type_attributes SET removed_at = NULL, updated_at = now()
-WHERE id = @id AND asset_type_id = @asset_type_id
-RETURNING *;
+UPDATE inventory.asset_type_attributes AS t SET removed_at = NULL, updated_at = now(),
+    position = (SELECT COALESCE(MAX(a.position) + 1, 0) FROM inventory.asset_type_attributes a
+                WHERE a.asset_type_id = @asset_type_id AND a.removed_at IS NULL)
+WHERE t.id = @id AND t.asset_type_id = @asset_type_id
+RETURNING t.*;
 
 -- name: AttributeHasValues :one
 SELECT EXISTS (SELECT 1 FROM inventory.asset_attribute_values WHERE attribute_id = @attribute_id);
@@ -106,7 +109,10 @@ RETURNING *;
 UPDATE inventory.asset_attribute_options SET removed_at = now(), updated_at = now()
 WHERE id = @id AND attribute_id = @attribute_id AND removed_at IS NULL;
 
+-- Khôi phục về cuối danh sách, như thuộc tính
 -- name: RestoreOption :one
-UPDATE inventory.asset_attribute_options SET removed_at = NULL, updated_at = now()
-WHERE id = @id AND attribute_id = @attribute_id
-RETURNING *;
+UPDATE inventory.asset_attribute_options AS t SET removed_at = NULL, updated_at = now(),
+    position = (SELECT COALESCE(MAX(o.position) + 1, 0) FROM inventory.asset_attribute_options o
+                WHERE o.attribute_id = @attribute_id AND o.removed_at IS NULL)
+WHERE t.id = @id AND t.attribute_id = @attribute_id
+RETURNING t.*;

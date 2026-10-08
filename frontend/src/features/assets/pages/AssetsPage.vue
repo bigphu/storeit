@@ -23,6 +23,7 @@ import InlineCell from '@/components/InlineCell.vue'
 import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import QuickEditDrawer from '@/components/QuickEditDrawer.vue'
 import { mayClose } from '@/lib/confirm'
+import { useQuickDrawer } from '@/lib/quickDrawer'
 import { changesOf, clearTab, emptyDraft, isDirty } from '@/lib/detailDraft'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
@@ -390,18 +391,11 @@ const quickSaved = computed(() => {
     ...Object.fromEntries(a.attributes.map((x) => [attrKey(x.key), asText(values[x.key])])),
   }
 })
-const quickOpen = computed({
-  get: () => quick.value !== null,
-  set: (v) => {
-    if (!v) {
-      quick.value = null
-      clearTab(quickDraft, 'overview')
-    }
-  },
-})
+// mở/đóng ngăn kéo: mục giữ lại đến khi trượt ra xong rồi mới xoá cùng bản nháp
+const quickDrawer = useQuickDrawer(quick, () => clearTab(quickDraft, 'overview'))
+const quickOpen = quickDrawer.visible
 function openQuick(a: AssetListItem) {
-  clearTab(quickDraft, 'overview')
-  quick.value = a
+  quickDrawer.open(a)
 }
 const quickIndex = computed(() => (quick.value ? rows.value.findIndex((x) => x.id === quick.value!.id) : -1))
 async function moveQuick(step: number) {
@@ -681,6 +675,7 @@ watch(rows, (list) => {
     <QuickEditDrawer
       v-if="quick"
       v-model:visible="quickOpen"
+      @closed="quickDrawer.closed()"
       :title="`${quick.tag} · ${quick.name}`"
       icon="box"
       :dirty="isDirty(quickDraft)"
