@@ -43,3 +43,22 @@ export function statusGroups(
   }
   return [...groups].map(([statusId, items]) => ({ statusId, items }))
 }
+
+// mapLimit: chạy fn cho từng phần tử, cùng lúc tối đa limit việc; kết quả theo đúng thứ tự,
+// lỗi của một việc không dừng các việc khác (như Promise.allSettled)
+export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length)
+  let next = 0
+  async function worker() {
+    while (next < items.length) {
+      const i = next++
+      try {
+        results[i] = { status: 'fulfilled', value: await fn(items[i]) }
+      } catch (reason) {
+        results[i] = { status: 'rejected', reason }
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}

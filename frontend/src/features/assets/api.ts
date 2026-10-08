@@ -68,7 +68,7 @@ function useAssetMutation<V, R>(fn: (v: V) => Promise<R>, toast = true) {
     mutationFn: fn,
     meta: { toast },
     // số tài sản theo loại (sidebar) cũng đổi
-    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: assetKeys.all }), qc.invalidateQueries({ queryKey: typeKeys.all })]),
+    onSuccess: () => refreshAssetLists(qc),
   })
 }
 
@@ -98,12 +98,19 @@ export function useRetireAsset() {
   )
 }
 
+// restoreAssetRequest: chỉ gọi API, không nạp lại danh sách (Undo của retire hàng loạt gọi
+// nhiều lần rồi nạp lại một lần, xem refreshAssetLists)
+export function restoreAssetRequest({ id, version }: { id: string; version: number }) {
+  return unwrap(inventoryApi.POST('/assets/{assetID}/restore', { ...path(id), body: { version } }))
+}
+
 export function useRestoreAsset() {
-  return useAssetMutation(
-    ({ id, version }: { id: string; version: number }) =>
-      unwrap(inventoryApi.POST('/assets/{assetID}/restore', { ...path(id), body: { version } })),
-    false,
-  )
+  return useAssetMutation(restoreAssetRequest, false)
+}
+
+// refreshAssetLists: nạp lại danh sách tài sản và số tài sản theo loại (sidebar)
+export function refreshAssetLists(qc: QueryClient) {
+  return Promise.all([qc.invalidateQueries({ queryKey: assetKeys.all }), qc.invalidateQueries({ queryKey: typeKeys.all })])
 }
 
 // fetchAsset: đọc một lần ngoài query (lý do retire cho Undo của restore)
