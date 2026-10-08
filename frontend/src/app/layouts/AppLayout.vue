@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
+import Drawer from 'primevue/drawer'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Perm } from '@/lib/auth/permissions'
@@ -19,6 +20,26 @@ const route = useRoute()
 const tabs = useTabs()
 
 const allowed = computed(() => !route.meta.perm || session.can(route.meta.perm))
+
+// Màn hẹp (điện thoại): sidebar không nằm trên trang (đẩy nội dung xuống và xô lệch khi danh
+// sách loại tải xong) mà mở bằng nút ☰ thành ngăn kéo bên trái; chọn trang xong thì đóng
+const narrowQuery = typeof window !== 'undefined' ? window.matchMedia('(max-width: 760px)') : null
+const narrow = ref(narrowQuery?.matches ?? false)
+const onNarrowChange = (e: MediaQueryListEvent) => (narrow.value = e.matches)
+narrowQuery?.addEventListener('change', onNarrowChange)
+onBeforeUnmount(() => narrowQuery?.removeEventListener('change', onNarrowChange))
+const navOpen = ref(false)
+watch(
+  () => route.fullPath,
+  () => (navOpen.value = false),
+)
+watch(narrow, (n) => {
+  if (!n) navOpen.value = false
+})
+function switchTypeFromNav() {
+  navOpen.value = false
+  switcherOpen.value = true
+}
 
 // Mỗi lần điều hướng: vị trí mới thuộc về tab đang mở
 watch(
@@ -99,6 +120,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="shell">
     <header class="topbar">
+      <Button v-if="narrow" icon="pi pi-bars" text rounded class="nav-toggle" aria-label="Open navigation" @click="navOpen = true" />
       <RouterLink to="/assets" class="brand">StoreIt</RouterLink>
       <Button
         v-if="session.can(Perm.AssetRead)"
@@ -115,7 +137,16 @@ onBeforeUnmount(() => {
       <span class="spacer" />
       <AccountMenu />
     </header>
-    <AppSidebar @switch-type="switcherOpen = true" />
+    <AppSidebar v-if="!narrow" @switch-type="switcherOpen = true" />
+    <Drawer
+      v-else
+      v-model:visible="navOpen"
+      position="left"
+      header="StoreIt"
+      :pt="{ root: { class: 'nav-drawer', style: 'width: min(18rem, 85vw)' }, content: { class: 'nav-drawer-content' } }"
+    >
+      <AppSidebar @switch-type="switchTypeFromNav" />
+    </Drawer>
     <div class="work">
       <TabBar @switch="switchTo" />
       <main ref="content" class="content">
@@ -184,6 +215,10 @@ onBeforeUnmount(() => {
 .spacer {
   flex: 1;
 }
+.nav-toggle {
+  flex: none;
+  margin-left: -0.5rem;
+}
 .work {
   display: flex;
   flex-direction: column;
@@ -198,9 +233,10 @@ onBeforeUnmount(() => {
   background: var(--p-content-background);
 }
 @media (max-width: 760px) {
+  /* sidebar ở trong ngăn kéo: chỉ còn thanh trên và phần làm việc */
   .shell {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     height: auto;
     min-height: 100vh;
   }
@@ -210,5 +246,20 @@ onBeforeUnmount(() => {
   .go-type span {
     display: none;
   }
+}
+</style>
+<style>
+/* ngăn kéo điều hướng trên màn hẹp (dựng ngoài cây component): sidebar chiếm hết */
+.nav-drawer .p-drawer-header {
+  font: 800 1.1rem var(--app-display);
+  letter-spacing: -0.01em;
+}
+.nav-drawer .nav-drawer-content {
+  padding: 0;
+  display: flex;
+}
+.nav-drawer .nav-drawer-content > .sidebar {
+  flex: 1;
+  border-right: 0;
 }
 </style>
