@@ -121,6 +121,11 @@ export function restoreAssetRequest({ id, version }: { id: string; version: numb
   return unwrap(inventoryApi.POST('/assets/{assetID}/restore', { ...path(id), body: { version } }))
 }
 
+// searchAssets: gợi ý tài sản (tag hay tên) cho hộp Replace; tài sản đã retire không có
+export async function searchAssets(q: string) {
+  return (await unwrap(inventoryApi.GET('/assets', { params: { query: { q: q || undefined, page: 1, page_size: 10 } } }))).items
+}
+
 // Thay thế (US-13): ghi và hoàn tác; runAction lo thông báo nên không toast ở đây
 export function useRecordReplacement() {
   return useAssetMutation(

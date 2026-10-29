@@ -2,9 +2,10 @@
 // retire (RetireDialog, có Undo), restore (chạy ngay, có Undo), sửa nhanh từ danh sách
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { runAction } from '@/lib/actions'
+import { runAction, type UndoOptions } from '@/lib/actions'
+import type { AssetDetail } from '@/lib/api/types'
 import { openLocation } from '@/lib/navigation'
-import { fetchAsset, useReplaceAsset, useRestoreAsset, useRetireAsset } from './api'
+import { fetchAsset, useRecordReplacement, useReplaceAsset, useRestoreAsset, useRetireAsset, useUndoReplacement } from './api'
 import { type AssetQuickChange, quickAssetBody } from './quickEdit'
 import { assetBodyOf, type FormValues } from './values'
 
@@ -23,6 +24,8 @@ export function useAssetActions() {
   const restoreAsset = useRestoreAsset()
   const retireAsset = useRetireAsset()
   const replaceAsset = useReplaceAsset()
+  const recordReplacement = useRecordReplacement()
+  const undoReplacementMut = useUndoReplacement()
 
   // retireTarget + retireOpen gắn vào <RetireDialog>
   const retireTarget = ref<ActionAsset | null>(null)
@@ -55,6 +58,31 @@ export function useAssetActions() {
         undo: ({ before, saved }) => replaceAsset.mutateAsync({ id: row.id, version: saved.version, ...before }),
         undone: `${row.tag} changed back.`,
         undoFailed: `Couldn't change ${row.tag} back. Someone may have changed it since.`,
+      })
+    },
+    // replacementUndo: thông báo sau khi thay (hộp Replace tự gọi API để hiện lỗi trong form);
+    // Undo hoàn tác thay thế, tài sản cũ được khôi phục
+    replacementUndo(old: ActionAsset, newTag: string): UndoOptions<AssetDetail> {
+      return {
+        done: `${old.tag} replaced by ${newTag}.`,
+        undo: (saved) => undoReplacementMut.mutateAsync({ id: old.id, version: saved.version }),
+        undone: `${old.tag} restored.`,
+        undoFailed: `Couldn't undo the replacement. Someone may have changed ${old.tag} since.`,
+      }
+    },
+    // undoReplacement: hoàn tác thay thế từ trang tài sản; Undo ghi lại đúng lần thay cũ
+    undoReplacement(a: AssetDetail) {
+      const by = a.replaced_by
+      return runAction({
+        run: () => undoReplacementMut.mutateAsync({ id: a.id, version: a.version }),
+        done: `Replacement undone. ${a.tag} restored.`,
+        failed: `Couldn't undo the replacement of ${a.tag}.`,
+        undo: by
+          ? (restored) =>
+              recordReplacement.mutateAsync({ id: a.id, replacementId: by.id, replacedOn: by.replaced_on, reason: by.reason, version: restored.version })
+          : undefined,
+        undone: by ? `${a.tag} replaced by ${by.tag} again.` : undefined,
+        undoFailed: `Couldn't replace ${a.tag} again. It stays restored.`,
       })
     },
     restore(a: ActionAsset) {

@@ -20,6 +20,7 @@ import { usePageKeys } from '@/lib/pageKeys'
 import { kindSeverity } from '@/features/statuses/api'
 import { fetchAssetPage, useAsset } from '../api'
 import AssetActivity from '../components/AssetActivity.vue'
+import ReplaceDialog from '../components/ReplaceDialog.vue'
 import RetireDialog from '../components/RetireDialog.vue'
 import { position, stepFrom, useListContext } from '../listContext'
 import { listLocation, toApiParams, typeListLocation } from '../listQuery'
@@ -40,6 +41,8 @@ const canManageTypes = computed(() => session.can(Perm.TypeManage))
 const { data: asset } = useAsset(() => props.id)
 // tab đang mở; Activity chỉ tải khi mở lần đầu
 const tab = ref<'details' | 'activity'>('details')
+// hộp "Replace" (US-13)
+const replaceOpen = ref(false)
 const retired = computed(() => !!asset.value?.retired_at)
 useTabTitle(() => asset.value?.tag)
 
@@ -111,7 +114,10 @@ usePageKeys((e) => {
           <KeyHint keys="E" />
         </Button>
         <Button label="Retire" icon="pi pi-ban" severity="secondary" outlined @click="actions.askRetire(asset)" />
+        <Button label="Replace…" icon="pi pi-sync" severity="secondary" outlined @click="replaceOpen = true" />
       </template>
+      <!-- tài sản bị thay: khôi phục là hoàn tác thay thế -->
+      <Button v-else-if="asset.replaced_by" label="Undo replacement" icon="pi pi-undo" @click="actions.undoReplacement(asset)" />
       <Button v-else label="Restore" icon="pi pi-replay" @click="actions.restore(asset)" />
     </div>
 
@@ -162,6 +168,28 @@ usePageKeys((e) => {
                 <RouterLink v-if="canManageTypes" :to="`/types/${asset.asset_type.id}/settings`">Add some in the type's settings</RouterLink>
               </p>
             </Panel>
+            <!-- liên kết thay thế: lần ngược nguồn gốc qua "Replaces" -->
+            <Panel v-if="asset.replaced_by || asset.replaces.length" header="Replacement">
+              <dl class="props">
+                <template v-if="asset.replaced_by">
+                  <dt>Replaced by</dt>
+                  <dd>
+                    <RouterLink :to="`/assets/${asset.replaced_by.id}`" class="mono">{{ asset.replaced_by.tag }}</RouterLink>
+                    · {{ asset.replaced_by.name }} · {{ formatDate(asset.replaced_by.replaced_on) }}
+                    <div class="pre muted">{{ asset.replaced_by.reason }}</div>
+                  </dd>
+                </template>
+                <template v-if="asset.replaces.length">
+                  <dt>Replaces</dt>
+                  <dd>
+                    <div v-for="r in asset.replaces" :key="r.id">
+                      <RouterLink :to="`/assets/${r.id}`" class="mono">{{ r.tag }}</RouterLink>
+                      · {{ r.name }} · {{ formatDate(r.replaced_on) }}
+                    </div>
+                  </dd>
+                </template>
+              </dl>
+            </Panel>
           </div>
         </TabPanel>
         <TabPanel value="activity">
@@ -171,6 +199,7 @@ usePageKeys((e) => {
     </Tabs>
 
     <RetireDialog v-model:visible="actions.retireOpen.value" :asset="actions.retireTarget.value" />
+    <ReplaceDialog v-if="!retired" v-model:visible="replaceOpen" :asset="asset" />
   </section>
 </template>
 

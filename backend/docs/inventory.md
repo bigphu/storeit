@@ -106,6 +106,23 @@ Seeded IDs are in `domain/permissions.go` (`GeneralTypeID`, `AvailableStatusID`,
   in `COALESCE(…, false)` so a `NULL` column never matches.
 
 
+## Replacement (US-13)
+
+`POST /assets/{assetID}/replacement {replacement_asset_id, replaced_on, reason, version}`
+records that another asset replaced this one. The old asset must not be retired; the new one
+must exist, not be retired and not be the old one (`/errors/invalid-replacement`, field
+`replacement_asset_id`). `replaced_on` may not be after the server's UTC date + 1 day (the
+user's day), `reason` is 1–500 characters. In one transaction (both assets locked in ID
+order): a row in `inventory.asset_replacements` (one per old asset), the old asset retired to
+the default retired status with reason "Replaced by <tag>: <reason>" (cut to 500), events
+`inventory.asset_replaced` (old) and `inventory.asset_replaces` (new), no `asset_retired`.
+`POST …/replacement/undo {version}` deletes the row, restores the old asset and appends
+`inventory.asset_replacement_undone` on both (`role` old/new); no link is 409
+`/errors/asset-not-replaced`. `POST …/restore` on a replaced asset does the same as undo, so
+an active asset is never listed as replaced. `AssetDetail` carries `replaced_by` (null) and
+`replaces` (newest first). Activity kinds `replaced`, `replaces`, `replacement_undone` carry
+`related {id, tag, role?}`.
+
 ## Activity history (US-16)
 
 `GET /assets/{assetID}/activity` reads the asset's events from `platform.events` (kept
@@ -126,7 +143,7 @@ skipped. Built by `service.AssetActivity` from `events.ListForAggregate` (index
 | Endpoints | Needs |
 |---|---|
 | `GET /asset-types` (`with_counts=true` adds `asset_count` and `kind_counts` for assets not retired, `attribute_count` and `attribute_labels` for active attributes), `GET /asset-types/{typeID}`, `GET /asset-statuses` (`with_counts=true` adds `asset_count`, retired assets included), `GET /assets`, `GET /assets/{assetID}`, `GET /assets/{assetID}/activity` | `inventory.asset.read` |
-| `POST /assets`, `PUT /assets/{assetID}`, `POST …/retire`, `POST …/restore`, `POST /assets/bulk-retire`, `POST /assets/bulk-status` | `inventory.asset.manage` |
+| `POST /assets`, `PUT /assets/{assetID}`, `POST …/retire`, `POST …/restore`, `POST …/replacement`, `POST …/replacement/undo`, `POST /assets/bulk-retire`, `POST /assets/bulk-status` | `inventory.asset.manage` |
 | `POST /asset-types`, `PATCH /asset-types/{typeID}`, `POST …/archive`, `POST …/restore`, attributes (`POST`, `PATCH`, `DELETE`, `POST …/restore`, `PUT …/attributes/order`), options (`POST`, `PATCH`, `DELETE`, `POST …/restore`, `PUT …/options/order`) | `inventory.type.manage` |
 | `POST /asset-statuses`, `PATCH /asset-statuses/{statusID}`, `POST …/archive`, `POST …/restore`, `PUT /asset-statuses/order` | `inventory.status.manage` |
 | `POST /assets/export` | `inventory.asset.read` + `inventory.asset.export` |

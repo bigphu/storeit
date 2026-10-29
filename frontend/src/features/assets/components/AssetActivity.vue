@@ -30,6 +30,19 @@ const ICONS: Record<ActivityEntry['kind'], string> = {
   other: 'pi pi-circle',
 }
 
+// câu tóm tắt tách quanh tag của tài sản liên quan (thay thế) để tag thành liên kết
+function summaryParts(item: ActivityEntry): { text: string; link: boolean }[] {
+  const text = activitySummary(item).text
+  const tag = item.related?.tag
+  const at = tag ? text.indexOf(tag) : -1
+  if (!tag || at < 0) return [{ text, link: false }]
+  return [
+    { text: text.slice(0, at), link: false },
+    { text: tag, link: true },
+    { text: text.slice(at + tag.length), link: false },
+  ]
+}
+
 // giá trị dài đang mở rộng, theo "<id entry>:<field>:<from|to>"
 const expanded = reactive(new Set<string>())
 function toggle(key: string) {
@@ -51,7 +64,10 @@ function toggle(key: string) {
         <div class="entry">
           <p class="summary">
             <strong>{{ activitySummary(item).who }}</strong>
-            {{ activitySummary(item).text }}
+            <template v-for="(part, i) in summaryParts(item)" :key="i">
+              <RouterLink v-if="part.link && item.related" :to="`/assets/${item.related.id}`" class="mono">{{ part.text }}</RouterLink>
+              <template v-else>{{ ` ${part.text}`.replace(/^ (?=:)/, '') }}</template>
+            </template>
             <time class="when" :datetime="item.occurred_at" :title="formatDateTime(item.occurred_at)">{{ relativeTime(item.occurred_at, now) }}</time>
           </p>
           <dl v-if="item.changes.length" class="changes">
