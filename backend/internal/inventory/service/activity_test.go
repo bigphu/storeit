@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -167,4 +168,36 @@ func ptrStr(p *string) string {
 		return "<nil>"
 	}
 	return *p
+}
+
+// stubEvents: một trang event cố định cho AssetActivity
+type stubEvents []events.Event
+
+func (s stubEvents) Events(context.Context, uuid.UUID, *uuid.UUID, int) ([]events.Event, error) {
+	return s, nil
+}
+
+// Trang sau của lịch sử: không có event tạo hay event đổi loại, chỉ một lần sửa thuộc tính
+// của loại cũ. Nhãn và option vẫn phải ra chữ, không ra key và UUID
+func TestAssetActivity_OldTypeAttributeOnLaterPage(t *testing.T) {
+	types, assets := newFakeTypes(), newFakeAssets()
+	laptop, phone, windows, macos := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	types.types[laptop] = domain.AssetType{ID: laptop, Name: "Laptop", Attributes: []domain.Attribute{{
+		Key: "os", Label: "OS", DataType: domain.TypeSelect,
+		Options: []domain.Option{{ID: windows, Label: "Windows"}, {ID: macos, Label: "macOS"}},
+	}}}
+	types.types[phone] = domain.AssetType{ID: phone, Name: "Phone"}
+	a := domain.Asset{ID: uuid.New(), TypeID: phone, StatusID: domain.AvailableStatusID}
+	assets.assets[a.ID] = a
+	page := stubEvents{updated(t, change("attributes.os", windows.String(), macos.String()))}
+	svc := New(Deps{Types: types, Statuses: newFakeStatuses(), Assets: assets, Profiles: newFakeProfiles(), Accounts: fakeAccounts{}, Events: page})
+
+	got, _, err := svc.AssetActivity(as(domain.PermAssetRead), a.ID, nil, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("entries = %+v", got)
+	}
+	assertChanges(t, got[0].Changes, []ActivityChange{{Field: "attributes.os", Label: "OS", From: str("Windows"), To: str("macOS")}})
 }

@@ -148,6 +148,11 @@ func (s *Service) activityLookups(ctx context.Context, a domain.Asset, evts []ev
 		}
 		lk.types = append(lk.types, t)
 	}
+	// Thuộc tính của loại cũ mà trang này không có event đổi loại (trang sau của lịch sử):
+	// tìm ở mọi loại có key đó, chỉ khi thiếu
+	if err := s.loadTypesForMissingKeys(ctx, &lk, evts, seen); err != nil {
+		return lk, err
+	}
 
 	if len(actorIDs) > 0 {
 		accs, err := s.accounts.GetAccounts(ctx, actorIDs)
@@ -159,6 +164,50 @@ func (s *Service) activityLookups(ctx context.Context, a domain.Asset, evts []ev
 		}
 	}
 	return lk, nil
+}
+
+// loadTypesForMissingKeys nạp thêm các loại (kể cả đã lưu trữ) khi trang có thuộc tính mà
+// các loại đã nạp không có key đó
+func (s *Service) loadTypesForMissingKeys(ctx context.Context, lk *activityLookups, evts []events.Event, loaded map[uuid.UUID]bool) error {
+	missing := false
+	for _, e := range evts {
+		if e.Type != contract.EventAssetUpdated {
+			continue
+		}
+		p, err := events.Decode[contract.AssetUpdated](e)
+		if err != nil {
+			continue
+		}
+		for _, c := range p.Changes {
+			if key, ok := strings.CutPrefix(c.Field, "attributes."); ok {
+				if _, found := lk.attribute(key); !found {
+					missing = true
+				}
+			}
+		}
+	}
+	if !missing {
+		return nil
+	}
+	all, err := s.types.List(ctx, true)
+	if err != nil {
+		return err
+	}
+	for _, t := range all {
+		if loaded[t.ID] {
+			continue
+		}
+		full, err := s.types.Get(ctx, t.ID)
+		if errors.Is(err, domain.ErrTypeNotFound) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		loaded[t.ID] = true
+		lk.types = append(lk.types, full)
+	}
+	return nil
 }
 
 // resolveActivity đổi event thành entry; event asset_updated chỉ đổi trường ẩn thì bỏ
