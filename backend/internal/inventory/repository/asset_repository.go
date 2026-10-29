@@ -215,6 +215,11 @@ func fieldFilterArgs(filters []domain.FieldFilter) (fields, ops, vals []string) 
 	return fields, ops, vals
 }
 
+// Events: event của tài sản trong platform.events, mới nhất trước (lịch sử hoạt động)
+func (r *AssetRepository) Events(ctx context.Context, id uuid.UUID, before *uuid.UUID, limit int) ([]events.Event, error) {
+	return events.ListForAggregate(ctx, r.pool, contract.AggregateAsset, id, before, limit)
+}
+
 func (r *AssetRepository) CountByType(ctx context.Context) (map[uuid.UUID]domain.TypeCounts, error) {
 	rows, err := r.q.CountActiveAssetsByTypeAndKind(ctx)
 	if err != nil {
