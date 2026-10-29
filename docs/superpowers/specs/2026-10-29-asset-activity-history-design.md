@@ -105,7 +105,7 @@ The main question people bring to it: "who changed this asset, when, and what di
 |---|---|
 | `status_id`, `asset_type_id` | The status or type name. Archived ones still resolve. An ID that no longer exists shows as "(deleted)". |
 | `attributes.<key>` | `label` is the attribute's label, looked up in the asset's *current* type first, then in any type that has that key. Removed attributes and options still resolve. The value is formatted by data type: number + unit, date as is, booleans "Yes"/"No", choice options by their label. |
-| `location_id`, `holder_member_id` | There is no directory for these yet. The label is "Location" / "Holder", and the entry says "set" (from empty), "changed" (one value to another) or "cleared" (to empty), with no from/to values. |
+| `location_id`, `holder_member_id` | Not shown. StoreIt has no locations, and the holder will be shown by the borrowing entries (US-10 to US-12). The API drops these changes; an `updated` event left with no changes is left out of the timeline. |
 | `purchase_date`, `name`, `description` | As stored. Long text is not shortened by the API. |
 
   An empty `from` or `to` is `null`; the UI shows "—".
