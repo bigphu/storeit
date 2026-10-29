@@ -1,4 +1,4 @@
-import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { keepPreviousData, type QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 import { inventoryApi } from '@/lib/api/client'
 import { unwrap } from '@/lib/errors'
@@ -11,6 +11,23 @@ export const assetKeys = {
   all: ['assets'] as const,
   list: (p: ListParams) => ['assets', 'list', p] as const,
   one: (id: string) => ['assets', id] as const,
+}
+
+// useAssetActivity: lịch sử hoạt động, tải từng trang 50 dòng ("Load more"). Khoá nằm dưới
+// assetKeys.all nên sửa, retire, khôi phục xong thì tự tải lại
+export function useAssetActivity(id: MaybeRefOrGetter<string>, enabled: MaybeRefOrGetter<boolean>) {
+  return useInfiniteQuery({
+    queryKey: computed(() => [...assetKeys.one(toValue(id)), 'activity'] as const),
+    queryFn: ({ pageParam }) =>
+      unwrap(
+        inventoryApi.GET('/assets/{assetID}/activity', {
+          params: { path: { assetID: toValue(id) }, query: { before: pageParam, limit: 50 } },
+        }),
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.next,
+    enabled: computed(() => toValue(enabled)),
+  })
 }
 
 // assetListQuery: khoá và hàm tải dùng chung cho useAssetList, fetchAssetPage và tải trước
