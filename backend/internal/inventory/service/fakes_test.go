@@ -373,6 +373,18 @@ func apply(a domain.Asset, in domain.AssetFields) domain.Asset {
 	return a
 }
 
+func (f *fakeAssets) RecordReplacement(context.Context, uuid.UUID, uuid.UUID, time.Time, string, uuid.UUID, int32) (domain.Asset, error) {
+	return domain.Asset{}, nil
+}
+
+func (f *fakeAssets) UndoReplacement(context.Context, uuid.UUID, uuid.UUID, int32) (domain.Asset, error) {
+	return domain.Asset{}, nil
+}
+
+func (f *fakeAssets) Replacements(context.Context, uuid.UUID) (*domain.ReplacementLink, []domain.ReplacementLink, error) {
+	return nil, nil, nil
+}
+
 func (f *fakeAssets) Get(_ context.Context, id uuid.UUID) (domain.Asset, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

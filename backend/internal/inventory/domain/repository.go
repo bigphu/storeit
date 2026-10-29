@@ -179,6 +179,14 @@ type AssetRepository interface {
 	Create(ctx context.Context, tag string, f AssetFields) (Asset, error)
 	// Get: kèm giá trị thuộc tính; ErrAssetNotFound
 	Get(ctx context.Context, id uuid.UUID) (Asset, error)
+	// RecordReplacement: oldID được thay bằng newID, cũ retire (ErrAssetRetired, ErrAssetChanged,
+	// ErrInvalidReplacement); event asset_replaced, asset_replaces
+	RecordReplacement(ctx context.Context, oldID, newID uuid.UUID, replacedOn time.Time, reason string, retiredStatus uuid.UUID, version int32) (Asset, error)
+	// UndoReplacement: bỏ liên kết, khôi phục tài sản cũ (ErrAssetNotReplaced); event
+	// asset_replacement_undone ở cả hai
+	UndoReplacement(ctx context.Context, oldID uuid.UUID, availableStatus uuid.UUID, version int32) (Asset, error)
+	// Replacements: tài sản thay id (nil) và các tài sản id đã thay, mới nhất trước
+	Replacements(ctx context.Context, id uuid.UUID) (*ReplacementLink, []ReplacementLink, error)
 	List(ctx context.Context, f AssetFilter) ([]AssetListItem, int64, error)
 	// Count: số dòng List sẽ trả với cùng bộ lọc (bỏ qua Limit, Offset)
 	Count(ctx context.Context, f AssetFilter) (int64, error)

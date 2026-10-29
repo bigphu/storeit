@@ -334,31 +334,9 @@ func (r *AssetRepository) Retire(ctx context.Context, id uuid.UUID, reason strin
 	return out, err
 }
 
+// Restore khôi phục tài sản đã retire; tài sản đã bị thay thì như UndoReplacement
 func (r *AssetRepository) Restore(ctx context.Context, id uuid.UUID, availableStatus uuid.UUID, version int32) (domain.Asset, error) {
-	var out domain.Asset
-	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
-		q := r.q.WithTx(tx)
-		cur, err := assetOrNotFound(q.GetAssetForUpdate(ctx, id))
-		if err != nil {
-			return err
-		}
-		if cur.Version != version {
-			return domain.ErrAssetChanged
-		}
-		if !cur.Retired() { // chưa retire: không có gì để khôi phục
-			out, err = loadAsset(ctx, q, id)
-			return err
-		}
-		if _, err := q.RestoreAsset(ctx, db.RestoreAssetParams{ID: id, StatusID: availableStatus}); err != nil {
-			return fmt.Errorf("inventory: restore asset: %w", err)
-		}
-		if out, err = loadAsset(ctx, q, id); err != nil {
-			return err
-		}
-		return appendEvent(ctx, tx, r.outbox, contract.EventAssetRestored, contract.AggregateAsset, id,
-			contract.AssetRestored{AssetID: id})
-	})
-	return out, err
+	return r.restoreOrUndo(ctx, id, availableStatus, version, false)
 }
 
 // lockAsset khoá tài sản để sửa: không có thì ErrAssetNotFound, đã retire thì
