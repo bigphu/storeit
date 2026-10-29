@@ -8,7 +8,7 @@ import TabPanel from 'primevue/tabpanel'
 import TabPanels from 'primevue/tabpanels'
 import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTabId, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
@@ -19,6 +19,7 @@ import { formatDate, formatDateTime } from '@/lib/dates'
 import { usePageKeys } from '@/lib/pageKeys'
 import { kindSeverity } from '@/features/statuses/api'
 import { fetchAssetPage, useAsset } from '../api'
+import AssetActivity from '../components/AssetActivity.vue'
 import RetireDialog from '../components/RetireDialog.vue'
 import { position, stepFrom, useListContext } from '../listContext'
 import { listLocation, toApiParams, typeListLocation } from '../listQuery'
@@ -37,6 +38,8 @@ const canManage = computed(() => session.can(Perm.AssetManage))
 const canManageTypes = computed(() => session.can(Perm.TypeManage))
 
 const { data: asset } = useAsset(() => props.id)
+// tab đang mở; Activity chỉ tải khi mở lần đầu
+const tab = ref<'details' | 'activity'>('details')
 const retired = computed(() => !!asset.value?.retired_at)
 useTabTitle(() => asset.value?.tag)
 
@@ -112,11 +115,11 @@ usePageKeys((e) => {
       <Button v-else label="Restore" icon="pi pi-replay" @click="actions.restore(asset)" />
     </div>
 
-    <!-- Details | Activity: lịch sử hoạt động là module sau -->
-    <Tabs value="details">
+    <!-- Details | Activity: lịch sử hoạt động của tài sản -->
+    <Tabs v-model:value="tab">
       <TabList>
         <Tab value="details">Details</Tab>
-        <Tab value="activity" disabled>Activity <small class="later">later</small></Tab>
+        <Tab value="activity">Activity</Tab>
       </TabList>
       <TabPanels class="panels">
         <TabPanel value="details">
@@ -161,6 +164,9 @@ usePageKeys((e) => {
             </Panel>
           </div>
         </TabPanel>
+        <TabPanel value="activity">
+          <AssetActivity v-if="tab === 'activity'" :asset-id="asset.id" />
+        </TabPanel>
       </TabPanels>
     </Tabs>
 
@@ -192,11 +198,6 @@ usePageKeys((e) => {
 .page-actions kbd {
   margin-left: 0.25rem;
   font-size: 0.7rem;
-}
-.later {
-  font-weight: 400;
-  font-style: italic;
-  color: var(--p-text-muted-color);
 }
 .panels {
   padding: 1rem 0 0;

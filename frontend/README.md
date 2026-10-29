@@ -70,6 +70,7 @@ behaves the same everywhere.
 | `SaveBar` | Sticky unsaved-changes bar with Discard/Save; `blocked` when a rule (lock-out) forbids saving |
 | `AppBreadcrumb` | Breadcrumb with the per-tab back button |
 | `KeyHint` | Key cap after a button label (`<KeyHint keys="N" />`); give the button `aria-label="New … (N)"`. Hidden on touch screens |
+| `AssetActivity` (features/assets) | The asset page's Activity tab: timeline from `useAssetActivity` (infinite query under `assetKeys.one(id)`, refreshed by any asset invalidation), summary and relative time from `features/assets/activity.ts`, long values clamped with Show more |
 
 Keyboard shortcuts are listed once in `lib/shortcuts.ts` (grouped); the `?` dialog renders that
 list, so add a new key there first. List pages page with J/K through `stepPage()`, and keep their
