@@ -219,6 +219,9 @@ param names exactly as in the spec (`/things/{thingID}`). Wrap lists in
   `r.OnAll(name, handler)`. Each name is registered once; it is the job key, so
   don't rename it while jobs are pending. Handlers must be idempotent.
 - Read the payload: `p, err := events.Decode[contract.X](e)`.
+- Read a timeline: `events.ListForAggregate(ctx, q, aggregateType, id, before, limit)` returns
+  that aggregate's events newest first (`occurred_at`, `id` descending); `before` is the ID of the
+  last event on the previous page (nil for the first page). Read-only; `q` is a pool or a tx.
 - Worker: `events.RegisterWorker(workers, pool, registry, loadActor)`. It restores
   the original actor (`jobs.RestoreActor`). An unknown subscriber retries (API may
   deploy before the worker); a missing event or deleted actor cancels the job.

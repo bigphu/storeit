@@ -13,6 +13,9 @@ import (
 type Querier interface {
 	GetEvent(ctx context.Context, id uuid.UUID) (GetEventRow, error)
 	InsertEvent(ctx context.Context, arg InsertEventParams) error
+	// Event của một aggregate, mới nhất trước. before: id event cuối của trang trước; chỉ lấy
+	// event cũ hơn event đó
+	ListAggregateEvents(ctx context.Context, arg ListAggregateEventsParams) ([]ListAggregateEventsRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -71,3 +71,66 @@ func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) error 
 	)
 	return err
 }
+
+const listAggregateEvents = `-- name: ListAggregateEvents :many
+SELECT e.id, e.type, e.aggregate_type, e.aggregate_id, e.actor_id, e.occurred_at, e.payload
+FROM platform.events e
+WHERE e.aggregate_type = $1
+  AND e.aggregate_id = $2
+  AND ($3::uuid IS NULL
+       OR (e.occurred_at, e.id) < (SELECT b.occurred_at, b.id FROM platform.events b WHERE b.id = $3::uuid))
+ORDER BY e.occurred_at DESC, e.id DESC
+LIMIT $4
+`
+
+type ListAggregateEventsParams struct {
+	AggregateType string
+	AggregateID   uuid.UUID
+	Before        *uuid.UUID
+	Lim           int32
+}
+
+type ListAggregateEventsRow struct {
+	ID            uuid.UUID
+	Type          string
+	AggregateType string
+	AggregateID   uuid.UUID
+	ActorID       *uuid.UUID
+	OccurredAt    time.Time
+	Payload       json.RawMessage
+}
+
+// Event của một aggregate, mới nhất trước. before: id event cuối của trang trước; chỉ lấy
+// event cũ hơn event đó
+func (q *Queries) ListAggregateEvents(ctx context.Context, arg ListAggregateEventsParams) ([]ListAggregateEventsRow, error) {
+	rows, err := q.db.Query(ctx, listAggregateEvents,
+		arg.AggregateType,
+		arg.AggregateID,
+		arg.Before,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAggregateEventsRow{}
+	for rows.Next() {
+		var i ListAggregateEventsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Type,
+			&i.AggregateType,
+			&i.AggregateID,
+			&i.ActorID,
+			&i.OccurredAt,
+			&i.Payload,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
