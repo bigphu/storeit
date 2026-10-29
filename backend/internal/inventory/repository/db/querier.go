@@ -30,6 +30,7 @@ type Querier interface {
 	DeleteAttributeOptions(ctx context.Context, attributeID uuid.UUID) error
 	// Xoá mềm
 	DeleteExportProfile(ctx context.Context, id uuid.UUID) (int64, error)
+	DeleteReplacement(ctx context.Context, oldAssetID uuid.UUID) error
 	GetAsset(ctx context.Context, id uuid.UUID) (InventoryAsset, error)
 	// NO KEY UPDATE: không chặn insert tham chiếu tài sản (giá trị thuộc tính, sau này là phiếu mượn)
 	GetAssetForUpdate(ctx context.Context, id uuid.UUID) (InventoryAsset, error)
@@ -43,9 +44,12 @@ type Querier interface {
 	GetExportProfileAnyForUpdate(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error)
 	GetExportProfileForUpdate(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error)
 	GetOptionForUpdate(ctx context.Context, arg GetOptionForUpdateParams) (InventoryAssetAttributeOption, error)
+	// Liên kết của tài sản cũ, kèm tag và tên tài sản thay nó
+	GetReplacementByOld(ctx context.Context, oldAssetID uuid.UUID) (GetReplacementByOldRow, error)
 	GetStatus(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
 	GetStatusForUpdate(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
 	InsertAssetValue(ctx context.Context, arg InsertAssetValueParams) error
+	InsertReplacement(ctx context.Context, arg InsertReplacementParams) error
 	// Nhãn thuộc tính đang dùng của mọi loại, theo thứ tự hiển thị (thẻ ở trang loại)
 	ListActiveAttributeLabels(ctx context.Context) ([]ListActiveAttributeLabelsRow, error)
 	// Khoá mọi status đang dùng khi đổi thứ tự
@@ -61,6 +65,8 @@ type Querier interface {
 	// Của mình và mọi profile được chia sẻ
 	ListExportProfiles(ctx context.Context, ownerID uuid.UUID) ([]InventoryExportProfile, error)
 	ListOptionsForType(ctx context.Context, assetTypeID uuid.UUID) ([]InventoryAssetAttributeOption, error)
+	// Các tài sản mà tài sản mới đã thay, mới nhất trước
+	ListReplacementsByNew(ctx context.Context, newAssetID uuid.UUID) ([]ListReplacementsByNewRow, error)
 	ListStatuses(ctx context.Context, includeArchived bool) ([]InventoryAssetStatus, error)
 	// Giá trị của nhiều tài sản một lần (các dòng của một trang danh sách)
 	ListValuesForAssets(ctx context.Context, assetIds []uuid.UUID) ([]ListValuesForAssetsRow, error)

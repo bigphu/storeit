@@ -9,6 +9,11 @@ const (
 	EventAssetUpdated  = "inventory.asset_updated"
 	EventAssetRetired  = "inventory.asset_retired"
 	EventAssetRestored = "inventory.asset_restored"
+	// Thay thế (US-13): asset_replaced trên tài sản cũ, asset_replaces trên tài sản mới,
+	// asset_replacement_undone trên cả hai khi hoàn tác
+	EventAssetReplaced          = "inventory.asset_replaced"
+	EventAssetReplaces          = "inventory.asset_replaces"
+	EventAssetReplacementUndone = "inventory.asset_replacement_undone"
 
 	EventAssetTypeCreated  = "inventory.asset_type_created"
 	EventAssetTypeUpdated  = "inventory.asset_type_updated"
@@ -66,6 +71,33 @@ type AssetRetired struct {
 
 type AssetRestored struct {
 	AssetID uuid.UUID `json:"asset_id"`
+}
+
+// AssetReplaced: AssetID (cũ) được thay bằng ReplacementID; ReplacedOn "YYYY-MM-DD"
+type AssetReplaced struct {
+	AssetID        uuid.UUID `json:"asset_id"`
+	ReplacementID  uuid.UUID `json:"replacement_id"`
+	ReplacementTag string    `json:"replacement_tag"`
+	ReplacedOn     string    `json:"replaced_on"`
+	Reason         string    `json:"reason"`
+}
+
+// AssetReplaces: AssetID (mới) thay ReplacedID
+type AssetReplaces struct {
+	AssetID     uuid.UUID `json:"asset_id"`
+	ReplacedID  uuid.UUID `json:"replaced_id"`
+	ReplacedTag string    `json:"replaced_tag"`
+	ReplacedOn  string    `json:"replaced_on"`
+	Reason      string    `json:"reason"`
+}
+
+// AssetReplacementUndone: liên kết giữa AssetID và OtherID bị huỷ; Role là vai của AssetID
+// ("old" hay "new")
+type AssetReplacementUndone struct {
+	AssetID  uuid.UUID `json:"asset_id"`
+	OtherID  uuid.UUID `json:"other_id"`
+	OtherTag string    `json:"other_tag"`
+	Role     string    `json:"role"`
 }
 
 type AssetTypeCreated struct {
