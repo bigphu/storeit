@@ -12,7 +12,6 @@ import (
 
 	idcontract "storeit/internal/identity/contract"
 	"storeit/internal/inventory/domain"
-	"storeit/internal/platform/events"
 )
 
 // Fake repository trong bộ nhớ: đủ để kiểm tra luật của service. SQL, khoá
@@ -372,10 +371,6 @@ func apply(a domain.Asset, in domain.AssetFields) domain.Asset {
 	a.Name, a.Description, a.TypeID, a.StatusID = in.Name, in.Description, in.TypeID, in.StatusID
 	a.LocationID, a.HolderMemberID, a.PurchaseDate, a.Values = in.LocationID, in.HolderMemberID, in.PurchaseDate, in.Values
 	return a
-}
-
-func (f *fakeAssets) Events(context.Context, uuid.UUID, *uuid.UUID, int) ([]events.Event, error) {
-	return nil, nil
 }
 
 func (f *fakeAssets) Get(_ context.Context, id uuid.UUID) (domain.Asset, error) {

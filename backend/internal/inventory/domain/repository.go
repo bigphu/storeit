@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
-	"storeit/internal/platform/events"
 )
 
 // Interface repository do service dùng, repository/ cài đặt. Mọi method ghi tự
@@ -181,8 +179,6 @@ type AssetRepository interface {
 	Create(ctx context.Context, tag string, f AssetFields) (Asset, error)
 	// Get: kèm giá trị thuộc tính; ErrAssetNotFound
 	Get(ctx context.Context, id uuid.UUID) (Asset, error)
-	// Events: event của tài sản, mới nhất trước; before là ID event cuối của trang trước
-	Events(ctx context.Context, id uuid.UUID, before *uuid.UUID, limit int) ([]events.Event, error)
 	List(ctx context.Context, f AssetFilter) ([]AssetListItem, int64, error)
 	// Count: số dòng List sẽ trả với cùng bộ lọc (bỏ qua Limit, Offset)
 	Count(ctx context.Context, f AssetFilter) (int64, error)

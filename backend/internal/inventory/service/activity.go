@@ -19,6 +19,12 @@ import (
 // Lịch sử hoạt động của tài sản (US-16): đọc event đã lưu trong platform.events, đổi ID
 // thành tên người đọc được. Không ghi gì.
 
+// AssetEventReader đọc event của một tài sản, mới nhất trước; before là ID event cuối của
+// trang trước. domain không được import platform/events nên interface nằm ở đây
+type AssetEventReader interface {
+	Events(ctx context.Context, id uuid.UUID, before *uuid.UUID, limit int) ([]events.Event, error)
+}
+
 type ActivityEntry struct {
 	ID         uuid.UUID
 	Kind       string // "created" | "updated" | "retired" | "restored" | "other"
@@ -72,7 +78,7 @@ func (s *Service) AssetActivity(ctx context.Context, assetID uuid.UUID, before *
 	if err != nil {
 		return nil, nil, err
 	}
-	evts, err := s.assets.Events(ctx, assetID, before, limit+1)
+	evts, err := s.events.Events(ctx, assetID, before, limit+1)
 	if err != nil {
 		return nil, nil, err
 	}

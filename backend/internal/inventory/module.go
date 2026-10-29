@@ -42,10 +42,12 @@ func New(d Deps) (*Module, error) {
 	if d.Pool == nil || d.Outbox == nil || d.Accounts == nil {
 		return nil, fmt.Errorf("inventory: Pool, Outbox and Accounts are required")
 	}
+	assets := repository.NewAssetRepository(d.Pool, d.Outbox)
 	svc := service.New(service.Deps{
 		Types:    repository.NewTypeRepository(d.Pool, d.Outbox),
 		Statuses: repository.NewStatusRepository(d.Pool, d.Outbox),
-		Assets:   repository.NewAssetRepository(d.Pool, d.Outbox),
+		Assets:   assets,
+		Events:   assets,
 
 		Profiles:      repository.NewExportProfileRepository(d.Pool, d.Outbox),
 		Accounts:      d.Accounts,

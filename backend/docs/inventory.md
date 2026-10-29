@@ -105,11 +105,27 @@ Seeded IDs are in `domain/permissions.go` (`GeneralTypeID`, `AvailableStatusID`,
   `tz`. SQL: three more parallel arrays (`b_fields`, `b_ops`, `b_vals`), each condition wrapped
   in `COALESCE(…, false)` so a `NULL` column never matches.
 
+
+## Activity history (US-16)
+
+`GET /assets/{assetID}/activity` reads the asset's events from `platform.events` (kept
+for good; nothing writes here) newest first, `limit` 1–100 (default 50), cursor paging:
+pass the previous page's `next` as `before`. `next` is the ID of the page's last **raw**
+event, so paging keeps going past events that were left out. Each entry has `kind`
+(`created`, `updated`, `retired` with `reason`, `restored`, or `other` with the raw `type`),
+`occurred_at`, `actor` (`null` = system; a missing account is "Unknown user") and, for
+`updated`, `changes` with readable labels and values: status and type names, attribute
+labels (current type first, then any type the asset belonged to), numbers with their unit,
+Yes/No, option labels (removed ones too); unknown IDs show "(deleted)". Changes to
+`location_id` and `holder_member_id` are dropped; an update with nothing else left is
+skipped. Built by `service.AssetActivity` from `events.ListForAggregate` (index
+`events_aggregate_timeline_idx`, migration 00006).
+
 ## API (`/api/v1`) and permissions
 
 | Endpoints | Needs |
 |---|---|
-| `GET /asset-types` (`with_counts=true` adds `asset_count` and `kind_counts` for assets not retired, `attribute_count` and `attribute_labels` for active attributes), `GET /asset-types/{typeID}`, `GET /asset-statuses` (`with_counts=true` adds `asset_count`, retired assets included), `GET /assets`, `GET /assets/{assetID}` | `inventory.asset.read` |
+| `GET /asset-types` (`with_counts=true` adds `asset_count` and `kind_counts` for assets not retired, `attribute_count` and `attribute_labels` for active attributes), `GET /asset-types/{typeID}`, `GET /asset-statuses` (`with_counts=true` adds `asset_count`, retired assets included), `GET /assets`, `GET /assets/{assetID}`, `GET /assets/{assetID}/activity` | `inventory.asset.read` |
 | `POST /assets`, `PUT /assets/{assetID}`, `POST …/retire`, `POST …/restore`, `POST /assets/bulk-retire`, `POST /assets/bulk-status` | `inventory.asset.manage` |
 | `POST /asset-types`, `PATCH /asset-types/{typeID}`, `POST …/archive`, `POST …/restore`, attributes (`POST`, `PATCH`, `DELETE`, `POST …/restore`, `PUT …/attributes/order`), options (`POST`, `PATCH`, `DELETE`, `POST …/restore`, `PUT …/options/order`) | `inventory.type.manage` |
 | `POST /asset-statuses`, `PATCH /asset-statuses/{statusID}`, `POST …/archive`, `POST …/restore`, `PUT /asset-statuses/order` | `inventory.status.manage` |

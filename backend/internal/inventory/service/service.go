@@ -18,6 +18,8 @@ type Deps struct {
 	Assets   domain.AssetRepository
 	Profiles domain.ExportProfileRepository
 	Accounts idcontract.AccountReader // tên chủ profile, tên người export trong tiêu đề báo cáo
+	// Events đọc event của tài sản cho lịch sử hoạt động (repository tài sản cài sẵn)
+	Events AssetEventReader
 	// ExportMaxRows: số dòng tối đa một lần export; 0 là mặc định 50.000
 	ExportMaxRows int
 }
@@ -28,6 +30,7 @@ type Service struct {
 	assets        domain.AssetRepository
 	profiles      domain.ExportProfileRepository
 	accounts      idcontract.AccountReader
+	events        AssetEventReader
 	exportMaxRows int
 }
 
@@ -36,7 +39,7 @@ func New(d Deps) *Service {
 	if maxRows == 0 {
 		maxRows = defaultExportMaxRows
 	}
-	return &Service{types: d.Types, statuses: d.Statuses, assets: d.Assets, profiles: d.Profiles, accounts: d.Accounts, exportMaxRows: maxRows}
+	return &Service{types: d.Types, statuses: d.Statuses, assets: d.Assets, profiles: d.Profiles, accounts: d.Accounts, events: d.Events, exportMaxRows: maxRows}
 }
 
 // Độ dài tối đa (ký tự), khớp CHECK của migration và maxLength của OpenAPI

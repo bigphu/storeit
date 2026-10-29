@@ -520,6 +520,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/{assetID}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assetID: components["parameters"]["AssetID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Activity history of an asset, newest first (inventory.asset.read)
+         * @description Lịch sử hoạt động đọc từ event đã lưu (tạo, sửa, retire, khôi phục). Tên status, loại,
+         *     nhãn thuộc tính và option đã được đổi sẵn thành chữ. Thay đổi chỗ để và người giữ
+         *     không hiện. Phân trang bằng con trỏ: truyền `next` của trang trước vào `before`.
+         */
+        get: operations["getAssetActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -662,6 +686,35 @@ export interface components {
             position?: number;
             /** @description Make this the default status of its kind (moves the flag) */
             make_default?: boolean;
+        };
+        AssetActivityPage: {
+            items: components["schemas"]["AssetActivityEntry"][];
+            next?: components["schemas"]["ID"];
+        };
+        AssetActivityEntry: {
+            id: components["schemas"]["ID"];
+            /** @enum {string} */
+            kind: "created" | "updated" | "retired" | "restored" | "other";
+            /** @description Raw event type */
+            type: string;
+            /** Format: date-time */
+            occurred_at: string;
+            /** @description null when the system did it */
+            actor: components["schemas"]["ActivityActor"] | null;
+            changes: components["schemas"]["ActivityChange"][];
+            /** @description Only on retired */
+            reason?: string;
+        };
+        ActivityActor: {
+            id: components["schemas"]["ID"];
+            /** @description "Unknown user" when the account no longer exists */
+            name: string;
+        };
+        ActivityChange: {
+            field: string;
+            label: string;
+            from: string | null;
+            to: string | null;
         };
         AssetListItem: {
             id: components["schemas"]["ID"];
@@ -1890,6 +1943,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getAssetActivity: {
+        parameters: {
+            query?: {
+                /** @description ID of the last entry of the previous page (`next`) */
+                before?: components["schemas"]["ID"];
+                /** @description Entries per page, default 50 */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                assetID: components["parameters"]["AssetID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of activity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetActivityPage"];
                 };
             };
             default: components["responses"]["Problem"];

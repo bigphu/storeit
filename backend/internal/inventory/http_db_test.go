@@ -55,10 +55,12 @@ func newAppWith(t *testing.T, maxRows int) *app {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assets := repository.NewAssetRepository(pool, outbox)
 	svc := service.New(service.Deps{
 		Types:    repository.NewTypeRepository(pool, outbox),
 		Statuses: repository.NewStatusRepository(pool, outbox),
-		Assets:   repository.NewAssetRepository(pool, outbox),
+		Assets:   assets,
+		Events:   assets,
 
 		Profiles:      repository.NewExportProfileRepository(pool, outbox),
 		Accounts:      stubAccounts{},
@@ -911,5 +913,114 @@ func TestListByBuiltinFieldOverHTTP(t *testing.T) {
 	rows, _ := x.GetRows(code)
 	if len(rows) != 2 { // dòng tên cột + 1 tài sản
 		t.Errorf("exported rows = %d, want 2: %v", len(rows), rows)
+	}
+}
+
+func TestAssetActivityOverHTTP(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	code := "AC" + strings.ToUpper(uuid.NewString()[:6])
+	typ := decode[typeDetail](t, a.do("POST", "/api/v1/asset-types", tok, map[string]any{
+		"code": code, "name": "Activity " + code,
+		"attributes": []map[string]any{{"key": "ram_gb", "label": "RAM", "data_type": "number", "unit": "GB"}},
+	}), 201)
+	created := decode[assetDetail](t, a.do("POST", "/api/v1/assets", tok, map[string]any{
+		"tag": code + "-1", "name": "Laptop", "asset_type_id": typ.ID, "attributes": map[string]any{"ram_gb": 8},
+	}), 201)
+	upd := decode[assetDetail](t, a.do("PUT", "/api/v1/assets/"+created.ID, tok, map[string]any{
+		"name": "Laptop", "asset_type_id": typ.ID, "status_id": domain.InUseStatusID.String(),
+		"attributes": map[string]any{"ram_gb": 16}, "version": created.Version,
+	}), 200)
+	ret := decode[assetDetail](t, a.do("POST", "/api/v1/assets/"+created.ID+"/retire", tok, map[string]any{"reason": "Broken", "version": upd.Version}), 200)
+	rest := decode[assetDetail](t, a.do("POST", "/api/v1/assets/"+created.ID+"/restore", tok, map[string]any{"version": ret.Version}), 200)
+
+	type change struct {
+		Field, Label string
+		From, To     *string
+	}
+	type entry struct {
+		ID      string
+		Kind    string
+		Actor   *struct{ ID, Name string }
+		Changes []change
+		Reason  string
+	}
+	type page struct {
+		Items []entry
+		Next  *string
+	}
+	path := "/api/v1/assets/" + created.ID + "/activity"
+	p := decode[page](t, a.do("GET", path, tok, nil), 200)
+	var kinds []string
+	for _, e := range p.Items {
+		kinds = append(kinds, e.Kind)
+	}
+	if strings.Join(kinds, ",") != "restored,retired,updated,created" || p.Next != nil {
+		t.Fatalf("kinds = %v next = %v", kinds, p.Next)
+	}
+	if p.Items[1].Reason != "Broken" {
+		t.Errorf("retired reason = %q", p.Items[1].Reason)
+	}
+	if p.Items[0].Actor == nil || p.Items[0].Actor.Name != "Người dùng" {
+		t.Errorf("actor = %+v", p.Items[0].Actor)
+	}
+	got := map[string]change{}
+	for _, c := range p.Items[2].Changes {
+		got[c.Label] = c
+	}
+	if c := got["RAM"]; c.From == nil || *c.From != "8 GB" || c.To == nil || *c.To != "16 GB" {
+		t.Errorf("RAM change = %+v", c)
+	}
+	if c := got["Status"]; c.From == nil || *c.From != created.Status.Name || c.To == nil || *c.To != upd.Status.Name {
+		t.Errorf("Status change = %+v, want %q → %q", c, created.Status.Name, upd.Status.Name)
+	}
+
+	// Phân trang: 2 dòng mỗi trang, next dẫn tới phần còn lại
+	p1 := decode[page](t, a.do("GET", path+"?limit=2", tok, nil), 200)
+	if len(p1.Items) != 2 || p1.Next == nil {
+		t.Fatalf("page 1 = %+v", p1)
+	}
+	p2 := decode[page](t, a.do("GET", path+"?limit=2&before="+*p1.Next, tok, nil), 200)
+	if len(p2.Items) != 2 || p2.Next != nil || p2.Items[1].Kind != "created" {
+		t.Fatalf("page 2 = %+v", p2)
+	}
+
+	// Đổi chỗ để (trường ẩn) ba lần: không hiện, nhưng next vẫn đi tiếp tới "created"
+	cur := rest
+	for range 3 {
+		cur = decode[assetDetail](t, a.do("PUT", "/api/v1/assets/"+created.ID, tok, map[string]any{
+			"name": "Laptop", "asset_type_id": typ.ID, "location_id": uuid.NewString(),
+			"attributes": map[string]any{"ram_gb": 16}, "version": cur.Version,
+		}), 200)
+	}
+	var walked []string
+	next := ""
+	for range 10 {
+		q := path + "?limit=2"
+		if next != "" {
+			q += "&before=" + next
+		}
+		pg := decode[page](t, a.do("GET", q, tok, nil), 200)
+		for _, e := range pg.Items {
+			walked = append(walked, e.Kind)
+		}
+		if pg.Next == nil {
+			break
+		}
+		next = *pg.Next
+	}
+	if strings.Join(walked, ",") != "restored,retired,updated,created" {
+		t.Errorf("walked = %v, want the four visible entries after skipping hidden ones", walked)
+	}
+
+	// Tài sản đã retire vẫn đọc được lịch sử
+	decode[assetDetail](t, a.do("POST", "/api/v1/assets/"+created.ID+"/retire", tok, map[string]any{"version": cur.Version}), 200)
+	decode[page](t, a.do("GET", path, tok, nil), 200)
+
+	if rec := a.do("GET", "/api/v1/assets/"+uuid.NewString()+"/activity", tok, nil); rec.Code != 404 {
+		t.Errorf("unknown asset = %d, want 404", rec.Code)
+	}
+	if rec := a.do("GET", path, a.token(domain.PermTypeManage), nil); rec.Code != 403 {
+		t.Errorf("no asset.read = %d, want 403", rec.Code)
 	}
 }

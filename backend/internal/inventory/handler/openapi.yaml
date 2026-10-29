@@ -691,6 +691,32 @@ paths:
               schema: { $ref: '#/components/schemas/AssetDetail' }
         default: { $ref: '#/components/responses/Problem' }
 
+  /assets/{assetID}/activity:
+    parameters:
+      - $ref: '#/components/parameters/AssetID'
+    get:
+      operationId: getAssetActivity
+      summary: Activity history of an asset, newest first (inventory.asset.read)
+      description: |
+        Lịch sử hoạt động đọc từ event đã lưu (tạo, sửa, retire, khôi phục). Tên status, loại,
+        nhãn thuộc tính và option đã được đổi sẵn thành chữ. Thay đổi chỗ để và người giữ
+        không hiện. Phân trang bằng con trỏ: truyền `next` của trang trước vào `before`.
+      parameters:
+        - name: before
+          in: query
+          description: ID of the last entry of the previous page (`next`)
+          schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        - name: limit
+          in: query
+          description: Entries per page, default 50
+          schema: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        "200":
+          description: One page of activity
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetActivityPage' }
+        default: { $ref: '#/components/responses/Problem' }
 components:
   securitySchemes:
     bearerAuth:
@@ -916,6 +942,48 @@ components:
         make_default:
           type: boolean
           description: Make this the default status of its kind (moves the flag)
+
+    AssetActivityPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AssetActivityEntry' }
+        next: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+
+    AssetActivityEntry:
+      type: object
+      required: [id, kind, type, occurred_at, actor, changes]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        kind: { type: string, enum: [created, updated, retired, restored, other] }
+        type: { type: string, description: Raw event type }
+        occurred_at: { type: string, format: date-time }
+        actor:
+          nullable: true
+          description: null when the system did it
+          allOf: [{ $ref: '#/components/schemas/ActivityActor' }]
+        changes:
+          type: array
+          items: { $ref: '#/components/schemas/ActivityChange' }
+        reason: { type: string, description: Only on retired, when one was given }
+
+    ActivityActor:
+      type: object
+      required: [id, name]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        name: { type: string, description: '"Unknown user" when the account no longer exists' }
+
+    ActivityChange:
+      type: object
+      required: [field, label, from, to]
+      properties:
+        field: { type: string }
+        label: { type: string }
+        from: { type: string, nullable: true }
+        to: { type: string, nullable: true }
 
     AssetListItem:
       type: object
