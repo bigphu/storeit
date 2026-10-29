@@ -124,6 +124,15 @@ type InventoryAssetAttributeValue struct {
 	ValueOptionID *uuid.UUID
 }
 
+type InventoryAssetReplacement struct {
+	OldAssetID uuid.UUID
+	NewAssetID uuid.UUID
+	ReplacedOn pgtype.Date
+	Reason     string
+	CreatedBy  *uuid.UUID
+	CreatedAt  time.Time
+}
+
 type InventoryAssetStatus struct {
 	ID         uuid.UUID
 	Name       string
