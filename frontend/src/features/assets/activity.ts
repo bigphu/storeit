@@ -16,6 +16,12 @@ export function activitySummary(e: ActivityEntry): { who: string; text: string }
       return { who, text: e.reason ? `retired this asset: ${e.reason}` : 'retired this asset' }
     case 'restored':
       return { who, text: 'restored this asset' }
+    case 'replaced':
+      return { who, text: `replaced this asset with ${e.related?.tag ?? '?'}${e.reason ? `: ${e.reason}` : ''}` }
+    case 'replaces':
+      return { who, text: `recorded that this asset replaces ${e.related?.tag ?? '?'}` }
+    case 'replacement_undone':
+      return { who, text: `undid the replacement ${e.related?.role === 'new' ? 'of' : 'by'} ${e.related?.tag ?? '?'}` }
     default:
       return { who, text: `recorded ${e.type}` }
   }

@@ -24,6 +24,9 @@ const ICONS: Record<ActivityEntry['kind'], string> = {
   updated: 'pi pi-pencil',
   retired: 'pi pi-ban',
   restored: 'pi pi-replay',
+  replaced: 'pi pi-sync',
+  replaces: 'pi pi-sync',
+  replacement_undone: 'pi pi-undo',
   other: 'pi pi-circle',
 }
 

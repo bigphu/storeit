@@ -57,3 +57,15 @@ describe('isLong', () => {
     expect(isLong(null)).toBe(false)
   })
 })
+
+describe('activitySummary for replacements', () => {
+  const rel = (tag: string, role?: 'old' | 'new') => ({ id: 'x', tag, ...(role ? { role } : {}) })
+  it('names the other asset', () => {
+    expect(activitySummary(entry({ kind: 'replaced', related: rel('LAP-0042'), reason: 'screen broken' })).text).toBe(
+      'replaced this asset with LAP-0042: screen broken',
+    )
+    expect(activitySummary(entry({ kind: 'replaces', related: rel('LAP-0017') })).text).toBe('recorded that this asset replaces LAP-0017')
+    expect(activitySummary(entry({ kind: 'replacement_undone', related: rel('LAP-0042', 'old') })).text).toBe('undid the replacement by LAP-0042')
+    expect(activitySummary(entry({ kind: 'replacement_undone', related: rel('LAP-0017', 'new') })).text).toBe('undid the replacement of LAP-0017')
+  })
+})

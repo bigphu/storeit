@@ -121,6 +121,28 @@ export function restoreAssetRequest({ id, version }: { id: string; version: numb
   return unwrap(inventoryApi.POST('/assets/{assetID}/restore', { ...path(id), body: { version } }))
 }
 
+// Thay thế (US-13): ghi và hoàn tác; runAction lo thông báo nên không toast ở đây
+export function useRecordReplacement() {
+  return useAssetMutation(
+    ({ id, replacementId, replacedOn, reason, version }: { id: string; replacementId: string; replacedOn: string; reason: string; version: number }) =>
+      unwrap(
+        inventoryApi.POST('/assets/{assetID}/replacement', {
+          ...path(id),
+          body: { replacement_asset_id: replacementId, replaced_on: replacedOn, reason, version },
+        }),
+      ),
+    false,
+  )
+}
+
+export function useUndoReplacement() {
+  return useAssetMutation(
+    ({ id, version }: { id: string; version: number }) =>
+      unwrap(inventoryApi.POST('/assets/{assetID}/replacement/undo', { ...path(id), body: { version } })),
+    false,
+  )
+}
+
 export function useRestoreAsset() {
   return useAssetMutation(restoreAssetRequest, false)
 }
