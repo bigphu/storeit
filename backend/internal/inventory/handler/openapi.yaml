@@ -994,7 +994,7 @@ components:
       required: [id, kind, type, occurred_at, actor, changes]
       properties:
         id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
-        kind: { type: string, enum: [created, updated, retired, restored, other] }
+        kind: { type: string, enum: [created, updated, retired, restored, replaced, replaces, replacement_undone, other] }
         type: { type: string, description: Raw event type }
         occurred_at: { type: string, format: date-time }
         actor:
@@ -1004,7 +1004,17 @@ components:
         changes:
           type: array
           items: { $ref: '#/components/schemas/ActivityChange' }
-        reason: { type: string, description: Only on retired, when one was given }
+        reason: { type: string, description: 'On retired and replaced, when one was given' }
+        related: { $ref: '#/components/schemas/ActivityRelated' }
+
+    ActivityRelated:
+      type: object
+      description: The asset at the other end of a replacement (US-13)
+      required: [id, tag]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        tag: { type: string }
+        role: { type: string, enum: [old, new], description: "Only on replacement_undone: this asset's role" }
 
     ActivityActor:
       type: object

@@ -27,12 +27,22 @@ type AssetEventReader interface {
 
 type ActivityEntry struct {
 	ID         uuid.UUID
-	Kind       string // "created" | "updated" | "retired" | "restored" | "other"
+	Kind       string // "created" | "updated" | "retired" | "restored" | "replaced" | "replaces" | "replacement_undone" | "other"
 	Type       string // event type gốc (để hiện "other")
 	OccurredAt time.Time
 	Actor      *ActivityActor // nil = hệ thống
 	Changes    []ActivityChange
-	Reason     string // chỉ retired
+	Reason     string // retired, replaced
+	// Related: tài sản ở đầu kia của một lần thay thế (US-13)
+	Related *ActivityRelated
+}
+
+// ActivityRelated: tài sản liên quan; Role chỉ có ở replacement_undone, là vai của tài sản
+// đang xem ("old" hay "new")
+type ActivityRelated struct {
+	ID   uuid.UUID
+	Tag  string
+	Role string
 }
 
 type ActivityActor struct {
@@ -225,6 +235,22 @@ func resolveActivity(evts []events.Event, lk activityLookups) []ActivityEntry {
 			}
 		case contract.EventAssetRestored:
 			en.Kind = "restored"
+		case contract.EventAssetReplaced:
+			en.Kind = "replaced"
+			if p, err := events.Decode[contract.AssetReplaced](e); err == nil {
+				en.Reason = p.Reason
+				en.Related = &ActivityRelated{ID: p.ReplacementID, Tag: p.ReplacementTag}
+			}
+		case contract.EventAssetReplaces:
+			en.Kind = "replaces"
+			if p, err := events.Decode[contract.AssetReplaces](e); err == nil {
+				en.Related = &ActivityRelated{ID: p.ReplacedID, Tag: p.ReplacedTag}
+			}
+		case contract.EventAssetReplacementUndone:
+			en.Kind = "replacement_undone"
+			if p, err := events.Decode[contract.AssetReplacementUndone](e); err == nil {
+				en.Related = &ActivityRelated{ID: p.OtherID, Tag: p.OtherTag, Role: p.Role}
+			}
 		case contract.EventAssetUpdated:
 			en.Kind = "updated"
 			p, err := events.Decode[contract.AssetUpdated](e)

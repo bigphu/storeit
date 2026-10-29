@@ -34,6 +34,14 @@ func (h *Handler) GetAssetActivity(ctx context.Context, req api.GetAssetActivity
 		if e.Reason != "" {
 			item.Reason = &e.Reason
 		}
+		if e.Related != nil {
+			rel := api.ActivityRelated{Id: e.Related.ID, Tag: e.Related.Tag}
+			if e.Related.Role != "" {
+				role := api.ActivityRelatedRole(e.Related.Role)
+				rel.Role = &role
+			}
+			item.Related = &rel
+		}
 		out.Items[i] = item
 	}
 	return out, nil

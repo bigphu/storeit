@@ -732,7 +732,7 @@ export interface components {
         AssetActivityEntry: {
             id: components["schemas"]["ID"];
             /** @enum {string} */
-            kind: "created" | "updated" | "retired" | "restored" | "other";
+            kind: "created" | "updated" | "retired" | "restored" | "replaced" | "replaces" | "replacement_undone" | "other";
             /** @description Raw event type */
             type: string;
             /** Format: date-time */
@@ -740,8 +740,19 @@ export interface components {
             /** @description null when the system did it */
             actor: components["schemas"]["ActivityActor"] | null;
             changes: components["schemas"]["ActivityChange"][];
-            /** @description Only on retired */
+            /** @description On retired and replaced, when one was given */
             reason?: string;
+            related?: components["schemas"]["ActivityRelated"];
+        };
+        /** @description The asset at the other end of a replacement (US-13) */
+        ActivityRelated: {
+            id: components["schemas"]["ID"];
+            tag: string;
+            /**
+             * @description Only on replacement_undone: this asset's role
+             * @enum {string}
+             */
+            role?: "old" | "new";
         };
         ActivityActor: {
             id: components["schemas"]["ID"];

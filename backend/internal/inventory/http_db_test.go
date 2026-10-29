@@ -1070,6 +1070,28 @@ func TestReplacementOverHTTP(t *testing.T) {
 		t.Errorf("new after undo = %+v", nd2)
 	}
 
+	// Lịch sử của hai tài sản có các mục thay thế, kèm tag của tài sản kia
+	type entry struct {
+		Kind    string
+		Related *struct{ ID, Tag, Role string }
+	}
+	type page struct{ Items []entry }
+	op := decode[page](t, a.do("GET", "/api/v1/assets/"+o.ID+"/activity", tok, nil), 200)
+	if len(op.Items) < 2 || op.Items[0].Kind != "replacement_undone" || op.Items[1].Kind != "replaced" ||
+		op.Items[0].Related == nil || op.Items[0].Related.Tag != n.Tag || op.Items[0].Related.Role != "old" ||
+		op.Items[1].Related == nil || op.Items[1].Related.Tag != n.Tag {
+		t.Errorf("old activity = %+v", op.Items)
+	}
+	np := decode[page](t, a.do("GET", "/api/v1/assets/"+n.ID+"/activity", tok, nil), 200)
+	var nk []string
+	for _, e := range np.Items {
+		nk = append(nk, e.Kind)
+	}
+	if len(np.Items) == 0 || np.Items[0].Kind != "replacement_undone" || np.Items[0].Related == nil || np.Items[0].Related.Tag != o.Tag ||
+		np.Items[0].Related.Role != "new" || !slices.Contains(nk, "replaces") {
+		t.Errorf("new activity = %v %+v", nk, np.Items)
+	}
+
 	o2, n2 := mk("Old 2"), mk("New 2")
 	p2 := "/api/v1/assets/" + o2.ID + "/replacement"
 	future := time.Now().UTC().AddDate(0, 0, 3).Format(time.DateOnly)

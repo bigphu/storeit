@@ -201,3 +201,31 @@ func TestAssetActivity_OldTypeAttributeOnLaterPage(t *testing.T) {
 	}
 	assertChanges(t, got[0].Changes, []ActivityChange{{Field: "attributes.os", Label: "OS", From: str("Windows"), To: str("macOS")}})
 }
+
+func TestResolveActivity_ReplacementKinds(t *testing.T) {
+	oldID, newID := uuid.New(), uuid.New()
+	got := resolveActivity([]events.Event{
+		ev(t, contract.EventAssetReplaced, contract.AssetReplaced{AssetID: oldID, ReplacementID: newID, ReplacementTag: "LAP-0042", Reason: "screen broken"}, uuid.Nil),
+		ev(t, contract.EventAssetReplaces, contract.AssetReplaces{AssetID: newID, ReplacedID: oldID, ReplacedTag: "LAP-0017"}, uuid.Nil),
+		ev(t, contract.EventAssetReplacementUndone, contract.AssetReplacementUndone{AssetID: oldID, OtherID: newID, OtherTag: "LAP-0042", Role: "old"}, uuid.Nil),
+		ev(t, contract.EventAssetReplacementUndone, contract.AssetReplacementUndone{AssetID: newID, OtherID: oldID, OtherTag: "LAP-0017", Role: "new"}, uuid.Nil),
+	}, activityLookups{})
+	if len(got) != 4 {
+		t.Fatalf("entries = %+v", got)
+	}
+	want := []struct {
+		kind, reason string
+		related      ActivityRelated
+	}{
+		{"replaced", "screen broken", ActivityRelated{ID: newID, Tag: "LAP-0042"}},
+		{"replaces", "", ActivityRelated{ID: oldID, Tag: "LAP-0017"}},
+		{"replacement_undone", "", ActivityRelated{ID: newID, Tag: "LAP-0042", Role: "old"}},
+		{"replacement_undone", "", ActivityRelated{ID: oldID, Tag: "LAP-0017", Role: "new"}},
+	}
+	for i, w := range want {
+		g := got[i]
+		if g.Kind != w.kind || g.Reason != w.reason || g.Related == nil || *g.Related != w.related {
+			t.Errorf("entry %d = kind %q reason %q related %+v, want %+v", i, g.Kind, g.Reason, g.Related, w)
+		}
+	}
+}
