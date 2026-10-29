@@ -1024,3 +1024,73 @@ func TestAssetActivityOverHTTP(t *testing.T) {
 		t.Errorf("no asset.read = %d, want 403", rec.Code)
 	}
 }
+
+func TestReplacementOverHTTP(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	mk := func(name string) assetDetail {
+		t.Helper()
+		return decode[assetDetail](t, a.do("POST", "/api/v1/assets", tok, map[string]any{
+			"tag": "RH-" + strings.ToUpper(uuid.NewString()[:8]), "name": name, "asset_type_id": domain.GeneralTypeID.String(),
+		}), 201)
+	}
+	type link struct {
+		ID, Tag, Name, Reason string
+		ReplacedOn            string `json:"replaced_on"`
+	}
+	type detail struct {
+		ID         string
+		Version    int32
+		RetiredAt  *string `json:"retired_at"`
+		ReplacedBy *link   `json:"replaced_by"`
+		Replaces   []link
+	}
+	o, n := mk("Old laptop"), mk("New laptop")
+	today := time.Now().UTC().Format(time.DateOnly)
+	path := "/api/v1/assets/" + o.ID + "/replacement"
+
+	rec := decode[detail](t, a.do("POST", path, tok, map[string]any{
+		"replacement_asset_id": n.ID, "replaced_on": today, "reason": "Broken screen", "version": o.Version,
+	}), 200)
+	if rec.RetiredAt == nil || rec.ReplacedBy == nil || rec.ReplacedBy.Tag != n.Tag || rec.ReplacedBy.Reason != "Broken screen" {
+		t.Fatalf("old after replace = %+v", rec)
+	}
+	nd := decode[detail](t, a.do("GET", "/api/v1/assets/"+n.ID, tok, nil), 200)
+	if len(nd.Replaces) != 1 || nd.Replaces[0].Tag != o.Tag {
+		t.Fatalf("new replaces = %+v", nd.Replaces)
+	}
+
+	// Tài sản mới bị retire sau đó: vẫn hoàn tác được, tài sản mới giữ nguyên retire
+	decode[detail](t, a.do("POST", "/api/v1/assets/"+n.ID+"/retire", tok, map[string]any{"version": nd.Version}), 200)
+	back := decode[detail](t, a.do("POST", path+"/undo", tok, map[string]any{"version": rec.Version}), 200)
+	if back.RetiredAt != nil || back.ReplacedBy != nil {
+		t.Errorf("old after undo = %+v", back)
+	}
+	if nd2 := decode[detail](t, a.do("GET", "/api/v1/assets/"+n.ID, tok, nil), 200); nd2.RetiredAt == nil || len(nd2.Replaces) != 0 {
+		t.Errorf("new after undo = %+v", nd2)
+	}
+
+	o2, n2 := mk("Old 2"), mk("New 2")
+	p2 := "/api/v1/assets/" + o2.ID + "/replacement"
+	future := time.Now().UTC().AddDate(0, 0, 3).Format(time.DateOnly)
+	rec2 := a.do("POST", p2, tok, map[string]any{"replacement_asset_id": n2.ID, "replaced_on": future, "reason": "x", "version": o2.Version})
+	if typ, fields := problem(t, rec2); rec2.Code != 422 || typ != "/errors/invalid-replacement" || len(fields) != 1 || !strings.HasPrefix(fields[0], "replaced_on") {
+		t.Errorf("future date = %d %s %v", rec2.Code, typ, fields)
+	}
+	if rec := a.do("POST", p2, tok, map[string]any{"replacement_asset_id": n2.ID, "replaced_on": today, "reason": "  ", "version": o2.Version}); rec.Code != 422 {
+		t.Errorf("blank reason = %d, want 422", rec.Code)
+	}
+	if rec := a.do("POST", p2, a.token(domain.PermAssetRead), map[string]any{"replacement_asset_id": n2.ID, "replaced_on": today, "reason": "x", "version": o2.Version}); rec.Code != 403 {
+		t.Errorf("no manage = %d, want 403", rec.Code)
+	}
+	if rec := a.do("POST", "/api/v1/assets/"+uuid.NewString()+"/replacement", tok, map[string]any{"replacement_asset_id": n2.ID, "replaced_on": today, "reason": "x", "version": 1}); rec.Code != 404 {
+		t.Errorf("unknown asset = %d, want 404", rec.Code)
+	}
+	rec3 := a.do("POST", p2+"/undo", tok, map[string]any{"version": o2.Version})
+	if typ, _ := problem(t, rec3); rec3.Code != 409 || typ != "/errors/asset-not-replaced" {
+		t.Errorf("undo without link = %d %s", rec3.Code, typ)
+	}
+	if rec := a.do("POST", p2, tok, map[string]any{"replacement_asset_id": n2.ID, "replaced_on": today, "reason": "x", "version": o2.Version + 7}); rec.Code != 409 {
+		t.Errorf("stale version = %d, want 409", rec.Code)
+	}
+}

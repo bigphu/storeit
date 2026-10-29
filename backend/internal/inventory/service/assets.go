@@ -30,6 +30,9 @@ type AssetView struct {
 	domain.Asset
 	Type   domain.AssetType
 	Status domain.Status
+	// liên kết thay thế (US-13): tài sản thay nó, và các tài sản nó đã thay
+	ReplacedBy *domain.ReplacementLink
+	Replaces   []domain.ReplacementLink
 }
 
 // ListAssets trả danh sách (không kèm giá trị thuộc tính); chi tiết dùng GetAsset
@@ -245,5 +248,9 @@ func (s *Service) view(ctx context.Context, a domain.Asset) (AssetView, error) {
 	if err != nil {
 		return AssetView{}, err
 	}
-	return AssetView{Asset: a, Type: t, Status: st}, nil
+	by, replaces, err := s.assets.Replacements(ctx, a.ID)
+	if err != nil {
+		return AssetView{}, err
+	}
+	return AssetView{Asset: a, Type: t, Status: st, ReplacedBy: by, Replaces: replaces}, nil
 }

@@ -717,6 +717,43 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AssetActivityPage' }
         default: { $ref: '#/components/responses/Problem' }
+  /assets/{assetID}/replacement:
+    parameters:
+      - $ref: '#/components/parameters/AssetID'
+    post:
+      operationId: recordReplacement
+      summary: Record that another asset replaces this one; this asset is retired (inventory.asset.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReplacementRequest' }
+      responses:
+        "200":
+          description: The replaced (old) asset
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /assets/{assetID}/replacement/undo:
+    parameters:
+      - $ref: '#/components/parameters/AssetID'
+    post:
+      operationId: undoReplacement
+      summary: Undo this asset's replacement and restore it (inventory.asset.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VersionRequest' }
+      responses:
+        "200":
+          description: The restored asset
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetDetail' }
+        default: { $ref: '#/components/responses/Problem' }
 components:
   securitySchemes:
     bearerAuth:
@@ -1048,10 +1085,37 @@ components:
         option_label: { type: string }
         option_removed: { type: boolean }
 
+    ReplacementRequest:
+      type: object
+      required: [replacement_asset_id, replaced_on, reason, version]
+      properties:
+        replacement_asset_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        replaced_on: { type: string, format: date }
+        reason: { type: string, maxLength: 500 }
+        version: { type: integer, format: int32 }
+
+    ReplacementLink:
+      type: object
+      required: [id, tag, name, replaced_on, reason]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        tag: { type: string }
+        name: { type: string }
+        replaced_on: { type: string, format: date }
+        reason: { type: string }
+
     AssetDetail:
       type: object
-      required: [id, tag, name, description, asset_type, status, version, created_at, updated_at, attributes]
+      required: [id, tag, name, description, asset_type, status, version, created_at, updated_at, attributes, replaces]
       properties:
+        replaced_by:
+          nullable: true
+          description: The asset that replaced this one (US-13)
+          allOf: [{ $ref: '#/components/schemas/ReplacementLink' }]
+        replaces:
+          type: array
+          description: Assets this one replaced, newest first
+          items: { $ref: '#/components/schemas/ReplacementLink' }
         id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
         tag: { type: string }
         name: { type: string }

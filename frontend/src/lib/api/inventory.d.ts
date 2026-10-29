@@ -544,6 +544,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/{assetID}/replacement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assetID: components["parameters"]["AssetID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record that another asset replaces this one; this asset is retired (inventory.asset.manage) */
+        post: operations["recordReplacement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{assetID}/replacement/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assetID: components["parameters"]["AssetID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo this asset's replacement and restore it (inventory.asset.manage) */
+        post: operations["undoReplacement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -761,7 +799,27 @@ export interface components {
             option_label?: string;
             option_removed?: boolean;
         };
+        ReplacementRequest: {
+            replacement_asset_id: components["schemas"]["ID"];
+            /** Format: date */
+            replaced_on: string;
+            reason: string;
+            /** Format: int32 */
+            version: number;
+        };
+        ReplacementLink: {
+            id: components["schemas"]["ID"];
+            tag: string;
+            name: string;
+            /** Format: date */
+            replaced_on: string;
+            reason: string;
+        };
         AssetDetail: {
+            /** @description The asset that replaced this one (US-13) */
+            replaced_by?: components["schemas"]["ReplacementLink"] | null;
+            /** @description Assets this one replaced, newest first */
+            replaces: components["schemas"]["ReplacementLink"][];
             id: components["schemas"]["ID"];
             tag: string;
             name: string;
@@ -1971,6 +2029,60 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetActivityPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    recordReplacement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assetID: components["parameters"]["AssetID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplacementRequest"];
+            };
+        };
+        responses: {
+            /** @description The replaced (old) asset */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    undoReplacement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assetID: components["parameters"]["AssetID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionRequest"];
+            };
+        };
+        responses: {
+            /** @description The restored asset */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDetail"];
                 };
             };
             default: components["responses"]["Problem"];

@@ -70,14 +70,23 @@ func toAPIAsset(v service.AssetView) api.AssetDetail {
 	if v.RetiredReason != "" {
 		reason = &v.RetiredReason
 	}
-	return api.AssetDetail{
+	out := api.AssetDetail{
 		Id: v.ID, Tag: v.Tag, Name: v.Name, Description: v.Description,
 		AssetType:  api.TypeSummary{Id: v.Type.ID, Code: v.Type.Code, Name: v.Type.Name},
 		Status:     api.StatusSummary{Id: v.Status.ID, Name: v.Status.Name, Kind: api.StatusKind(v.Status.Kind)},
 		LocationId: v.LocationID, HolderMemberId: v.HolderMemberID, PurchaseDate: toAPIDate(v.PurchaseDate),
 		RetiredAt: v.RetiredAt, RetiredReason: reason, Version: v.Version, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt,
 		Attributes: attributeValues(v.Type, v.Values),
+		Replaces:   make([]api.ReplacementLink, len(v.Replaces)),
 	}
+	for i, l := range v.Replaces {
+		out.Replaces[i] = toAPIReplacementLink(l)
+	}
+	if v.ReplacedBy != nil {
+		by := toAPIReplacementLink(*v.ReplacedBy)
+		out.ReplacedBy = &by
+	}
+	return out
 }
 
 // attributeValues: mọi thuộc tính đang hoạt động của loại, theo thứ tự hiển
