@@ -134,6 +134,19 @@ export function useLendAsset() {
   )
 }
 
+// useReturnAsset: ghi nhận trả (US-11); statusId bỏ trống là về Available mặc định
+export function useReturnAsset() {
+  return useBorrowMutation(
+    ({ id, returnedOn, statusId, note, version }: { id: string; returnedOn: string; statusId?: string; note?: string; version: number }) =>
+      unwrap(
+        inventoryApi.POST('/assets/{assetID}/return', {
+          params: { path: { assetID: id } },
+          body: { returned_on: returnedOn, status_id: statusId || undefined, note: note || undefined, version },
+        }),
+      ),
+  )
+}
+
 // useTypeAttributes: thuộc tính của các loại (đọc yêu cầu của phiếu thành chữ), mỗi loại một
 // lần tải, dùng chung cache với trang loại
 export function useTypeAttributes(ids: MaybeRefOrGetter<string[]>) {

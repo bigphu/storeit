@@ -29,6 +29,8 @@ export function activitySummary(e: ActivityEntry): { who: string; text: string }
       return { who, text: `cancelled the reservation for ${borrowingTail(e)}` }
     case 'lent':
       return { who, text: e.ticket_number ? `handed this asset over to ${borrowingTail(e)}` : `lent this asset to ${borrowingTail(e)}` }
+    case 'returned':
+      return { who, text: `took this asset back from ${borrowingTail(e)}${e.status_name ? ` · now ${e.status_name}` : ''}` }
     default:
       return { who, text: `recorded ${e.type}` }
   }

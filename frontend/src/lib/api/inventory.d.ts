@@ -748,6 +748,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/{assetID}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assetID: components["parameters"]["AssetID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record the return of an asset on loan (inventory.borrow.manage) */
+        post: operations["returnAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/loans": {
         parameters: {
             query?: never;
@@ -755,7 +774,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Assets on loan now, overdue first by default (inventory.borrow.manage) */
+        /** Assets on loan now, overdue first by default (inventory.borrow.manage; mine=true needs only inventory.borrow.request) */
         get: operations["listLoans"];
         put?: never;
         post?: never;
@@ -937,7 +956,7 @@ export interface components {
         AssetActivityEntry: {
             id: components["schemas"]["ID"];
             /** @enum {string} */
-            kind: "created" | "updated" | "retired" | "restored" | "replaced" | "replaces" | "replacement_undone" | "reserved" | "reservation_cancelled" | "lent" | "other";
+            kind: "created" | "updated" | "retired" | "restored" | "replaced" | "replaces" | "replacement_undone" | "reserved" | "reservation_cancelled" | "lent" | "returned" | "other";
             /** @description Raw event type */
             type: string;
             /** Format: date-time */
@@ -948,7 +967,7 @@ export interface components {
             /** @description On retired and replaced, when one was given */
             reason?: string;
             related?: components["schemas"]["ActivityRelated"];
-            /** @description On reserved, reservation_cancelled and lent: who it was reserved for or lent to */
+            /** @description On reserved, reservation_cancelled, lent and returned: who it was reserved for, lent to or taken back from */
             person?: components["schemas"]["ActivityActor"] | null;
             /**
              * Format: int64
@@ -957,6 +976,8 @@ export interface components {
             ticket_number?: number;
             /** Format: date */
             return_by?: string | null;
+            /** @description On returned: the status it went to, when not Available */
+            status_name?: string;
         };
         /** @description The asset at the other end of a replacement (US-13) */
         ActivityRelated: {
@@ -1065,6 +1086,8 @@ export interface components {
             /** @description Attribute conditions "<key>:<op>:<value>", as in the asset list's attr filter */
             requirements: string[];
             suggested_asset?: components["schemas"]["AssetRef"] | null;
+            /** @description Only on GET of a handed-over ticket */
+            loan?: components["schemas"]["TicketLoan"];
             /** @description The reserved asset, once approved */
             asset?: components["schemas"]["AssetRef"] | null;
             /** Format: date */
@@ -1122,6 +1145,24 @@ export interface components {
             reason?: string;
             /** Format: int32 */
             version: number;
+        };
+        ReturnAssetRequest: {
+            /** Format: date */
+            returned_on: string;
+            /** @description Status after the return; omitted means the default Available */
+            status_id?: components["schemas"]["ID"];
+            note?: string;
+            /** Format: int32 */
+            version: number;
+        };
+        /** @description The loan a handed-over ticket became */
+        TicketLoan: {
+            /** Format: date */
+            started_on: string;
+            /** Format: date */
+            return_by?: string | null;
+            /** Format: date */
+            returned_on?: string | null;
         };
         LendRequest: {
             borrower_id: components["schemas"]["ID"];
@@ -2705,9 +2746,38 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    returnAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assetID: components["parameters"]["AssetID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturnAssetRequest"];
+            };
+        };
+        responses: {
+            /** @description The asset, with the status it was returned to */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     listLoans: {
         parameters: {
             query?: {
+                /** @description Only the caller's own loans */
+                mine?: boolean;
                 sort?: "started_on" | "-started_on" | "return_by" | "-return_by";
                 page?: components["parameters"]["Page"];
                 page_size?: components["parameters"]["PageSize"];

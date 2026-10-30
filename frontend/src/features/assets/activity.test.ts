@@ -80,6 +80,12 @@ describe('activitySummary for borrowing', () => {
     expect(activitySummary(entry({ kind: 'lent', person, ticket_number: 12 })).text).toBe('handed this asset over to Phạm Thu Hà (ticket #12)')
     expect(activitySummary(entry({ kind: 'lent', person })).text).toBe('lent this asset to Phạm Thu Hà')
   })
+  it('says who it was taken back from, and where it went when not Available', () => {
+    expect(activitySummary(entry({ kind: 'returned', person, ticket_number: 12 })).text).toBe('took this asset back from Phạm Thu Hà (ticket #12)')
+    expect(activitySummary(entry({ kind: 'returned', person, status_name: 'In repair' })).text).toBe(
+      'took this asset back from Phạm Thu Hà · now In repair',
+    )
+  })
   it('adds the return date when there is one', () => {
     expect(activitySummary(entry({ kind: 'lent', person, return_by: '2026-11-07' })).text).toBe('lent this asset to Phạm Thu Hà · return by 7 Nov')
   })

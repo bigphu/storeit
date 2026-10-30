@@ -30,6 +30,7 @@ const ICONS: Record<ActivityEntry['kind'], string> = {
   reserved: 'pi pi-bookmark',
   reservation_cancelled: 'pi pi-times-circle',
   lent: 'pi pi-arrow-right-arrow-left',
+  returned: 'pi pi-reply',
   other: 'pi pi-circle',
 }
 

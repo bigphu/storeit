@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Button from 'primevue/button'
 import Column from 'primevue/column'
 import DataTable, { type DataTablePageEvent, type DataTableSortEvent } from 'primevue/datatable'
 import Tag from 'primevue/tag'
@@ -7,16 +8,20 @@ import { RouterLink, useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import PersonCell from '@/components/PersonCell.vue'
+import RowMenuButton from '@/components/RowMenuButton.vue'
+import RowMenus from '@/components/RowMenus.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import type { Loan } from '@/lib/api/types'
 import { formatDate } from '@/lib/dates'
 import { openLocation } from '@/lib/navigation'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
-import { useKeepScrollOnPage, useListTable } from '@/lib/tableRows'
+import { useKeepScrollOnPage, useListTable, useRowMenu } from '@/lib/tableRows'
 import { queryInt, queryString, useUrlState } from '@/lib/urlState'
 import { fromTableSort, toTableSort } from '@/features/assets/listQuery'
+import { useAsset } from '@/features/assets/api'
 import { type LoanParams, useLoans } from '../api'
 import { overdueLabel } from '../borrowing'
+import ReturnDialog from '../components/ReturnDialog.vue'
 
 // Tài sản đang cho mượn (người quản lý), mặc định quá hạn lên trước; Since và Return by sắp xếp
 // được. Bấm dòng mở tài sản.
@@ -50,12 +55,35 @@ function onPage(e: DataTablePageEvent) {
   update({ page: e.page + 1 })
 }
 const router = useRouter()
-const table = useListTable({ open: (l: Loan, e?: MouseEvent) => openLocation(router, `/assets/${l.asset.id}`, e) })
+const openAsset = (l: Loan, e?: MouseEvent, newTab?: boolean) => openLocation(router, `/assets/${l.asset.id}`, e, newTab)
+
+// Ghi nhận trả: dòng khoản mượn không có version tài sản, nên đọc tài sản trước khi mở hộp
+const returning = ref<Loan | null>(null)
+const returnOpen = ref(false)
+const { data: returningAsset } = useAsset(() => returning.value?.asset.id)
+const returnTarget = computed(() =>
+  returning.value && returningAsset.value?.id === returning.value.asset.id
+    ? { id: returningAsset.value.id, tag: returningAsset.value.tag, version: returningAsset.value.version, startedOn: returning.value.started_on }
+    : null,
+)
+function askReturn(l: Loan) {
+  returning.value = l
+  returnOpen.value = true
+}
+
+const rowMenu = useRowMenu<Loan>((l) => [
+  { label: 'Open asset', icon: 'pi pi-arrow-right', command: () => openAsset(l) },
+  { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => openAsset(l, undefined, true) },
+  { separator: true },
+  { label: 'Record return…', icon: 'pi pi-reply', command: () => askReturn(l) },
+])
+const table = useListTable({ open: openAsset, showMenu: rowMenu.showContext })
 </script>
 
 <template>
   <section>
     <PageHeader title="On loan" subtitle="Assets lent out now, overdue first." />
+    <RowMenus :menu="rowMenu" />
     <DataTable
       ref="tableRef"
       :value="data?.items ?? []"
@@ -105,11 +133,22 @@ const table = useListTable({ open: (l: Loan, e?: MouseEvent) => openLocation(rou
           <span v-else class="muted">Lent directly</span>
         </template>
       </Column>
+      <Column header="">
+        <template #body="{ data: l }: { data: Loan }">
+          <Button label="Record return" size="small" text @click.stop="askReturn(l)" />
+        </template>
+      </Column>
+      <Column frozen align-frozen="right" header-class="row-menu-col" body-class="row-menu-col">
+        <template #body="{ data: l, index }: { data: Loan; index: number }">
+          <RowMenuButton :active="table.active.isActive(index)" @open="(e) => rowMenu.toggle(l, e)" />
+        </template>
+      </Column>
       <template #empty>
         <TableSkeleton v-if="isLoading" :rows="8" />
         <EmptyState v-else icon="pi pi-clock" text="Nothing is on loan right now." />
       </template>
     </DataTable>
+    <ReturnDialog v-model:visible="returnOpen" :asset="returnTarget" />
   </section>
 </template>
 

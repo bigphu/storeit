@@ -24,6 +24,7 @@ import { canSeeTicket, overdueLabel } from '@/features/borrowing/borrowing'
 import LendDialog from '@/features/borrowing/components/LendDialog.vue'
 import NewTicketDialog from '@/features/borrowing/components/NewTicketDialog.vue'
 import RejectDialog from '@/features/borrowing/components/RejectDialog.vue'
+import ReturnDialog from '@/features/borrowing/components/ReturnDialog.vue'
 import { useTicketActions } from '@/features/borrowing/useTicketActions'
 import { fetchAssetPage, useAsset } from '../api'
 import AssetActivity from '../components/AssetActivity.vue'
@@ -67,6 +68,12 @@ const { data: heldTicket } = useTicket(() =>
 )
 const lendOpen = ref(false)
 const askOpen = ref(false)
+// đang cho mượn: người quản lý ghi nhận trả (US-11)
+const canReturn = computed(() => borrowing.value?.state === 'on_loan' && !!borrowing.value.since && session.can(Perm.BorrowManage))
+const returnOpen = ref(false)
+const returnTarget = computed(() =>
+  asset.value && borrowing.value?.since ? { id: asset.value.id, tag: asset.value.tag, version: asset.value.version, startedOn: borrowing.value.since } : null,
+)
 useTabTitle(() => asset.value?.tag)
 
 // Danh sách đã mở trước đó (nếu tài sản này nằm trong nó): quay lại và bước qua kết quả
@@ -129,7 +136,7 @@ usePageKeys((e) => {
       </span>
     </div>
 
-    <div v-if="canManage || canLend || canAsk || (heldTicket && ticketActions.canManage.value)" class="actions page-actions">
+    <div v-if="canManage || canLend || canAsk || canReturn || (heldTicket && ticketActions.canManage.value)" class="actions page-actions">
       <template v-if="canManage">
         <template v-if="!retired">
           <Button aria-label="Edit (E)" @click="(e: MouseEvent) => actions.edit(asset!, e)">
@@ -150,6 +157,7 @@ usePageKeys((e) => {
         <Button label="Hand over" icon="pi pi-arrow-right-arrow-left" @click="ticketActions.doHandOver(heldTicket)" />
         <Button label="Cancel reservation" severity="secondary" outlined @click="ticketActions.doCancel(heldTicket)" />
       </template>
+      <Button v-if="canReturn" label="Record return…" icon="pi pi-reply" @click="returnOpen = true" />
       <Button v-if="canLend" label="Lend…" icon="pi pi-arrow-right-arrow-left" severity="secondary" outlined @click="lendOpen = true" />
       <Button v-if="canAsk" label="Borrow this…" icon="pi pi-ticket" severity="secondary" outlined @click="askOpen = true" />
     </div>
@@ -268,6 +276,7 @@ usePageKeys((e) => {
          kịp báo đóng thì replaceOpen kẹt true và hộp tự mở lại khi Undo -->
     <ReplaceDialog v-model:visible="replaceOpen" :asset="asset" :type-id="asset.asset_type.id" />
     <LendDialog v-model:visible="lendOpen" :asset="asset" />
+    <ReturnDialog v-model:visible="returnOpen" :asset="returnTarget" />
     <RejectDialog v-model:visible="ticketActions.rejectOpen.value" :ticket="ticketActions.rejectTarget.value" :cancel="ticketActions.rejectCancel.value" />
     <NewTicketDialog v-model:visible="askOpen" :preset-type-id="asset.asset_type.id" :suggested="{ id: asset.id, tag: asset.tag }" />
   </section>

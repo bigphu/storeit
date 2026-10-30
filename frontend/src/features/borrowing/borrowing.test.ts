@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { Status } from '@/lib/api/types'
 import {
   canSeeTicket,
   isBorrowingStatus,
@@ -10,6 +11,8 @@ import {
   parseRequirement,
   pickableStatuses,
   requirementLabels,
+  returnConditionOptions,
+  returnFormError,
   satisfies,
   shortDay,
   ticketFormError,
@@ -64,6 +67,37 @@ describe('requirements', () => {
   it('reads a condition on a removed attribute as written', () => {
     const removed = [{ ...attrs[0]!, removed: true }]
     expect(requirementLabels(['ram:gte:16'], removed)).toEqual(['ram:gte:16'])
+  })
+})
+
+describe('returnConditionOptions', () => {
+  const st = (id: string, kind: string, archived = false) =>
+    ({ id, name: id, kind, archived_at: archived ? '2026-10-01T00:00:00Z' : null }) as unknown as Status
+  it('puts Fine first, then statuses an asset can come back damaged to', () => {
+    const all = [
+      st('Available', 'available'),
+      st('Spare', 'available'),
+      st('In repair', 'unavailable'),
+      st(RESERVED_STATUS_ID, 'in_use'),
+      st(ON_LOAN_STATUS_ID, 'in_use'),
+      st('In use', 'in_use'),
+      st('Lost', 'unavailable', true),
+      st('Retired', 'retired'),
+    ]
+    expect(returnConditionOptions(all)).toEqual([
+      { label: 'Fine — back to Available', value: null },
+      { label: 'In repair', value: 'In repair' },
+      { label: 'In use', value: 'In use' },
+    ])
+  })
+})
+
+describe('returnFormError', () => {
+  it('needs a date from the loan start to today', () => {
+    expect(returnFormError('', '2026-10-20', '2026-10-30')).toBe('Pick the return date.')
+    expect(returnFormError('2026-10-19', '2026-10-20', '2026-10-30')).toBe('The loan started on 20 Oct; pick that day or later.')
+    expect(returnFormError('2026-10-31', '2026-10-20', '2026-10-30')).toBe("That date hasn't come yet.")
+    expect(returnFormError('2026-10-20', '2026-10-20', '2026-10-30')).toBeNull()
   })
 })
 

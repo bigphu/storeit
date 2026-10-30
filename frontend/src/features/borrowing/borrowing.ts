@@ -1,5 +1,5 @@
 // Mượn tài sản (US-10): nhãn, kiểm form phiếu mượn, đọc yêu cầu thuộc tính thành chữ
-import type { Attribute, TicketState } from '@/lib/api/types'
+import type { Attribute, Status, TicketState } from '@/lib/api/types'
 import { fromDateString } from '@/lib/dates'
 import type { Tone } from '@/lib/tones'
 import { attrFilterLabel } from '@/features/assets/filterChips'
@@ -17,6 +17,25 @@ export function isBorrowingStatus(id: string | null | undefined): boolean {
 // pickableStatuses: status chọn tay được (bỏ Reserved, On loan)
 export function pickableStatuses<T extends { id: string }>(statuses: T[]): T[] {
   return statuses.filter((s) => !isBorrowingStatus(s.id))
+}
+
+// returnConditionOptions: tình trạng khi nhận lại tài sản; null là tốt (về Available mặc định),
+// còn lại là status đang dùng không thuộc kind available hay retired và không do việc mượn đặt
+export function returnConditionOptions(statuses: readonly Status[]): { label: string; value: string | null }[] {
+  return [
+    { label: 'Fine — back to Available', value: null },
+    ...statuses
+      .filter((s) => !s.archived_at && s.kind !== 'available' && s.kind !== 'retired' && !isBorrowingStatus(s.id))
+      .map((s) => ({ label: s.name, value: s.id })),
+  ]
+}
+
+// returnFormError: ngày trả từ ngày bắt đầu khoản mượn tới hôm nay (YYYY-MM-DD); null là hợp lệ
+export function returnFormError(returnedOn: string, startedOn: string, today: string): string | null {
+  if (!returnedOn) return 'Pick the return date.'
+  if (returnedOn < startedOn) return `The loan started on ${shortDay(startedOn)}; pick that day or later.`
+  if (returnedOn > today) return "That date hasn't come yet."
+  return null
 }
 
 export const TICKET_STATE_LABEL: Record<TicketState, string> = {
