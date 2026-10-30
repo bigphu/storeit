@@ -27,7 +27,7 @@ type AssetEventReader interface {
 
 type ActivityEntry struct {
 	ID         uuid.UUID
-	Kind       string // "created" | "updated" | "retired" | "restored" | "replaced" | "replaces" | "replacement_undone" | "other"
+	Kind       string // "created" | "updated" | "retired" | "restored" | "replaced" | "replaces" | "replacement_undone" | "reserved" | "reservation_cancelled" | "lent" | "other"
 	Type       string // event type gốc (để hiện "other")
 	OccurredAt time.Time
 	Actor      *ActivityActor // nil = hệ thống
@@ -35,6 +35,10 @@ type ActivityEntry struct {
 	Reason     string // retired, replaced
 	// Related: tài sản ở đầu kia của một lần thay thế (US-13)
 	Related *ActivityRelated
+	// Mượn (US-10): người được giữ chỗ / người mượn, số phiếu (0: cho mượn trực tiếp), hạn trả
+	Person       *ActivityActor
+	TicketNumber int64
+	ReturnBy     *time.Time
 }
 
 // ActivityRelated: tài sản liên quan; Role chỉ có ở replacement_undone, là vai của tài sản
@@ -131,6 +135,10 @@ func (s *Service) activityLookups(ctx context.Context, a domain.Asset, evts []ev
 		if e.ActorID != uuid.Nil && !seenActor[e.ActorID] {
 			seenActor[e.ActorID] = true
 			actorIDs = append(actorIDs, e.ActorID)
+		}
+		if id := borrowingPerson(e); id != uuid.Nil && !seenActor[id] {
+			seenActor[id] = true
+			actorIDs = append(actorIDs, id)
 		}
 		switch e.Type {
 		case contract.EventAssetCreated:
@@ -250,6 +258,24 @@ func resolveActivity(evts []events.Event, lk activityLookups) []ActivityEntry {
 			en.Kind = "replacement_undone"
 			if p, err := events.Decode[contract.AssetReplacementUndone](e); err == nil {
 				en.Related = &ActivityRelated{ID: p.OtherID, Tag: p.OtherTag, Role: p.Role}
+			}
+		case contract.EventAssetReserved:
+			en.Kind = "reserved"
+			if p, err := events.Decode[contract.AssetReserved](e); err == nil {
+				en.Person, en.TicketNumber = lk.actor(p.AccountID), p.TicketNumber
+			}
+		case contract.EventAssetReservationCancelled:
+			en.Kind = "reservation_cancelled"
+			if p, err := events.Decode[contract.AssetReservationCancelled](e); err == nil {
+				en.Person, en.TicketNumber = lk.actor(p.AccountID), p.TicketNumber
+			}
+		case contract.EventAssetLent:
+			en.Kind = "lent"
+			if p, err := events.Decode[contract.AssetLent](e); err == nil {
+				en.Person, en.TicketNumber = lk.actor(p.BorrowerID), p.TicketNumber
+				if d, err := time.Parse(time.DateOnly, p.ReturnBy); err == nil {
+					en.ReturnBy = &d
+				}
 			}
 		case contract.EventAssetUpdated:
 			en.Kind = "updated"
@@ -403,3 +429,22 @@ func idOf(v any) (uuid.UUID, bool) {
 }
 
 func strp(s string) *string { return &s }
+
+// borrowingPerson: account được nhắc trong event mượn (người được giữ chỗ, người mượn)
+func borrowingPerson(e events.Event) uuid.UUID {
+	switch e.Type {
+	case contract.EventAssetReserved:
+		if p, err := events.Decode[contract.AssetReserved](e); err == nil {
+			return p.AccountID
+		}
+	case contract.EventAssetReservationCancelled:
+		if p, err := events.Decode[contract.AssetReservationCancelled](e); err == nil {
+			return p.AccountID
+		}
+	case contract.EventAssetLent:
+		if p, err := events.Decode[contract.AssetLent](e); err == nil {
+			return p.BorrowerID
+		}
+	}
+	return uuid.Nil
+}

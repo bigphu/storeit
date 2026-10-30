@@ -229,3 +229,31 @@ func TestResolveActivity_ReplacementKinds(t *testing.T) {
 		}
 	}
 }
+
+// Mượn (US-10): giữ chỗ, huỷ giữ chỗ, cho mượn; người mượn lấy tên qua account
+func TestResolveActivity_BorrowingKinds(t *testing.T) {
+	assetID, ticketID, person := uuid.New(), uuid.New(), uuid.New()
+	ret := time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC)
+	lk := activityLookups{accounts: map[uuid.UUID]idcontract.Account{person: {ID: person, Name: "Phạm Thu Hà"}}}
+	got := resolveActivity([]events.Event{
+		ev(t, contract.EventAssetReserved, contract.AssetReserved{AssetID: assetID, TicketID: ticketID, TicketNumber: 12, AccountID: person}, uuid.Nil),
+		ev(t, contract.EventAssetReservationCancelled, contract.AssetReservationCancelled{AssetID: assetID, TicketID: ticketID, TicketNumber: 12, AccountID: person, ByManager: true}, uuid.Nil),
+		ev(t, contract.EventAssetLent, contract.AssetLent{AssetID: assetID, LoanID: uuid.New(), BorrowerID: person, TicketID: &ticketID, TicketNumber: 12, ReturnBy: "2026-11-07"}, uuid.Nil),
+		ev(t, contract.EventAssetLent, contract.AssetLent{AssetID: assetID, LoanID: uuid.New(), BorrowerID: person}, uuid.Nil),
+	}, lk)
+	if len(got) != 4 {
+		t.Fatalf("entries = %+v", got)
+	}
+	want := []struct {
+		kind   string
+		ticket int64
+		ret    *time.Time
+	}{{"reserved", 12, nil}, {"reservation_cancelled", 12, nil}, {"lent", 12, &ret}, {"lent", 0, nil}}
+	for i, w := range want {
+		g := got[i]
+		if g.Kind != w.kind || g.TicketNumber != w.ticket || g.Person == nil || g.Person.Name != "Phạm Thu Hà" ||
+			(w.ret == nil) != (g.ReturnBy == nil) || (w.ret != nil && !g.ReturnBy.Equal(*w.ret)) {
+			t.Errorf("entry %d = kind %q ticket %d person %+v return %v, want %+v", i, g.Kind, g.TicketNumber, g.Person, g.ReturnBy, w)
+		}
+	}
+}

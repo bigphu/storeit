@@ -1,0 +1,472 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+
+	idcontract "storeit/internal/identity/contract"
+	"storeit/internal/inventory/domain"
+	"storeit/internal/platform/auth"
+	"storeit/internal/platform/errs"
+)
+
+// Mượn tài sản (US-10). Người có quyền request gửi phiếu, xem và huỷ phiếu của mình; người có
+// quyền manage xem mọi phiếu, duyệt (giữ chỗ một tài sản), từ chối, huỷ phiếu đã duyệt, giao và
+// cho mượn trực tiếp. Ngày nghiệp vụ theo múi giờ của ứng dụng (s.loc).
+
+// TicketInput: phiếu mới; NeededFrom và ReturnBy chỉ có phần ngày
+type TicketInput struct {
+	TypeID           uuid.UUID
+	Requirements     []string
+	SuggestedAssetID *uuid.UUID
+	NeededFrom       time.Time
+	ReturnBy         *time.Time
+	Note             string
+}
+
+// AssetRef: tài sản được nhắc tới (tag, tên)
+type AssetRef struct {
+	ID        uuid.UUID
+	Tag, Name string
+}
+
+type TicketView struct {
+	domain.BorrowTicket
+	Requester      idcontract.Account
+	TypeName       string
+	Asset          *AssetRef
+	SuggestedAsset *AssetRef
+}
+
+type LoanView struct {
+	domain.Loan
+	Asset       AssetRef
+	TypeName    string
+	Borrower    idcontract.Account
+	OverdueDays int
+}
+
+// BorrowingInfo: tài sản đang được giữ chỗ (reserved) hay đang cho mượn (on_loan)
+type BorrowingInfo struct {
+	State        string // "reserved" | "on_loan"
+	Account      idcontract.Account
+	TicketID     *uuid.UUID
+	TicketNumber int64
+	Since        *time.Time
+	ReturnBy     *time.Time
+	OverdueDays  int
+}
+
+type TicketCounts struct{ Waiting, Approved int64 }
+
+const maxBorrowerResults = 10
+
+// today: ngày hiện tại theo múi giờ ứng dụng, ở dạng UTC 00:00 (khớp cột date)
+func (s *Service) today() time.Time {
+	y, m, d := s.now().In(s.loc).Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+}
+
+// borrowActor: actor có ít nhất một trong hai quyền mượn; canManage là có quyền manage
+func borrowActor(ctx context.Context) (auth.Actor, bool, error) {
+	a, ok := auth.FromContext(ctx)
+	if !ok {
+		return auth.Actor{}, false, auth.ErrUnauthenticated
+	}
+	if a.Can(domain.PermBorrowManage) {
+		return a, true, nil
+	}
+	if _, err := auth.Require(ctx, domain.PermBorrowRequest); err != nil {
+		return auth.Actor{}, false, err
+	}
+	return a, false, nil
+}
+
+func ticketField(field, detail string) error {
+	return domain.ErrInvalidTicket.With(errs.WithFields(errs.FieldError{Field: field, Detail: detail}))
+}
+
+func (s *Service) CreateTicket(ctx context.Context, in TicketInput) (TicketView, error) {
+	actor, err := auth.Require(ctx, domain.PermBorrowRequest)
+	if err != nil {
+		return TicketView{}, err
+	}
+	t, err := s.types.Get(ctx, in.TypeID)
+	if errors.Is(err, domain.ErrTypeNotFound) {
+		return TicketView{}, ticketField("asset_type_id", "unknown asset type")
+	}
+	if err != nil {
+		return TicketView{}, err
+	}
+	if !t.CanBorrow || t.Archived() {
+		return TicketView{}, ticketField("asset_type_id", "this type can't be borrowed")
+	}
+	reqs, err := resolveRequirements(t, in.Requirements)
+	if err != nil {
+		return TicketView{}, err
+	}
+	note, err := cleanText(in.Note, domain.MaxTicketNote)
+	if err != nil {
+		return TicketView{}, ticketField("note", "must be text up to 500 characters")
+	}
+	if err := domain.CheckTicketDates(in.NeededFrom, in.ReturnBy, s.today()); err != nil {
+		return TicketView{}, err
+	}
+	if in.SuggestedAssetID != nil {
+		a, err := s.assets.Get(ctx, *in.SuggestedAssetID)
+		if errors.Is(err, domain.ErrAssetNotFound) || (err == nil && a.TypeID != t.ID) {
+			return TicketView{}, ticketField("suggested_asset_id", "must be an asset of the requested type")
+		}
+		if err != nil {
+			return TicketView{}, err
+		}
+	}
+	tk, err := s.borrowing.CreateTicket(ctx, domain.NewBorrowTicket{
+		RequesterID: actor.AccountID, TypeID: t.ID, Requirements: reqs, SuggestedAssetID: in.SuggestedAssetID,
+		NeededFrom: in.NeededFrom, ReturnBy: in.ReturnBy, Note: note,
+	})
+	if err != nil {
+		return TicketView{}, err
+	}
+	return s.ticketView(ctx, tk)
+}
+
+// resolveRequirements kiểm điều kiện thuộc tính như bộ lọc của danh sách; lỗi đổi field
+// "attr[i]" thành "requirements[i]"
+func resolveRequirements(t domain.AssetType, reqs []string) ([]string, error) {
+	if len(reqs) > domain.MaxTicketRequirements {
+		return nil, ticketField("requirements", "at most 10 specs")
+	}
+	if len(reqs) == 0 {
+		return []string{}, nil
+	}
+	if _, _, err := domain.ResolveAttrQuery(t, reqs, ""); err != nil {
+		var e *errs.Error
+		if !errors.As(err, &e) {
+			return nil, err
+		}
+		fields := make([]errs.FieldError, 0, len(e.Fields()))
+		for _, f := range e.Fields() {
+			fields = append(fields, errs.FieldError{Field: strings.Replace(f.Field, "attr[", "requirements[", 1), Detail: f.Detail})
+		}
+		return nil, domain.ErrInvalidTicket.With(errs.WithFields(fields...))
+	}
+	return reqs, nil
+}
+
+// GetTicket: người quản lý xem mọi phiếu; người khác chỉ phiếu của mình (phiếu người khác là 404)
+func (s *Service) GetTicket(ctx context.Context, id uuid.UUID) (TicketView, error) {
+	tk, err := s.visibleTicket(ctx, id)
+	if err != nil {
+		return TicketView{}, err
+	}
+	return s.ticketView(ctx, tk)
+}
+
+func (s *Service) visibleTicket(ctx context.Context, id uuid.UUID) (domain.BorrowTicket, error) {
+	actor, canManage, err := borrowActor(ctx)
+	if err != nil {
+		return domain.BorrowTicket{}, err
+	}
+	tk, err := s.borrowing.GetTicket(ctx, id)
+	if err != nil {
+		return domain.BorrowTicket{}, err
+	}
+	if !canManage && tk.RequesterID != actor.AccountID {
+		return domain.BorrowTicket{}, domain.ErrTicketNotFound
+	}
+	return tk, nil
+}
+
+// ListTickets: không có quyền manage thì luôn chỉ phiếu của mình; mine lọc phiếu của mình cho
+// người quản lý. f.Q tìm theo tên/email người gửi hay tên loại.
+func (s *Service) ListTickets(ctx context.Context, f domain.TicketFilter, mine bool) ([]TicketView, int64, error) {
+	actor, canManage, err := borrowActor(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	if !canManage || mine {
+		id := actor.AccountID
+		f.RequesterID = &id
+	}
+	if f.Q = strings.TrimSpace(f.Q); f.Q != "" {
+		if f.MatchRequesters, f.MatchTypes, err = s.matchTicketQuery(ctx, f.Q); err != nil {
+			return nil, 0, err
+		}
+	}
+	items, total, err := s.borrowing.ListTickets(ctx, f)
+	if err != nil {
+		return nil, 0, err
+	}
+	out := make([]TicketView, len(items))
+	for i, tk := range items {
+		if out[i], err = s.ticketView(ctx, tk); err != nil {
+			return nil, 0, err
+		}
+	}
+	return out, total, nil
+}
+
+// matchTicketQuery: account có tên/email chứa q và loại có tên chứa q
+func (s *Service) matchTicketQuery(ctx context.Context, q string) ([]uuid.UUID, []uuid.UUID, error) {
+	accs, err := s.accounts.SearchAccounts(ctx, q, 50)
+	if err != nil {
+		return nil, nil, err
+	}
+	people := make([]uuid.UUID, len(accs))
+	for i, a := range accs {
+		people[i] = a.ID
+	}
+	types, err := s.types.List(ctx, true)
+	if err != nil {
+		return nil, nil, err
+	}
+	var typeIDs []uuid.UUID
+	lq := strings.ToLower(q)
+	for _, t := range types {
+		if strings.Contains(strings.ToLower(t.Name), lq) {
+			typeIDs = append(typeIDs, t.ID)
+		}
+	}
+	return people, typeIDs, nil
+}
+
+func (s *Service) TicketCounts(ctx context.Context) (TicketCounts, error) {
+	if _, err := auth.Require(ctx, domain.PermBorrowManage); err != nil {
+		return TicketCounts{}, err
+	}
+	w, a, err := s.borrowing.TicketCounts(ctx)
+	return TicketCounts{Waiting: w, Approved: a}, err
+}
+
+func (s *Service) ApproveTicket(ctx context.Context, id, assetID uuid.UUID, version int32) (TicketView, error) {
+	if _, err := auth.Require(ctx, domain.PermBorrowManage); err != nil {
+		return TicketView{}, err
+	}
+	tk, err := s.borrowing.Approve(ctx, id, assetID, version)
+	if err != nil {
+		return TicketView{}, err
+	}
+	return s.ticketView(ctx, tk)
+}
+
+func (s *Service) RejectTicket(ctx context.Context, id uuid.UUID, reason string, version int32) (TicketView, error) {
+	if _, err := auth.Require(ctx, domain.PermBorrowManage); err != nil {
+		return TicketView{}, err
+	}
+	r, err := cleanText(reason, domain.MaxTicketNote)
+	if err != nil {
+		return TicketView{}, ticketField("reason", "must be text up to 500 characters")
+	}
+	if r == "" {
+		return TicketView{}, ticketField("reason", "is required")
+	}
+	tk, err := s.borrowing.Reject(ctx, id, r, version)
+	if err != nil {
+		return TicketView{}, err
+	}
+	return s.ticketView(ctx, tk)
+}
+
+// CancelTicket: người gửi huỷ phiếu của mình khi đang chờ hay đã duyệt; người quản lý huỷ phiếu
+// đã duyệt của người khác (phiếu đang chờ thì từ chối), người gửi được báo qua thư
+func (s *Service) CancelTicket(ctx context.Context, id uuid.UUID, reason string, version int32) (TicketView, error) {
+	actor, _, err := borrowActor(ctx)
+	if err != nil {
+		return TicketView{}, err
+	}
+	tk, err := s.visibleTicket(ctx, id)
+	if err != nil {
+		return TicketView{}, err
+	}
+	own := tk.RequesterID == actor.AccountID
+	if !own && tk.State != domain.TicketApproved {
+		return TicketView{}, domain.ErrTicketState
+	}
+	r, err := cleanText(reason, domain.MaxTicketNote)
+	if err != nil {
+		return TicketView{}, ticketField("reason", "must be text up to 500 characters")
+	}
+	out, err := s.borrowing.Cancel(ctx, id, r, !own, version)
+	if err != nil {
+		return TicketView{}, err
+	}
+	return s.ticketView(ctx, out)
+}
+
+// HandOverTicket giao tài sản đã giữ chỗ; account người gửi phải còn hoạt động
+func (s *Service) HandOverTicket(ctx context.Context, id uuid.UUID, version int32) (TicketView, error) {
+	if _, err := auth.Require(ctx, domain.PermBorrowManage); err != nil {
+		return TicketView{}, err
+	}
+	tk, err := s.borrowing.GetTicket(ctx, id)
+	if err != nil {
+		return TicketView{}, err
+	}
+	acc, err := s.accounts.GetAccount(ctx, tk.RequesterID)
+	if errors.Is(err, idcontract.ErrAccountNotFound) || (err == nil && !acc.Active) {
+		return TicketView{}, ticketField("requester", "the account is disabled; cancel the reservation instead")
+	}
+	if err != nil {
+		return TicketView{}, err
+	}
+	out, _, err := s.borrowing.HandOver(ctx, id, s.today(), version)
+	if err != nil {
+		return TicketView{}, err
+	}
+	return s.ticketView(ctx, out)
+}
+
+// LendAsset cho mượn trực tiếp, bắt đầu hôm nay
+func (s *Service) LendAsset(ctx context.Context, assetID, borrowerID uuid.UUID, returnBy *time.Time, version int32) (AssetView, error) {
+	if _, err := auth.Require(ctx, domain.PermBorrowManage); err != nil {
+		return AssetView{}, err
+	}
+	acc, err := s.accounts.GetAccount(ctx, borrowerID)
+	if errors.Is(err, idcontract.ErrAccountNotFound) || (err == nil && !acc.Active) {
+		return AssetView{}, domain.ErrInvalidLoan.With(errs.WithFields(errs.FieldError{Field: "borrower_id", Detail: "unknown or disabled account"}))
+	}
+	if err != nil {
+		return AssetView{}, err
+	}
+	if err := domain.CheckLoanReturnBy(returnBy, s.today()); err != nil {
+		return AssetView{}, err
+	}
+	if _, err := s.borrowing.Lend(ctx, assetID, borrowerID, s.today(), returnBy, version); err != nil {
+		return AssetView{}, err
+	}
+	a, err := s.assets.Get(ctx, assetID)
+	if err != nil {
+		return AssetView{}, err
+	}
+	return s.view(ctx, a)
+}
+
+func (s *Service) ListLoans(ctx context.Context, page, pageSize int) ([]LoanView, int64, error) {
+	if _, err := auth.Require(ctx, domain.PermBorrowManage); err != nil {
+		return nil, 0, err
+	}
+	today := s.today()
+	loans, total, err := s.borrowing.ListActiveLoans(ctx, today, page, pageSize)
+	if err != nil {
+		return nil, 0, err
+	}
+	ids := make([]uuid.UUID, len(loans))
+	for i, l := range loans {
+		ids[i] = l.BorrowerID
+	}
+	people, err := s.accountMap(ctx, ids)
+	if err != nil {
+		return nil, 0, err
+	}
+	out := make([]LoanView, len(loans))
+	for i, l := range loans {
+		a, err := s.assets.Get(ctx, l.AssetID)
+		if err != nil {
+			return nil, 0, err
+		}
+		v := LoanView{Loan: l, Asset: AssetRef{ID: a.ID, Tag: a.Tag, Name: a.Name}, Borrower: people[l.BorrowerID], OverdueDays: l.OverdueDays(today)}
+		if t, err := s.types.Get(ctx, a.TypeID); err == nil {
+			v.TypeName = t.Name
+		}
+		out[i] = v
+	}
+	return out, total, nil
+}
+
+// SearchBorrowers: account đang hoạt động để chọn người mượn (hộp Lend)
+func (s *Service) SearchBorrowers(ctx context.Context, q string) ([]idcontract.Account, error) {
+	if _, err := auth.Require(ctx, domain.PermBorrowManage); err != nil {
+		return nil, err
+	}
+	return s.accounts.SearchAccounts(ctx, q, maxBorrowerResults)
+}
+
+func (s *Service) ticketView(ctx context.Context, tk domain.BorrowTicket) (TicketView, error) {
+	v := TicketView{BorrowTicket: tk}
+	people, err := s.accountMap(ctx, []uuid.UUID{tk.RequesterID})
+	if err != nil {
+		return TicketView{}, err
+	}
+	v.Requester = people[tk.RequesterID]
+	if t, err := s.types.Get(ctx, tk.TypeID); err == nil {
+		v.TypeName = t.Name
+	} else if !errors.Is(err, domain.ErrTypeNotFound) {
+		return TicketView{}, err
+	}
+	if v.Asset, err = s.assetRef(ctx, tk.AssetID); err != nil {
+		return TicketView{}, err
+	}
+	if v.SuggestedAsset, err = s.assetRef(ctx, tk.SuggestedAssetID); err != nil {
+		return TicketView{}, err
+	}
+	return v, nil
+}
+
+func (s *Service) assetRef(ctx context.Context, id *uuid.UUID) (*AssetRef, error) {
+	if id == nil {
+		return nil, nil
+	}
+	a, err := s.assets.Get(ctx, *id)
+	if errors.Is(err, domain.ErrAssetNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &AssetRef{ID: a.ID, Tag: a.Tag, Name: a.Name}, nil
+}
+
+// accountMap: account theo ID; account không còn thì tên "Unknown user"
+func (s *Service) accountMap(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]idcontract.Account, error) {
+	out := make(map[uuid.UUID]idcontract.Account, len(ids))
+	accs, err := s.accounts.GetAccounts(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range accs {
+		out[a.ID] = a
+	}
+	for _, id := range ids {
+		if _, ok := out[id]; !ok {
+			out[id] = idcontract.Account{ID: id, Name: unknownUser}
+		}
+	}
+	return out, nil
+}
+
+// borrowingInfo: tài sản Reserved thì phiếu giữ chỗ, On loan thì khoản đang mượn; khác thì nil
+func (s *Service) borrowingInfo(ctx context.Context, a domain.Asset) (*BorrowingInfo, error) {
+	if s.borrowing == nil || !domain.IsBorrowingStatus(a.StatusID) {
+		return nil, nil
+	}
+	if a.StatusID == domain.ReservedStatusID {
+		tk, err := s.borrowing.ApprovedTicketFor(ctx, a.ID)
+		if err != nil || tk == nil {
+			return nil, err
+		}
+		people, err := s.accountMap(ctx, []uuid.UUID{tk.RequesterID})
+		if err != nil {
+			return nil, err
+		}
+		id := tk.ID
+		return &BorrowingInfo{State: "reserved", Account: people[tk.RequesterID], TicketID: &id, TicketNumber: tk.Number, ReturnBy: tk.ReturnBy}, nil
+	}
+	l, err := s.borrowing.ActiveLoan(ctx, a.ID)
+	if err != nil || l == nil {
+		return nil, err
+	}
+	people, err := s.accountMap(ctx, []uuid.UUID{l.BorrowerID})
+	if err != nil {
+		return nil, err
+	}
+	since := l.StartedOn
+	return &BorrowingInfo{
+		State: "on_loan", Account: people[l.BorrowerID], TicketID: l.TicketID, TicketNumber: l.TicketNumber,
+		Since: &since, ReturnBy: l.ReturnBy, OverdueDays: l.OverdueDays(s.today()),
+	}, nil
+}

@@ -65,6 +65,7 @@ func newAppWith(t *testing.T, maxRows int) *app {
 		Profiles:      repository.NewExportProfileRepository(pool, outbox),
 		Accounts:      stubAccounts{},
 		ExportMaxRows: maxRows,
+		Borrowing:     repository.NewBorrowingRepository(pool, outbox, jobs.NewRiver(client)),
 	})
 	srv := server.New(server.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err := handler.New(svc).Mount(srv.Router(), tokens); err != nil {
@@ -77,6 +78,16 @@ func newAppWith(t *testing.T, maxRows int) *app {
 func (a *app) token(perms ...string) string {
 	a.t.Helper()
 	tok, err := a.tokens.Issue(uuid.New(), perms)
+	if err != nil {
+		a.t.Fatal(err)
+	}
+	return tok.Value
+}
+
+// tokenFor: như token nhưng cho một account cụ thể (người gửi phiếu mượn)
+func (a *app) tokenFor(id uuid.UUID, perms ...string) string {
+	a.t.Helper()
+	tok, err := a.tokens.Issue(id, perms)
 	if err != nil {
 		a.t.Fatal(err)
 	}
@@ -1196,5 +1207,123 @@ func TestAssetsBorrowableFilter(t *testing.T) {
 	got := decode[page](t, a.do("GET", "/api/v1/assets?borrowable=true&q="+prefix, tok, nil), 200)
 	if len(got.Items) != 1 || got.Items[0].ID != free.ID {
 		t.Errorf("borrowable = %+v, want only %s", got.Items, free.ID)
+	}
+}
+
+// Mượn qua HTTP (US-10): nhân viên gửi phiếu có yêu cầu thuộc tính, người quản lý duyệt (giữ
+// chỗ), giao, cho mượn trực tiếp; tài sản hiện trạng thái mượn và lịch sử
+func TestBorrowingOverHTTP(t *testing.T) {
+	a := newApp(t)
+	admin := a.token(allPerms...)
+	emp := uuid.New()
+	empTok := a.tokenFor(emp, domain.PermAssetRead, domain.PermBorrowRequest)
+	officer := a.token(domain.PermAssetRead, domain.PermBorrowRequest, domain.PermBorrowManage)
+	code := "HB" + strings.ToUpper(uuid.NewString()[:6])
+	ty := decode[typeDetail](t, a.do("POST", "/api/v1/asset-types", admin, map[string]any{
+		"code": code, "name": "Laptop " + code, "can_borrow": true,
+		"attributes": []map[string]any{{"key": "ram", "label": "RAM", "data_type": "number"}},
+	}), 201)
+	mk := func() assetDetail {
+		return decode[assetDetail](t, a.do("POST", "/api/v1/assets", admin, map[string]any{
+			"tag": code + "-" + strings.ToUpper(uuid.NewString()[:4]), "name": "Dell", "asset_type_id": ty.ID,
+			"attributes": map[string]any{"ram": 16},
+		}), 201)
+	}
+	x := mk()
+	today := time.Now().UTC().Format(time.DateOnly)
+	type ticket struct {
+		ID, State string
+		Number    int64
+		Version   int32
+		Requester struct{ ID, Name string }
+		Asset     *struct{ ID, Tag string }
+	}
+
+	tk := decode[ticket](t, a.do("POST", "/api/v1/borrow-tickets", empTok, map[string]any{
+		"asset_type_id": ty.ID, "requirements": []string{"ram:gte:16"}, "needed_from": today, "note": "Client demo",
+	}), 201)
+	if tk.State != "waiting" || tk.Number == 0 || tk.Requester.ID != emp.String() {
+		t.Fatalf("new ticket = %+v", tk)
+	}
+	rec := a.do("POST", "/api/v1/borrow-tickets", empTok, map[string]any{
+		"asset_type_id": ty.ID, "requirements": []string{"nope:eq:1"}, "needed_from": today,
+	})
+	if typ, fields := problem(t, rec); rec.Code != 422 || typ != "/errors/invalid-borrow-ticket" || len(fields) == 0 || !strings.HasPrefix(fields[0], "requirements[0]") {
+		t.Errorf("bad requirement = %d %s %v", rec.Code, typ, fields)
+	}
+	if rec := a.do("POST", "/api/v1/borrow-tickets/"+tk.ID+"/approve", empTok, map[string]any{"asset_id": x.ID, "version": tk.Version}); rec.Code != 403 {
+		t.Errorf("employee approves = %d, want 403", rec.Code)
+	}
+	if rec := a.do("GET", "/api/v1/borrow-tickets/"+tk.ID, a.token(domain.PermBorrowRequest), nil); rec.Code != 404 {
+		t.Errorf("another employee reads the ticket = %d, want 404", rec.Code)
+	}
+
+	ap := decode[ticket](t, a.do("POST", "/api/v1/borrow-tickets/"+tk.ID+"/approve", officer, map[string]any{"asset_id": x.ID, "version": tk.Version}), 200)
+	if ap.State != "approved" || ap.Asset == nil || ap.Asset.Tag != x.Tag {
+		t.Fatalf("approved = %+v", ap)
+	}
+	type withBorrowing struct {
+		Status    struct{ ID string }
+		Borrowing *struct {
+			State   string
+			Account struct{ ID string }
+			Ticket  *struct{ Number int64 }
+		}
+	}
+	got := decode[withBorrowing](t, a.do("GET", "/api/v1/assets/"+x.ID, admin, nil), 200)
+	if got.Borrowing == nil || got.Borrowing.State != "reserved" || got.Borrowing.Account.ID != emp.String() ||
+		got.Borrowing.Ticket == nil || got.Borrowing.Ticket.Number != tk.Number || got.Status.ID != domain.ReservedStatusID.String() {
+		t.Fatalf("asset after approve = %+v", got)
+	}
+
+	ho := decode[ticket](t, a.do("POST", "/api/v1/borrow-tickets/"+tk.ID+"/hand-over", officer, map[string]any{"version": ap.Version}), 200)
+	if ho.State != "handed_over" {
+		t.Errorf("hand over = %+v", ho)
+	}
+	if got := decode[withBorrowing](t, a.do("GET", "/api/v1/assets/"+x.ID, admin, nil), 200); got.Borrowing == nil || got.Borrowing.State != "on_loan" {
+		t.Errorf("asset after hand over = %+v", got.Borrowing)
+	}
+
+	y := mk()
+	lent := decode[withBorrowing](t, a.do("POST", "/api/v1/assets/"+y.ID+"/lend", officer, map[string]any{"borrower_id": uuid.NewString(), "version": y.Version}), 200)
+	if lent.Borrowing == nil || lent.Borrowing.State != "on_loan" || lent.Borrowing.Ticket != nil {
+		t.Errorf("direct lend = %+v", lent.Borrowing)
+	}
+	type loanPage struct {
+		Items []struct{ Asset struct{ ID string } }
+		Total int64
+	}
+	loans := decode[loanPage](t, a.do("GET", "/api/v1/loans?page_size=100", officer, nil), 200)
+	seen := map[string]bool{}
+	for _, l := range loans.Items {
+		seen[l.Asset.ID] = true
+	}
+	if !seen[x.ID] || !seen[y.ID] {
+		t.Errorf("loans = %+v, want both assets", loans)
+	}
+	type summary struct{ Waiting, Approved int64 }
+	decode[summary](t, a.do("GET", "/api/v1/borrow-tickets/summary", officer, nil), 200)
+	if rec := a.do("GET", "/api/v1/borrow-tickets/summary", empTok, nil); rec.Code != 403 {
+		t.Errorf("employee summary = %d, want 403", rec.Code)
+	}
+	type ticketPage struct {
+		Items []ticket
+		Total int64
+	}
+	if mine := decode[ticketPage](t, a.do("GET", "/api/v1/borrow-tickets", empTok, nil), 200); mine.Total != 1 || mine.Items[0].ID != tk.ID {
+		t.Errorf("employee's tickets = %+v, want only theirs", mine)
+	}
+	type activity struct{ Items []struct{ Kind string } }
+	var kinds []string
+	for _, e := range decode[activity](t, a.do("GET", "/api/v1/assets/"+x.ID+"/activity", admin, nil), 200).Items {
+		kinds = append(kinds, e.Kind)
+	}
+	if !slices.Contains(kinds, "reserved") || !slices.Contains(kinds, "lent") {
+		t.Errorf("activity kinds = %v, want reserved and lent", kinds)
+	}
+	for _, p := range []string{"/api/v1/borrow-tickets", "/api/v1/loans", "/api/v1/borrowers", "/api/v1/borrow-tickets/summary"} {
+		if rec := a.do("GET", p, "", nil); rec.Code != 401 {
+			t.Errorf("GET %s without token = %d, want 401", p, rec.Code)
+		}
 	}
 }

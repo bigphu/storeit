@@ -4,7 +4,7 @@
 //
 // main dựng module một lần:
 //
-//	m, err := inventory.New(inventory.Deps{Pool: pool, Outbox: outbox, Accounts: identityMod.AccountReader(), Config: cfg.Inventory})
+//	m, err := inventory.New(inventory.Deps{Pool: pool, Outbox: outbox, Jobs: jobs.NewRiver(insertClient), Accounts: identityMod.AccountReader(), Config: cfg.Inventory})
 //	err = m.Mount(srv.Router(), tokens)   // cmd/server: route /api/v1/...
 //	doc, err := m.APIDoc()                // cmd/server, HTTP_API_DOCS: web.MountDocs
 //
@@ -22,14 +22,17 @@ import (
 	"storeit/internal/inventory/repository"
 	"storeit/internal/inventory/service"
 	"storeit/internal/platform/events"
+	"storeit/internal/platform/jobs"
 	"storeit/internal/platform/jwt"
 	"storeit/internal/platform/web"
 )
 
 type Deps struct {
-	Pool     *pgxpool.Pool
-	Outbox   *events.Outbox
-	Accounts idcontract.AccountReader // tên chủ profile export
+	Pool   *pgxpool.Pool
+	Outbox *events.Outbox
+	// Jobs xếp thư của việc mượn trong cùng transaction (US-10)
+	Jobs     jobs.Enqueuer
+	Accounts idcontract.AccountReader // tên chủ profile export, người mượn
 	Config   Config
 }
 
@@ -39,8 +42,8 @@ type Module struct {
 }
 
 func New(d Deps) (*Module, error) {
-	if d.Pool == nil || d.Outbox == nil || d.Accounts == nil {
-		return nil, fmt.Errorf("inventory: Pool, Outbox and Accounts are required")
+	if d.Pool == nil || d.Outbox == nil || d.Jobs == nil || d.Accounts == nil {
+		return nil, fmt.Errorf("inventory: Pool, Outbox, Jobs and Accounts are required")
 	}
 	assets := repository.NewAssetRepository(d.Pool, d.Outbox)
 	svc := service.New(service.Deps{
@@ -52,6 +55,9 @@ func New(d Deps) (*Module, error) {
 		Profiles:      repository.NewExportProfileRepository(d.Pool, d.Outbox),
 		Accounts:      d.Accounts,
 		ExportMaxRows: d.Config.ExportMaxRows,
+
+		Borrowing: repository.NewBorrowingRepository(d.Pool, d.Outbox, d.Jobs),
+		Location:  d.Config.Location(),
 	})
 	return &Module{svc: svc, handler: handler.New(svc)}, nil
 }

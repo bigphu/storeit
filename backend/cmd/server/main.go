@@ -73,7 +73,7 @@ func run() error {
 		return err
 	}
 	inventoryMod, err := inventory.New(inventory.Deps{
-		Pool: pool, Outbox: outbox, Accounts: identityMod.AccountReader(), Config: cfg.Inventory,
+		Pool: pool, Outbox: outbox, Jobs: jobs.NewRiver(insertClient), Accounts: identityMod.AccountReader(), Config: cfg.Inventory,
 	})
 	if err != nil {
 		return err

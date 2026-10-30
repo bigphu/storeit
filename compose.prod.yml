@@ -35,6 +35,7 @@ x-go-env: &go-env
   JWT_ISSUER: ${JWT_ISSUER:-storeit}
   # Frontend: link trong thư mời / đặt lại mật khẩu trỏ về đây
   IDENTITY_APP_URL: ${APP_URL:?set APP_URL, ví dụ https://storeit.example.com}
+  INVENTORY_APP_URL: ${APP_URL:?set APP_URL, ví dụ https://storeit.example.com}
   # Administrator đầu tiên, chỉ dùng khi DB chưa có account nào. Đăng nhập
   # được rồi thì xoá hai biến này khỏi .env
   ADMIN_EMAIL: ${ADMIN_EMAIL:-}

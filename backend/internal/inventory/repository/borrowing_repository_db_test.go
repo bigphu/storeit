@@ -357,7 +357,9 @@ func TestBorrowing_QueueOverdueEmails(t *testing.T) {
 
 type failingEnqueuer struct{}
 
-func (failingEnqueuer) Enqueue(context.Context, jobs.Job, ...jobs.Option) error { return errors.New("queue down") }
+func (failingEnqueuer) Enqueue(context.Context, jobs.Job, ...jobs.Option) error {
+	return errors.New("queue down")
+}
 func (failingEnqueuer) EnqueueTx(context.Context, pgx.Tx, jobs.Job, ...jobs.Option) error {
 	return errors.New("queue down")
 }

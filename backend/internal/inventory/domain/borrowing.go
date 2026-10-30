@@ -117,9 +117,9 @@ type TicketFilter struct {
 	// Q khác rỗng: phiếu của một trong MatchRequesters hay thuộc một trong MatchTypes
 	MatchRequesters []uuid.UUID
 	MatchTypes      []uuid.UUID
-	Sort        string     // "-number" (mặc định) | "number" | "needed_from" | "-needed_from"
-	Page        int
-	PageSize    int
+	Sort            string // "-number" (mặc định) | "number" | "needed_from" | "-needed_from"
+	Page            int
+	PageSize        int
 }
 
 // CheckTicketDates: needed_from không trước today; return_by (nếu có) không trước needed_from

@@ -53,7 +53,7 @@ func (f *fakeTypes) Get(_ context.Context, id uuid.UUID) (domain.AssetType, erro
 func (f *fakeTypes) Create(_ context.Context, in domain.NewAssetType) (domain.AssetType, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	t := domain.AssetType{ID: uuid.New(), Code: in.Code, Name: in.Name, Description: in.Description, Version: 1}
+	t := domain.AssetType{ID: uuid.New(), Code: in.Code, Name: in.Name, Description: in.Description, CanBorrow: in.CanBorrow, Version: 1}
 	for _, na := range in.Attributes {
 		t.Attributes = append(t.Attributes, newAttr(t.ID, na))
 	}
@@ -79,6 +79,9 @@ func (f *fakeTypes) Update(_ context.Context, id uuid.UUID, name, description *s
 	}
 	if name != nil {
 		t.Name = *name
+	}
+	if canBorrow != nil {
+		t.CanBorrow = *canBorrow
 	}
 	if description != nil {
 		t.Description = *description
@@ -655,5 +658,166 @@ func (a fakeAccounts) GetAccounts(ctx context.Context, ids []uuid.UUID) ([]idcon
 }
 
 func (fakeAccounts) SearchAccounts(context.Context, string, int) ([]idcontract.Account, error) {
+	return nil, nil
+}
+
+// fakeBorrowing: phiếu trong bộ nhớ, đủ cho các quy tắc của service (quyền, ngày, người mượn)
+type fakeBorrowing struct {
+	mu         sync.Mutex
+	tickets    map[uuid.UUID]domain.BorrowTicket
+	handOvers  int
+	lends      int
+	lastFilter domain.TicketFilter
+	overdueOn  []time.Time
+}
+
+func newFakeBorrowing() *fakeBorrowing {
+	return &fakeBorrowing{tickets: map[uuid.UUID]domain.BorrowTicket{}}
+}
+
+func (f *fakeBorrowing) CreateTicket(_ context.Context, n domain.NewBorrowTicket) (domain.BorrowTicket, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t := domain.BorrowTicket{
+		ID: uuid.New(), Number: int64(len(f.tickets) + 1), RequesterID: n.RequesterID, TypeID: n.TypeID,
+		Requirements: n.Requirements, SuggestedAssetID: n.SuggestedAssetID, NeededFrom: n.NeededFrom,
+		ReturnBy: n.ReturnBy, Note: n.Note, State: domain.TicketWaiting, Version: 1,
+	}
+	f.tickets[t.ID] = t
+	return t, nil
+}
+
+func (f *fakeBorrowing) GetTicket(_ context.Context, id uuid.UUID) (domain.BorrowTicket, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, ok := f.tickets[id]
+	if !ok {
+		return domain.BorrowTicket{}, domain.ErrTicketNotFound
+	}
+	return t, nil
+}
+
+func (f *fakeBorrowing) ListTickets(_ context.Context, flt domain.TicketFilter) ([]domain.BorrowTicket, int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lastFilter = flt
+	var out []domain.BorrowTicket
+	for _, t := range f.tickets {
+		if flt.RequesterID == nil || t.RequesterID == *flt.RequesterID {
+			out = append(out, t)
+		}
+	}
+	return out, int64(len(out)), nil
+}
+
+func (f *fakeBorrowing) TicketCounts(context.Context) (int64, int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var w, a int64
+	for _, t := range f.tickets {
+		switch t.State {
+		case domain.TicketWaiting:
+			w++
+		case domain.TicketApproved:
+			a++
+		}
+	}
+	return w, a, nil
+}
+
+func (f *fakeBorrowing) set(id uuid.UUID, version int32, from []domain.TicketState, apply func(*domain.BorrowTicket)) (domain.BorrowTicket, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, ok := f.tickets[id]
+	if !ok {
+		return domain.BorrowTicket{}, domain.ErrTicketNotFound
+	}
+	if t.Version != version {
+		return domain.BorrowTicket{}, domain.ErrTicketChanged
+	}
+	if !slices.Contains(from, t.State) {
+		return domain.BorrowTicket{}, domain.ErrTicketState
+	}
+	apply(&t)
+	t.Version++
+	f.tickets[id] = t
+	return t, nil
+}
+
+func (f *fakeBorrowing) Approve(_ context.Context, id, assetID uuid.UUID, version int32) (domain.BorrowTicket, error) {
+	return f.set(id, version, []domain.TicketState{domain.TicketWaiting}, func(t *domain.BorrowTicket) {
+		t.State, t.AssetID = domain.TicketApproved, &assetID
+	})
+}
+
+func (f *fakeBorrowing) Reject(_ context.Context, id uuid.UUID, reason string, version int32) (domain.BorrowTicket, error) {
+	return f.set(id, version, []domain.TicketState{domain.TicketWaiting}, func(t *domain.BorrowTicket) {
+		t.State, t.Reason = domain.TicketRejected, reason
+	})
+}
+
+func (f *fakeBorrowing) Cancel(_ context.Context, id uuid.UUID, reason string, _ bool, version int32) (domain.BorrowTicket, error) {
+	return f.set(id, version, []domain.TicketState{domain.TicketWaiting, domain.TicketApproved}, func(t *domain.BorrowTicket) {
+		t.State, t.Reason = domain.TicketCancelled, reason
+	})
+}
+
+func (f *fakeBorrowing) HandOver(_ context.Context, id uuid.UUID, startedOn time.Time, version int32) (domain.BorrowTicket, domain.Loan, error) {
+	t, err := f.set(id, version, []domain.TicketState{domain.TicketApproved}, func(t *domain.BorrowTicket) {
+		t.State = domain.TicketHandedOver
+	})
+	if err != nil {
+		return t, domain.Loan{}, err
+	}
+	f.mu.Lock()
+	f.handOvers++
+	f.mu.Unlock()
+	return t, domain.Loan{ID: uuid.New(), AssetID: *t.AssetID, BorrowerID: t.RequesterID, StartedOn: startedOn}, nil
+}
+
+func (f *fakeBorrowing) Lend(_ context.Context, assetID, borrowerID uuid.UUID, startedOn time.Time, returnBy *time.Time, _ int32) (domain.Loan, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lends++
+	return domain.Loan{ID: uuid.New(), AssetID: assetID, BorrowerID: borrowerID, StartedOn: startedOn, ReturnBy: returnBy}, nil
+}
+
+func (f *fakeBorrowing) ActiveLoan(context.Context, uuid.UUID) (*domain.Loan, error) { return nil, nil }
+
+func (f *fakeBorrowing) ApprovedTicketFor(context.Context, uuid.UUID) (*domain.BorrowTicket, error) {
+	return nil, nil
+}
+
+func (f *fakeBorrowing) GetLoan(context.Context, uuid.UUID) (domain.Loan, error) {
+	return domain.Loan{}, domain.ErrLoanNotFound
+}
+
+func (f *fakeBorrowing) ListActiveLoans(context.Context, time.Time, int, int) ([]domain.Loan, int64, error) {
+	return nil, 0, nil
+}
+
+func (f *fakeBorrowing) QueueOverdueEmails(_ context.Context, today time.Time, _ int) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.overdueOn = append(f.overdueOn, today)
+	return 0, nil
+}
+
+// borrowAccounts: như fakeAccounts nhưng đánh dấu được account bị khoá
+type borrowAccounts struct{ inactive map[uuid.UUID]bool }
+
+func (a borrowAccounts) GetAccount(_ context.Context, id uuid.UUID) (idcontract.Account, error) {
+	return idcontract.Account{ID: id, Name: "Account " + id.String()[:8], Email: id.String()[:8] + "@storeit.test", Active: !a.inactive[id]}, nil
+}
+
+func (a borrowAccounts) GetAccounts(ctx context.Context, ids []uuid.UUID) ([]idcontract.Account, error) {
+	out := make([]idcontract.Account, len(ids))
+	for i, id := range ids {
+		out[i], _ = a.GetAccount(ctx, id)
+	}
+	return out, nil
+}
+
+func (borrowAccounts) SearchAccounts(context.Context, string, int) ([]idcontract.Account, error) {
 	return nil, nil
 }

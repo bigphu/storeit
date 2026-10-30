@@ -52,7 +52,7 @@ func newEnv(t *testing.T) env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	invm, err := inventory.New(inventory.Deps{Pool: pool, Outbox: outbox, Accounts: idm.AccountReader()})
+	invm, err := inventory.New(inventory.Deps{Pool: pool, Outbox: outbox, Jobs: jobs.NewRiver(client), Accounts: idm.AccountReader()})
 	if err != nil {
 		t.Fatal(err)
 	}

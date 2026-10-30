@@ -1,0 +1,154 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+
+	"storeit/internal/inventory/domain"
+	"storeit/internal/platform/auth"
+	"storeit/internal/platform/errs"
+)
+
+var hcm = func() *time.Location {
+	loc, err := time.LoadLocation("Asia/Ho_Chi_Minh")
+	if err != nil {
+		panic(err)
+	}
+	return loc
+}()
+
+type borrowEnv struct {
+	*env
+	borrowing *fakeBorrowing
+	accounts  borrowAccounts
+	typeID    uuid.UUID
+}
+
+// newBorrowEnv: service với giờ cố định now, múi giờ Hồ Chí Minh, một loại cho mượn được
+func newBorrowEnv(t *testing.T, now time.Time) *borrowEnv {
+	t.Helper()
+	e := &env{types: newFakeTypes(), statuses: newFakeStatuses(), assets: newFakeAssets(), profiles: newFakeProfiles()}
+	b := &borrowEnv{env: e, borrowing: newFakeBorrowing(), accounts: borrowAccounts{inactive: map[uuid.UUID]bool{}}}
+	e.svc = New(Deps{
+		Types: e.types, Statuses: e.statuses, Assets: e.assets, Profiles: e.profiles, Accounts: b.accounts,
+		Borrowing: b.borrowing, Location: hcm, Now: func() time.Time { return now },
+	})
+	ty, err := e.svc.CreateAssetType(manager, domain.NewAssetType{Code: "PROJ", Name: "Projector", CanBorrow: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.typeID = ty.ID
+	return b
+}
+
+// asAccount: actor là account id với các quyền perms
+func asAccount(id uuid.UUID, perms ...string) context.Context {
+	return auth.WithActor(context.Background(), auth.Actor{AccountID: id, Permissions: perms})
+}
+
+func fieldName(t *testing.T, err error, want error) string {
+	t.Helper()
+	var e *errs.Error
+	if !errors.Is(err, want) || !errors.As(err, &e) || len(e.Fields()) == 0 {
+		t.Fatalf("err = %v, want %v with a field", err, want)
+	}
+	return e.Fields()[0].Field
+}
+
+func day(s string) time.Time {
+	d, _ := time.Parse(time.DateOnly, s)
+	return d
+}
+
+// 00:30 ở Việt Nam là 17:30 UTC hôm trước: "hôm nay" là ngày Việt Nam
+func TestService_BusinessDay(t *testing.T) {
+	now := time.Date(2026, 10, 29, 17, 30, 0, 0, time.UTC)
+	b := newBorrowEnv(t, now)
+	if got := b.svc.today(); !got.Equal(day("2026-10-30")) {
+		t.Fatalf("today() = %v, want 2026-10-30", got)
+	}
+	emp := asAccount(uuid.New(), domain.PermBorrowRequest)
+	if _, err := b.svc.CreateTicket(emp, TicketInput{TypeID: b.typeID, NeededFrom: day("2026-10-30")}); err != nil {
+		t.Errorf("needed from the Vietnamese today: %v", err)
+	}
+	_, err := b.svc.CreateTicket(emp, TicketInput{TypeID: b.typeID, NeededFrom: day("2026-10-29")})
+	if f := fieldName(t, err, domain.ErrInvalidTicket); f != "needed_from" {
+		t.Errorf("field = %q, want needed_from", f)
+	}
+}
+
+// Account người gửi bị khoá giữa lúc duyệt và lúc giao: không giao, giữ nguyên chỗ
+func TestBorrowing_HandOverDisabledRequester(t *testing.T) {
+	b := newBorrowEnv(t, time.Date(2026, 10, 30, 3, 0, 0, 0, time.UTC))
+	requester := uuid.New()
+	tk, err := b.svc.CreateTicket(asAccount(requester, domain.PermBorrowRequest), TicketInput{TypeID: b.typeID, NeededFrom: day("2026-10-30")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ap, err := b.borrowing.Approve(context.Background(), tk.ID, uuid.New(), tk.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.accounts.inactive[requester] = true
+	officer := asAccount(uuid.New(), domain.PermBorrowManage)
+	_, err = b.svc.HandOverTicket(officer, tk.ID, ap.Version)
+	if f := fieldName(t, err, domain.ErrInvalidTicket); f != "requester" {
+		t.Errorf("field = %q, want requester", f)
+	}
+	if b.borrowing.handOvers != 0 {
+		t.Errorf("repository HandOver called %d times, want 0", b.borrowing.handOvers)
+	}
+}
+
+func TestBorrowingPermissions(t *testing.T) {
+	b := newBorrowEnv(t, time.Date(2026, 10, 30, 3, 0, 0, 0, time.UTC))
+	in := TicketInput{TypeID: b.typeID, NeededFrom: day("2026-10-30")}
+
+	if _, err := b.svc.CreateTicket(as(domain.PermAssetRead), in); status(err) != 403 {
+		t.Errorf("create without borrow.request = %v, want 403", err)
+	}
+	alice, bob := uuid.New(), uuid.New()
+	aliceCtx, bobCtx := asAccount(alice, domain.PermBorrowRequest), asAccount(bob, domain.PermBorrowRequest)
+	tk, err := b.svc.CreateTicket(aliceCtx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tk.RequesterID != alice {
+		t.Errorf("requester = %v, want the actor", tk.RequesterID)
+	}
+	if _, err := b.svc.GetTicket(bobCtx, tk.ID); !errors.Is(err, domain.ErrTicketNotFound) {
+		t.Errorf("someone else's ticket: %v, want ErrTicketNotFound", err)
+	}
+	if _, _, err := b.svc.ListTickets(bobCtx, domain.TicketFilter{}, false); err != nil {
+		t.Fatal(err)
+	}
+	if f := b.borrowing.lastFilter.RequesterID; f == nil || *f != bob {
+		t.Errorf("list without manage: requester filter = %v, want forced to the actor", f)
+	}
+	if _, err := b.svc.ApproveTicket(aliceCtx, tk.ID, uuid.New(), tk.Version); status(err) != 403 {
+		t.Errorf("approve without borrow.manage = %v, want 403", err)
+	}
+	// Người gửi huỷ được phiếu của mình kể cả đã duyệt
+	ap, err := b.borrowing.Approve(context.Background(), tk.ID, uuid.New(), tk.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.svc.CancelTicket(bobCtx, tk.ID, "", ap.Version); !errors.Is(err, domain.ErrTicketNotFound) {
+		t.Errorf("cancel someone else's ticket: %v, want ErrTicketNotFound", err)
+	}
+	if got, err := b.svc.CancelTicket(aliceCtx, tk.ID, "", ap.Version); err != nil || got.State != domain.TicketCancelled {
+		t.Errorf("cancel own approved ticket = %+v, %v", got, err)
+	}
+	// Người quản lý không huỷ được phiếu đang chờ của người khác (họ từ chối)
+	w, err := b.svc.CreateTicket(aliceCtx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.svc.CancelTicket(asAccount(uuid.New(), domain.PermBorrowManage), w.ID, "", w.Version); !errors.Is(err, domain.ErrTicketState) {
+		t.Errorf("manager cancels a waiting ticket: %v, want ErrTicketState", err)
+	}
+}

@@ -513,13 +513,13 @@ func ticketSort(s string) string {
 	return "-number"
 }
 
-// pageOf: trang từ 1, cỡ trang 1..100 (mặc định 25)
+// pageOf: trang từ 1, cỡ trang 1..200 (mặc định 50), như tham số Page/PageSize chung
 func pageOf(page, size int) (int, int) {
 	if page < 1 {
 		page = 1
 	}
-	if size < 1 || size > 100 {
-		size = 25
+	if size < 1 || size > 200 {
+		size = 50
 	}
 	return page, size
 }

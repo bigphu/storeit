@@ -86,6 +86,7 @@ func toAPIAsset(v service.AssetView) api.AssetDetail {
 		by := toAPIReplacementLink(*v.ReplacedBy)
 		out.ReplacedBy = &by
 	}
+	out.Borrowing = toAPIBorrowing(v.Borrowing)
 	return out
 }
 
