@@ -31,6 +31,8 @@ export interface AssetListState {
   statusId?: string
   statusKind?: StatusKind
   includeRetired: boolean
+  // "Borrowable now" (US-10): loại cho mượn được và status thuộc kind available
+  borrowable?: boolean
   filters: AttrFilterRow[]
   fields: FieldFilterRow[]
   // giá trị sort của API: "name", "-updated_at", "attributes.ram_gb"...
@@ -83,6 +85,7 @@ export function parseAssetQuery(q: LocationQuery): AssetListState {
     statusId: queryString(q.status_id),
     statusKind: statusKinds.includes(kind as StatusKind) ? (kind as StatusKind) : undefined,
     includeRetired: queryString(q.include_retired) === 'true',
+    borrowable: queryString(q.borrowable) === 'true' || undefined,
     filters: attr.flatMap((a) => (typeof a === 'string' ? (parseFilter(a) ?? []) : [])),
     fields: field.flatMap((f) => (typeof f === 'string' ? (parseField(f) ?? []) : [])),
     sort: queryString(q.sort),
@@ -99,6 +102,7 @@ export function serializeAssetQuery(s: AssetListState): LocationQueryRaw {
   if (s.statusId) out.status_id = s.statusId
   if (s.statusKind) out.status_kind = s.statusKind
   if (s.includeRetired) out.include_retired = 'true'
+  if (s.borrowable) out.borrowable = 'true'
   if (s.filters.length) out.attr = s.filters.map(filterString)
   if (s.fields.length) out.field = s.fields.map(fieldString)
   if (s.sort) out.sort = s.sort
@@ -117,6 +121,7 @@ export function toApiParams(s: AssetListState, pageSize: number) {
     status_id: s.statusId,
     status_kind: s.statusKind,
     include_retired: s.includeRetired,
+    borrowable: s.borrowable || undefined,
     attr: filters.length ? filters : undefined,
     field: s.fields.length ? s.fields.map(fieldString) : undefined,
     // created_at/updated_at so theo ngày của múi giờ người dùng

@@ -27,6 +27,13 @@ SET retired_at = now(), retired_reason = sqlc.narg('reason'), status_id = @statu
 WHERE id = @id
 RETURNING *;
 
+-- Đổi status do việc mượn (giữ chỗ, giao, huỷ): không qua UpdateAsset, không event asset_updated
+-- name: SetAssetStatusQuiet :one
+UPDATE inventory.assets
+SET status_id = @status_id, version = version + 1, updated_at = now()
+WHERE id = @id
+RETURNING *;
+
 -- name: RestoreAsset :one
 UPDATE inventory.assets
 SET retired_at = NULL, retired_reason = NULL, status_id = @status_id,
@@ -75,6 +82,10 @@ WHERE (sqlc.narg('q')::text IS NULL
   AND (sqlc.narg('location_id')::uuid IS NULL OR a.location_id = sqlc.narg('location_id')::uuid)
   AND (sqlc.narg('holder_member_id')::uuid IS NULL OR a.holder_member_id = sqlc.narg('holder_member_id')::uuid)
   AND (@include_retired::boolean OR a.retired_at IS NULL)
+  -- "Borrowable now" (US-10): loại cho mượn được, chưa archive, status thuộc kind available
+  AND (NOT @borrowable::boolean OR (s.kind = 'available' AND EXISTS (
+        SELECT 1 FROM inventory.asset_types bt
+        WHERE bt.id = a.asset_type_id AND bt.can_borrow AND bt.archived_at IS NULL)))
   AND (sqlc.narg('ids')::uuid[] IS NULL OR a.id = ANY(sqlc.narg('ids')::uuid[]))
   AND NOT EXISTS (
     -- mọi điều kiện i (f_attrs[i], f_ops[i], f_vals[i]) phải có giá trị khớp; giá trị đã kiểm
@@ -171,6 +182,10 @@ WHERE (sqlc.narg('q')::text IS NULL
   AND (sqlc.narg('location_id')::uuid IS NULL OR a.location_id = sqlc.narg('location_id')::uuid)
   AND (sqlc.narg('holder_member_id')::uuid IS NULL OR a.holder_member_id = sqlc.narg('holder_member_id')::uuid)
   AND (@include_retired::boolean OR a.retired_at IS NULL)
+  -- "Borrowable now" (US-10): loại cho mượn được, chưa archive, status thuộc kind available
+  AND (NOT @borrowable::boolean OR (s.kind = 'available' AND EXISTS (
+        SELECT 1 FROM inventory.asset_types bt
+        WHERE bt.id = a.asset_type_id AND bt.can_borrow AND bt.archived_at IS NULL)))
   AND (sqlc.narg('ids')::uuid[] IS NULL OR a.id = ANY(sqlc.narg('ids')::uuid[]))
   AND NOT EXISTS (
     -- mọi điều kiện i (f_attrs[i], f_ops[i], f_vals[i]) phải có giá trị khớp; giá trị đã kiểm

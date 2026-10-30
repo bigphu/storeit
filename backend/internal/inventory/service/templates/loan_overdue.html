@@ -1,0 +1,11 @@
+{{define "loan_overdue.html"}}{{template "email-top" .}}
+<h1 style="margin:0 0 16px;font-size:24px;line-height:1.25;font-weight:800;color:#14201c">{{.Tag}} is overdue</h1>
+<p style="margin:0 0 12px">Hello {{.Name}},</p>
+<p style="margin:0 0 12px">Please return {{.Tag}} · {{.AssetName}} to the inventory team. It was due back on {{.Due}}.</p>
+<div style="height:12px"></div>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px"><tr>
+<td style="background:#059669;border-radius:8px"><a href="{{.Link}}" style="display:inline-block;padding:12px 22px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px">See your tickets</a></td>
+</tr></table>
+{{template "email-link" .}}
+You're receiving this because you borrow assets through StoreIt.
+{{template "email-end" .}}{{end}}

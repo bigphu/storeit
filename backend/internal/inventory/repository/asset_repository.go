@@ -107,7 +107,7 @@ func (r *AssetRepository) page(ctx context.Context, q *db.Queries, f domain.Asse
 	args := listArgs(f)
 	rows, err := q.ListAssets(ctx, db.ListAssetsParams{
 		Q: args.q, TypeID: f.TypeID, StatusID: f.StatusID, StatusKind: args.kind, LocationID: f.LocationID,
-		HolderMemberID: f.HolderMemberID, IncludeRetired: f.IncludeRetired, Ids: f.IDs,
+		HolderMemberID: f.HolderMemberID, IncludeRetired: f.IncludeRetired, Borrowable: f.Borrowable, Ids: f.IDs,
 		FAttrs: args.fAttrs, FOps: args.fOps, FVals: args.fVals,
 		BFields: args.bFields, BOps: args.bOps, BVals: args.bVals,
 		SortAttr: args.sortAttr, Sort: args.sort, Lim: f.Limit, Off: f.Offset,
@@ -139,7 +139,7 @@ func (r *AssetRepository) count(ctx context.Context, q *db.Queries, f domain.Ass
 	args := listArgs(f)
 	total, err := q.CountAssets(ctx, db.CountAssetsParams{
 		Q: args.q, TypeID: f.TypeID, StatusID: f.StatusID, StatusKind: args.kind, LocationID: f.LocationID,
-		HolderMemberID: f.HolderMemberID, IncludeRetired: f.IncludeRetired, Ids: f.IDs,
+		HolderMemberID: f.HolderMemberID, IncludeRetired: f.IncludeRetired, Borrowable: f.Borrowable, Ids: f.IDs,
 		FAttrs: args.fAttrs, FOps: args.fOps, FVals: args.fVals,
 		BFields: args.bFields, BOps: args.bOps, BVals: args.bVals,
 	})
@@ -280,6 +280,10 @@ func (r *AssetRepository) Replace(ctx context.Context, id uuid.UUID, f domain.As
 		if err != nil {
 			return err
 		}
+		// Reserved / On loan: status và loại do việc mượn giữ, chỉ sửa được trường khác
+		if domain.IsBorrowingStatus(cur.StatusID) && (f.StatusID != cur.StatusID || f.TypeID != cur.TypeID) {
+			return domain.ErrAssetInBorrowing
+		}
 		oldValues, err := loadValues(ctx, q, id)
 		if err != nil {
 			return err
@@ -318,13 +322,16 @@ func (r *AssetRepository) Retire(ctx context.Context, id uuid.UUID, reason strin
 	var out domain.Asset
 	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
 		q := r.q.WithTx(tx)
-		if _, err := lockAsset(ctx, q, id, version); err != nil {
+		cur, err := lockAsset(ctx, q, id, version)
+		if err != nil {
 			return err
+		}
+		if domain.IsBorrowingStatus(cur.StatusID) {
+			return domain.ErrAssetInBorrowing
 		}
 		if _, err := q.RetireAsset(ctx, db.RetireAssetParams{ID: id, Reason: nilIfEmpty(reason), StatusID: retiredStatus}); err != nil {
 			return fmt.Errorf("inventory: retire asset: %w", err)
 		}
-		var err error
 		if out, err = loadAsset(ctx, q, id); err != nil {
 			return err
 		}

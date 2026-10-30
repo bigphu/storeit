@@ -36,13 +36,12 @@ type statusSpec struct {
 
 const (
 	repairStatus = "Đang sửa chữa"
-	loanStatus   = "Cho mượn"
 	retireReason = "Hỏng, đã thanh lý"
 )
 
+// Đang cho mượn dùng status hệ thống On loan (US-10), do việc mượn đặt
 var statuses = []statusSpec{
 	{repairStatus, domain.KindUnavailable},
-	{loanStatus, domain.KindInUse},
 }
 
 // attrSpec: Gen trả string (text, ngày YYYY-MM-DD), float64, bool, hoặc NHÃN
@@ -58,10 +57,12 @@ type attrSpec struct {
 
 type typeSpec struct {
 	Code, Name, Description string
-	Prefix                  string // tag: <Prefix>-0001
-	Count                   int
-	Models                  []string
-	Attrs                   []attrSpec
+	// Borrow: bật "Can be borrowed" (US-10)
+	Borrow bool
+	Prefix string // tag: <Prefix>-0001
+	Count  int
+	Models []string
+	Attrs  []attrSpec
 }
 
 // Bộ sinh giá trị
@@ -104,7 +105,7 @@ var seedDay = time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC)
 
 var types = []typeSpec{
 	{
-		Code: "LAPTOP", Name: "Laptop", Description: "Máy tính xách tay cấp cho nhân viên", Prefix: "LAP", Count: 90,
+		Code: "LAPTOP", Borrow: true, Name: "Laptop", Description: "Máy tính xách tay cấp cho nhân viên", Prefix: "LAP", Count: 90,
 		Models: []string{"ThinkPad T14 Gen 3", "ThinkPad X1 Carbon Gen 11", "Dell Latitude 5440", "MacBook Air M2", "MacBook Pro 14 M3", "HP EliteBook 840 G10", "ASUS ExpertBook B9"},
 		Attrs: []attrSpec{
 			{Key: "cpu", Label: "CPU", Type: domain.TypeText, Required: true, Gen: pick[any]("Intel Core i5-1335U", "Intel Core i7-1365U", "Apple M2", "Apple M3 Pro", "AMD Ryzen 7 7840U")},
@@ -115,7 +116,7 @@ var types = []typeSpec{
 		},
 	},
 	{
-		Code: "MONITOR", Name: "Monitor", Description: "Màn hình rời", Prefix: "MON", Count: 60,
+		Code: "MONITOR", Borrow: true, Name: "Monitor", Description: "Màn hình rời", Prefix: "MON", Count: 60,
 		Models: []string{"Dell U2723QE", "Dell P2422H", "LG 27UL850", "Samsung ViewFinity S8", "ASUS ProArt PA278QV"},
 		Attrs: []attrSpec{
 			{Key: "size_in", Label: "Size", Type: domain.TypeNumber, Unit: "inch", Required: true, Gen: num(24, 27, 32, 34)},
@@ -124,7 +125,7 @@ var types = []typeSpec{
 		},
 	},
 	{
-		Code: "PHONE", Name: "Điện thoại", Description: "Điện thoại công ty", Prefix: "PHN", Count: 40,
+		Code: "PHONE", Borrow: true, Name: "Điện thoại", Description: "Điện thoại công ty", Prefix: "PHN", Count: 40,
 		Models: []string{"iPhone 14", "iPhone 15", "Samsung Galaxy A54", "Samsung Galaxy S23", "Xiaomi Redmi Note 13"},
 		Attrs: []attrSpec{
 			{Key: "imei", Label: "IMEI", Type: domain.TypeText, Required: true, Gen: serial("35", 13)},
@@ -180,7 +181,7 @@ var types = []typeSpec{
 		},
 	},
 	{
-		Code: "PROJECTOR", Name: "Máy chiếu", Description: "Máy chiếu phòng họp", Prefix: "PRJ", Count: 10,
+		Code: "PROJECTOR", Borrow: true, Name: "Máy chiếu", Description: "Máy chiếu phòng họp", Prefix: "PRJ", Count: 10,
 		Models: []string{"Epson EB-X51", "BenQ MW560", "ViewSonic PA503W"},
 		Attrs: []attrSpec{
 			{Key: "lumens", Label: "Brightness", Type: domain.TypeNumber, Unit: "lm", Gen: num(3600, 3800, 4000)},

@@ -46,20 +46,26 @@ func (e ActivityRelatedRole) Valid() bool {
 
 // Defines values for AssetActivityEntryKind.
 const (
-	AssetActivityEntryKindCreated           AssetActivityEntryKind = "created"
-	AssetActivityEntryKindOther             AssetActivityEntryKind = "other"
-	AssetActivityEntryKindReplaced          AssetActivityEntryKind = "replaced"
-	AssetActivityEntryKindReplacementUndone AssetActivityEntryKind = "replacement_undone"
-	AssetActivityEntryKindReplaces          AssetActivityEntryKind = "replaces"
-	AssetActivityEntryKindRestored          AssetActivityEntryKind = "restored"
-	AssetActivityEntryKindRetired           AssetActivityEntryKind = "retired"
-	AssetActivityEntryKindUpdated           AssetActivityEntryKind = "updated"
+	AssetActivityEntryKindCreated              AssetActivityEntryKind = "created"
+	AssetActivityEntryKindLent                 AssetActivityEntryKind = "lent"
+	AssetActivityEntryKindOther                AssetActivityEntryKind = "other"
+	AssetActivityEntryKindReplaced             AssetActivityEntryKind = "replaced"
+	AssetActivityEntryKindReplacementUndone    AssetActivityEntryKind = "replacement_undone"
+	AssetActivityEntryKindReplaces             AssetActivityEntryKind = "replaces"
+	AssetActivityEntryKindReservationCancelled AssetActivityEntryKind = "reservation_cancelled"
+	AssetActivityEntryKindReserved             AssetActivityEntryKind = "reserved"
+	AssetActivityEntryKindRestored             AssetActivityEntryKind = "restored"
+	AssetActivityEntryKindRetired              AssetActivityEntryKind = "retired"
+	AssetActivityEntryKindReturned             AssetActivityEntryKind = "returned"
+	AssetActivityEntryKindUpdated              AssetActivityEntryKind = "updated"
 )
 
 // Valid indicates whether the value is a known member of the AssetActivityEntryKind enum.
 func (e AssetActivityEntryKind) Valid() bool {
 	switch e {
 	case AssetActivityEntryKindCreated:
+		return true
+	case AssetActivityEntryKindLent:
 		return true
 	case AssetActivityEntryKindOther:
 		return true
@@ -69,9 +75,15 @@ func (e AssetActivityEntryKind) Valid() bool {
 		return true
 	case AssetActivityEntryKindReplaces:
 		return true
+	case AssetActivityEntryKindReservationCancelled:
+		return true
+	case AssetActivityEntryKindReserved:
+		return true
 	case AssetActivityEntryKindRestored:
 		return true
 	case AssetActivityEntryKindRetired:
+		return true
+	case AssetActivityEntryKindReturned:
 		return true
 	case AssetActivityEntryKindUpdated:
 		return true
@@ -80,27 +92,45 @@ func (e AssetActivityEntryKind) Valid() bool {
 	}
 }
 
+// Defines values for AssetBorrowingState.
+const (
+	AssetBorrowingStateOnLoan   AssetBorrowingState = "on_loan"
+	AssetBorrowingStateReserved AssetBorrowingState = "reserved"
+)
+
+// Valid indicates whether the value is a known member of the AssetBorrowingState enum.
+func (e AssetBorrowingState) Valid() bool {
+	switch e {
+	case AssetBorrowingStateOnLoan:
+		return true
+	case AssetBorrowingStateReserved:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DataType.
 const (
-	Boolean DataType = "boolean"
-	Date    DataType = "date"
-	Number  DataType = "number"
-	Select  DataType = "select"
-	Text    DataType = "text"
+	DataTypeBoolean DataType = "boolean"
+	DataTypeDate    DataType = "date"
+	DataTypeNumber  DataType = "number"
+	DataTypeSelect  DataType = "select"
+	DataTypeText    DataType = "text"
 )
 
 // Valid indicates whether the value is a known member of the DataType enum.
 func (e DataType) Valid() bool {
 	switch e {
-	case Boolean:
+	case DataTypeBoolean:
 		return true
-	case Date:
+	case DataTypeDate:
 		return true
-	case Number:
+	case DataTypeNumber:
 		return true
-	case Select:
+	case DataTypeSelect:
 		return true
-	case Text:
+	case DataTypeText:
 		return true
 	default:
 		return false
@@ -263,6 +293,81 @@ func (e StatusKind) Valid() bool {
 	}
 }
 
+// Defines values for TicketState.
+const (
+	Approved   TicketState = "approved"
+	Cancelled  TicketState = "cancelled"
+	HandedOver TicketState = "handed_over"
+	Rejected   TicketState = "rejected"
+	Waiting    TicketState = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the TicketState enum.
+func (e TicketState) Valid() bool {
+	switch e {
+	case Approved:
+		return true
+	case Cancelled:
+		return true
+	case HandedOver:
+		return true
+	case Rejected:
+		return true
+	case Waiting:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListBorrowTicketsParamsSort.
+const (
+	ListBorrowTicketsParamsSortMinusNeededFrom ListBorrowTicketsParamsSort = "-needed_from"
+	ListBorrowTicketsParamsSortMinusNumber     ListBorrowTicketsParamsSort = "-number"
+	ListBorrowTicketsParamsSortNeededFrom      ListBorrowTicketsParamsSort = "needed_from"
+	ListBorrowTicketsParamsSortNumber          ListBorrowTicketsParamsSort = "number"
+)
+
+// Valid indicates whether the value is a known member of the ListBorrowTicketsParamsSort enum.
+func (e ListBorrowTicketsParamsSort) Valid() bool {
+	switch e {
+	case ListBorrowTicketsParamsSortMinusNeededFrom:
+		return true
+	case ListBorrowTicketsParamsSortMinusNumber:
+		return true
+	case ListBorrowTicketsParamsSortNeededFrom:
+		return true
+	case ListBorrowTicketsParamsSortNumber:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListLoansParamsSort.
+const (
+	MinusReturnBy  ListLoansParamsSort = "-return_by"
+	MinusStartedOn ListLoansParamsSort = "-started_on"
+	ReturnBy       ListLoansParamsSort = "return_by"
+	StartedOn      ListLoansParamsSort = "started_on"
+)
+
+// Valid indicates whether the value is a known member of the ListLoansParamsSort enum.
+func (e ListLoansParamsSort) Valid() bool {
+	switch e {
+	case MinusReturnBy:
+		return true
+	case MinusStartedOn:
+		return true
+	case ReturnBy:
+		return true
+	case StartedOn:
+		return true
+	default:
+		return false
+	}
+}
+
 // ActivityActor defines model for ActivityActor.
 type ActivityActor struct {
 	Id externalRef0.ID `json:"id"`
@@ -291,6 +396,12 @@ type ActivityRelated struct {
 // ActivityRelatedRole Only on replacement_undone: this asset's role
 type ActivityRelatedRole string
 
+// ApproveTicketRequest defines model for ApproveTicketRequest.
+type ApproveTicketRequest struct {
+	AssetId externalRef0.ID `json:"asset_id"`
+	Version int32           `json:"version"`
+}
+
 // AssetActivityEntry defines model for AssetActivityEntry.
 type AssetActivityEntry struct {
 	// Actor null when the system did it
@@ -300,11 +411,21 @@ type AssetActivityEntry struct {
 	Kind       AssetActivityEntryKind `json:"kind"`
 	OccurredAt time.Time              `json:"occurred_at"`
 
+	// Person On reserved, reservation_cancelled, lent and returned: who it was reserved for, lent to or taken back from
+	Person *ActivityActor `json:"person,omitempty"`
+
 	// Reason On retired and replaced, when one was given
 	Reason *string `json:"reason,omitempty"`
 
 	// Related The asset at the other end of a replacement (US-13)
-	Related *ActivityRelated `json:"related,omitempty"`
+	Related  *ActivityRelated    `json:"related,omitempty"`
+	ReturnBy *openapi_types.Date `json:"return_by,omitempty"`
+
+	// StatusName On returned: the status it went to, when not Available
+	StatusName *string `json:"status_name,omitempty"`
+
+	// TicketNumber Borrow ticket number; 0 for a direct loan
+	TicketNumber *int64 `json:"ticket_number,omitempty"`
 
 	// Type Raw event type
 	Type string `json:"type"`
@@ -319,12 +440,34 @@ type AssetActivityPage struct {
 	Next  *externalRef0.ID     `json:"next,omitempty"`
 }
 
+// AssetBorrowing defines model for AssetBorrowing.
+type AssetBorrowing struct {
+	Account struct {
+		Id   externalRef0.ID `json:"id"`
+		Name string          `json:"name"`
+	} `json:"account"`
+	OverdueDays int                 `json:"overdue_days"`
+	ReturnBy    *openapi_types.Date `json:"return_by,omitempty"`
+	Since       *openapi_types.Date `json:"since,omitempty"`
+	State       AssetBorrowingState `json:"state"`
+	Ticket      *struct {
+		Id     externalRef0.ID `json:"id"`
+		Number int64           `json:"number"`
+	} `json:"ticket,omitempty"`
+}
+
+// AssetBorrowingState defines model for AssetBorrowing.State.
+type AssetBorrowingState string
+
 // AssetDetail defines model for AssetDetail.
 type AssetDetail struct {
 	AssetType TypeSummary `json:"asset_type"`
 
 	// Attributes Active attributes of the asset's type in display order, with their values
-	Attributes     []AttributeValue    `json:"attributes"`
+	Attributes []AttributeValue `json:"attributes"`
+
+	// Borrowing Reserved for someone, or on loan (US-10)
+	Borrowing      *AssetBorrowing     `json:"borrowing,omitempty"`
 	CreatedAt      time.Time           `json:"created_at"`
 	Description    string              `json:"description"`
 	HolderMemberId *externalRef0.ID    `json:"holder_member_id,omitempty"`
@@ -373,6 +516,13 @@ type AssetListItem struct {
 	Version        int32               `json:"version"`
 }
 
+// AssetRef defines model for AssetRef.
+type AssetRef struct {
+	Id   externalRef0.ID `json:"id"`
+	Name string          `json:"name"`
+	Tag  string          `json:"tag"`
+}
+
 // AssetType defines model for AssetType.
 type AssetType struct {
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
@@ -384,12 +534,15 @@ type AssetType struct {
 	AttributeCount *int32 `json:"attribute_count,omitempty"`
 
 	// AttributeLabels Labels of the active attributes in display order; only with `with_counts=true`
-	AttributeLabels *[]string       `json:"attribute_labels,omitempty"`
-	Code            string          `json:"code"`
-	CreatedAt       time.Time       `json:"created_at"`
-	Description     string          `json:"description"`
-	Id              externalRef0.ID `json:"id"`
-	IsSystem        bool            `json:"is_system"`
+	AttributeLabels *[]string `json:"attribute_labels,omitempty"`
+
+	// CanBorrow "Can be borrowed": assets of this type can be lent (US-10)
+	CanBorrow   bool            `json:"can_borrow"`
+	Code        string          `json:"code"`
+	CreatedAt   time.Time       `json:"created_at"`
+	Description string          `json:"description"`
+	Id          externalRef0.ID `json:"id"`
+	IsSystem    bool            `json:"is_system"`
 
 	// KindCounts Assets not retired by the kind of their status; only with `with_counts=true`
 	KindCounts *KindCounts `json:"kind_counts,omitempty"`
@@ -412,7 +565,10 @@ type AssetTypeDetail struct {
 	AttributeLabels *[]string `json:"attribute_labels,omitempty"`
 
 	// Attributes All attributes in display order, including removed ones (removed = true)
-	Attributes  []Attribute     `json:"attributes"`
+	Attributes []Attribute `json:"attributes"`
+
+	// CanBorrow "Can be borrowed": assets of this type can be lent (US-10)
+	CanBorrow   bool            `json:"can_borrow"`
 	Code        string          `json:"code"`
 	CreatedAt   time.Time       `json:"created_at"`
 	Description string          `json:"description"`
@@ -457,6 +613,55 @@ type AttributeValue struct {
 // AttributeValues Attribute key -> value (string, number, boolean; select = option id; date = YYYY-MM-DD)
 type AttributeValues map[string]interface{}
 
+// BorrowTicket defines model for BorrowTicket.
+type BorrowTicket struct {
+	// Asset The reserved asset, once approved
+	Asset     *AssetRef `json:"asset,omitempty"`
+	AssetType struct {
+		Id   externalRef0.ID `json:"id"`
+		Name string          `json:"name"`
+	} `json:"asset_type"`
+	CancelledAt *time.Time      `json:"cancelled_at,omitempty"`
+	CreatedAt   time.Time       `json:"created_at"`
+	DecidedAt   *time.Time      `json:"decided_at,omitempty"`
+	Id          externalRef0.ID `json:"id"`
+
+	// Loan Only on GET of a handed-over ticket
+	Loan       *TicketLoan        `json:"loan,omitempty"`
+	NeededFrom openapi_types.Date `json:"needed_from"`
+	Note       string             `json:"note"`
+	Number     int64              `json:"number"`
+
+	// Reason Why it was rejected or cancelled
+	Reason    string `json:"reason"`
+	Requester Person `json:"requester"`
+
+	// Requirements Attribute conditions "<key>:<op>:<value>", as in the asset list's attr filter
+	Requirements   []string            `json:"requirements"`
+	ReturnBy       *openapi_types.Date `json:"return_by,omitempty"`
+	State          TicketState         `json:"state"`
+	SuggestedAsset *AssetRef           `json:"suggested_asset,omitempty"`
+	UpdatedAt      time.Time           `json:"updated_at"`
+	Version        int32               `json:"version"`
+}
+
+// BorrowTicketPage defines model for BorrowTicketPage.
+type BorrowTicketPage struct {
+	Items []BorrowTicket `json:"items"`
+	Total int64          `json:"total"`
+}
+
+// BorrowTicketSummary defines model for BorrowTicketSummary.
+type BorrowTicketSummary struct {
+	Approved int64 `json:"approved"`
+	Waiting  int64 `json:"waiting"`
+}
+
+// BorrowerList defines model for BorrowerList.
+type BorrowerList struct {
+	Items []Person `json:"items"`
+}
+
 // BulkFailure defines model for BulkFailure.
 type BulkFailure struct {
 	Id      externalRef0.ID      `json:"id"`
@@ -492,6 +697,17 @@ type BulkStatusRequest struct {
 	StatusId externalRef0.ID `json:"status_id"`
 }
 
+// BusinessDay defines model for BusinessDay.
+type BusinessDay struct {
+	Today openapi_types.Date `json:"today"`
+}
+
+// CancelTicketRequest defines model for CancelTicketRequest.
+type CancelTicketRequest struct {
+	Reason  *string `json:"reason,omitempty"`
+	Version int32   `json:"version"`
+}
+
 // CreateAssetRequest defines model for CreateAssetRequest.
 type CreateAssetRequest struct {
 	AssetTypeId externalRef0.ID `json:"asset_type_id"`
@@ -509,10 +725,23 @@ type CreateAssetRequest struct {
 
 // CreateAssetTypeRequest defines model for CreateAssetTypeRequest.
 type CreateAssetTypeRequest struct {
-	Attributes  *[]NewAttribute `json:"attributes,omitempty"`
-	Code        string          `json:"code"`
-	Description *string         `json:"description,omitempty"`
-	Name        string          `json:"name"`
+	Attributes *[]NewAttribute `json:"attributes,omitempty"`
+
+	// CanBorrow Default false
+	CanBorrow   *bool   `json:"can_borrow,omitempty"`
+	Code        string  `json:"code"`
+	Description *string `json:"description,omitempty"`
+	Name        string  `json:"name"`
+}
+
+// CreateBorrowTicketRequest defines model for CreateBorrowTicketRequest.
+type CreateBorrowTicketRequest struct {
+	AssetTypeId      externalRef0.ID     `json:"asset_type_id"`
+	NeededFrom       openapi_types.Date  `json:"needed_from"`
+	Note             *string             `json:"note,omitempty"`
+	Requirements     *[]string           `json:"requirements,omitempty"`
+	ReturnBy         *openapi_types.Date `json:"return_by,omitempty"`
+	SuggestedAssetId *externalRef0.ID    `json:"suggested_asset_id,omitempty"`
 }
 
 // CreateExportProfileRequest defines model for CreateExportProfileRequest.
@@ -630,6 +859,36 @@ type KindCounts struct {
 	Unavailable int64 `json:"unavailable"`
 }
 
+// LendRequest defines model for LendRequest.
+type LendRequest struct {
+	BorrowerId externalRef0.ID     `json:"borrower_id"`
+	ReturnBy   *openapi_types.Date `json:"return_by,omitempty"`
+	Version    int32               `json:"version"`
+}
+
+// Loan defines model for Loan.
+type Loan struct {
+	Asset         AssetRef        `json:"asset"`
+	AssetTypeName string          `json:"asset_type_name"`
+	Borrower      Person          `json:"borrower"`
+	Id            externalRef0.ID `json:"id"`
+
+	// OverdueDays 0 when not overdue
+	OverdueDays int                 `json:"overdue_days"`
+	ReturnBy    *openapi_types.Date `json:"return_by,omitempty"`
+	StartedOn   openapi_types.Date  `json:"started_on"`
+	TicketId    *externalRef0.ID    `json:"ticket_id,omitempty"`
+
+	// TicketNumber 0 for a direct loan
+	TicketNumber int64 `json:"ticket_number"`
+}
+
+// LoanPage defines model for LoanPage.
+type LoanPage struct {
+	Items []Loan `json:"items"`
+	Total int64  `json:"total"`
+}
+
 // NewAttribute defines model for NewAttribute.
 type NewAttribute struct {
 	DataType   DataType  `json:"data_type"`
@@ -661,6 +920,19 @@ type OrderRequest struct {
 	Ids []externalRef0.ID `json:"ids"`
 }
 
+// Person defines model for Person.
+type Person struct {
+	Email string          `json:"email"`
+	Id    externalRef0.ID `json:"id"`
+	Name  string          `json:"name"`
+}
+
+// RejectTicketRequest defines model for RejectTicketRequest.
+type RejectTicketRequest struct {
+	Reason  string `json:"reason"`
+	Version int32  `json:"version"`
+}
+
 // ReplacementLink defines model for ReplacementLink.
 type ReplacementLink struct {
 	Id         externalRef0.ID    `json:"id"`
@@ -682,6 +954,16 @@ type ReplacementRequest struct {
 type RetireAssetRequest struct {
 	Reason  *string `json:"reason,omitempty"`
 	Version int32   `json:"version"`
+}
+
+// ReturnAssetRequest defines model for ReturnAssetRequest.
+type ReturnAssetRequest struct {
+	Note       *string            `json:"note,omitempty"`
+	ReturnedOn openapi_types.Date `json:"returned_on"`
+
+	// StatusId Status after the return; omitted means the default Available
+	StatusId *externalRef0.ID `json:"status_id,omitempty"`
+	Version  int32            `json:"version"`
 }
 
 // Status defines model for Status.
@@ -708,6 +990,16 @@ type StatusSummary struct {
 	Name string          `json:"name"`
 }
 
+// TicketLoan The loan a handed-over ticket became
+type TicketLoan struct {
+	ReturnBy   *openapi_types.Date `json:"return_by,omitempty"`
+	ReturnedOn *openapi_types.Date `json:"returned_on,omitempty"`
+	StartedOn  openapi_types.Date  `json:"started_on"`
+}
+
+// TicketState defines model for TicketState.
+type TicketState string
+
 // TypeSummary defines model for TypeSummary.
 type TypeSummary struct {
 	Code string          `json:"code"`
@@ -732,6 +1024,7 @@ type UpdateAssetRequest struct {
 
 // UpdateAssetTypeRequest defines model for UpdateAssetTypeRequest.
 type UpdateAssetTypeRequest struct {
+	CanBorrow   *bool   `json:"can_borrow,omitempty"`
 	Description *string `json:"description,omitempty"`
 	Name        *string `json:"name,omitempty"`
 	Version     int32   `json:"version"`
@@ -790,6 +1083,9 @@ type OptionID = externalRef0.ID
 // StatusID defines model for StatusID.
 type StatusID = externalRef0.ID
 
+// TicketID defines model for TicketID.
+type TicketID = externalRef0.ID
+
 // TypeID defines model for TypeID.
 type TypeID = externalRef0.ID
 
@@ -825,6 +1121,9 @@ type ListAssetsParams struct {
 	HolderMemberId *externalRef0.ID `form:"holder_member_id,omitempty" json:"holder_member_id,omitempty"`
 	IncludeRetired *bool            `form:"include_retired,omitempty" json:"include_retired,omitempty"`
 
+	// Borrowable Chỉ tài sản cho mượn được ngay (loại bật can_borrow, status thuộc kind available).
+	Borrowable *bool `form:"borrowable,omitempty" json:"borrowable,omitempty"`
+
 	// Attr Lọc theo thuộc tính tuỳ chỉnh, cần `type_id`; lặp lại để kết hợp (AND).
 	// Dạng `<key>:<op>:<value>`. Toán tử theo kiểu: text `eq` (không phân biệt
 	// hoa thường), `contains`; number và date `eq`, `gt`, `gte`, `lt`, `lte`;
@@ -859,6 +1158,40 @@ type GetAssetActivityParams struct {
 	// Limit Entries per page, default 50
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// ListBorrowTicketsParams defines parameters for ListBorrowTickets.
+type ListBorrowTicketsParams struct {
+	State *[]TicketState `form:"state,omitempty" json:"state,omitempty"`
+
+	// Mine Only my own tickets (managers see everyone's otherwise)
+	Mine *bool `form:"mine,omitempty" json:"mine,omitempty"`
+
+	// Q Requester name or email, or asset type name
+	Q        *string                      `form:"q,omitempty" json:"q,omitempty"`
+	Sort     *ListBorrowTicketsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+	Page     *externalRef0.Page           `form:"page,omitempty" json:"page,omitempty"`
+	PageSize *externalRef0.PageSize       `form:"page_size,omitempty" json:"page_size,omitempty"`
+}
+
+// ListBorrowTicketsParamsSort defines parameters for ListBorrowTickets.
+type ListBorrowTicketsParamsSort string
+
+// SearchBorrowersParams defines parameters for SearchBorrowers.
+type SearchBorrowersParams struct {
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+}
+
+// ListLoansParams defines parameters for ListLoans.
+type ListLoansParams struct {
+	// Mine Only the caller's own loans
+	Mine     *bool                  `form:"mine,omitempty" json:"mine,omitempty"`
+	Sort     *ListLoansParamsSort   `form:"sort,omitempty" json:"sort,omitempty"`
+	Page     *externalRef0.Page     `form:"page,omitempty" json:"page,omitempty"`
+	PageSize *externalRef0.PageSize `form:"page_size,omitempty" json:"page_size,omitempty"`
+}
+
+// ListLoansParamsSort defines parameters for ListLoans.
+type ListLoansParamsSort string
 
 // CreateStatusJSONRequestBody defines body for CreateStatus for application/json ContentType.
 type CreateStatusJSONRequestBody = CreateStatusRequest
@@ -908,6 +1241,9 @@ type ExportAssetsJSONRequestBody = ExportRequest
 // UpdateAssetJSONRequestBody defines body for UpdateAsset for application/json ContentType.
 type UpdateAssetJSONRequestBody = UpdateAssetRequest
 
+// LendAssetJSONRequestBody defines body for LendAsset for application/json ContentType.
+type LendAssetJSONRequestBody = LendRequest
+
 // RecordReplacementJSONRequestBody defines body for RecordReplacement for application/json ContentType.
 type RecordReplacementJSONRequestBody = ReplacementRequest
 
@@ -919,6 +1255,24 @@ type RestoreAssetJSONRequestBody = VersionRequest
 
 // RetireAssetJSONRequestBody defines body for RetireAsset for application/json ContentType.
 type RetireAssetJSONRequestBody = RetireAssetRequest
+
+// ReturnAssetJSONRequestBody defines body for ReturnAsset for application/json ContentType.
+type ReturnAssetJSONRequestBody = ReturnAssetRequest
+
+// CreateBorrowTicketJSONRequestBody defines body for CreateBorrowTicket for application/json ContentType.
+type CreateBorrowTicketJSONRequestBody = CreateBorrowTicketRequest
+
+// ApproveBorrowTicketJSONRequestBody defines body for ApproveBorrowTicket for application/json ContentType.
+type ApproveBorrowTicketJSONRequestBody = ApproveTicketRequest
+
+// CancelBorrowTicketJSONRequestBody defines body for CancelBorrowTicket for application/json ContentType.
+type CancelBorrowTicketJSONRequestBody = CancelTicketRequest
+
+// HandOverBorrowTicketJSONRequestBody defines body for HandOverBorrowTicket for application/json ContentType.
+type HandOverBorrowTicketJSONRequestBody = VersionRequest
+
+// RejectBorrowTicketJSONRequestBody defines body for RejectBorrowTicket for application/json ContentType.
+type RejectBorrowTicketJSONRequestBody = RejectTicketRequest
 
 // CreateExportProfileJSONRequestBody defines body for CreateExportProfile for application/json ContentType.
 type CreateExportProfileJSONRequestBody = CreateExportProfileRequest
@@ -1018,6 +1372,9 @@ type ServerInterface interface {
 	// GetAssetActivity Activity history of an asset, newest first (inventory.asset.read)
 	// (GET /assets/{assetID}/activity)
 	GetAssetActivity(w http.ResponseWriter, r *http.Request, assetID AssetID, params GetAssetActivityParams)
+	// LendAsset Lend an available asset directly, without a ticket (inventory.borrow.manage)
+	// (POST /assets/{assetID}/lend)
+	LendAsset(w http.ResponseWriter, r *http.Request, assetID AssetID)
 	// RecordReplacement Record that another asset replaces this one; this asset is retired (inventory.asset.manage)
 	// (POST /assets/{assetID}/replacement)
 	RecordReplacement(w http.ResponseWriter, r *http.Request, assetID AssetID)
@@ -1030,6 +1387,39 @@ type ServerInterface interface {
 	// RetireAsset Retire an asset; it keeps its tag (inventory.asset.manage)
 	// (POST /assets/{assetID}/retire)
 	RetireAsset(w http.ResponseWriter, r *http.Request, assetID AssetID)
+	// ReturnAsset Record the return of an asset on loan (inventory.borrow.manage)
+	// (POST /assets/{assetID}/return)
+	ReturnAsset(w http.ResponseWriter, r *http.Request, assetID AssetID)
+	// ListBorrowTickets Borrow tickets; without inventory.borrow.manage only your own
+	// (GET /borrow-tickets)
+	ListBorrowTickets(w http.ResponseWriter, r *http.Request, params ListBorrowTicketsParams)
+	// CreateBorrowTicket Ask to borrow an asset of a type (inventory.borrow.request)
+	// (POST /borrow-tickets)
+	CreateBorrowTicket(w http.ResponseWriter, r *http.Request)
+	// BorrowTicketSummary Tickets waiting and approved, for the sidebar (inventory.borrow.manage)
+	// (GET /borrow-tickets/summary)
+	BorrowTicketSummary(w http.ResponseWriter, r *http.Request)
+	// GetBorrowTicket One ticket; someone else's is 404 without inventory.borrow.manage
+	// (GET /borrow-tickets/{ticketID})
+	GetBorrowTicket(w http.ResponseWriter, r *http.Request, ticketID TicketID)
+	// ApproveBorrowTicket Approve a waiting ticket by reserving an available asset of its type (inventory.borrow.manage)
+	// (POST /borrow-tickets/{ticketID}/approve)
+	ApproveBorrowTicket(w http.ResponseWriter, r *http.Request, ticketID TicketID)
+	// CancelBorrowTicket Cancel your own ticket (waiting or approved), or as a manager an approved one; frees the reserved asset
+	// (POST /borrow-tickets/{ticketID}/cancel)
+	CancelBorrowTicket(w http.ResponseWriter, r *http.Request, ticketID TicketID)
+	// HandOverBorrowTicket Hand the reserved asset over; the loan starts today (inventory.borrow.manage)
+	// (POST /borrow-tickets/{ticketID}/hand-over)
+	HandOverBorrowTicket(w http.ResponseWriter, r *http.Request, ticketID TicketID)
+	// RejectBorrowTicket Reject a waiting ticket with a reason (inventory.borrow.manage)
+	// (POST /borrow-tickets/{ticketID}/reject)
+	RejectBorrowTicket(w http.ResponseWriter, r *http.Request, ticketID TicketID)
+	// SearchBorrowers Active accounts to lend to, by name or email (inventory.borrow.manage)
+	// (GET /borrowers)
+	SearchBorrowers(w http.ResponseWriter, r *http.Request, params SearchBorrowersParams)
+	// GetBusinessDay Today in the app's time zone, the day borrowing dates are checked against (inventory.borrow.request or inventory.borrow.manage)
+	// (GET /borrowing/today)
+	GetBusinessDay(w http.ResponseWriter, r *http.Request)
 	// ListExportProfiles Your export profiles and every shared one (inventory.asset.export)
 	// (GET /export-profiles)
 	ListExportProfiles(w http.ResponseWriter, r *http.Request)
@@ -1048,6 +1438,9 @@ type ServerInterface interface {
 	// RestoreExportProfile Undo deleting a profile (owner; shared ones also inventory.export_profile.manage)
 	// (POST /export-profiles/{profileID}/restore)
 	RestoreExportProfile(w http.ResponseWriter, r *http.Request, profileID externalRef0.ID)
+	// ListLoans Assets on loan now, overdue first by default (inventory.borrow.manage; mine=true needs only inventory.borrow.request)
+	// (GET /loans)
+	ListLoans(w http.ResponseWriter, r *http.Request, params ListLoansParams)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -1234,6 +1627,12 @@ func (_ Unimplemented) GetAssetActivity(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// LendAsset Lend an available asset directly, without a ticket (inventory.borrow.manage)
+// (POST /assets/{assetID}/lend)
+func (_ Unimplemented) LendAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // RecordReplacement Record that another asset replaces this one; this asset is retired (inventory.asset.manage)
 // (POST /assets/{assetID}/replacement)
 func (_ Unimplemented) RecordReplacement(w http.ResponseWriter, r *http.Request, assetID AssetID) {
@@ -1255,6 +1654,72 @@ func (_ Unimplemented) RestoreAsset(w http.ResponseWriter, r *http.Request, asse
 // RetireAsset Retire an asset; it keeps its tag (inventory.asset.manage)
 // (POST /assets/{assetID}/retire)
 func (_ Unimplemented) RetireAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ReturnAsset Record the return of an asset on loan (inventory.borrow.manage)
+// (POST /assets/{assetID}/return)
+func (_ Unimplemented) ReturnAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListBorrowTickets Borrow tickets; without inventory.borrow.manage only your own
+// (GET /borrow-tickets)
+func (_ Unimplemented) ListBorrowTickets(w http.ResponseWriter, r *http.Request, params ListBorrowTicketsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateBorrowTicket Ask to borrow an asset of a type (inventory.borrow.request)
+// (POST /borrow-tickets)
+func (_ Unimplemented) CreateBorrowTicket(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// BorrowTicketSummary Tickets waiting and approved, for the sidebar (inventory.borrow.manage)
+// (GET /borrow-tickets/summary)
+func (_ Unimplemented) BorrowTicketSummary(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetBorrowTicket One ticket; someone else's is 404 without inventory.borrow.manage
+// (GET /borrow-tickets/{ticketID})
+func (_ Unimplemented) GetBorrowTicket(w http.ResponseWriter, r *http.Request, ticketID TicketID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ApproveBorrowTicket Approve a waiting ticket by reserving an available asset of its type (inventory.borrow.manage)
+// (POST /borrow-tickets/{ticketID}/approve)
+func (_ Unimplemented) ApproveBorrowTicket(w http.ResponseWriter, r *http.Request, ticketID TicketID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CancelBorrowTicket Cancel your own ticket (waiting or approved), or as a manager an approved one; frees the reserved asset
+// (POST /borrow-tickets/{ticketID}/cancel)
+func (_ Unimplemented) CancelBorrowTicket(w http.ResponseWriter, r *http.Request, ticketID TicketID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// HandOverBorrowTicket Hand the reserved asset over; the loan starts today (inventory.borrow.manage)
+// (POST /borrow-tickets/{ticketID}/hand-over)
+func (_ Unimplemented) HandOverBorrowTicket(w http.ResponseWriter, r *http.Request, ticketID TicketID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RejectBorrowTicket Reject a waiting ticket with a reason (inventory.borrow.manage)
+// (POST /borrow-tickets/{ticketID}/reject)
+func (_ Unimplemented) RejectBorrowTicket(w http.ResponseWriter, r *http.Request, ticketID TicketID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SearchBorrowers Active accounts to lend to, by name or email (inventory.borrow.manage)
+// (GET /borrowers)
+func (_ Unimplemented) SearchBorrowers(w http.ResponseWriter, r *http.Request, params SearchBorrowersParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetBusinessDay Today in the app's time zone, the day borrowing dates are checked against (inventory.borrow.request or inventory.borrow.manage)
+// (GET /borrowing/today)
+func (_ Unimplemented) GetBusinessDay(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1291,6 +1756,12 @@ func (_ Unimplemented) UpdateExportProfile(w http.ResponseWriter, r *http.Reques
 // RestoreExportProfile Undo deleting a profile (owner; shared ones also inventory.export_profile.manage)
 // (POST /export-profiles/{profileID}/restore)
 func (_ Unimplemented) RestoreExportProfile(w http.ResponseWriter, r *http.Request, profileID externalRef0.ID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListLoans Assets on loan now, overdue first by default (inventory.borrow.manage; mine=true needs only inventory.borrow.request)
+// (GET /loans)
+func (_ Unimplemented) ListLoans(w http.ResponseWriter, r *http.Request, params ListLoansParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2078,6 +2549,19 @@ func (siw *ServerInterfaceWrapper) ListAssets(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// ------------- Optional query parameter "borrowable" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "borrowable", r.URL.Query(), &params.Borrowable, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "borrowable"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "borrowable", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "attr" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "attr", r.URL.Query(), &params.Attr, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
@@ -2330,6 +2814,32 @@ func (siw *ServerInterfaceWrapper) GetAssetActivity(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// LendAsset operation middleware
+func (siw *ServerInterfaceWrapper) LendAsset(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "assetID" -------------
+	var assetID AssetID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "assetID", chi.URLParam(r, "assetID"), &assetID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "assetID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LendAsset(w, r, assetID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RecordReplacement operation middleware
 func (siw *ServerInterfaceWrapper) RecordReplacement(w http.ResponseWriter, r *http.Request) {
 
@@ -2425,6 +2935,335 @@ func (siw *ServerInterfaceWrapper) RetireAsset(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RetireAsset(w, r, assetID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReturnAsset operation middleware
+func (siw *ServerInterfaceWrapper) ReturnAsset(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "assetID" -------------
+	var assetID AssetID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "assetID", chi.URLParam(r, "assetID"), &assetID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "assetID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReturnAsset(w, r, assetID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListBorrowTickets operation middleware
+func (siw *ServerInterfaceWrapper) ListBorrowTickets(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListBorrowTicketsParams
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "mine" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "mine", r.URL.Query(), &params.Mine, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "mine"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mine", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page_size" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page_size", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page_size"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page_size", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBorrowTickets(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateBorrowTicket operation middleware
+func (siw *ServerInterfaceWrapper) CreateBorrowTicket(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateBorrowTicket(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BorrowTicketSummary operation middleware
+func (siw *ServerInterfaceWrapper) BorrowTicketSummary(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BorrowTicketSummary(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetBorrowTicket operation middleware
+func (siw *ServerInterfaceWrapper) GetBorrowTicket(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ticketID" -------------
+	var ticketID TicketID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ticketID", chi.URLParam(r, "ticketID"), &ticketID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ticketID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBorrowTicket(w, r, ticketID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApproveBorrowTicket operation middleware
+func (siw *ServerInterfaceWrapper) ApproveBorrowTicket(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ticketID" -------------
+	var ticketID TicketID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ticketID", chi.URLParam(r, "ticketID"), &ticketID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ticketID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApproveBorrowTicket(w, r, ticketID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelBorrowTicket operation middleware
+func (siw *ServerInterfaceWrapper) CancelBorrowTicket(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ticketID" -------------
+	var ticketID TicketID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ticketID", chi.URLParam(r, "ticketID"), &ticketID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ticketID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelBorrowTicket(w, r, ticketID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// HandOverBorrowTicket operation middleware
+func (siw *ServerInterfaceWrapper) HandOverBorrowTicket(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ticketID" -------------
+	var ticketID TicketID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ticketID", chi.URLParam(r, "ticketID"), &ticketID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ticketID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.HandOverBorrowTicket(w, r, ticketID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RejectBorrowTicket operation middleware
+func (siw *ServerInterfaceWrapper) RejectBorrowTicket(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ticketID" -------------
+	var ticketID TicketID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ticketID", chi.URLParam(r, "ticketID"), &ticketID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ticketID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RejectBorrowTicket(w, r, ticketID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchBorrowers operation middleware
+func (siw *ServerInterfaceWrapper) SearchBorrowers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchBorrowersParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchBorrowers(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetBusinessDay operation middleware
+func (siw *ServerInterfaceWrapper) GetBusinessDay(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBusinessDay(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2557,6 +3396,78 @@ func (siw *ServerInterfaceWrapper) RestoreExportProfile(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RestoreExportProfile(w, r, profileID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListLoans operation middleware
+func (siw *ServerInterfaceWrapper) ListLoans(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListLoansParams
+
+	// ------------- Optional query parameter "mine" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "mine", r.URL.Query(), &params.Mine, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "mine"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mine", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page_size" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page_size", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page_size"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page_size", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLoans(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2798,6 +3709,45 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/assets/{assetID}/replacement/undo", wrapper.UndoReplacement)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/borrow-tickets", wrapper.ListBorrowTickets)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/borrow-tickets", wrapper.CreateBorrowTicket)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/borrow-tickets/summary", wrapper.BorrowTicketSummary)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/borrowing/today", wrapper.GetBusinessDay)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/borrow-tickets/{ticketID}", wrapper.GetBorrowTicket)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/borrow-tickets/{ticketID}/approve", wrapper.ApproveBorrowTicket)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/borrow-tickets/{ticketID}/reject", wrapper.RejectBorrowTicket)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/borrow-tickets/{ticketID}/cancel", wrapper.CancelBorrowTicket)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/borrow-tickets/{ticketID}/hand-over", wrapper.HandOverBorrowTicket)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/assets/{assetID}/lend", wrapper.LendAsset)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/assets/{assetID}/return", wrapper.ReturnAsset)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/loans", wrapper.ListLoans)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/borrowers", wrapper.SearchBorrowers)
 	})
 
 	return r
@@ -4008,6 +4958,46 @@ func (response GetAssetActivitydefaultApplicationProblemPlusJSONResponse) VisitG
 	return err
 }
 
+type LendAssetRequestObject struct {
+	AssetID AssetID `json:"assetID"`
+	Body    *LendAssetJSONRequestBody
+}
+
+type LendAssetResponseObject interface {
+	VisitLendAssetResponse(w http.ResponseWriter) error
+}
+
+type LendAsset200JSONResponse AssetDetail
+
+func (response LendAsset200JSONResponse) VisitLendAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LendAssetdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response LendAssetdefaultApplicationProblemPlusJSONResponse) VisitLendAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RecordReplacementRequestObject struct {
 	AssetID AssetID `json:"assetID"`
 	Body    *RecordReplacementJSONRequestBody
@@ -4157,6 +5147,438 @@ type RetireAssetdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response RetireAssetdefaultApplicationProblemPlusJSONResponse) VisitRetireAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReturnAssetRequestObject struct {
+	AssetID AssetID `json:"assetID"`
+	Body    *ReturnAssetJSONRequestBody
+}
+
+type ReturnAssetResponseObject interface {
+	VisitReturnAssetResponse(w http.ResponseWriter) error
+}
+
+type ReturnAsset200JSONResponse AssetDetail
+
+func (response ReturnAsset200JSONResponse) VisitReturnAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReturnAssetdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ReturnAssetdefaultApplicationProblemPlusJSONResponse) VisitReturnAssetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBorrowTicketsRequestObject struct {
+	Params ListBorrowTicketsParams
+}
+
+type ListBorrowTicketsResponseObject interface {
+	VisitListBorrowTicketsResponse(w http.ResponseWriter) error
+}
+
+type ListBorrowTickets200JSONResponse BorrowTicketPage
+
+func (response ListBorrowTickets200JSONResponse) VisitListBorrowTicketsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBorrowTicketsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ListBorrowTicketsdefaultApplicationProblemPlusJSONResponse) VisitListBorrowTicketsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateBorrowTicketRequestObject struct {
+	Body *CreateBorrowTicketJSONRequestBody
+}
+
+type CreateBorrowTicketResponseObject interface {
+	VisitCreateBorrowTicketResponse(w http.ResponseWriter) error
+}
+
+type CreateBorrowTicket201JSONResponse BorrowTicket
+
+func (response CreateBorrowTicket201JSONResponse) VisitCreateBorrowTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateBorrowTicketdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response CreateBorrowTicketdefaultApplicationProblemPlusJSONResponse) VisitCreateBorrowTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BorrowTicketSummaryRequestObject struct {
+}
+
+type BorrowTicketSummaryResponseObject interface {
+	VisitBorrowTicketSummaryResponse(w http.ResponseWriter) error
+}
+
+type BorrowTicketSummary200JSONResponse BorrowTicketSummary
+
+func (response BorrowTicketSummary200JSONResponse) VisitBorrowTicketSummaryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BorrowTicketSummarydefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response BorrowTicketSummarydefaultApplicationProblemPlusJSONResponse) VisitBorrowTicketSummaryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBorrowTicketRequestObject struct {
+	TicketID TicketID `json:"ticketID"`
+}
+
+type GetBorrowTicketResponseObject interface {
+	VisitGetBorrowTicketResponse(w http.ResponseWriter) error
+}
+
+type GetBorrowTicket200JSONResponse BorrowTicket
+
+func (response GetBorrowTicket200JSONResponse) VisitGetBorrowTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBorrowTicketdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response GetBorrowTicketdefaultApplicationProblemPlusJSONResponse) VisitGetBorrowTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveBorrowTicketRequestObject struct {
+	TicketID TicketID `json:"ticketID"`
+	Body     *ApproveBorrowTicketJSONRequestBody
+}
+
+type ApproveBorrowTicketResponseObject interface {
+	VisitApproveBorrowTicketResponse(w http.ResponseWriter) error
+}
+
+type ApproveBorrowTicket200JSONResponse BorrowTicket
+
+func (response ApproveBorrowTicket200JSONResponse) VisitApproveBorrowTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveBorrowTicketdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ApproveBorrowTicketdefaultApplicationProblemPlusJSONResponse) VisitApproveBorrowTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelBorrowTicketRequestObject struct {
+	TicketID TicketID `json:"ticketID"`
+	Body     *CancelBorrowTicketJSONRequestBody
+}
+
+type CancelBorrowTicketResponseObject interface {
+	VisitCancelBorrowTicketResponse(w http.ResponseWriter) error
+}
+
+type CancelBorrowTicket200JSONResponse BorrowTicket
+
+func (response CancelBorrowTicket200JSONResponse) VisitCancelBorrowTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelBorrowTicketdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response CancelBorrowTicketdefaultApplicationProblemPlusJSONResponse) VisitCancelBorrowTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type HandOverBorrowTicketRequestObject struct {
+	TicketID TicketID `json:"ticketID"`
+	Body     *HandOverBorrowTicketJSONRequestBody
+}
+
+type HandOverBorrowTicketResponseObject interface {
+	VisitHandOverBorrowTicketResponse(w http.ResponseWriter) error
+}
+
+type HandOverBorrowTicket200JSONResponse BorrowTicket
+
+func (response HandOverBorrowTicket200JSONResponse) VisitHandOverBorrowTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type HandOverBorrowTicketdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response HandOverBorrowTicketdefaultApplicationProblemPlusJSONResponse) VisitHandOverBorrowTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RejectBorrowTicketRequestObject struct {
+	TicketID TicketID `json:"ticketID"`
+	Body     *RejectBorrowTicketJSONRequestBody
+}
+
+type RejectBorrowTicketResponseObject interface {
+	VisitRejectBorrowTicketResponse(w http.ResponseWriter) error
+}
+
+type RejectBorrowTicket200JSONResponse BorrowTicket
+
+func (response RejectBorrowTicket200JSONResponse) VisitRejectBorrowTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RejectBorrowTicketdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response RejectBorrowTicketdefaultApplicationProblemPlusJSONResponse) VisitRejectBorrowTicketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchBorrowersRequestObject struct {
+	Params SearchBorrowersParams
+}
+
+type SearchBorrowersResponseObject interface {
+	VisitSearchBorrowersResponse(w http.ResponseWriter) error
+}
+
+type SearchBorrowers200JSONResponse BorrowerList
+
+func (response SearchBorrowers200JSONResponse) VisitSearchBorrowersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchBorrowersdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response SearchBorrowersdefaultApplicationProblemPlusJSONResponse) VisitSearchBorrowersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBusinessDayRequestObject struct {
+}
+
+type GetBusinessDayResponseObject interface {
+	VisitGetBusinessDayResponse(w http.ResponseWriter) error
+}
+
+type GetBusinessDay200JSONResponse BusinessDay
+
+func (response GetBusinessDay200JSONResponse) VisitGetBusinessDayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBusinessDaydefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response GetBusinessDaydefaultApplicationProblemPlusJSONResponse) VisitGetBusinessDayResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -4398,6 +5820,45 @@ func (response RestoreExportProfiledefaultApplicationProblemPlusJSONResponse) Vi
 	return err
 }
 
+type ListLoansRequestObject struct {
+	Params ListLoansParams
+}
+
+type ListLoansResponseObject interface {
+	VisitListLoansResponse(w http.ResponseWriter) error
+}
+
+type ListLoans200JSONResponse LoanPage
+
+func (response ListLoans200JSONResponse) VisitListLoansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLoansdefaultApplicationProblemPlusJSONResponse struct {
+	Body       externalRef0.Problem
+	StatusCode int
+}
+
+func (response ListLoansdefaultApplicationProblemPlusJSONResponse) VisitListLoansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// ListStatuses List asset statuses (inventory.asset.read)
@@ -4490,6 +5951,9 @@ type StrictServerInterface interface {
 	// GetAssetActivity Activity history of an asset, newest first (inventory.asset.read)
 	// (GET /assets/{assetID}/activity)
 	GetAssetActivity(ctx context.Context, request GetAssetActivityRequestObject) (GetAssetActivityResponseObject, error)
+	// LendAsset Lend an available asset directly, without a ticket (inventory.borrow.manage)
+	// (POST /assets/{assetID}/lend)
+	LendAsset(ctx context.Context, request LendAssetRequestObject) (LendAssetResponseObject, error)
 	// RecordReplacement Record that another asset replaces this one; this asset is retired (inventory.asset.manage)
 	// (POST /assets/{assetID}/replacement)
 	RecordReplacement(ctx context.Context, request RecordReplacementRequestObject) (RecordReplacementResponseObject, error)
@@ -4502,6 +5966,39 @@ type StrictServerInterface interface {
 	// RetireAsset Retire an asset; it keeps its tag (inventory.asset.manage)
 	// (POST /assets/{assetID}/retire)
 	RetireAsset(ctx context.Context, request RetireAssetRequestObject) (RetireAssetResponseObject, error)
+	// ReturnAsset Record the return of an asset on loan (inventory.borrow.manage)
+	// (POST /assets/{assetID}/return)
+	ReturnAsset(ctx context.Context, request ReturnAssetRequestObject) (ReturnAssetResponseObject, error)
+	// ListBorrowTickets Borrow tickets; without inventory.borrow.manage only your own
+	// (GET /borrow-tickets)
+	ListBorrowTickets(ctx context.Context, request ListBorrowTicketsRequestObject) (ListBorrowTicketsResponseObject, error)
+	// CreateBorrowTicket Ask to borrow an asset of a type (inventory.borrow.request)
+	// (POST /borrow-tickets)
+	CreateBorrowTicket(ctx context.Context, request CreateBorrowTicketRequestObject) (CreateBorrowTicketResponseObject, error)
+	// BorrowTicketSummary Tickets waiting and approved, for the sidebar (inventory.borrow.manage)
+	// (GET /borrow-tickets/summary)
+	BorrowTicketSummary(ctx context.Context, request BorrowTicketSummaryRequestObject) (BorrowTicketSummaryResponseObject, error)
+	// GetBorrowTicket One ticket; someone else's is 404 without inventory.borrow.manage
+	// (GET /borrow-tickets/{ticketID})
+	GetBorrowTicket(ctx context.Context, request GetBorrowTicketRequestObject) (GetBorrowTicketResponseObject, error)
+	// ApproveBorrowTicket Approve a waiting ticket by reserving an available asset of its type (inventory.borrow.manage)
+	// (POST /borrow-tickets/{ticketID}/approve)
+	ApproveBorrowTicket(ctx context.Context, request ApproveBorrowTicketRequestObject) (ApproveBorrowTicketResponseObject, error)
+	// CancelBorrowTicket Cancel your own ticket (waiting or approved), or as a manager an approved one; frees the reserved asset
+	// (POST /borrow-tickets/{ticketID}/cancel)
+	CancelBorrowTicket(ctx context.Context, request CancelBorrowTicketRequestObject) (CancelBorrowTicketResponseObject, error)
+	// HandOverBorrowTicket Hand the reserved asset over; the loan starts today (inventory.borrow.manage)
+	// (POST /borrow-tickets/{ticketID}/hand-over)
+	HandOverBorrowTicket(ctx context.Context, request HandOverBorrowTicketRequestObject) (HandOverBorrowTicketResponseObject, error)
+	// RejectBorrowTicket Reject a waiting ticket with a reason (inventory.borrow.manage)
+	// (POST /borrow-tickets/{ticketID}/reject)
+	RejectBorrowTicket(ctx context.Context, request RejectBorrowTicketRequestObject) (RejectBorrowTicketResponseObject, error)
+	// SearchBorrowers Active accounts to lend to, by name or email (inventory.borrow.manage)
+	// (GET /borrowers)
+	SearchBorrowers(ctx context.Context, request SearchBorrowersRequestObject) (SearchBorrowersResponseObject, error)
+	// GetBusinessDay Today in the app's time zone, the day borrowing dates are checked against (inventory.borrow.request or inventory.borrow.manage)
+	// (GET /borrowing/today)
+	GetBusinessDay(ctx context.Context, request GetBusinessDayRequestObject) (GetBusinessDayResponseObject, error)
 	// ListExportProfiles Your export profiles and every shared one (inventory.asset.export)
 	// (GET /export-profiles)
 	ListExportProfiles(ctx context.Context, request ListExportProfilesRequestObject) (ListExportProfilesResponseObject, error)
@@ -4520,6 +6017,9 @@ type StrictServerInterface interface {
 	// RestoreExportProfile Undo deleting a profile (owner; shared ones also inventory.export_profile.manage)
 	// (POST /export-profiles/{profileID}/restore)
 	RestoreExportProfile(ctx context.Context, request RestoreExportProfileRequestObject) (RestoreExportProfileResponseObject, error)
+	// ListLoans Assets on loan now, overdue first by default (inventory.borrow.manage; mine=true needs only inventory.borrow.request)
+	// (GET /loans)
+	ListLoans(ctx context.Context, request ListLoansRequestObject) (ListLoansResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -5451,6 +6951,39 @@ func (sh *strictHandler) GetAssetActivity(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// LendAsset operation middleware
+func (sh *strictHandler) LendAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
+	var request LendAssetRequestObject
+
+	request.AssetID = assetID
+
+	var body LendAssetJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.LendAsset(ctx, request.(LendAssetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "LendAsset")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LendAssetResponseObject); ok {
+		if err := validResponse.VisitLendAssetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // RecordReplacement operation middleware
 func (sh *strictHandler) RecordReplacement(w http.ResponseWriter, r *http.Request, assetID AssetID) {
 	var request RecordReplacementRequestObject
@@ -5576,6 +7109,328 @@ func (sh *strictHandler) RetireAsset(w http.ResponseWriter, r *http.Request, ass
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RetireAssetResponseObject); ok {
 		if err := validResponse.VisitRetireAssetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReturnAsset operation middleware
+func (sh *strictHandler) ReturnAsset(w http.ResponseWriter, r *http.Request, assetID AssetID) {
+	var request ReturnAssetRequestObject
+
+	request.AssetID = assetID
+
+	var body ReturnAssetJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReturnAsset(ctx, request.(ReturnAssetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReturnAsset")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReturnAssetResponseObject); ok {
+		if err := validResponse.VisitReturnAssetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListBorrowTickets operation middleware
+func (sh *strictHandler) ListBorrowTickets(w http.ResponseWriter, r *http.Request, params ListBorrowTicketsParams) {
+	var request ListBorrowTicketsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListBorrowTickets(ctx, request.(ListBorrowTicketsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListBorrowTickets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListBorrowTicketsResponseObject); ok {
+		if err := validResponse.VisitListBorrowTicketsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateBorrowTicket operation middleware
+func (sh *strictHandler) CreateBorrowTicket(w http.ResponseWriter, r *http.Request) {
+	var request CreateBorrowTicketRequestObject
+
+	var body CreateBorrowTicketJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateBorrowTicket(ctx, request.(CreateBorrowTicketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateBorrowTicket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateBorrowTicketResponseObject); ok {
+		if err := validResponse.VisitCreateBorrowTicketResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// BorrowTicketSummary operation middleware
+func (sh *strictHandler) BorrowTicketSummary(w http.ResponseWriter, r *http.Request) {
+	var request BorrowTicketSummaryRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.BorrowTicketSummary(ctx, request.(BorrowTicketSummaryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "BorrowTicketSummary")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(BorrowTicketSummaryResponseObject); ok {
+		if err := validResponse.VisitBorrowTicketSummaryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetBorrowTicket operation middleware
+func (sh *strictHandler) GetBorrowTicket(w http.ResponseWriter, r *http.Request, ticketID TicketID) {
+	var request GetBorrowTicketRequestObject
+
+	request.TicketID = ticketID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBorrowTicket(ctx, request.(GetBorrowTicketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBorrowTicket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBorrowTicketResponseObject); ok {
+		if err := validResponse.VisitGetBorrowTicketResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ApproveBorrowTicket operation middleware
+func (sh *strictHandler) ApproveBorrowTicket(w http.ResponseWriter, r *http.Request, ticketID TicketID) {
+	var request ApproveBorrowTicketRequestObject
+
+	request.TicketID = ticketID
+
+	var body ApproveBorrowTicketJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ApproveBorrowTicket(ctx, request.(ApproveBorrowTicketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ApproveBorrowTicket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ApproveBorrowTicketResponseObject); ok {
+		if err := validResponse.VisitApproveBorrowTicketResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelBorrowTicket operation middleware
+func (sh *strictHandler) CancelBorrowTicket(w http.ResponseWriter, r *http.Request, ticketID TicketID) {
+	var request CancelBorrowTicketRequestObject
+
+	request.TicketID = ticketID
+
+	var body CancelBorrowTicketJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelBorrowTicket(ctx, request.(CancelBorrowTicketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelBorrowTicket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelBorrowTicketResponseObject); ok {
+		if err := validResponse.VisitCancelBorrowTicketResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// HandOverBorrowTicket operation middleware
+func (sh *strictHandler) HandOverBorrowTicket(w http.ResponseWriter, r *http.Request, ticketID TicketID) {
+	var request HandOverBorrowTicketRequestObject
+
+	request.TicketID = ticketID
+
+	var body HandOverBorrowTicketJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.HandOverBorrowTicket(ctx, request.(HandOverBorrowTicketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "HandOverBorrowTicket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(HandOverBorrowTicketResponseObject); ok {
+		if err := validResponse.VisitHandOverBorrowTicketResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RejectBorrowTicket operation middleware
+func (sh *strictHandler) RejectBorrowTicket(w http.ResponseWriter, r *http.Request, ticketID TicketID) {
+	var request RejectBorrowTicketRequestObject
+
+	request.TicketID = ticketID
+
+	var body RejectBorrowTicketJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RejectBorrowTicket(ctx, request.(RejectBorrowTicketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RejectBorrowTicket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RejectBorrowTicketResponseObject); ok {
+		if err := validResponse.VisitRejectBorrowTicketResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SearchBorrowers operation middleware
+func (sh *strictHandler) SearchBorrowers(w http.ResponseWriter, r *http.Request, params SearchBorrowersParams) {
+	var request SearchBorrowersRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchBorrowers(ctx, request.(SearchBorrowersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchBorrowers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchBorrowersResponseObject); ok {
+		if err := validResponse.VisitSearchBorrowersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetBusinessDay operation middleware
+func (sh *strictHandler) GetBusinessDay(w http.ResponseWriter, r *http.Request) {
+	var request GetBusinessDayRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBusinessDay(ctx, request.(GetBusinessDayRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBusinessDay")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBusinessDayResponseObject); ok {
+		if err := validResponse.VisitGetBusinessDayResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -5749,126 +7604,184 @@ func (sh *strictHandler) RestoreExportProfile(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// ListLoans operation middleware
+func (sh *strictHandler) ListLoans(w http.ResponseWriter, r *http.Request, params ListLoansParams) {
+	var request ListLoansRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListLoans(ctx, request.(ListLoansRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListLoans")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListLoansResponseObject); ok {
+		if err := validResponse.VisitListLoansResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"8Pr56/8fAAD//w==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

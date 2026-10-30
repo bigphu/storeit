@@ -32,6 +32,9 @@ import { notify } from '@/lib/notify'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
 import { stepPage, useKeepScrollOnPage, useListTable, useRowMenu } from '@/lib/tableRows'
 import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
+import { isBorrowingStatus, pickableStatuses } from '@/features/borrowing/borrowing'
+import LendDialog from '@/features/borrowing/components/LendDialog.vue'
+import NewTicketDialog from '@/features/borrowing/components/NewTicketDialog.vue'
 import { kindSeverity, statusKinds, useStatuses } from '@/features/statuses/api'
 import { assetListQuery, assetQuery, useAsset, useAssetList } from '../api'
 import EmptyState from '@/components/EmptyState.vue'
@@ -150,7 +153,7 @@ watch(
 const chips = computed(() => filterChips(state.value, attributes.value, statuses.value ?? []))
 const chipKey = (c: FilterChip) => `${c.kind}:${c.label}`
 function clearAll() {
-  update({ q: '', statusId: undefined, statusKind: undefined, includeRetired: false, filters: [], fields: [], page: 1 })
+  update({ q: '', statusId: undefined, statusKind: undefined, includeRetired: false, borrowable: undefined, filters: [], fields: [], page: 1 })
 }
 const filterPop = ref<InstanceType<typeof AttributeFilterPopover>>()
 function addFilter(f: AttrFilterRow) {
@@ -285,7 +288,16 @@ function openBulk(mode: 'status' | 'retire') {
   bulkOpen.value = true
 }
 
-// Menu của dòng (chuột phải và nút ☰ cuối dòng): mở, sửa nhanh, sửa, retire, thay thế / restore
+// Mượn (US-10): tài sản rảnh của loại cho mượn được thì cho mượn trực tiếp hay gửi phiếu
+const borrowTypes = computed(() => new Set((typeCounts.value ?? []).filter((t) => t.can_borrow).map((t) => t.id)))
+const isBorrowable = (a: AssetListItem) => !a.retired_at && a.status_kind === 'available' && borrowTypes.value.has(a.asset_type_id)
+const lendTarget = ref<AssetListItem | null>(null)
+const lendOpen = ref(false)
+const askTarget = ref<AssetListItem | null>(null)
+const askOpen = ref(false)
+
+// Menu của dòng (chuột phải và nút ☰ cuối dòng): mở, sửa nhanh, sửa, retire, thay thế / restore,
+// cho mượn / mượn
 const rowMenu = useRowMenu<AssetListItem>((a) => {
   const items: MenuItem[] = [
     { label: 'Open', icon: 'pi pi-arrow-right', command: () => actions.open(a) },
@@ -297,9 +309,18 @@ const rowMenu = useRowMenu<AssetListItem>((a) => {
     else {
       items.push({ label: 'Quick edit', icon: 'pi pi-sliders-h', command: () => openQuick(a) })
       items.push({ label: 'Edit', icon: 'pi pi-pencil', command: () => actions.edit(a) })
-      items.push({ label: 'Retire', icon: 'pi pi-ban', command: () => actions.askRetire(a) })
-      items.push({ label: 'Replace…', icon: 'pi pi-sync', command: () => actions.askReplace(a, a.asset_type_id) })
+      // đang giữ chỗ / cho mượn: việc mượn giữ tài sản, không retire hay thay được
+      if (!isBorrowingStatus(a.status_id)) {
+        items.push({ label: 'Retire', icon: 'pi pi-ban', command: () => actions.askRetire(a) })
+        items.push({ label: 'Replace…', icon: 'pi pi-sync', command: () => actions.askReplace(a, a.asset_type_id) })
+      }
     }
+  }
+  if (isBorrowable(a)) {
+    const borrow: MenuItem[] = []
+    if (session.can(Perm.BorrowManage)) borrow.push({ label: 'Lend…', icon: 'pi pi-arrow-right-arrow-left', command: () => ((lendTarget.value = a), (lendOpen.value = true)) })
+    if (session.can(Perm.BorrowRequest)) borrow.push({ label: 'Borrow this…', icon: 'pi pi-ticket', command: () => ((askTarget.value = a), (askOpen.value = true)) })
+    if (borrow.length) items.push({ separator: true }, ...borrow)
   }
   return items
 })
@@ -326,7 +347,7 @@ function cell(row: AssetListItem, key: string) {
 // Sửa nhanh: bút chì cạnh tên, status, ngày mua để đổi tại chỗ; nút thanh trượt (pi-sliders-h) mở ngăn kéo (các trường
 // của tài sản và thuộc tính của loại). Tài sản đã retire không sửa nhanh được
 const statusChoices = computed(() =>
-  (statuses.value ?? []).filter((x) => !x.archived_at && x.kind !== 'retired').map((x) => ({ label: x.name, value: x.id })),
+  pickableStatuses(statuses.value ?? []).filter((x) => !x.archived_at && x.kind !== 'retired').map((x) => ({ label: x.name, value: x.id })),
 )
 const statusLabel = (id: string) => statusChoices.value.find((o) => o.value === id)?.label ?? 'another status'
 const canQuick = (a: AssetListItem) => canManage.value && !a.retired_at
@@ -353,11 +374,15 @@ const attrOptions = (x: AttrDef) =>
       : undefined
 // khoá trường thuộc tính: "attr:<key>" để không trùng tên trường của tài sản
 const attrKey = (k: string) => `attr:${k}`
+// tài sản đang Reserved / On loan: status do việc mượn giữ, hiện mà không đổi được
+const quickBorrowing = computed(() => isBorrowingStatus(quickAsset.value?.status.id))
 const quickFields = computed<FieldDef[]>(() => {
   const base: FieldDef[] = [
     { key: 'name', label: 'Name', maxlength: 200 },
     { key: 'tag', label: 'Tag', lock: 'Tags never change.' },
-    { key: 'status_id', label: 'Status', kind: 'select', options: statusChoices.value },
+    quickBorrowing.value
+      ? { key: 'status_id', label: 'Status', kind: 'select', options: [{ label: quickAsset.value!.status.name, value: quickAsset.value!.status.id }], lock: 'Borrowing sets this status.' }
+      : { key: 'status_id', label: 'Status', kind: 'select', options: statusChoices.value },
     { key: 'purchase_date', label: 'Purchase date', kind: 'date' },
     { key: 'description', label: 'Description', kind: 'textarea' },
   ]
@@ -485,6 +510,13 @@ watch(rows, (list) => {
         @update:model-value="(v: boolean) => update({ includeRetired: v, page: 1 })"
       />
       <label for="include-retired">Include retired</label>
+      <Checkbox
+        :model-value="!!state.borrowable"
+        input-id="borrowable-now"
+        binary
+        @update:model-value="(v: boolean) => update({ borrowable: v || undefined, page: 1 })"
+      />
+      <label for="borrowable-now">Borrowable now</label>
       <ExportButton v-if="canExport" class="export-btn" :scope="listScope" @report="(id) => openReport(false, id)" />
     </div>
 
@@ -579,7 +611,7 @@ watch(rows, (list) => {
           <InlineCell
             :value="a.status_id"
             label="status"
-            :editable="canQuick(a)"
+            :editable="canQuick(a) && !isBorrowingStatus(a.status_id)"
             kind="select"
             :options="statusChoices"
             @save="(v) => actions.quickSave(a, { status_id: v }, `set to ${statusLabel(v)}`)"
@@ -658,6 +690,13 @@ watch(rows, (list) => {
     </QuickEditDrawer>
 
     <RetireDialog v-model:visible="actions.retireOpen.value" :asset="actions.retireTarget.value" />
+    <LendDialog v-model:visible="lendOpen" :asset="lendTarget" />
+    <NewTicketDialog
+      v-if="askTarget"
+      v-model:visible="askOpen"
+      :preset-type-id="askTarget.asset_type_id"
+      :suggested="{ id: askTarget.id, tag: askTarget.tag }"
+    />
     <ReplaceDialog
       v-if="actions.replaceTarget.value"
       v-model:visible="actions.replaceOpen.value"

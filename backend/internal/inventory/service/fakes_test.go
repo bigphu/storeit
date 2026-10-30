@@ -12,6 +12,7 @@ import (
 
 	idcontract "storeit/internal/identity/contract"
 	"storeit/internal/inventory/domain"
+	"storeit/internal/platform/mail"
 )
 
 // Fake repository trong bộ nhớ: đủ để kiểm tra luật của service. SQL, khoá
@@ -53,7 +54,7 @@ func (f *fakeTypes) Get(_ context.Context, id uuid.UUID) (domain.AssetType, erro
 func (f *fakeTypes) Create(_ context.Context, in domain.NewAssetType) (domain.AssetType, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	t := domain.AssetType{ID: uuid.New(), Code: in.Code, Name: in.Name, Description: in.Description, Version: 1}
+	t := domain.AssetType{ID: uuid.New(), Code: in.Code, Name: in.Name, Description: in.Description, CanBorrow: in.CanBorrow, Version: 1}
 	for _, na := range in.Attributes {
 		t.Attributes = append(t.Attributes, newAttr(t.ID, na))
 	}
@@ -70,7 +71,7 @@ func newAttr(typeID uuid.UUID, na domain.NewAttribute) domain.Attribute {
 	return a
 }
 
-func (f *fakeTypes) Update(_ context.Context, id uuid.UUID, name, description *string, version int32) (domain.AssetType, error) {
+func (f *fakeTypes) Update(_ context.Context, id uuid.UUID, name, description *string, canBorrow *bool, version int32) (domain.AssetType, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	t := f.types[id]
@@ -79,6 +80,9 @@ func (f *fakeTypes) Update(_ context.Context, id uuid.UUID, name, description *s
 	}
 	if name != nil {
 		t.Name = *name
+	}
+	if canBorrow != nil {
+		t.CanBorrow = *canBorrow
 	}
 	if description != nil {
 		t.Description = *description
@@ -350,6 +354,7 @@ type fakeAssets struct {
 	mu         sync.Mutex
 	assets     map[uuid.UUID]domain.Asset
 	lastFilter domain.AssetFilter // bộ lọc List nhận gần nhất
+	gets       int                // số lần Get (kiểm việc đọc gộp)
 }
 
 func newFakeAssets() *fakeAssets { return &fakeAssets{assets: map[uuid.UUID]domain.Asset{}} }
@@ -388,6 +393,7 @@ func (f *fakeAssets) Replacements(context.Context, uuid.UUID) (*domain.Replaceme
 func (f *fakeAssets) Get(_ context.Context, id uuid.UUID) (domain.Asset, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.gets++
 	a, ok := f.assets[id]
 	if !ok {
 		return domain.Asset{}, domain.ErrAssetNotFound
@@ -424,7 +430,14 @@ func (f *fakeAssets) List(_ context.Context, filter domain.AssetFilter) ([]domai
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.lastFilter = filter
-	return nil, 0, nil
+	// lọc theo IDs (đọc gộp tài sản cho phiếu, khoản mượn); bộ lọc khác: rỗng
+	var out []domain.AssetListItem
+	for _, id := range filter.IDs {
+		if a, ok := f.assets[id]; ok {
+			out = append(out, domain.AssetListItem{Asset: a})
+		}
+	}
+	return out, int64(len(out)), nil
 }
 
 func (f *fakeAssets) Replace(_ context.Context, id uuid.UUID, in domain.AssetFields, version int32) (domain.Asset, error) {
@@ -652,4 +665,245 @@ func (a fakeAccounts) GetAccounts(ctx context.Context, ids []uuid.UUID) ([]idcon
 		out[i], _ = a.GetAccount(ctx, id)
 	}
 	return out, nil
+}
+
+func (fakeAccounts) SearchAccounts(context.Context, string, int) ([]idcontract.Account, error) {
+	return nil, nil
+}
+
+// fakeBorrowing: phiếu trong bộ nhớ, đủ cho các quy tắc của service (quyền, ngày, người mượn)
+type fakeBorrowing struct {
+	mu         sync.Mutex
+	tickets    map[uuid.UUID]domain.BorrowTicket
+	loans      map[uuid.UUID]domain.Loan
+	handOvers  int
+	lends      int
+	lastFilter domain.TicketFilter
+	overdueOn  []time.Time
+	returns    []domain.LoanReturn
+	// loansOf: borrowerID của lần ListActiveLoans gần nhất (nil là mọi người)
+	loansOf *uuid.UUID
+}
+
+func newFakeBorrowing() *fakeBorrowing {
+	return &fakeBorrowing{tickets: map[uuid.UUID]domain.BorrowTicket{}, loans: map[uuid.UUID]domain.Loan{}}
+}
+
+func (f *fakeBorrowing) CreateTicket(_ context.Context, n domain.NewBorrowTicket) (domain.BorrowTicket, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t := domain.BorrowTicket{
+		ID: uuid.New(), Number: int64(len(f.tickets) + 1), RequesterID: n.RequesterID, TypeID: n.TypeID,
+		Requirements: n.Requirements, SuggestedAssetID: n.SuggestedAssetID, NeededFrom: n.NeededFrom,
+		ReturnBy: n.ReturnBy, Note: n.Note, State: domain.TicketWaiting, Version: 1,
+	}
+	f.tickets[t.ID] = t
+	return t, nil
+}
+
+func (f *fakeBorrowing) GetTicket(_ context.Context, id uuid.UUID) (domain.BorrowTicket, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, ok := f.tickets[id]
+	if !ok {
+		return domain.BorrowTicket{}, domain.ErrTicketNotFound
+	}
+	return t, nil
+}
+
+func (f *fakeBorrowing) ListTickets(_ context.Context, flt domain.TicketFilter) ([]domain.BorrowTicket, int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lastFilter = flt
+	var out []domain.BorrowTicket
+	for _, t := range f.tickets {
+		if flt.RequesterID == nil || t.RequesterID == *flt.RequesterID {
+			out = append(out, t)
+		}
+	}
+	return out, int64(len(out)), nil
+}
+
+func (f *fakeBorrowing) TicketCounts(context.Context) (int64, int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var w, a int64
+	for _, t := range f.tickets {
+		switch t.State {
+		case domain.TicketWaiting:
+			w++
+		case domain.TicketApproved:
+			a++
+		}
+	}
+	return w, a, nil
+}
+
+func (f *fakeBorrowing) set(id uuid.UUID, version int32, from []domain.TicketState, apply func(*domain.BorrowTicket)) (domain.BorrowTicket, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, ok := f.tickets[id]
+	if !ok {
+		return domain.BorrowTicket{}, domain.ErrTicketNotFound
+	}
+	if t.Version != version {
+		return domain.BorrowTicket{}, domain.ErrTicketChanged
+	}
+	if !slices.Contains(from, t.State) {
+		return domain.BorrowTicket{}, domain.ErrTicketState
+	}
+	apply(&t)
+	t.Version++
+	f.tickets[id] = t
+	return t, nil
+}
+
+func (f *fakeBorrowing) Approve(_ context.Context, id, assetID uuid.UUID, version int32) (domain.BorrowTicket, error) {
+	return f.set(id, version, []domain.TicketState{domain.TicketWaiting}, func(t *domain.BorrowTicket) {
+		t.State, t.AssetID = domain.TicketApproved, &assetID
+	})
+}
+
+func (f *fakeBorrowing) Reject(_ context.Context, id uuid.UUID, reason string, version int32) (domain.BorrowTicket, error) {
+	return f.set(id, version, []domain.TicketState{domain.TicketWaiting}, func(t *domain.BorrowTicket) {
+		t.State, t.Reason = domain.TicketRejected, reason
+	})
+}
+
+func (f *fakeBorrowing) Cancel(_ context.Context, id uuid.UUID, reason string, _ bool, version int32) (domain.BorrowTicket, error) {
+	return f.set(id, version, []domain.TicketState{domain.TicketWaiting, domain.TicketApproved}, func(t *domain.BorrowTicket) {
+		t.State, t.Reason = domain.TicketCancelled, reason
+	})
+}
+
+func (f *fakeBorrowing) HandOver(_ context.Context, id uuid.UUID, startedOn time.Time, version int32) (domain.BorrowTicket, domain.Loan, error) {
+	t, err := f.set(id, version, []domain.TicketState{domain.TicketApproved}, func(t *domain.BorrowTicket) {
+		t.State = domain.TicketHandedOver
+	})
+	if err != nil {
+		return t, domain.Loan{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.handOvers++
+	ticket := t.ID
+	l := domain.Loan{ID: uuid.New(), AssetID: *t.AssetID, BorrowerID: t.RequesterID, TicketID: &ticket, TicketNumber: t.Number, StartedOn: startedOn}
+	f.loans[l.ID] = l
+	return t, l, nil
+}
+
+func (f *fakeBorrowing) LoanForTicket(_ context.Context, ticketID uuid.UUID) (*domain.Loan, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, l := range f.loans {
+		if l.TicketID != nil && *l.TicketID == ticketID {
+			return &l, nil
+		}
+	}
+	return nil, nil
+}
+
+func (f *fakeBorrowing) Lend(_ context.Context, assetID, borrowerID uuid.UUID, startedOn time.Time, returnBy *time.Time, _ int32) (domain.Loan, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lends++
+	l := domain.Loan{ID: uuid.New(), AssetID: assetID, BorrowerID: borrowerID, StartedOn: startedOn, ReturnBy: returnBy}
+	f.loans[l.ID] = l
+	return l, nil
+}
+
+func (f *fakeBorrowing) ActiveLoan(_ context.Context, assetID uuid.UUID) (*domain.Loan, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, l := range f.loans {
+		if l.AssetID == assetID && l.ReturnedOn == nil {
+			return &l, nil
+		}
+	}
+	return nil, nil
+}
+
+func (f *fakeBorrowing) Return(_ context.Context, assetID uuid.UUID, r domain.LoanReturn, _ int32) (domain.Loan, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for id, l := range f.loans {
+		if l.AssetID == assetID && l.ReturnedOn == nil {
+			d := r.ReturnedOn
+			l.ReturnedOn, l.ReturnNote = &d, r.Note
+			f.loans[id] = l
+			f.returns = append(f.returns, r)
+			return l, nil
+		}
+	}
+	return domain.Loan{}, domain.ErrNoActiveLoan
+}
+
+func (f *fakeBorrowing) ApprovedTicketFor(context.Context, uuid.UUID) (*domain.BorrowTicket, error) {
+	return nil, nil
+}
+
+func (f *fakeBorrowing) GetLoan(_ context.Context, id uuid.UUID) (domain.Loan, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	l, ok := f.loans[id]
+	if !ok {
+		return domain.Loan{}, domain.ErrLoanNotFound
+	}
+	return l, nil
+}
+
+func (f *fakeBorrowing) ListActiveLoans(_ context.Context, _ time.Time, borrowerID *uuid.UUID, _ string, _, _ int) ([]domain.Loan, int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.loansOf = borrowerID
+	return nil, 0, nil
+}
+
+func (f *fakeBorrowing) QueueOverdueEmails(_ context.Context, today time.Time, _ int) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.overdueOn = append(f.overdueOn, today)
+	return 0, nil
+}
+
+// borrowAccounts: như fakeAccounts nhưng đánh dấu được account bị khoá
+type borrowAccounts struct {
+	inactive    map[uuid.UUID]bool
+	searchLimit *int // giới hạn của lần SearchAccounts gần nhất
+}
+
+func (a borrowAccounts) GetAccount(_ context.Context, id uuid.UUID) (idcontract.Account, error) {
+	return idcontract.Account{ID: id, Name: "Account " + id.String()[:8], Email: id.String()[:8] + "@storeit.test", Active: !a.inactive[id]}, nil
+}
+
+func (a borrowAccounts) GetAccounts(ctx context.Context, ids []uuid.UUID) ([]idcontract.Account, error) {
+	out := make([]idcontract.Account, len(ids))
+	for i, id := range ids {
+		out[i], _ = a.GetAccount(ctx, id)
+	}
+	return out, nil
+}
+
+func (a borrowAccounts) SearchAccounts(_ context.Context, _ string, limit int) ([]idcontract.Account, error) {
+	if a.searchLimit != nil {
+		*a.searchLimit = limit
+	}
+	return nil, nil
+}
+
+// fakeMail ghi lại thư đã gửi
+type fakeMail struct {
+	mu   sync.Mutex
+	sent []mail.Message
+	err  error
+}
+
+func (f *fakeMail) Send(_ context.Context, m mail.Message) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return f.err
+	}
+	f.sent = append(f.sent, m)
+	return nil
 }

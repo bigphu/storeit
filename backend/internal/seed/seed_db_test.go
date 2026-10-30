@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"storeit/internal/identity"
 	idservice "storeit/internal/identity/service"
 	"storeit/internal/inventory"
@@ -27,6 +29,7 @@ const adminEmail, adminPassword = "admin@storeit.test", "admin-password-123"
 type env struct {
 	identity  *identity.Module
 	inventory *inventory.Module
+	pool      *pgxpool.Pool
 }
 
 // newEnv dựng hai module như cmd/seed trên DB test của package (DB riêng, trống)
@@ -52,11 +55,11 @@ func newEnv(t *testing.T) env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	invm, err := inventory.New(inventory.Deps{Pool: pool, Outbox: outbox, Accounts: idm.AccountReader()})
+	invm, err := inventory.New(inventory.Deps{Pool: pool, Outbox: outbox, Jobs: jobs.NewRiver(client), Accounts: idm.AccountReader()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return env{identity: idm, inventory: invm}
+	return env{identity: idm, inventory: invm, pool: pool}
 }
 
 func (e env) deps(pw string) seed.Deps {
@@ -89,7 +92,7 @@ func TestRun_SeedsOnceThenSkips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := seed.Summary{Accounts: 6, Statuses: 2, Types: 10, Assets: 300, Profiles: 3}
+	want := seed.Summary{Accounts: 6, Statuses: 1, Types: 10, Assets: 300, Profiles: 3, Tickets: 6, Loans: 2}
 	got := sum
 	got.Retired = 0
 	if got != want {
@@ -121,6 +124,34 @@ func TestRun_SeedsOnceThenSkips(t *testing.T) {
 	}
 	if total != 300 {
 		t.Errorf("assets in DB = %d, want 300", total)
+	}
+
+	// Mượn (US-10): phiếu ở mọi trạng thái, hai khoản đang mượn, bốn loại cho mượn được, không
+	// còn status tự tạo "Cho mượn"
+	count := func(q string, args ...any) int {
+		t.Helper()
+		var n int
+		if err := e.pool.QueryRow(ctx, q, args...).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	for state, want := range map[string]int{"waiting": 3, "approved": 1, "handed_over": 1, "rejected": 1} {
+		if n := count(`SELECT count(*) FROM inventory.borrow_tickets WHERE state = $1`, state); n != want {
+			t.Errorf("%s tickets = %d, want %d", state, n, want)
+		}
+	}
+	if n := count(`SELECT count(*) FROM inventory.loans WHERE returned_on IS NULL`); n != 2 {
+		t.Errorf("active loans = %d, want 2", n)
+	}
+	if n := count(`SELECT count(*) FROM inventory.asset_statuses WHERE name = 'Cho mượn'`); n != 0 {
+		t.Errorf(`status "Cho mượn" still seeded`)
+	}
+	if n := count(`SELECT count(*) FROM inventory.asset_types WHERE can_borrow AND code IN ('LAPTOP', 'MONITOR', 'PROJECTOR', 'PHONE')`); n != 4 {
+		t.Errorf("borrowable demo types = %d, want 4", n)
+	}
+	if n := count(`SELECT count(*) FROM inventory.asset_types WHERE can_borrow`); n != 4 {
+		t.Errorf("all borrowable types = %d, want only the four", n)
 	}
 
 	// Lần hai: không ghi gì

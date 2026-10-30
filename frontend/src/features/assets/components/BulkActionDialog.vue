@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/vue-query'
 import FormDialog from '@/components/FormDialog.vue'
 import { announce } from '@/lib/actions'
 import { useDirty, useFormErrors } from '@/lib/forms'
+import { pickableStatuses } from '@/features/borrowing/borrowing'
 import { useStatuses } from '@/features/statuses/api'
 import { type BulkItemRef, refreshAssetLists, restoreAssetRequest, useBulkRetire, useBulkStatus } from '../api'
 import { type BulkSummary, mapLimit, retiredItems, statusGroups, summarizeBulk } from '../bulk'
@@ -25,7 +26,7 @@ const errors = useFormErrors()
 
 // status chọn được: không thuộc kind retired (dùng Retire), không lưu trữ
 const { data: statuses } = useStatuses()
-const statusOptions = computed(() => (statuses.value ?? []).filter((s) => s.kind !== 'retired'))
+const statusOptions = computed(() => pickableStatuses(statuses.value ?? []).filter((s) => s.kind !== 'retired'))
 
 const statusId = ref<string | null>(null)
 const reason = ref('')

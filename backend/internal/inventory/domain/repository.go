@@ -21,6 +21,7 @@ type NewAttribute struct {
 
 type NewAssetType struct {
 	Code, Name, Description string
+	CanBorrow               bool
 	Attributes              []NewAttribute
 }
 
@@ -40,7 +41,8 @@ type TypeRepository interface {
 	// Create: ErrTypeCodeTaken, ErrTypeNameTaken, ErrAttributeKeyTaken...; event asset_type_created
 	Create(ctx context.Context, in NewAssetType) (AssetType, error)
 	// Update: ErrAssetTypeChanged khi version cũ; event asset_type_updated
-	Update(ctx context.Context, id uuid.UUID, name, description *string, version int32) (AssetType, error)
+	// canBorrow nil: giữ nguyên
+	Update(ctx context.Context, id uuid.UUID, name, description *string, canBorrow *bool, version int32) (AssetType, error)
 	SetArchived(ctx context.Context, id uuid.UUID, archived bool) (AssetType, error)
 	AddAttribute(ctx context.Context, typeID uuid.UUID, in NewAttribute) (Attribute, error)
 	// UpdateAttribute: đổi kiểu hay đơn vị khi đã có giá trị là ErrAttributeInUse;
@@ -144,6 +146,8 @@ type AssetFilter struct {
 	LocationID     *uuid.UUID
 	HolderMemberID *uuid.UUID
 	IncludeRetired bool
+	// Borrowable: chỉ tài sản cho mượn được ngay (loại bật Can be borrowed, status kind available)
+	Borrowable bool
 	// IDs: chỉ các tài sản này ("Export selected"); nil là không lọc
 	IDs           []uuid.UUID
 	Sort          AssetSort
@@ -203,4 +207,29 @@ type AssetRepository interface {
 	Replace(ctx context.Context, id uuid.UUID, f AssetFields, version int32) (Asset, error)
 	Retire(ctx context.Context, id uuid.UUID, reason string, retiredStatus uuid.UUID, version int32) (Asset, error)
 	Restore(ctx context.Context, id uuid.UUID, availableStatus uuid.UUID, version int32) (Asset, error)
+}
+
+// BorrowingRepository: phiếu mượn và khoản mượn (US-10). Mỗi thao tác ghi là một transaction:
+// khoá phiếu rồi tới tài sản, kiểm tra, ghi, đổi status tài sản (không event asset_updated),
+// thêm event và xếp thư trong cùng transaction.
+type BorrowingRepository interface {
+	CreateTicket(ctx context.Context, t NewBorrowTicket) (BorrowTicket, error)
+	GetTicket(ctx context.Context, id uuid.UUID) (BorrowTicket, error)
+	ListTickets(ctx context.Context, f TicketFilter) ([]BorrowTicket, int64, error)
+	TicketCounts(ctx context.Context) (waiting, approved int64, err error)
+	Approve(ctx context.Context, ticketID, assetID uuid.UUID, version int32) (BorrowTicket, error)
+	Reject(ctx context.Context, ticketID uuid.UUID, reason string, version int32) (BorrowTicket, error)
+	Cancel(ctx context.Context, ticketID uuid.UUID, reason string, byManager bool, version int32) (BorrowTicket, error)
+	HandOver(ctx context.Context, ticketID uuid.UUID, startedOn time.Time, version int32) (BorrowTicket, Loan, error)
+	Lend(ctx context.Context, assetID, borrowerID uuid.UUID, startedOn time.Time, returnBy *time.Time, version int32) (Loan, error)
+	ActiveLoan(ctx context.Context, assetID uuid.UUID) (*Loan, error)
+	// LoanForTicket: khoản mượn của phiếu đã giao; nil khi phiếu chưa giao
+	LoanForTicket(ctx context.Context, ticketID uuid.UUID) (*Loan, error)
+	ApprovedTicketFor(ctx context.Context, assetID uuid.UUID) (*BorrowTicket, error)
+	GetLoan(ctx context.Context, id uuid.UUID) (Loan, error)
+	// ListActiveLoans: borrowerID nil là mọi người
+	ListActiveLoans(ctx context.Context, today time.Time, borrowerID *uuid.UUID, sort string, page, pageSize int) ([]Loan, int64, error)
+	// Return ghi nhận trả khoản mượn đang hiệu lực của tài sản: ErrNoActiveLoan, ErrAssetChanged
+	Return(ctx context.Context, assetID uuid.UUID, r LoanReturn, version int32) (Loan, error)
+	QueueOverdueEmails(ctx context.Context, today time.Time, limit int) (int, error)
 }

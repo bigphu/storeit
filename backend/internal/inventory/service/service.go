@@ -5,11 +5,13 @@ package service
 
 import (
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
 	idcontract "storeit/internal/identity/contract"
 	"storeit/internal/inventory/domain"
+	"storeit/internal/platform/mail"
 )
 
 type Deps struct {
@@ -22,6 +24,15 @@ type Deps struct {
 	Events AssetEventReader
 	// ExportMaxRows: số dòng tối đa một lần export; 0 là mặc định 50.000
 	ExportMaxRows int
+
+	// Mượn tài sản (US-10). Location: múi giờ của ngày nghiệp vụ (nil là UTC); Now: đồng hồ
+	// (nil là time.Now), test thay được
+	Borrowing domain.BorrowingRepository
+	Location  *time.Location
+	Now       func() time.Time
+	// Mail gửi thư của việc mượn (chỉ worker cần); AppURL là địa chỉ frontend cho link trong thư
+	Mail   mail.Sender
+	AppURL string
 }
 
 type Service struct {
@@ -32,6 +43,11 @@ type Service struct {
 	accounts      idcontract.AccountReader
 	events        AssetEventReader
 	exportMaxRows int
+	borrowing     domain.BorrowingRepository
+	loc           *time.Location
+	now           func() time.Time
+	mail          mail.Sender
+	appURL        string
 }
 
 func New(d Deps) *Service {
@@ -39,7 +55,17 @@ func New(d Deps) *Service {
 	if maxRows == 0 {
 		maxRows = defaultExportMaxRows
 	}
-	return &Service{types: d.Types, statuses: d.Statuses, assets: d.Assets, profiles: d.Profiles, accounts: d.Accounts, events: d.Events, exportMaxRows: maxRows}
+	loc, now := d.Location, d.Now
+	if loc == nil {
+		loc = time.UTC
+	}
+	if now == nil {
+		now = time.Now
+	}
+	return &Service{
+		types: d.Types, statuses: d.Statuses, assets: d.Assets, profiles: d.Profiles, accounts: d.Accounts, events: d.Events,
+		exportMaxRows: maxRows, borrowing: d.Borrowing, loc: loc, now: now, mail: d.Mail, appURL: d.AppURL,
+	}
 }
 
 // Độ dài tối đa (ký tự), khớp CHECK của migration và maxLength của OpenAPI

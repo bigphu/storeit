@@ -89,3 +89,12 @@ describe('v1.0.2 labels and built-in chips', () => {
     expect(removeChip(s, chips[0])).toEqual({ fields: [{ key: 'description', op: 'contains', value: 'dock' }], page: 1 })
   })
 })
+
+describe('borrowable chip (US-10)', () => {
+  it('shows "Borrowable now" and removing it turns the filter off', () => {
+    const s = { q: '', includeRetired: false, borrowable: true, filters: [], fields: [], page: 1 }
+    const chip = filterChips(s, [], []).find((c) => c.kind === 'borrowable')
+    expect(chip?.label).toBe('Borrowable now')
+    expect(removeChip(s, chip!)).toEqual({ borrowable: undefined, page: 1 })
+  })
+})

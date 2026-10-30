@@ -10,6 +10,8 @@ export const Perm = {
   StatusManage: 'inventory.status.manage',
   AssetExport: 'inventory.asset.export',
   ExportProfileManage: 'inventory.export_profile.manage',
+  BorrowRequest: 'inventory.borrow.request',
+  BorrowManage: 'inventory.borrow.manage',
 } as const
 
 export type PermCode = (typeof Perm)[keyof typeof Perm]

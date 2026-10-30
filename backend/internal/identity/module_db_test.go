@@ -18,6 +18,7 @@ import (
 	"storeit/internal/identity/job"
 	"storeit/internal/identity/service"
 	"storeit/internal/identity/worker"
+	"storeit/internal/platform/auth"
 	"storeit/internal/platform/database/dbtest"
 	"storeit/internal/platform/events"
 	"storeit/internal/platform/jobs"
@@ -151,5 +152,41 @@ func TestModule_SeedAccount(t *testing.T) {
 	}
 	if _, err := m.SeedAccount(ctx, "weak-"+email, "X", "short", nil); err == nil {
 		t.Error("weak password accepted")
+	}
+}
+
+// SearchAccounts (contract cho module khác, vd chọn người mượn): chỉ account đang hoạt
+// động, tên hay email chứa q, không phân biệt hoa thường, sắp theo tên, tối đa limit
+func TestAccountReader_SearchAccounts(t *testing.T) {
+	m := newModule(t, identity.Config{})
+	ctx := context.Background()
+	tag := strings.ToLower(uuid.NewString()[:6])
+	seed := func(local, name string) uuid.UUID {
+		t.Helper()
+		id, err := m.SeedAccount(ctx, local+"-"+tag+"@storeit.test", name+" "+tag, "correct-horse-battery", []uuid.UUID{domain.EmployeeRoleID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	ha, an := seed("ha", "Phạm Thu Hà"), seed("an", "Nguyễn Văn An")
+	off := seed("off", "Disabled Hà")
+	if _, err := m.Service().DisableAccount(auth.WithActor(ctx, auth.SystemActor), off); err != nil {
+		t.Fatal(err)
+	}
+	r := m.AccountReader()
+
+	got, err := r.SearchAccounts(ctx, tag, 10)
+	if err != nil || len(got) != 2 || got[0].ID != an || got[1].ID != ha {
+		t.Fatalf("search %q = %+v, %v; want An then Hà, no disabled account", tag, got, err)
+	}
+	if got, _ := r.SearchAccounts(ctx, "hà "+tag, 10); len(got) != 1 || got[0].ID != ha {
+		t.Errorf("search by lower-case name = %+v, want Hà only", got)
+	}
+	if got, _ := r.SearchAccounts(ctx, strings.ToUpper("an-"+tag+"@"), 10); len(got) != 1 || got[0].ID != an {
+		t.Errorf("search by upper-case email = %+v, want An", got)
+	}
+	if got, _ := r.SearchAccounts(ctx, tag, 1); len(got) != 1 || got[0].ID != an {
+		t.Errorf("limit 1 = %+v, want only An", got)
 	}
 }

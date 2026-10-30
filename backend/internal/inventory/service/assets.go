@@ -33,6 +33,8 @@ type AssetView struct {
 	// liên kết thay thế (US-13): tài sản thay nó, và các tài sản nó đã thay
 	ReplacedBy *domain.ReplacementLink
 	Replaces   []domain.ReplacementLink
+	// Borrowing: tài sản đang giữ chỗ hay đang cho mượn (US-10); nil là không
+	Borrowing *BorrowingInfo
 }
 
 // ListAssets trả danh sách (không kèm giá trị thuộc tính); chi tiết dùng GetAsset
@@ -218,13 +220,17 @@ func (s *Service) fields(ctx context.Context, in AssetInput, cur *domain.Asset) 
 }
 
 // status chọn status cho tài sản: nil thì mặc định (tạo) hoặc giữ nguyên (sửa).
-// Status kind retired chỉ đặt bằng retire.
+// Status kind retired chỉ đặt bằng retire; Reserved và On loan chỉ việc mượn đặt (giữ nguyên
+// status đang có thì được, để sửa trường khác của tài sản đang mượn).
 func (s *Service) status(ctx context.Context, id *uuid.UUID, cur *domain.Asset) (domain.Status, error) {
 	if id == nil {
 		if cur != nil {
 			return s.statuses.Get(ctx, cur.StatusID)
 		}
 		return s.statuses.Default(ctx, domain.KindAvailable)
+	}
+	if domain.IsBorrowingStatus(*id) && (cur == nil || cur.StatusID != *id) {
+		return domain.Status{}, domain.ErrBorrowingStatus
 	}
 	st, err := s.statuses.Get(ctx, *id)
 	if err != nil {
@@ -252,5 +258,9 @@ func (s *Service) view(ctx context.Context, a domain.Asset) (AssetView, error) {
 	if err != nil {
 		return AssetView{}, err
 	}
-	return AssetView{Asset: a, Type: t, Status: st, ReplacedBy: by, Replaces: replaces}, nil
+	borrowing, err := s.borrowingInfo(ctx, a)
+	if err != nil {
+		return AssetView{}, err
+	}
+	return AssetView{Asset: a, Type: t, Status: st, ReplacedBy: by, Replaces: replaces, Borrowing: borrowing}, nil
 }

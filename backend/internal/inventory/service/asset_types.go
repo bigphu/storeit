@@ -54,6 +54,12 @@ func (s *Service) CreateAssetType(ctx context.Context, in domain.NewAssetType) (
 	if _, err := auth.Require(ctx, domain.PermTypeManage); err != nil {
 		return domain.AssetType{}, err
 	}
+	// tạo sẵn ở trạng thái cho mượn được cũng là quyết định của việc mượn
+	if in.CanBorrow {
+		if _, err := auth.Require(ctx, domain.PermBorrowManage); err != nil {
+			return domain.AssetType{}, err
+		}
+	}
 	code, err := domain.NormalizeTypeCode(in.Code)
 	if err != nil {
 		return domain.AssetType{}, err
@@ -75,12 +81,21 @@ func (s *Service) CreateAssetType(ctx context.Context, in domain.NewAssetType) (
 			attrs[i].Position = int32(i + 1)
 		}
 	}
-	return s.types.Create(ctx, domain.NewAssetType{Code: code, Name: name, Description: desc, Attributes: attrs})
+	return s.types.Create(ctx, domain.NewAssetType{Code: code, Name: name, Description: desc, CanBorrow: in.CanBorrow, Attributes: attrs})
 }
 
-func (s *Service) UpdateAssetType(ctx context.Context, id uuid.UUID, name, description *string, version int32) (domain.AssetType, error) {
-	if _, err := auth.Require(ctx, domain.PermTypeManage); err != nil {
-		return domain.AssetType{}, err
+// UpdateAssetType: tên, mô tả cần type.manage; "Can be borrowed" thuộc về việc mượn nên cần
+// borrow.manage (người quản lý kho bật được mà không cần quyền sửa loại)
+func (s *Service) UpdateAssetType(ctx context.Context, id uuid.UUID, name, description *string, canBorrow *bool, version int32) (domain.AssetType, error) {
+	if name != nil || description != nil || canBorrow == nil {
+		if _, err := auth.Require(ctx, domain.PermTypeManage); err != nil {
+			return domain.AssetType{}, err
+		}
+	}
+	if canBorrow != nil {
+		if _, err := auth.Require(ctx, domain.PermBorrowManage); err != nil {
+			return domain.AssetType{}, err
+		}
 	}
 	if name != nil {
 		n, err := domain.CleanLabel(*name, maxNameLen)
@@ -96,7 +111,7 @@ func (s *Service) UpdateAssetType(ctx context.Context, id uuid.UUID, name, descr
 		}
 		description = &d
 	}
-	return s.types.Update(ctx, id, name, description, version)
+	return s.types.Update(ctx, id, name, description, canBorrow, version)
 }
 
 // ArchiveAssetType: loại đã archive không chọn được cho tài sản mới; tài sản

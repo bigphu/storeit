@@ -24,6 +24,7 @@ x-go-env: &go-env
   IDENTITY_COOKIE_SECURE: "false"
   # Frontend: link trong thư mời / đặt lại mật khẩu trỏ về đây
   IDENTITY_APP_URL: ${APP_URL:-http://localhost:${WEB_PORT:-3000}}
+  INVENTORY_APP_URL: ${APP_URL:-http://localhost:${WEB_PORT:-3000}}
   # Administrator đầu tiên, tạo khi DB chưa có account nào (đặt trong .env)
   ADMIN_EMAIL: ${ADMIN_EMAIL:-}
   ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}

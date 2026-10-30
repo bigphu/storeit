@@ -250,3 +250,18 @@ describe('built-in field filters', () => {
     expect(fieldOperators('purchase_date')).toEqual(['eq', 'gt', 'gte', 'lt', 'lte'])
   })
 })
+
+describe('borrowable now (US-10)', () => {
+  it('round-trips through the URL and reaches the API', () => {
+    const s = parseAssetQuery({ borrowable: 'true' })
+    expect(s.borrowable).toBe(true)
+    expect(serializeAssetQuery(s)).toEqual({ borrowable: 'true' })
+    expect(toApiParams(s, 50).borrowable).toBe(true)
+  })
+  it('is off unless asked for', () => {
+    const s = parseAssetQuery({})
+    expect(s.borrowable).toBeFalsy()
+    expect(serializeAssetQuery(s)).toEqual({})
+    expect(toApiParams(s, 50).borrowable).toBeUndefined()
+  })
+})

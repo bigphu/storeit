@@ -23,6 +23,7 @@ import (
 const (
 	codeUniqueViolation     = "23505"
 	codeForeignKeyViolation = "23503"
+	codeCheckViolation      = "23514"
 )
 
 // pgCode trả mã lỗi Postgres và tên constraint, rỗng nếu không phải lỗi Postgres
@@ -111,7 +112,7 @@ func appendEvent(ctx context.Context, tx pgx.Tx, outbox *events.Outbox, typ, agg
 
 func toAssetType(t db.InventoryAssetType) domain.AssetType {
 	return domain.AssetType{
-		ID: t.ID, Code: t.Code, Name: t.Name, Description: t.Description, IsSystem: t.IsSystem,
+		ID: t.ID, Code: t.Code, Name: t.Name, Description: t.Description, IsSystem: t.IsSystem, CanBorrow: t.CanBorrow,
 		ArchivedAt: t.ArchivedAt, Version: t.Version, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	}
 }

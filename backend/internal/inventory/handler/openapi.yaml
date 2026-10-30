@@ -410,6 +410,10 @@ paths:
         - name: include_retired
           in: query
           schema: { type: boolean }
+        - name: borrowable
+          in: query
+          description: Chỉ tài sản cho mượn được ngay (loại bật can_borrow, status thuộc kind available).
+          schema: { type: boolean }
         - name: attr
           in: query
           description: |
@@ -754,6 +758,245 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AssetDetail' }
         default: { $ref: '#/components/responses/Problem' }
+  # Mượn tài sản (US-10): quyền kiểm ở service (request: phiếu của mình; manage: mọi phiếu)
+  /borrow-tickets:
+    get:
+      operationId: listBorrowTickets
+      summary: Borrow tickets; without inventory.borrow.manage only your own
+      parameters:
+        - name: state
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 5
+            items: { $ref: '#/components/schemas/TicketState' }
+        - name: mine
+          in: query
+          description: Only my own tickets (managers see everyone's otherwise)
+          schema: { type: boolean }
+        - name: q
+          in: query
+          description: Requester name or email, or asset type name
+          schema: { type: string, maxLength: 100 }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [number, -number, needed_from, -needed_from] }
+        - $ref: '../../../api/common.yaml#/components/parameters/Page'
+        - $ref: '../../../api/common.yaml#/components/parameters/PageSize'
+      responses:
+        "200":
+          description: One page of tickets, newest first by default
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BorrowTicketPage' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createBorrowTicket
+      summary: Ask to borrow an asset of a type (inventory.borrow.request)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateBorrowTicketRequest' }
+      responses:
+        "201":
+          description: The new ticket
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BorrowTicket' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /borrow-tickets/summary:
+    get:
+      operationId: borrowTicketSummary
+      summary: Tickets waiting and approved, for the sidebar (inventory.borrow.manage)
+      responses:
+        "200":
+          description: Counts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BorrowTicketSummary' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /borrowing/today:
+    get:
+      operationId: getBusinessDay
+      summary: Today in the app's time zone, the day borrowing dates are checked against (inventory.borrow.request or inventory.borrow.manage)
+      responses:
+        "200":
+          description: Today
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessDay' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /borrow-tickets/{ticketID}:
+    parameters:
+      - $ref: '#/components/parameters/TicketID'
+    get:
+      operationId: getBorrowTicket
+      summary: One ticket; someone else's is 404 without inventory.borrow.manage
+      responses:
+        "200":
+          description: The ticket
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BorrowTicket' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /borrow-tickets/{ticketID}/approve:
+    parameters:
+      - $ref: '#/components/parameters/TicketID'
+    post:
+      operationId: approveBorrowTicket
+      summary: Approve a waiting ticket by reserving an available asset of its type (inventory.borrow.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApproveTicketRequest' }
+      responses:
+        "200":
+          description: The approved ticket
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BorrowTicket' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /borrow-tickets/{ticketID}/reject:
+    parameters:
+      - $ref: '#/components/parameters/TicketID'
+    post:
+      operationId: rejectBorrowTicket
+      summary: Reject a waiting ticket with a reason (inventory.borrow.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RejectTicketRequest' }
+      responses:
+        "200":
+          description: The rejected ticket
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BorrowTicket' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /borrow-tickets/{ticketID}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/TicketID'
+    post:
+      operationId: cancelBorrowTicket
+      summary: Cancel your own ticket (waiting or approved), or as a manager an approved one; frees the reserved asset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CancelTicketRequest' }
+      responses:
+        "200":
+          description: The cancelled ticket
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BorrowTicket' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /borrow-tickets/{ticketID}/hand-over:
+    parameters:
+      - $ref: '#/components/parameters/TicketID'
+    post:
+      operationId: handOverBorrowTicket
+      summary: Hand the reserved asset over; the loan starts today (inventory.borrow.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VersionRequest' }
+      responses:
+        "200":
+          description: The handed-over ticket
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BorrowTicket' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /assets/{assetID}/lend:
+    parameters:
+      - $ref: '#/components/parameters/AssetID'
+    post:
+      operationId: lendAsset
+      summary: Lend an available asset directly, without a ticket (inventory.borrow.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LendRequest' }
+      responses:
+        "200":
+          description: The asset, now on loan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /assets/{assetID}/return:
+    parameters:
+      - $ref: '#/components/parameters/AssetID'
+    post:
+      operationId: returnAsset
+      summary: Record the return of an asset on loan (inventory.borrow.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReturnAssetRequest' }
+      responses:
+        "200":
+          description: The asset, with the status it was returned to
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetDetail' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /loans:
+    get:
+      operationId: listLoans
+      summary: Assets on loan now, overdue first by default (inventory.borrow.manage; mine=true needs only inventory.borrow.request)
+      parameters:
+        - name: mine
+          in: query
+          description: Only the caller's own loans
+          schema: { type: boolean }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [started_on, -started_on, return_by, -return_by] }
+        - $ref: '../../../api/common.yaml#/components/parameters/Page'
+        - $ref: '../../../api/common.yaml#/components/parameters/PageSize'
+      responses:
+        "200":
+          description: One page of active loans
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoanPage' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /borrowers:
+    get:
+      operationId: searchBorrowers
+      summary: Active accounts to lend to, by name or email (inventory.borrow.manage)
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 100 }
+      responses:
+        "200":
+          description: Up to 10 accounts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BorrowerList' }
+        default: { $ref: '#/components/responses/Problem' }
 components:
   securitySchemes:
     bearerAuth:
@@ -787,6 +1030,11 @@ components:
       in: path
       required: true
       schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+    TicketID:
+      name: ticketID
+      in: path
+      required: true
+      schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
     IncludeArchived:
       name: include_archived
       in: query
@@ -810,13 +1058,14 @@ components:
 
     AssetType:
       type: object
-      required: [id, code, name, description, is_system, version, created_at, updated_at]
+      required: [id, code, name, description, is_system, can_borrow, version, created_at, updated_at]
       properties:
         id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
         code: { type: string }
         name: { type: string }
         description: { type: string }
         is_system: { type: boolean }
+        can_borrow: { type: boolean, description: '"Can be borrowed": assets of this type can be lent (US-10)' }
         archived_at: { type: string, format: date-time }
         version: { type: integer, format: int32 }
         created_at: { type: string, format: date-time }
@@ -902,6 +1151,7 @@ components:
         code: { type: string, minLength: 1, maxLength: 32 }
         name: { type: string, minLength: 1, maxLength: 100 }
         description: { type: string, maxLength: 500 }
+        can_borrow: { type: boolean, description: Default false }
         attributes:
           type: array
           maxItems: 100
@@ -913,6 +1163,7 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 100 }
         description: { type: string, maxLength: 500 }
+        can_borrow: { type: boolean }
         version: { type: integer, format: int32 }
 
     UpdateAttributeRequest:
@@ -994,7 +1245,7 @@ components:
       required: [id, kind, type, occurred_at, actor, changes]
       properties:
         id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
-        kind: { type: string, enum: [created, updated, retired, restored, replaced, replaces, replacement_undone, other] }
+        kind: { type: string, enum: [created, updated, retired, restored, replaced, replaces, replacement_undone, reserved, reservation_cancelled, lent, returned, other] }
         type: { type: string, description: Raw event type }
         occurred_at: { type: string, format: date-time }
         actor:
@@ -1006,6 +1257,13 @@ components:
           items: { $ref: '#/components/schemas/ActivityChange' }
         reason: { type: string, description: 'On retired and replaced, when one was given' }
         related: { $ref: '#/components/schemas/ActivityRelated' }
+        person:
+          nullable: true
+          description: 'On reserved, reservation_cancelled, lent and returned: who it was reserved for, lent to or taken back from'
+          allOf: [{ $ref: '#/components/schemas/ActivityActor' }]
+        ticket_number: { type: integer, format: int64, description: Borrow ticket number; 0 for a direct loan }
+        return_by: { type: string, format: date, nullable: true }
+        status_name: { type: string, description: 'On returned: the status it went to, when not Available' }
 
     ActivityRelated:
       type: object
@@ -1114,6 +1372,204 @@ components:
         replaced_on: { type: string, format: date }
         reason: { type: string }
 
+    TicketState:
+      type: string
+      enum: [waiting, approved, rejected, cancelled, handed_over]
+
+    Person:
+      type: object
+      required: [id, name, email]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        name: { type: string }
+        email: { type: string }
+
+    AssetRef:
+      type: object
+      required: [id, tag, name]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        tag: { type: string }
+        name: { type: string }
+
+    BorrowTicket:
+      type: object
+      required: [id, number, state, requester, asset_type, requirements, needed_from, note, reason, version, created_at, updated_at]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        number: { type: integer, format: int64 }
+        state: { $ref: '#/components/schemas/TicketState' }
+        requester: { $ref: '#/components/schemas/Person' }
+        asset_type:
+          type: object
+          required: [id, name]
+          properties:
+            id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+            name: { type: string }
+        requirements:
+          type: array
+          description: Attribute conditions "<key>:<op>:<value>", as in the asset list's attr filter
+          items: { type: string }
+        suggested_asset:
+          nullable: true
+          allOf: [{ $ref: '#/components/schemas/AssetRef' }]
+        loan:
+          description: Only on GET of a handed-over ticket
+          allOf: [{ $ref: '#/components/schemas/TicketLoan' }]
+        asset:
+          nullable: true
+          description: The reserved asset, once approved
+          allOf: [{ $ref: '#/components/schemas/AssetRef' }]
+        needed_from: { type: string, format: date }
+        return_by: { type: string, format: date, nullable: true }
+        note: { type: string }
+        reason: { type: string, description: Why it was rejected or cancelled }
+        decided_at: { type: string, format: date-time, nullable: true }
+        cancelled_at: { type: string, format: date-time, nullable: true }
+        version: { type: integer, format: int32 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    BorrowTicketPage:
+      allOf:
+        - $ref: '../../../api/common.yaml#/components/schemas/Paged'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/BorrowTicket' }
+
+    BorrowTicketSummary:
+      type: object
+      required: [waiting, approved]
+      properties:
+        waiting: { type: integer, format: int64 }
+        approved: { type: integer, format: int64 }
+
+    BusinessDay:
+      type: object
+      required: [today]
+      properties:
+        today: { type: string, format: date }
+
+    CreateBorrowTicketRequest:
+      type: object
+      required: [asset_type_id, needed_from]
+      properties:
+        asset_type_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        requirements:
+          type: array
+          maxItems: 10
+          items: { type: string, maxLength: 600 }
+        suggested_asset_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        needed_from: { type: string, format: date }
+        return_by: { type: string, format: date }
+        note: { type: string, maxLength: 500 }
+
+    ApproveTicketRequest:
+      type: object
+      required: [asset_id, version]
+      properties:
+        asset_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        version: { type: integer, format: int32 }
+
+    RejectTicketRequest:
+      type: object
+      required: [reason, version]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500 }
+        version: { type: integer, format: int32 }
+
+    CancelTicketRequest:
+      type: object
+      required: [version]
+      properties:
+        reason: { type: string, maxLength: 500 }
+        version: { type: integer, format: int32 }
+
+    ReturnAssetRequest:
+      type: object
+      required: [returned_on, version]
+      properties:
+        returned_on: { type: string, format: date }
+        status_id:
+          description: Status after the return; omitted means the default Available
+          allOf: [{ $ref: '../../../api/common.yaml#/components/schemas/ID' }]
+        note: { type: string, maxLength: 500 }
+        version: { type: integer, format: int32 }
+
+    TicketLoan:
+      type: object
+      description: The loan a handed-over ticket became
+      required: [started_on]
+      properties:
+        started_on: { type: string, format: date }
+        return_by: { type: string, format: date, nullable: true }
+        returned_on: { type: string, format: date, nullable: true }
+
+    LendRequest:
+      type: object
+      required: [borrower_id, version]
+      properties:
+        borrower_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        return_by: { type: string, format: date }
+        version: { type: integer, format: int32 }
+
+    Loan:
+      type: object
+      required: [id, asset, asset_type_name, borrower, started_on, ticket_number, overdue_days]
+      properties:
+        id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        asset: { $ref: '#/components/schemas/AssetRef' }
+        asset_type_name: { type: string }
+        borrower: { $ref: '#/components/schemas/Person' }
+        ticket_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        ticket_number: { type: integer, format: int64, description: 0 for a direct loan }
+        started_on: { type: string, format: date }
+        return_by: { type: string, format: date, nullable: true }
+        overdue_days: { type: integer, description: 0 when not overdue }
+
+    LoanPage:
+      allOf:
+        - $ref: '../../../api/common.yaml#/components/schemas/Paged'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/Loan' }
+
+    BorrowerList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Person' }
+
+    AssetBorrowing:
+      type: object
+      required: [state, account, overdue_days]
+      properties:
+        state: { type: string, enum: [reserved, on_loan] }
+        account:
+          type: object
+          required: [id, name]
+          properties:
+            id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+            name: { type: string }
+        ticket:
+          nullable: true
+          type: object
+          required: [id, number]
+          properties:
+            id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+            number: { type: integer, format: int64 }
+        since: { type: string, format: date, nullable: true }
+        return_by: { type: string, format: date, nullable: true }
+        overdue_days: { type: integer }
+
     AssetDetail:
       type: object
       required: [id, tag, name, description, asset_type, status, version, created_at, updated_at, attributes, replaces]
@@ -1126,6 +1582,10 @@ components:
           type: array
           description: Assets this one replaced, newest first
           items: { $ref: '#/components/schemas/ReplacementLink' }
+        borrowing:
+          nullable: true
+          description: Reserved for someone, or on loan (US-10)
+          allOf: [{ $ref: '#/components/schemas/AssetBorrowing' }]
         id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
         tag: { type: string }
         name: { type: string }

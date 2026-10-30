@@ -22,6 +22,8 @@ type repos struct {
 	statuses *repository.StatusRepository
 	assets   *repository.AssetRepository
 	profiles *repository.ExportProfileRepository
+	// borrowing xếp job thật (river_job) để test đếm được thư
+	borrowing *repository.BorrowingRepository
 }
 
 func newRepos(t *testing.T) repos {
@@ -38,6 +40,8 @@ func newRepos(t *testing.T) repos {
 		statuses: repository.NewStatusRepository(pool, outbox),
 		assets:   repository.NewAssetRepository(pool, outbox),
 		profiles: repository.NewExportProfileRepository(pool, outbox),
+
+		borrowing: repository.NewBorrowingRepository(pool, outbox, jobs.NewRiver(client)),
 	}
 }
 

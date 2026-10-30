@@ -10,10 +10,12 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata" // múi giờ IANA cho ngày quá hạn, kể cả khi image không có zoneinfo
 
 	"github.com/riverqueue/river"
 
 	"storeit/internal/identity"
+	"storeit/internal/inventory"
 	"storeit/internal/platform/config"
 	"storeit/internal/platform/database"
 	"storeit/internal/platform/events"
@@ -70,13 +72,25 @@ func run() error {
 		return err
 	}
 
+	inventoryMod, err := inventory.New(inventory.Deps{
+		Pool: pool, Outbox: outbox, Jobs: jobs.NewRiver(insertClient), Accounts: identityMod.AccountReader(),
+		Mail: sender, Config: cfg.Inventory,
+	})
+	if err != nil {
+		return err
+	}
+
 	workers := river.NewWorkers()
 	events.RegisterWorker(workers, pool, registry, identityMod.LoadActor)
 	if err := identityMod.RegisterWorkers(workers); err != nil {
 		return err
 	}
+	if err := inventoryMod.RegisterWorkers(workers); err != nil {
+		return err
+	}
 
-	client, err := jobs.NewWorkerClient(pool, log, cfg.Jobs, workers, identity.PeriodicJobs())
+	periodic := append(identity.PeriodicJobs(), inventory.PeriodicJobs()...)
+	client, err := jobs.NewWorkerClient(pool, log, cfg.Jobs, workers, periodic)
 	if err != nil {
 		return err
 	}

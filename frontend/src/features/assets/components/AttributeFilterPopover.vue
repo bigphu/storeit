@@ -15,7 +15,12 @@ import { type AttrFilterRow, BUILTIN_FIELDS, type FieldFilterRow, fieldOperators
 // "+ Filter": thêm một điều kiện "trường / toán tử / giá trị" (các điều kiện kết hợp AND).
 // Trường có sẵn (ngày mua, ngày tạo, ngày sửa, mô tả) luôn có; thuộc tính khi đang xem một loại.
 // Trường có sẵn mang khoá "field:<key>" trong ô chọn để không trùng key thuộc tính.
-const props = defineProps<{ attributes: Attribute[] }>()
+// builtins false: chỉ thuộc tính của loại (phiếu mượn); lead: câu dẫn đầu hộp; action: nhãn nút thêm
+const props = withDefaults(defineProps<{ attributes: Attribute[]; builtins?: boolean; lead?: string; action?: string }>(), {
+  builtins: true,
+  lead: 'Show only assets that match.',
+  action: 'Add filter',
+})
 const emit = defineEmits<{ add: [filter: AttrFilterRow]; addField: [filter: FieldFilterRow] }>()
 
 const pop = ref<InstanceType<typeof Popover>>()
@@ -25,7 +30,7 @@ const builtin = computed(() => BUILTIN_FIELDS.find((b) => `field:${b.key}` === r
 const dataType = computed(() => builtin.value?.data_type ?? attr.value?.data_type)
 
 const groups = computed(() => [
-  { label: 'Built-in', items: BUILTIN_FIELDS.map((b) => ({ label: b.label, value: `field:${b.key}` })) },
+  ...(props.builtins ? [{ label: 'Built-in', items: BUILTIN_FIELDS.map((b) => ({ label: b.label, value: `field:${b.key}` })) }] : []),
   ...(props.attributes.length ? [{ label: 'Attributes', items: props.attributes.map((a) => ({ label: a.label, value: a.key })) }] : []),
 ])
 
@@ -37,7 +42,7 @@ function opsFor(key: string): string[] {
 }
 
 function reset() {
-  const key = props.attributes[0]?.key ?? `field:${BUILTIN_FIELDS[0].key}`
+  const key = props.attributes[0]?.key ?? (props.builtins ? `field:${BUILTIN_FIELDS[0].key}` : '')
   row.value = { key, op: opsFor(key)[0], value: '' }
 }
 
@@ -76,7 +81,7 @@ defineExpose({
 <template>
   <Popover ref="pop">
     <form class="filter-form" @submit.prevent="add">
-      <p class="pop-lead">Show only assets that match.</p>
+      <p class="pop-lead">{{ lead }}</p>
       <label for="filter-attr">Field</label>
       <Select
         :model-value="row.key"
@@ -150,7 +155,7 @@ defineExpose({
       </template>
       <div class="actions">
         <Button label="Cancel" size="small" text severity="secondary" @click="pop?.hide()" />
-        <Button type="submit" label="Add filter" size="small" :disabled="row.value === ''" />
+        <Button type="submit" :label="action" size="small" :disabled="row.value === ''" />
       </div>
     </form>
   </Popover>

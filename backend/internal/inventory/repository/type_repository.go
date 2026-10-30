@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -55,7 +56,7 @@ func (r *TypeRepository) Create(ctx context.Context, in domain.NewAssetType) (do
 	err = database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
 		q := r.q.WithTx(tx)
 		if _, err := q.CreateAssetType(ctx, db.CreateAssetTypeParams{
-			ID: id, Code: in.Code, Name: in.Name, Description: in.Description,
+			ID: id, Code: in.Code, Name: in.Name, Description: in.Description, CanBorrow: in.CanBorrow,
 		}); err != nil {
 			return mapWriteErr(err, "create asset type")
 		}
@@ -75,7 +76,7 @@ func (r *TypeRepository) Create(ctx context.Context, in domain.NewAssetType) (do
 	return out, err
 }
 
-func (r *TypeRepository) Update(ctx context.Context, id uuid.UUID, name, description *string, version int32) (domain.AssetType, error) {
+func (r *TypeRepository) Update(ctx context.Context, id uuid.UUID, name, description *string, canBorrow *bool, version int32) (domain.AssetType, error) {
 	var out domain.AssetType
 	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
 		q := r.q.WithTx(tx)
@@ -86,7 +87,7 @@ func (r *TypeRepository) Update(ctx context.Context, id uuid.UUID, name, descrip
 		if cur.Version != version {
 			return domain.ErrAssetTypeChanged
 		}
-		newName, newDesc := cur.Name, cur.Description
+		newName, newDesc, newBorrow := cur.Name, cur.Description, cur.CanBorrow
 		var changes []contract.FieldChange
 		if name != nil && *name != cur.Name {
 			changes = append(changes, change("name", cur.Name, *name))
@@ -96,7 +97,11 @@ func (r *TypeRepository) Update(ctx context.Context, id uuid.UUID, name, descrip
 			changes = append(changes, change("description", cur.Description, *description))
 			newDesc = *description
 		}
-		row, err := q.UpdateAssetType(ctx, db.UpdateAssetTypeParams{ID: id, Name: newName, Description: newDesc, Version: version})
+		if canBorrow != nil && *canBorrow != cur.CanBorrow {
+			changes = append(changes, change("can_borrow", strconv.FormatBool(cur.CanBorrow), strconv.FormatBool(*canBorrow)))
+			newBorrow = *canBorrow
+		}
+		row, err := q.UpdateAssetType(ctx, db.UpdateAssetTypeParams{ID: id, Name: newName, Description: newDesc, CanBorrow: newBorrow, Version: version})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.ErrAssetTypeChanged
 		}

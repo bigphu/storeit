@@ -8,6 +8,7 @@ import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { usePreferences } from '@/lib/preferences'
 import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
+import { useTicketCounts } from '@/features/borrowing/api'
 import { useTypeNav } from '../useTypeNav'
 
 // Sidebar hai cấp: cấp workspace (mọi tài sản, cấu hình, quản trị) và cấp loại
@@ -28,6 +29,8 @@ const route = useRoute()
 const prefs = usePreferences()
 const nav = useTypeNav()
 const { data: types } = useAssetTypes(false, true)
+// số phiếu đang chờ duyệt, cạnh mục Tickets (chỉ người quản lý)
+const { data: ticketCounts } = useTicketCounts(() => session.can(Perm.BorrowManage))
 const { data: scopeType } = useAssetType(nav.scopeTypeId)
 
 // loại mở gần đây (cho bộ chọn loại)
@@ -60,6 +63,29 @@ const workspace = computed<NavItem[]>(() => {
         })
       }
     }
+  }
+  // Mượn (US-10, US-11): phiếu của tôi, đồ tôi đang mượn; người quản lý thêm hàng chờ duyệt (có số) và đồ đang cho mượn
+  const borrowing: NavItem[] = []
+  if (session.can(Perm.BorrowRequest)) {
+    borrowing.push(
+      { label: 'My tickets', icon: 'pi pi-ticket', route: '/borrowing/mine', active: name.value === 'my-tickets' },
+      { label: 'My loans', icon: 'pi pi-clock', route: '/borrowing/mine/loans', active: name.value === 'my-loans' },
+    )
+  }
+  if (session.can(Perm.BorrowManage)) {
+    borrowing.push(
+      {
+        label: 'Tickets',
+        icon: 'pi pi-inbox',
+        route: '/borrowing/tickets',
+        count: ticketCounts.value?.waiting || undefined,
+        active: name.value === 'tickets' || name.value === 'ticket',
+      },
+      { label: 'On loan', icon: 'pi pi-clock', route: '/borrowing/loans', active: name.value === 'loans' },
+    )
+  }
+  if (borrowing.length) items.push({ label: 'Borrowing', items: borrowing })
+  if (session.can(Perm.AssetRead)) {
     items.push({
       label: 'Configuration',
       items: [

@@ -61,45 +61,49 @@ WHERE ($1::text IS NULL
   AND ($5::uuid IS NULL OR a.location_id = $5::uuid)
   AND ($6::uuid IS NULL OR a.holder_member_id = $6::uuid)
   AND ($7::boolean OR a.retired_at IS NULL)
-  AND ($8::uuid[] IS NULL OR a.id = ANY($8::uuid[]))
+  -- "Borrowable now" (US-10): loại cho mượn được, chưa archive, status thuộc kind available
+  AND (NOT $8::boolean OR (s.kind = 'available' AND EXISTS (
+        SELECT 1 FROM inventory.asset_types bt
+        WHERE bt.id = a.asset_type_id AND bt.can_borrow AND bt.archived_at IS NULL)))
+  AND ($9::uuid[] IS NULL OR a.id = ANY($9::uuid[]))
   AND NOT EXISTS (
     -- mọi điều kiện i (f_attrs[i], f_ops[i], f_vals[i]) phải có giá trị khớp; giá trị đã kiểm
     -- ở Go nên ép kiểu trong nhánh CASE không lỗi
-    SELECT 1 FROM generate_subscripts($9::text[], 1) AS f(i)
+    SELECT 1 FROM generate_subscripts($10::text[], 1) AS f(i)
     WHERE NOT EXISTS (
       SELECT 1 FROM inventory.asset_attribute_values v
-      WHERE v.asset_id = a.id AND v.attribute_id = ($10::uuid[])[f.i] AND CASE ($9::text[])[f.i]
-        WHEN 'text_eq' THEN lower(v.value_text) = lower(($11::text[])[f.i])
-        WHEN 'text_contains' THEN v.value_text ILIKE '%' || ($11::text[])[f.i] || '%'
-        WHEN 'number_eq' THEN v.value_number = ($11::text[])[f.i]::numeric
-        WHEN 'number_gt' THEN v.value_number > ($11::text[])[f.i]::numeric
-        WHEN 'number_gte' THEN v.value_number >= ($11::text[])[f.i]::numeric
-        WHEN 'number_lt' THEN v.value_number < ($11::text[])[f.i]::numeric
-        WHEN 'number_lte' THEN v.value_number <= ($11::text[])[f.i]::numeric
-        WHEN 'date_eq' THEN v.value_date = ($11::text[])[f.i]::date
-        WHEN 'date_gt' THEN v.value_date > ($11::text[])[f.i]::date
-        WHEN 'date_gte' THEN v.value_date >= ($11::text[])[f.i]::date
-        WHEN 'date_lt' THEN v.value_date < ($11::text[])[f.i]::date
-        WHEN 'date_lte' THEN v.value_date <= ($11::text[])[f.i]::date
-        WHEN 'boolean_eq' THEN v.value_bool = ($11::text[])[f.i]::boolean
-        WHEN 'select_eq' THEN v.value_option_id = ($11::text[])[f.i]::uuid
-        WHEN 'select_in' THEN v.value_option_id = ANY(string_to_array(($11::text[])[f.i], ',')::uuid[])
+      WHERE v.asset_id = a.id AND v.attribute_id = ($11::uuid[])[f.i] AND CASE ($10::text[])[f.i]
+        WHEN 'text_eq' THEN lower(v.value_text) = lower(($12::text[])[f.i])
+        WHEN 'text_contains' THEN v.value_text ILIKE '%' || ($12::text[])[f.i] || '%'
+        WHEN 'number_eq' THEN v.value_number = ($12::text[])[f.i]::numeric
+        WHEN 'number_gt' THEN v.value_number > ($12::text[])[f.i]::numeric
+        WHEN 'number_gte' THEN v.value_number >= ($12::text[])[f.i]::numeric
+        WHEN 'number_lt' THEN v.value_number < ($12::text[])[f.i]::numeric
+        WHEN 'number_lte' THEN v.value_number <= ($12::text[])[f.i]::numeric
+        WHEN 'date_eq' THEN v.value_date = ($12::text[])[f.i]::date
+        WHEN 'date_gt' THEN v.value_date > ($12::text[])[f.i]::date
+        WHEN 'date_gte' THEN v.value_date >= ($12::text[])[f.i]::date
+        WHEN 'date_lt' THEN v.value_date < ($12::text[])[f.i]::date
+        WHEN 'date_lte' THEN v.value_date <= ($12::text[])[f.i]::date
+        WHEN 'boolean_eq' THEN v.value_bool = ($12::text[])[f.i]::boolean
+        WHEN 'select_eq' THEN v.value_option_id = ($12::text[])[f.i]::uuid
+        WHEN 'select_in' THEN v.value_option_id = ANY(string_to_array(($12::text[])[f.i], ',')::uuid[])
       END))
   AND NOT EXISTS (
     -- điều kiện trên trường có sẵn (b_fields[i], b_ops[i], b_vals[i]), giá trị đã kiểm ở Go.
     -- COALESCE: so với NULL (chưa có ngày mua) là không khớp, không được lọt qua
-    SELECT 1 FROM generate_subscripts($12::text[], 1) AS b(i)
-    WHERE NOT COALESCE(CASE ($13::text[])[b.i] || '_' || ($12::text[])[b.i]
-        WHEN 'purchase_date_eq' THEN a.purchase_date = ($14::text[])[b.i]::date
-        WHEN 'purchase_date_gt' THEN a.purchase_date > ($14::text[])[b.i]::date
-        WHEN 'purchase_date_gte' THEN a.purchase_date >= ($14::text[])[b.i]::date
-        WHEN 'purchase_date_lt' THEN a.purchase_date < ($14::text[])[b.i]::date
-        WHEN 'purchase_date_lte' THEN a.purchase_date <= ($14::text[])[b.i]::date
-        WHEN 'created_at_gte' THEN a.created_at >= ($14::text[])[b.i]::timestamptz
-        WHEN 'created_at_lt' THEN a.created_at < ($14::text[])[b.i]::timestamptz
-        WHEN 'updated_at_gte' THEN a.updated_at >= ($14::text[])[b.i]::timestamptz
-        WHEN 'updated_at_lt' THEN a.updated_at < ($14::text[])[b.i]::timestamptz
-        WHEN 'description_contains' THEN a.description ILIKE '%' || ($14::text[])[b.i] || '%'
+    SELECT 1 FROM generate_subscripts($13::text[], 1) AS b(i)
+    WHERE NOT COALESCE(CASE ($14::text[])[b.i] || '_' || ($13::text[])[b.i]
+        WHEN 'purchase_date_eq' THEN a.purchase_date = ($15::text[])[b.i]::date
+        WHEN 'purchase_date_gt' THEN a.purchase_date > ($15::text[])[b.i]::date
+        WHEN 'purchase_date_gte' THEN a.purchase_date >= ($15::text[])[b.i]::date
+        WHEN 'purchase_date_lt' THEN a.purchase_date < ($15::text[])[b.i]::date
+        WHEN 'purchase_date_lte' THEN a.purchase_date <= ($15::text[])[b.i]::date
+        WHEN 'created_at_gte' THEN a.created_at >= ($15::text[])[b.i]::timestamptz
+        WHEN 'created_at_lt' THEN a.created_at < ($15::text[])[b.i]::timestamptz
+        WHEN 'updated_at_gte' THEN a.updated_at >= ($15::text[])[b.i]::timestamptz
+        WHEN 'updated_at_lt' THEN a.updated_at < ($15::text[])[b.i]::timestamptz
+        WHEN 'description_contains' THEN a.description ILIKE '%' || ($15::text[])[b.i] || '%'
       END, false))
 `
 
@@ -111,6 +115,7 @@ type CountAssetsParams struct {
 	LocationID     *uuid.UUID
 	HolderMemberID *uuid.UUID
 	IncludeRetired bool
+	Borrowable     bool
 	Ids            []uuid.UUID
 	FOps           []string
 	FAttrs         []uuid.UUID
@@ -129,6 +134,7 @@ func (q *Queries) CountAssets(ctx context.Context, arg CountAssetsParams) (int64
 		arg.LocationID,
 		arg.HolderMemberID,
 		arg.IncludeRetired,
+		arg.Borrowable,
 		arg.Ids,
 		arg.FOps,
 		arg.FAttrs,
@@ -385,74 +391,78 @@ WHERE ($2::text IS NULL
   AND ($6::uuid IS NULL OR a.location_id = $6::uuid)
   AND ($7::uuid IS NULL OR a.holder_member_id = $7::uuid)
   AND ($8::boolean OR a.retired_at IS NULL)
-  AND ($9::uuid[] IS NULL OR a.id = ANY($9::uuid[]))
+  -- "Borrowable now" (US-10): loại cho mượn được, chưa archive, status thuộc kind available
+  AND (NOT $9::boolean OR (s.kind = 'available' AND EXISTS (
+        SELECT 1 FROM inventory.asset_types bt
+        WHERE bt.id = a.asset_type_id AND bt.can_borrow AND bt.archived_at IS NULL)))
+  AND ($10::uuid[] IS NULL OR a.id = ANY($10::uuid[]))
   AND NOT EXISTS (
     -- mọi điều kiện i (f_attrs[i], f_ops[i], f_vals[i]) phải có giá trị khớp; giá trị đã kiểm
     -- ở Go nên ép kiểu trong nhánh CASE không lỗi
-    SELECT 1 FROM generate_subscripts($10::text[], 1) AS f(i)
+    SELECT 1 FROM generate_subscripts($11::text[], 1) AS f(i)
     WHERE NOT EXISTS (
       SELECT 1 FROM inventory.asset_attribute_values v
-      WHERE v.asset_id = a.id AND v.attribute_id = ($11::uuid[])[f.i] AND CASE ($10::text[])[f.i]
-        WHEN 'text_eq' THEN lower(v.value_text) = lower(($12::text[])[f.i])
-        WHEN 'text_contains' THEN v.value_text ILIKE '%' || ($12::text[])[f.i] || '%'
-        WHEN 'number_eq' THEN v.value_number = ($12::text[])[f.i]::numeric
-        WHEN 'number_gt' THEN v.value_number > ($12::text[])[f.i]::numeric
-        WHEN 'number_gte' THEN v.value_number >= ($12::text[])[f.i]::numeric
-        WHEN 'number_lt' THEN v.value_number < ($12::text[])[f.i]::numeric
-        WHEN 'number_lte' THEN v.value_number <= ($12::text[])[f.i]::numeric
-        WHEN 'date_eq' THEN v.value_date = ($12::text[])[f.i]::date
-        WHEN 'date_gt' THEN v.value_date > ($12::text[])[f.i]::date
-        WHEN 'date_gte' THEN v.value_date >= ($12::text[])[f.i]::date
-        WHEN 'date_lt' THEN v.value_date < ($12::text[])[f.i]::date
-        WHEN 'date_lte' THEN v.value_date <= ($12::text[])[f.i]::date
-        WHEN 'boolean_eq' THEN v.value_bool = ($12::text[])[f.i]::boolean
-        WHEN 'select_eq' THEN v.value_option_id = ($12::text[])[f.i]::uuid
-        WHEN 'select_in' THEN v.value_option_id = ANY(string_to_array(($12::text[])[f.i], ',')::uuid[])
+      WHERE v.asset_id = a.id AND v.attribute_id = ($12::uuid[])[f.i] AND CASE ($11::text[])[f.i]
+        WHEN 'text_eq' THEN lower(v.value_text) = lower(($13::text[])[f.i])
+        WHEN 'text_contains' THEN v.value_text ILIKE '%' || ($13::text[])[f.i] || '%'
+        WHEN 'number_eq' THEN v.value_number = ($13::text[])[f.i]::numeric
+        WHEN 'number_gt' THEN v.value_number > ($13::text[])[f.i]::numeric
+        WHEN 'number_gte' THEN v.value_number >= ($13::text[])[f.i]::numeric
+        WHEN 'number_lt' THEN v.value_number < ($13::text[])[f.i]::numeric
+        WHEN 'number_lte' THEN v.value_number <= ($13::text[])[f.i]::numeric
+        WHEN 'date_eq' THEN v.value_date = ($13::text[])[f.i]::date
+        WHEN 'date_gt' THEN v.value_date > ($13::text[])[f.i]::date
+        WHEN 'date_gte' THEN v.value_date >= ($13::text[])[f.i]::date
+        WHEN 'date_lt' THEN v.value_date < ($13::text[])[f.i]::date
+        WHEN 'date_lte' THEN v.value_date <= ($13::text[])[f.i]::date
+        WHEN 'boolean_eq' THEN v.value_bool = ($13::text[])[f.i]::boolean
+        WHEN 'select_eq' THEN v.value_option_id = ($13::text[])[f.i]::uuid
+        WHEN 'select_in' THEN v.value_option_id = ANY(string_to_array(($13::text[])[f.i], ',')::uuid[])
       END))
   AND NOT EXISTS (
     -- điều kiện trên trường có sẵn (b_fields[i], b_ops[i], b_vals[i]), giá trị đã kiểm ở Go.
     -- COALESCE: so với NULL (chưa có ngày mua) là không khớp, không được lọt qua
-    SELECT 1 FROM generate_subscripts($13::text[], 1) AS b(i)
-    WHERE NOT COALESCE(CASE ($14::text[])[b.i] || '_' || ($13::text[])[b.i]
-        WHEN 'purchase_date_eq' THEN a.purchase_date = ($15::text[])[b.i]::date
-        WHEN 'purchase_date_gt' THEN a.purchase_date > ($15::text[])[b.i]::date
-        WHEN 'purchase_date_gte' THEN a.purchase_date >= ($15::text[])[b.i]::date
-        WHEN 'purchase_date_lt' THEN a.purchase_date < ($15::text[])[b.i]::date
-        WHEN 'purchase_date_lte' THEN a.purchase_date <= ($15::text[])[b.i]::date
-        WHEN 'created_at_gte' THEN a.created_at >= ($15::text[])[b.i]::timestamptz
-        WHEN 'created_at_lt' THEN a.created_at < ($15::text[])[b.i]::timestamptz
-        WHEN 'updated_at_gte' THEN a.updated_at >= ($15::text[])[b.i]::timestamptz
-        WHEN 'updated_at_lt' THEN a.updated_at < ($15::text[])[b.i]::timestamptz
-        WHEN 'description_contains' THEN a.description ILIKE '%' || ($15::text[])[b.i] || '%'
+    SELECT 1 FROM generate_subscripts($14::text[], 1) AS b(i)
+    WHERE NOT COALESCE(CASE ($15::text[])[b.i] || '_' || ($14::text[])[b.i]
+        WHEN 'purchase_date_eq' THEN a.purchase_date = ($16::text[])[b.i]::date
+        WHEN 'purchase_date_gt' THEN a.purchase_date > ($16::text[])[b.i]::date
+        WHEN 'purchase_date_gte' THEN a.purchase_date >= ($16::text[])[b.i]::date
+        WHEN 'purchase_date_lt' THEN a.purchase_date < ($16::text[])[b.i]::date
+        WHEN 'purchase_date_lte' THEN a.purchase_date <= ($16::text[])[b.i]::date
+        WHEN 'created_at_gte' THEN a.created_at >= ($16::text[])[b.i]::timestamptz
+        WHEN 'created_at_lt' THEN a.created_at < ($16::text[])[b.i]::timestamptz
+        WHEN 'updated_at_gte' THEN a.updated_at >= ($16::text[])[b.i]::timestamptz
+        WHEN 'updated_at_lt' THEN a.updated_at < ($16::text[])[b.i]::timestamptz
+        WHEN 'description_contains' THEN a.description ILIKE '%' || ($16::text[])[b.i] || '%'
       END, false))
 ORDER BY
-  CASE WHEN $16::text = 'tag' THEN a.tag END ASC,
-  CASE WHEN $16::text = '-tag' THEN a.tag END DESC,
-  CASE WHEN $16::text = 'name' THEN lower(a.name) END ASC,
-  CASE WHEN $16::text = '-name' THEN lower(a.name) END DESC,
-  CASE WHEN $16::text = 'purchase_date' THEN a.purchase_date END ASC NULLS LAST,
-  CASE WHEN $16::text = '-purchase_date' THEN a.purchase_date END DESC NULLS LAST,
-  CASE WHEN $16::text = 'updated_at' THEN a.updated_at END ASC,
-  CASE WHEN $16::text = '-updated_at' THEN a.updated_at END DESC,
-  CASE WHEN $16::text = 'asset_type' THEN lower(t.name) END ASC,
-  CASE WHEN $16::text = '-asset_type' THEN lower(t.name) END DESC,
-  CASE WHEN $16::text = 'status' THEN s.position END ASC,
-  CASE WHEN $16::text = 'status' THEN lower(s.name) END ASC,
-  CASE WHEN $16::text = '-status' THEN s.position END DESC,
-  CASE WHEN $16::text = '-status' THEN lower(s.name) END DESC,
+  CASE WHEN $17::text = 'tag' THEN a.tag END ASC,
+  CASE WHEN $17::text = '-tag' THEN a.tag END DESC,
+  CASE WHEN $17::text = 'name' THEN lower(a.name) END ASC,
+  CASE WHEN $17::text = '-name' THEN lower(a.name) END DESC,
+  CASE WHEN $17::text = 'purchase_date' THEN a.purchase_date END ASC NULLS LAST,
+  CASE WHEN $17::text = '-purchase_date' THEN a.purchase_date END DESC NULLS LAST,
+  CASE WHEN $17::text = 'updated_at' THEN a.updated_at END ASC,
+  CASE WHEN $17::text = '-updated_at' THEN a.updated_at END DESC,
+  CASE WHEN $17::text = 'asset_type' THEN lower(t.name) END ASC,
+  CASE WHEN $17::text = '-asset_type' THEN lower(t.name) END DESC,
+  CASE WHEN $17::text = 'status' THEN s.position END ASC,
+  CASE WHEN $17::text = 'status' THEN lower(s.name) END ASC,
+  CASE WHEN $17::text = '-status' THEN s.position END DESC,
+  CASE WHEN $17::text = '-status' THEN lower(s.name) END DESC,
   -- theo thuộc tính: không có giá trị luôn ở cuối
-  CASE WHEN $16::text = 'attr_text' THEN lower(sv.value_text) END ASC NULLS LAST,
-  CASE WHEN $16::text = '-attr_text' THEN lower(sv.value_text) END DESC NULLS LAST,
-  CASE WHEN $16::text = 'attr_number' THEN sv.value_number END ASC NULLS LAST,
-  CASE WHEN $16::text = '-attr_number' THEN sv.value_number END DESC NULLS LAST,
-  CASE WHEN $16::text = 'attr_date' THEN sv.value_date END ASC NULLS LAST,
-  CASE WHEN $16::text = '-attr_date' THEN sv.value_date END DESC NULLS LAST,
-  CASE WHEN $16::text = 'attr_boolean' THEN sv.value_bool END ASC NULLS LAST,
-  CASE WHEN $16::text = '-attr_boolean' THEN sv.value_bool END DESC NULLS LAST,
-  CASE WHEN $16::text = 'attr_select' THEN so.position END ASC NULLS LAST,
-  CASE WHEN $16::text = '-attr_select' THEN so.position END DESC NULLS LAST,
+  CASE WHEN $17::text = 'attr_text' THEN lower(sv.value_text) END ASC NULLS LAST,
+  CASE WHEN $17::text = '-attr_text' THEN lower(sv.value_text) END DESC NULLS LAST,
+  CASE WHEN $17::text = 'attr_number' THEN sv.value_number END ASC NULLS LAST,
+  CASE WHEN $17::text = '-attr_number' THEN sv.value_number END DESC NULLS LAST,
+  CASE WHEN $17::text = 'attr_date' THEN sv.value_date END ASC NULLS LAST,
+  CASE WHEN $17::text = '-attr_date' THEN sv.value_date END DESC NULLS LAST,
+  CASE WHEN $17::text = 'attr_boolean' THEN sv.value_bool END ASC NULLS LAST,
+  CASE WHEN $17::text = '-attr_boolean' THEN sv.value_bool END DESC NULLS LAST,
+  CASE WHEN $17::text = 'attr_select' THEN so.position END ASC NULLS LAST,
+  CASE WHEN $17::text = '-attr_select' THEN so.position END DESC NULLS LAST,
   a.tag
-LIMIT $18 OFFSET $17
+LIMIT $19 OFFSET $18
 `
 
 type ListAssetsParams struct {
@@ -464,6 +474,7 @@ type ListAssetsParams struct {
 	LocationID     *uuid.UUID
 	HolderMemberID *uuid.UUID
 	IncludeRetired bool
+	Borrowable     bool
 	Ids            []uuid.UUID
 	FOps           []string
 	FAttrs         []uuid.UUID
@@ -507,6 +518,7 @@ func (q *Queries) ListAssets(ctx context.Context, arg ListAssetsParams) ([]ListA
 		arg.LocationID,
 		arg.HolderMemberID,
 		arg.IncludeRetired,
+		arg.Borrowable,
 		arg.Ids,
 		arg.FOps,
 		arg.FAttrs,
@@ -653,6 +665,41 @@ type RetireAssetParams struct {
 
 func (q *Queries) RetireAsset(ctx context.Context, arg RetireAssetParams) (InventoryAsset, error) {
 	row := q.db.QueryRow(ctx, retireAsset, arg.Reason, arg.StatusID, arg.ID)
+	var i InventoryAsset
+	err := row.Scan(
+		&i.ID,
+		&i.Tag,
+		&i.Name,
+		&i.Description,
+		&i.AssetTypeID,
+		&i.StatusID,
+		&i.LocationID,
+		&i.HolderMemberID,
+		&i.PurchaseDate,
+		&i.RetiredAt,
+		&i.RetiredReason,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const setAssetStatusQuiet = `-- name: SetAssetStatusQuiet :one
+UPDATE inventory.assets
+SET status_id = $1, version = version + 1, updated_at = now()
+WHERE id = $2
+RETURNING id, tag, name, description, asset_type_id, status_id, location_id, holder_member_id, purchase_date, retired_at, retired_reason, version, created_at, updated_at
+`
+
+type SetAssetStatusQuietParams struct {
+	StatusID uuid.UUID
+	ID       uuid.UUID
+}
+
+// Đổi status do việc mượn (giữ chỗ, giao, huỷ): không qua UpdateAsset, không event asset_updated
+func (q *Queries) SetAssetStatusQuiet(ctx context.Context, arg SetAssetStatusQuietParams) (InventoryAsset, error) {
+	row := q.db.QueryRow(ctx, setAssetStatusQuiet, arg.StatusID, arg.ID)
 	var i InventoryAsset
 	err := row.Scan(
 		&i.ID,

@@ -1,6 +1,7 @@
 // Lịch sử hoạt động của tài sản: câu tóm tắt mỗi dòng, thời gian tương đối, chữ dài cần thu
 import type { AssetActivityEntry } from '@/lib/api/types'
 import { formatDay } from '@/lib/dates'
+import { shortDay } from '@/features/borrowing/borrowing'
 
 export type ActivityEntry = AssetActivityEntry
 
@@ -22,9 +23,25 @@ export function activitySummary(e: ActivityEntry): { who: string; text: string }
       return { who, text: `recorded that this asset replaces ${e.related?.tag ?? '?'}` }
     case 'replacement_undone':
       return { who, text: `undid the replacement ${e.related?.role === 'new' ? 'of' : 'by'} ${e.related?.tag ?? '?'}` }
+    case 'reserved':
+      return { who, text: `reserved this asset for ${borrowingTail(e)}` }
+    case 'reservation_cancelled':
+      return { who, text: `cancelled the reservation for ${borrowingTail(e)}` }
+    case 'lent':
+      return { who, text: e.ticket_number ? `handed this asset over to ${borrowingTail(e)}` : `lent this asset to ${borrowingTail(e)}` }
+    case 'returned':
+      return { who, text: `took this asset back from ${borrowingTail(e)}${e.status_name ? ` · now ${e.status_name}` : ''}` }
     default:
       return { who, text: `recorded ${e.type}` }
   }
+}
+
+// borrowingTail: "Phạm Thu Hà (ticket #12) · return by 7 Nov" của các mục mượn (US-10)
+function borrowingTail(e: ActivityEntry): string {
+  let s = e.person?.name ?? 'someone'
+  if (e.ticket_number) s += ` (ticket #${e.ticket_number})`
+  if (e.return_by) s += ` · return by ${shortDay(e.return_by)}`
+  return s
 }
 
 const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })

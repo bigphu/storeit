@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router'
+import { Perm } from '@/lib/auth/permissions'
 import { routes } from './routes'
 
 const router = createRouter({ history: createMemoryHistory(), routes })
@@ -72,5 +73,23 @@ describe('type and account routes', () => {
       expect(r.params.section).toBe(s)
     }
     expect(router.resolve('/account/bogus').name).toBe('not-found')
+  })
+})
+
+describe('borrowing routes', () => {
+  it('lets anyone who may borrow see their own tickets and a ticket page', () => {
+    expect(router.resolve('/borrowing/mine').meta.perm).toBe(Perm.BorrowRequest)
+    const t = router.resolve('/borrowing/tickets/abc')
+    expect(t.name).toBe('ticket')
+    expect(t.meta.perm).toBe(Perm.BorrowRequest)
+  })
+  it('lets borrowers see what they hold', () => {
+    const r = router.resolve('/borrowing/mine/loans')
+    expect(r.name).toBe('my-loans')
+    expect(r.meta.perm).toBe(Perm.BorrowRequest)
+  })
+  it('keeps the queue and the loans to managers', () => {
+    expect(router.resolve('/borrowing/tickets').meta.perm).toBe(Perm.BorrowManage)
+    expect(router.resolve('/borrowing/loans').meta.perm).toBe(Perm.BorrowManage)
   })
 })

@@ -16,6 +16,7 @@ import { notify } from '@/lib/notify'
 import { kindSeverity, useStatuses } from '../api'
 import { archiveBlock, KIND_INFO, lanes } from '../lanes'
 import { useStatusLifecycle, useStatusOverviewSave } from '../overviewSave'
+import { isBorrowingStatus } from '@/features/borrowing/borrowing'
 
 // Trang của một status: chỉ Overview (tên sửa tại chỗ, kind khoá). Không có API đọc một
 // status: lấy từ danh sách (nhỏ, đã có trong cache)
@@ -97,7 +98,7 @@ const crumbs = computed(() => [{ label: 'Statuses', to: '/statuses' }, { label: 
         </Button>
         <template v-if="canManage">
           <Button
-            v-if="!status.is_default && !status.archived_at && status.kind !== 'retired'"
+            v-if="!status.is_default && !status.archived_at && status.kind !== 'retired' && !isBorrowingStatus(status.id)"
             label="Make default"
             severity="secondary"
             outlined

@@ -138,6 +138,64 @@ Yes/No, option labels (removed ones too); unknown IDs show "(deleted)". Changes 
 skipped. Built by `service.AssetActivity` from `events.ListForAggregate` (index
 `events_aggregate_timeline_idx`, migration 00006).
 
+## Borrowing (US-10)
+
+Asset types have `can_borrow` ("Can be borrowed", off by default; migration 00008 leaves every
+existing type off). Changing it, or creating a type with it on, needs `inventory.borrow.manage`
+(name and description still need `inventory.type.manage`), so inventory officers can turn
+borrowing on. An asset can be **reserved or lent** only when its type can be borrowed,
+the type isn't archived and its status is of kind `available` (`domain.Borrowable`);
+`GET /assets?borrowable=true` lists exactly those.
+
+- **Statuses:** two system statuses are set and cleared only by borrowing: **Reserved**
+  (`…0205`, kind `unavailable`) and **On loan** (`…0206`, kind `in_use`). Nobody can pick them
+  (create, update, bulk status: 422 `/errors/status-set-by-borrowing`). While an asset has one,
+  retire (single or bulk), replace (as the old asset) and any change of its status or type are
+  409 `/errors/asset-reserved-or-on-loan`; other fields stay editable.
+- **Tickets** (`inventory.borrow_tickets`): an employee asks for a type, optional
+  `requirements` (attribute conditions `<key>:<op>:<value>`, max 10, checked like the list's
+  `attr` filter; errors on `requirements[i]`), `needed_from` (not in the past), optional
+  `return_by` (not before `needed_from`), `note` ≤ 500, optional `suggested_asset_id` (same
+  type). States `waiting` → `approved` (a specific asset is reserved) → `handed_over` (a loan
+  starts); `waiting` → `rejected` (reason required); `waiting`/`approved` → `cancelled`.
+  Requesters cancel their own; managers reject waiting tickets and cancel approved ones.
+- **Loans** (`inventory.loans`): created by hand-over (borrower = requester, `return_by` from
+  the ticket) or by a direct lend (`POST /assets/{id}/lend`, any active account). The loan
+  starts on the business day in `INVENTORY_TIME_ZONE` (default Asia/Ho_Chi_Minh). Hand-over
+  refuses a disabled requester (422 field `requester`). `GET /loans?mine=true` lists the
+  caller's own active loans.
+- **Returns** (US-11, `POST /assets/{id}/return {returned_on, status_id?, note?, version}`,
+  `borrow.manage` only): closes the asset's active loan (`returned_on`, `returned_by`,
+  `return_note`; the loan is kept) and moves the asset to `status_id` (omitted: the default
+  Available; retired-kind, archived, Reserved and On loan are refused, 422 field `status_id`).
+  `returned_on` is from the loan's start to today (422 field `returned_on`). No active loan →
+  409 `/errors/no-active-loan`. A handed-over ticket's `GET` carries
+  `loan {started_on, return_by, returned_on}`.
+- **Consistency:** each action is one transaction in `BorrowingRepository`: lock the ticket,
+  then the asset; check; write; set the asset status with `SetAssetStatusQuiet` (no
+  `asset_updated`); append events; `EnqueueTx` the email job. Partial unique indexes keep one
+  approved ticket and one active loan per asset (a violation maps to 409
+  `/errors/asset-not-borrowable`). Other errors: 404 `/errors/borrow-ticket-not-found` (also
+  for someone else's ticket without `borrow.manage`), 409 `/errors/borrow-ticket-state`,
+  `/errors/borrow-ticket-changed`, 422 `/errors/invalid-borrow-ticket`, `/errors/invalid-loan`.
+- **Asset detail:** `borrowing` is `null` or `{state: reserved|on_loan, account {id, name},
+  ticket {id, number} (null for a direct loan), since, return_by, overdue_days}`.
+- **Activity:** kinds `reserved`, `reservation_cancelled`, `lent`, `returned` carry `person`
+  (who it was reserved for, lent to or taken back from), `ticket_number` (absent for a direct
+  loan) and `return_by`; `returned` has `status_name` when the asset did not go back to
+  Available.
+- **Email** (worker; `inventory.RegisterWorkers` needs `Deps.Mail`): the requester gets
+  "Ticket #N approved: TAG is ready for pickup", "Ticket #N was not approved" (with the
+  reason) and, when a manager cancels an approved ticket, "Ticket #N was cancelled"; a
+  borrower gets "TAG was due back on D MMM" once per overdue loan and "TAG return recorded"
+  when a return is recorded. Jobs
+  (`inventory.send_borrowing_email`) are queued in the same transaction and re-read the ticket
+  or loan when they run: a ticket that moved on, a returned loan or a disabled account sends
+  nothing. The periodic `inventory.scan_overdue_loans` runs hourly and only queues from 08:00
+  in `INVENTORY_TIME_ZONE`, marking `overdue_notified_on`. Templates in `service/templates`,
+  links to `INVENTORY_APP_URL/borrowing/mine`, idempotency key
+  `inventory/borrowing/<kind>/<ticket or loan id>`.
+
 ## API (`/api/v1`) and permissions
 
 | Endpoints | Needs |
@@ -147,13 +205,16 @@ skipped. Built by `service.AssetActivity` from `events.ListForAggregate` (index
 | `POST /asset-types`, `PATCH /asset-types/{typeID}`, `POST …/archive`, `POST …/restore`, attributes (`POST`, `PATCH`, `DELETE`, `POST …/restore`, `PUT …/attributes/order`), options (`POST`, `PATCH`, `DELETE`, `POST …/restore`, `PUT …/options/order`) | `inventory.type.manage` |
 | `POST /asset-statuses`, `PATCH /asset-statuses/{statusID}`, `POST …/archive`, `POST …/restore`, `PUT /asset-statuses/order` | `inventory.status.manage` |
 | `POST /assets/export` | `inventory.asset.read` + `inventory.asset.export` |
+| `POST /borrow-tickets`; `GET /borrow-tickets`, `GET /borrow-tickets/{ticketID}`, `POST …/cancel` for your own tickets; `GET /borrowing/today` (the app's business day, also with `inventory.borrow.manage`); `GET /loans?mine=true` | `inventory.borrow.request` |
+| `GET /borrow-tickets` and `GET …/{ticketID}` for everyone's, `GET /borrow-tickets/summary`, `POST …/approve`, `POST …/reject`, `POST …/cancel` (approved), `POST …/hand-over`, `POST /assets/{assetID}/lend`, `POST /assets/{assetID}/return`, `GET /loans` (overdue first; `sort=started_on|return_by`, `-` for descending), `GET /borrowers?q=` | `inventory.borrow.manage` |
 | `GET`/`POST /export-profiles`, `GET /export-profiles/{profileID}` | `inventory.asset.export` |
 | `PATCH`/`DELETE /export-profiles/{profileID}`, `POST …/restore` | `inventory.asset.export`, and the profile's owner; a shared profile of someone else also needs `inventory.export_profile.manage` |
 
-Grants (migrations `00003`, `00005`): Administrator the four above + `inventory.asset.export` +
-`inventory.export_profile.manage`; Authorized Manager read + type.manage + status.manage +
-asset.export + export_profile.manage; Inventory Officer read + asset.manage + asset.export;
-Employee read + asset.export.
+Grants (migrations `00003`, `00005`, `00008`): Administrator the four above +
+`inventory.asset.export` + `inventory.export_profile.manage` + both borrow permissions;
+Authorized Manager read + type.manage + status.manage + asset.export + export_profile.manage +
+borrow.request; Inventory Officer read + asset.manage + asset.export + borrow.request +
+borrow.manage; Employee read + asset.export + borrow.request.
 
 Custom values in requests: `"attributes": {"ram_gb": 16, "os": "<option id>",
 "warranty_end": "2027-06-30", "has_dock": true}`. In `GET /assets/{id}`: every active
@@ -183,7 +244,9 @@ nothing. Code: `service/bulk.go`.
 `inventory.status_created`, `status_updated`, `status_archived`, `status_restored`;
 `inventory.export_profile_created`, `export_profile_updated`, `export_profile_deleted`,
 `export_profile_restored`,
-`assets_exported` (see Export).
+`assets_exported` (see Export); `inventory.asset_reserved`, `asset_reservation_cancelled`,
+`asset_lent`, `asset_returned` on assets and `inventory.borrow_ticket_created`, `_approved`, `_rejected`,
+`_cancelled`, `_handed_over` on the `borrow_ticket` aggregate (see Borrowing).
 
 ## Export (US-07 to US-09)
 

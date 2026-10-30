@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/riverqueue/river"
 
 	"storeit/internal/inventory"
 	"storeit/internal/inventory/domain"
@@ -16,6 +17,7 @@ import (
 	"storeit/internal/platform/events"
 	"storeit/internal/platform/jobs"
 	"storeit/internal/platform/jwt"
+	"storeit/internal/platform/mail"
 	"storeit/internal/platform/server"
 )
 
@@ -34,7 +36,7 @@ func newModuleApp(t *testing.T) (*app, *inventory.Module) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, err := inventory.New(inventory.Deps{Pool: pool, Outbox: events.NewOutbox(events.NewRegistry(), client), Accounts: stubAccounts{}})
+	m, err := inventory.New(inventory.Deps{Pool: pool, Outbox: events.NewOutbox(events.NewRegistry(), client), Jobs: jobs.NewRiver(client), Accounts: stubAccounts{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,5 +127,36 @@ func TestModule_APIDoc(t *testing.T) {
 	}
 	if _, err := inventory.New(inventory.Deps{}); err == nil {
 		t.Error("New without Pool and Outbox = nil error")
+	}
+}
+
+// Worker (US-10): thư mượn cần Deps.Mail; quét quá hạn chạy mỗi giờ
+func TestModule_BorrowingWorkers(t *testing.T) {
+	pool := dbtest.Pool(t)
+	client, err := jobs.NewInsertClient(pool, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deps := inventory.Deps{Pool: pool, Outbox: events.NewOutbox(events.NewRegistry(), client), Jobs: jobs.NewRiver(client), Accounts: stubAccounts{}}
+	noMail, err := inventory.New(deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := noMail.RegisterWorkers(river.NewWorkers()); err == nil {
+		t.Error("RegisterWorkers without Deps.Mail = nil error")
+	}
+	deps.Mail, err = mail.New(mail.Config{Transport: mail.TransportLog, From: "no-reply@storeit.vn"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := inventory.New(deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.RegisterWorkers(river.NewWorkers()); err != nil {
+		t.Errorf("RegisterWorkers: %v", err)
+	}
+	if n := len(inventory.PeriodicJobs()); n != 1 {
+		t.Errorf("periodic jobs = %d, want 1 (overdue scan)", n)
 	}
 }
