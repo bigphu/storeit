@@ -33,7 +33,7 @@ func newResendForTest(t *testing.T, h http.HandlerFunc, mod ...func(*Config)) (S
 }
 
 var testMsg = Message{
-	To:             Address{Name: "Nguyễn Lan", Email: "lan@storeit.test"},
+	To:             Address{Name: "Nguyễn Lan", Email: "lan@storeit.vn"},
 	Subject:        "Your StoreIt invitation",
 	Text:           "plain body",
 	HTML:           "<p>html body</p>",
@@ -68,7 +68,7 @@ func TestResendSendsRequest(t *testing.T) {
 	}
 	want := map[string]any{
 		"from":    `"StoreIt" <no-reply@storeit.test>`,
-		"to":      []any{`=?utf-8?q?Nguy=E1=BB=85n_Lan?= <lan@storeit.test>`},
+		"to":      []any{`=?utf-8?q?Nguy=E1=BB=85n_Lan?= <lan@storeit.vn>`},
 		"subject": testMsg.Subject,
 		"text":    testMsg.Text,
 		"html":    testMsg.HTML,
@@ -210,14 +210,14 @@ func TestResendFromWithoutName(t *testing.T) {
 		_, _ = io.WriteString(w, `{"id":"x"}`)
 	}, func(c *Config) { c.From = "no-reply@storeit.test" })
 	m := testMsg
-	m.To = Address{Email: "lan@storeit.test"}
+	m.To = Address{Email: "lan@storeit.vn"}
 	if err := s.Send(context.Background(), m); err != nil {
 		t.Fatal(err)
 	}
 	if body["from"] != "no-reply@storeit.test" {
 		t.Errorf("from = %v, want the bare address", body["from"])
 	}
-	if fmt.Sprint(body["to"]) != "[lan@storeit.test]" {
+	if fmt.Sprint(body["to"]) != "[lan@storeit.vn]" {
 		t.Errorf("to = %v, want the bare address", body["to"])
 	}
 }

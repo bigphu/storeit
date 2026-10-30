@@ -21,7 +21,7 @@ func TestLogSenderWritesMessage(t *testing.T) {
 		t.Fatalf("Send() = %v", err)
 	}
 	out := buf.String()
-	for _, want := range []string{"level=WARN", "lan@storeit.test", m.Subject, "accept-invite#token=abc"} {
+	for _, want := range []string{"level=WARN", "lan@storeit.vn", m.Subject, "accept-invite#token=abc"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("log %q does not contain %q", out, want)
 		}

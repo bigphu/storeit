@@ -290,6 +290,10 @@ each one counts separately.
 - Resend errors are `*mail.StatusError{Status, Reason}`. `Reason` holds only the
   `name`/`message` fields, truncated, with the API key redacted; transport errors
   never carry the URL.
+- Resend and SMTP with TLS drop recipients in reserved test domains (`.test`, `.example`,
+  `.invalid`, `.localhost`; `mail.IsReservedTestDomain`) and log a WARN with the domain only.
+  `log` and Mailpit (`MAIL_SMTP_TLS=none`) still show them, so dev mail to the demo accounts
+  stays visible.
 - `log` prints the message (including the text body, so any link) at WARN. Dev and
   tests only. `smtp` with `MAIL_SMTP_TLS=none` is for Mailpit only.
 - SMTP sends open one connection each, with a 30s timeout (go-mail passes ctx only

@@ -29,7 +29,8 @@ type Sender interface {
 	Send(ctx context.Context, m Message) error
 }
 
-// New dựng Sender theo cfg.Transport. Không mở kết nối, không gọi mạng.
+// New dựng Sender theo cfg.Transport. Transport gửi thật (Resend, SMTP có TLS) được bọc guard
+// bỏ thư tới miền test. Không mở kết nối, không gọi mạng.
 // log nil thì log transport ghi qua logger của ctx.
 func New(cfg Config, log *slog.Logger) (Sender, error) {
 	if err := cfg.Validate(); err != nil {
@@ -42,9 +43,13 @@ func New(cfg Config, log *slog.Logger) (Sender, error) {
 	}
 	switch cfg.Transport {
 	case TransportResend:
-		return newResend(cfg, *from), nil
+		return guarded{next: newResend(cfg, *from), log: log}, nil
 	case TransportSMTP:
-		return newSMTP(cfg, *from)
+		s, err := newSMTP(cfg, *from)
+		if err != nil || cfg.SMTPTLS == TLSNone { // không TLS chỉ là Mailpit: thư ở lại máy dev
+			return s, err
+		}
+		return guarded{next: s, log: log}, nil
 	default:
 		return logSender{log: log}, nil
 	}

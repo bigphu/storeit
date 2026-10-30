@@ -99,7 +99,7 @@ func TestSMTPDeliversToServer(t *testing.T) {
 		t.Fatalf("mailpit has %d messages, want 1", len(list.Messages))
 	}
 	got := list.Messages[0]
-	if got.Subject != testMsg.Subject || len(got.To) != 1 || got.To[0].Address != "lan@storeit.test" || got.To[0].Name != "Nguyễn Lan" {
+	if got.Subject != testMsg.Subject || len(got.To) != 1 || got.To[0].Address != "lan@storeit.vn" || got.To[0].Name != "Nguyễn Lan" {
 		t.Errorf("message = %+v", got)
 	}
 	if len(got.ReplyTo) != 1 || got.ReplyTo[0].Address != "support@storeit.test" {
