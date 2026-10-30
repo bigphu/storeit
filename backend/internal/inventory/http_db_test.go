@@ -1321,6 +1321,47 @@ func TestBorrowingOverHTTP(t *testing.T) {
 	if !slices.Contains(kinds, "reserved") || !slices.Contains(kinds, "lent") {
 		t.Errorf("activity kinds = %v, want reserved and lent", kinds)
 	}
+	// Trả tài sản (US-11): ngày trả là "hôm nay" của ứng dụng
+	type businessDay struct{ Today string }
+	day := decode[businessDay](t, a.do("GET", "/api/v1/borrowing/today", empTok, nil), 200).Today
+	if mine := decode[loanPage](t, a.do("GET", "/api/v1/loans?mine=true", empTok, nil), 200); mine.Total != 1 || mine.Items[0].Asset.ID != x.ID {
+		t.Errorf("employee's loans = %+v, want only x", mine)
+	}
+	if rec := a.do("GET", "/api/v1/loans", empTok, nil); rec.Code != 403 {
+		t.Errorf("employee lists everyone's loans = %d, want 403", rec.Code)
+	}
+	cur := decode[assetDetail](t, a.do("GET", "/api/v1/assets/"+x.ID, admin, nil), 200)
+	if rec := a.do("POST", "/api/v1/assets/"+x.ID+"/return", empTok, map[string]any{"returned_on": day, "version": cur.Version}); rec.Code != 403 {
+		t.Errorf("employee records a return = %d, want 403", rec.Code)
+	}
+	back := decode[withBorrowing](t, a.do("POST", "/api/v1/assets/"+x.ID+"/return", officer, map[string]any{
+		"returned_on": day, "status_id": domain.RepairStatusID.String(), "note": "loose hinge", "version": cur.Version,
+	}), 200)
+	if back.Borrowing != nil || back.Status.ID != domain.RepairStatusID.String() {
+		t.Errorf("after return = %+v, want no borrowing and Under repair", back)
+	}
+	rec = a.do("POST", "/api/v1/assets/"+x.ID+"/return", officer, map[string]any{"returned_on": day, "version": cur.Version + 1})
+	if typ, _ := problem(t, rec); rec.Code != 409 || typ != "/errors/no-active-loan" {
+		t.Errorf("second return = %d %s, want 409 no-active-loan", rec.Code, typ)
+	}
+	type ticketLoan struct {
+		Loan *struct {
+			StartedOn  string `json:"started_on"`
+			ReturnedOn string `json:"returned_on"`
+		} `json:"loan"`
+	}
+	if v := decode[ticketLoan](t, a.do("GET", "/api/v1/borrow-tickets/"+tk.ID, empTok, nil), 200); v.Loan == nil || v.Loan.ReturnedOn != day {
+		t.Errorf("ticket loan = %+v, want returned on %s", v.Loan, day)
+	}
+	type returnedEntry struct {
+		Items []struct {
+			Kind       string
+			StatusName string `json:"status_name"`
+		}
+	}
+	if es := decode[returnedEntry](t, a.do("GET", "/api/v1/assets/"+x.ID+"/activity", admin, nil), 200).Items; len(es) == 0 || es[0].Kind != "returned" || es[0].StatusName != "Under repair" {
+		t.Errorf("latest activity = %+v, want returned · Under repair", es)
+	}
 	for _, p := range []string{"/api/v1/borrow-tickets", "/api/v1/loans", "/api/v1/borrowers", "/api/v1/borrow-tickets/summary"} {
 		if rec := a.do("GET", p, "", nil); rec.Code != 401 {
 			t.Errorf("GET %s without token = %d, want 401", p, rec.Code)

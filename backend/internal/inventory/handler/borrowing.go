@@ -106,9 +106,21 @@ func (h *Handler) LendAsset(ctx context.Context, req api.LendAssetRequestObject)
 	return api.LendAsset200JSONResponse(toAPIAsset(v)), nil
 }
 
+func (h *Handler) ReturnAsset(ctx context.Context, req api.ReturnAssetRequestObject) (api.ReturnAssetResponseObject, error) {
+	in := service.ReturnInput{ReturnedOn: req.Body.ReturnedOn.Time, Note: deref(req.Body.Note)}
+	if req.Body.StatusId != nil {
+		in.StatusID = req.Body.StatusId
+	}
+	v, err := h.svc.ReturnLoan(ctx, req.AssetID, in, req.Body.Version)
+	if err != nil {
+		return nil, err
+	}
+	return api.ReturnAsset200JSONResponse(toAPIAsset(v)), nil
+}
+
 func (h *Handler) ListLoans(ctx context.Context, req api.ListLoansRequestObject) (api.ListLoansResponseObject, error) {
 	page, size := paging(req.Params.Page, req.Params.PageSize)
-	loans, total, err := h.svc.ListLoans(ctx, false, string(deref(req.Params.Sort)), page, size)
+	loans, total, err := h.svc.ListLoans(ctx, deref(req.Params.Mine), string(deref(req.Params.Sort)), page, size)
 	if err != nil {
 		return nil, err
 	}
@@ -150,6 +162,9 @@ func toAPITicket(t service.TicketView) api.BorrowTicket {
 	}
 	if t.SuggestedAsset != nil {
 		out.SuggestedAsset = &api.AssetRef{Id: t.SuggestedAsset.ID, Tag: t.SuggestedAsset.Tag, Name: t.SuggestedAsset.Name}
+	}
+	if t.Loan != nil {
+		out.Loan = &api.TicketLoan{StartedOn: *toAPIDate(&t.Loan.StartedOn), ReturnBy: toAPIDate(t.Loan.ReturnBy), ReturnedOn: toAPIDate(t.Loan.ReturnedOn)}
 	}
 	return out
 }

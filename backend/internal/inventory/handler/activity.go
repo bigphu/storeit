@@ -49,6 +49,9 @@ func (h *Handler) GetAssetActivity(ctx context.Context, req api.GetAssetActivity
 			item.TicketNumber = &e.TicketNumber
 		}
 		item.ReturnBy = toAPIDate(e.ReturnBy)
+		if e.StatusName != "" {
+			item.StatusName = &e.StatusName
+		}
 		out.Items[i] = item
 	}
 	return out, nil
