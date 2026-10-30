@@ -653,3 +653,7 @@ func (a fakeAccounts) GetAccounts(ctx context.Context, ids []uuid.UUID) ([]idcon
 	}
 	return out, nil
 }
+
+func (fakeAccounts) SearchAccounts(context.Context, string, int) ([]idcontract.Account, error) {
+	return nil, nil
+}

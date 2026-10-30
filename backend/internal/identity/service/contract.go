@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -85,6 +86,20 @@ func (r accountReader) GetAccount(ctx context.Context, id uuid.UUID) (contract.A
 
 func (r accountReader) GetAccounts(ctx context.Context, ids []uuid.UUID) ([]contract.Account, error) {
 	as, err := r.s.accounts.GetMany(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]contract.Account, len(as))
+	for i, a := range as {
+		out[i] = toContract(a)
+	}
+	return out, nil
+}
+
+func (r accountReader) SearchAccounts(ctx context.Context, q string, limit int) ([]contract.Account, error) {
+	limit = min(max(limit, 1), 50)
+	active := true
+	as, _, err := r.s.accounts.List(ctx, domain.AccountFilter{Query: strings.TrimSpace(q), Active: &active, Limit: int32(limit)})
 	if err != nil {
 		return nil, err
 	}

@@ -27,4 +27,7 @@ type AccountReader interface {
 	GetAccount(ctx context.Context, id uuid.UUID) (Account, error)
 	// GetAccounts trả các account tìm thấy, bỏ qua ID không tồn tại
 	GetAccounts(ctx context.Context, ids []uuid.UUID) ([]Account, error)
+	// SearchAccounts: account đang hoạt động có tên hay email chứa q (không phân biệt hoa
+	// thường), sắp theo tên, tối đa limit (1..50); q rỗng trả các account đầu tiên theo tên
+	SearchAccounts(ctx context.Context, q string, limit int) ([]Account, error)
 }

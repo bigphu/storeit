@@ -642,6 +642,10 @@ func (stubAccounts) GetAccounts(_ context.Context, ids []uuid.UUID) ([]idcontrac
 	return out, nil
 }
 
+func (stubAccounts) SearchAccounts(context.Context, string, int) ([]idcontract.Account, error) {
+	return nil, nil
+}
+
 func TestExportOverHTTP(t *testing.T) {
 	a := newApp(t)
 	tok := a.token(allPerms...)
