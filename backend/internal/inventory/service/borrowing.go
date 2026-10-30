@@ -364,7 +364,7 @@ func (s *Service) ListLoans(ctx context.Context, sort string, page, pageSize int
 		return nil, 0, err
 	}
 	today := s.today()
-	loans, total, err := s.borrowing.ListActiveLoans(ctx, today, sort, page, pageSize)
+	loans, total, err := s.borrowing.ListActiveLoans(ctx, today, nil, sort, page, pageSize)
 	if err != nil {
 		return nil, 0, err
 	}

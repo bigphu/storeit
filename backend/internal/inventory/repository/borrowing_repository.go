@@ -15,6 +15,7 @@ import (
 	"storeit/internal/inventory/job"
 	"storeit/internal/inventory/repository/db"
 	"storeit/internal/platform/database"
+	"storeit/internal/platform/errs"
 	"storeit/internal/platform/events"
 	"storeit/internal/platform/jobs"
 )
@@ -312,6 +313,69 @@ func (r *BorrowingRepository) lent(ctx context.Context, tx pgx.Tx, l domain.Loan
 	return appendEvent(ctx, tx, r.outbox, contract.EventAssetLent, contract.AggregateAsset, l.AssetID, p)
 }
 
+// Return: khoá tài sản (phải đang On loan, đúng version) rồi khoản mượn đang hiệu lực; ghi ngày trả,
+// người nhận lại, ghi chú; tài sản sang r.StatusID; event asset_returned; xếp thư biên nhận
+func (r *BorrowingRepository) Return(ctx context.Context, assetID uuid.UUID, ret domain.LoanReturn, version int32) (domain.Loan, error) {
+	var out domain.Loan
+	err := database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
+		q := r.q.WithTx(tx)
+		locked, err := lockAssets(ctx, q, assetID)
+		if err != nil {
+			return err
+		}
+		a, ok := locked[assetID]
+		if !ok {
+			return domain.ErrAssetNotFound
+		}
+		// người khác vừa ghi nhận trả: status đã đổi, báo "không còn khoản mượn" thay vì lệch version
+		if a.StatusID != domain.OnLoanStatusID {
+			return domain.ErrNoActiveLoan
+		}
+		if a.Version != version {
+			return domain.ErrAssetChanged
+		}
+		active, err := q.GetActiveLoanForUpdate(ctx, assetID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrNoActiveLoan
+		}
+		if err != nil {
+			return fmt.Errorf("inventory: lock loan: %w", err)
+		}
+		var note *string
+		if ret.Note != "" {
+			note = &ret.Note
+		}
+		row, err := q.ReturnLoan(ctx, db.ReturnLoanParams{ID: active.ID, ReturnedOn: toPgDate(&ret.ReturnedOn), ReturnedBy: actorID(ctx), ReturnNote: note})
+		if code, constraint := pgCode(err); code == codeCheckViolation && constraint == "loans_returned_on_check" {
+			return domain.ErrInvalidLoan.With(errs.WithFields(errs.FieldError{Field: "returned_on", Detail: "can't be before the loan started"}))
+		}
+		if err != nil {
+			return fmt.Errorf("inventory: return loan: %w", err)
+		}
+		var number int64
+		if row.TicketID != nil {
+			tk, err := ticketOrNotFound(q.GetBorrowTicket(ctx, *row.TicketID))
+			if err != nil {
+				return err
+			}
+			number = tk.Number
+		}
+		out = toLoan(row, number)
+		if err := setStatus(ctx, q, assetID, ret.StatusID); err != nil {
+			return err
+		}
+		p := contract.AssetReturned{
+			AssetID: assetID, LoanID: out.ID, BorrowerID: out.BorrowerID, TicketID: out.TicketID, TicketNumber: number,
+			ReturnedOn: ret.ReturnedOn.Format(time.DateOnly), StatusID: ret.StatusID, Note: ret.Note,
+		}
+		if err := appendEvent(ctx, tx, r.outbox, contract.EventAssetReturned, contract.AggregateAsset, assetID, p); err != nil {
+			return err
+		}
+		return r.email(ctx, tx, job.EmailLoanReturned, nil, &out.ID)
+	})
+	return out, err
+}
+
 func (r *BorrowingRepository) ActiveLoan(ctx context.Context, assetID uuid.UUID) (*domain.Loan, error) {
 	row, err := r.q.GetActiveLoanForAsset(ctx, assetID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -323,6 +387,7 @@ func (r *BorrowingRepository) ActiveLoan(ctx context.Context, assetID uuid.UUID)
 	l := toLoan(db.InventoryLoan{
 		ID: row.ID, AssetID: row.AssetID, BorrowerID: row.BorrowerID, TicketID: row.TicketID, LentBy: row.LentBy,
 		StartedOn: row.StartedOn, ReturnBy: row.ReturnBy, ReturnedOn: row.ReturnedOn, CreatedAt: row.CreatedAt,
+		ReturnedBy: row.ReturnedBy, ReturnNote: row.ReturnNote,
 	}, row.TicketNumber)
 	return &l, nil
 }
@@ -350,16 +415,17 @@ func (r *BorrowingRepository) GetLoan(ctx context.Context, id uuid.UUID) (domain
 	return toLoan(db.InventoryLoan{
 		ID: row.ID, AssetID: row.AssetID, BorrowerID: row.BorrowerID, TicketID: row.TicketID, LentBy: row.LentBy,
 		StartedOn: row.StartedOn, ReturnBy: row.ReturnBy, ReturnedOn: row.ReturnedOn, CreatedAt: row.CreatedAt,
+		ReturnedBy: row.ReturnedBy, ReturnNote: row.ReturnNote,
 	}, row.TicketNumber), nil
 }
 
-func (r *BorrowingRepository) ListActiveLoans(ctx context.Context, today time.Time, sort string, page, pageSize int) ([]domain.Loan, int64, error) {
+func (r *BorrowingRepository) ListActiveLoans(ctx context.Context, today time.Time, borrowerID *uuid.UUID, sort string, page, pageSize int) ([]domain.Loan, int64, error) {
 	page, size := pageOf(page, pageSize)
-	rows, err := r.q.ListActiveLoans(ctx, db.ListActiveLoansParams{Today: toPgDate(&today), Sort: sort, Off: int32((page - 1) * size), Lim: int32(size)})
+	rows, err := r.q.ListActiveLoans(ctx, db.ListActiveLoansParams{BorrowerID: borrowerID, Today: toPgDate(&today), Sort: sort, Off: int32((page - 1) * size), Lim: int32(size)})
 	if err != nil {
 		return nil, 0, fmt.Errorf("inventory: list loans: %w", err)
 	}
-	total, err := r.q.CountActiveLoans(ctx)
+	total, err := r.q.CountActiveLoans(ctx, borrowerID)
 	if err != nil {
 		return nil, 0, fmt.Errorf("inventory: count loans: %w", err)
 	}
@@ -368,6 +434,7 @@ func (r *BorrowingRepository) ListActiveLoans(ctx context.Context, today time.Ti
 		out[i] = toLoan(db.InventoryLoan{
 			ID: row.ID, AssetID: row.AssetID, BorrowerID: row.BorrowerID, TicketID: row.TicketID, LentBy: row.LentBy,
 			StartedOn: row.StartedOn, ReturnBy: row.ReturnBy, ReturnedOn: row.ReturnedOn, CreatedAt: row.CreatedAt,
+			ReturnedBy: row.ReturnedBy, ReturnNote: row.ReturnNote,
 		}, row.TicketNumber)
 	}
 	return out, total, nil
@@ -508,7 +575,7 @@ func toLoan(l db.InventoryLoan, number int64) domain.Loan {
 	return domain.Loan{
 		ID: l.ID, AssetID: l.AssetID, BorrowerID: l.BorrowerID, TicketID: l.TicketID, TicketNumber: number,
 		LentBy: l.LentBy, StartedOn: dateOf(l.StartedOn), ReturnBy: fromPgDate(l.ReturnBy),
-		ReturnedOn: fromPgDate(l.ReturnedOn), CreatedAt: l.CreatedAt,
+		ReturnedOn: fromPgDate(l.ReturnedOn), ReturnedBy: l.ReturnedBy, ReturnNote: deref(l.ReturnNote), CreatedAt: l.CreatedAt,
 	}
 }
 

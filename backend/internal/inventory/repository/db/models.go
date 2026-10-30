@@ -217,6 +217,8 @@ type InventoryLoan struct {
 	ReturnedOn        pgtype.Date
 	OverdueNotifiedOn pgtype.Date
 	CreatedAt         time.Time
+	ReturnedBy        *uuid.UUID
+	ReturnNote        *string
 }
 
 type PlatformEvent struct {

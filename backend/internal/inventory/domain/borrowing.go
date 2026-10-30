@@ -96,7 +96,16 @@ type Loan struct {
 	StartedOn    time.Time
 	ReturnBy     *time.Time
 	ReturnedOn   *time.Time // US-11
+	ReturnedBy   *uuid.UUID // người ghi nhận trả
+	ReturnNote   string
 	CreatedAt    time.Time
+}
+
+// LoanReturn: ghi nhận trả một khoản mượn; StatusID là status tài sản sau khi trả (tình trạng)
+type LoanReturn struct {
+	ReturnedOn time.Time
+	StatusID   uuid.UUID
+	Note       string
 }
 
 // OverdueDays: số ngày đã quá hạn trả tính tới today; 0 khi chưa quá hạn, không có hạn hay
@@ -137,6 +146,17 @@ func CheckTicketDates(neededFrom time.Time, returnBy *time.Time, today time.Time
 func CheckLoanReturnBy(returnBy *time.Time, today time.Time) error {
 	if returnBy != nil && dateOnly(*returnBy).Before(dateOnly(today)) {
 		return invalid(ErrInvalidLoan, "return_by", "can't be in the past")
+	}
+	return nil
+}
+
+// CheckReturnedOn: ngày trả từ ngày bắt đầu khoản mượn tới hôm nay
+func CheckReturnedOn(startedOn, returnedOn, today time.Time) error {
+	if dateOnly(returnedOn).Before(dateOnly(startedOn)) {
+		return invalid(ErrInvalidLoan, "returned_on", "can't be before the loan started")
+	}
+	if dateOnly(returnedOn).After(dateOnly(today)) {
+		return invalid(ErrInvalidLoan, "returned_on", "can't be in the future")
 	}
 	return nil
 }

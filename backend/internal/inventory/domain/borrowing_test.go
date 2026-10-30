@@ -56,6 +56,21 @@ func TestCheckLoanReturnBy(t *testing.T) {
 	}
 }
 
+// Ngày trả: từ ngày bắt đầu khoản mượn tới hôm nay
+func TestCheckReturnedOn(t *testing.T) {
+	started, today := day("2026-10-20"), day("2026-10-30")
+	for _, bad := range []string{"2026-10-19", "2026-10-31"} {
+		if f := fieldOf(t, CheckReturnedOn(started, day(bad), today), ErrInvalidLoan); f != "returned_on" {
+			t.Errorf("%s: field %q", bad, f)
+		}
+	}
+	for _, ok := range []string{"2026-10-20", "2026-10-30"} {
+		if err := CheckReturnedOn(started, day(ok), today); err != nil {
+			t.Errorf("%s: %v", ok, err)
+		}
+	}
+}
+
 func TestIsBorrowingStatus(t *testing.T) {
 	if !IsBorrowingStatus(ReservedStatusID) || !IsBorrowingStatus(OnLoanStatusID) {
 		t.Error("Reserved and On loan must be borrowing statuses")

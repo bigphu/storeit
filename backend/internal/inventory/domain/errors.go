@@ -29,8 +29,11 @@ var (
 		errs.WithDetail("The ticket was changed by someone else. Reload it and try again."))
 	// field: asset_type_id, requirements[i], suggested_asset_id, needed_from, return_by, note, reason, requester
 	ErrInvalidTicket = errs.Unprocessable("/errors/invalid-borrow-ticket", "Invalid borrow ticket")
-	// field: borrower_id, return_by
+	// field: borrower_id, return_by, returned_on, status_id, note
 	ErrInvalidLoan = errs.Unprocessable("/errors/invalid-loan", "Invalid loan")
+	// Trả tài sản không có khoản mượn đang hiệu lực (đã trả, hay chưa từng cho mượn)
+	ErrNoActiveLoan = errs.Conflict("/errors/no-active-loan", "Asset is not on loan",
+		errs.WithDetail("The loan was already closed. Reload to see where the asset stands."))
 
 	ErrInvalidBulk = errs.Unprocessable("/errors/invalid-bulk", "Invalid selection",
 		errs.WithFields(errs.FieldError{Field: "items", Detail: "choose between 1 and 200 assets"}))

@@ -19,6 +19,7 @@ const (
 	EventAssetReserved             = "inventory.asset_reserved"
 	EventAssetReservationCancelled = "inventory.asset_reservation_cancelled"
 	EventAssetLent                 = "inventory.asset_lent"
+	EventAssetReturned             = "inventory.asset_returned"
 	// Trên phiếu mượn (aggregate borrow_ticket)
 	EventBorrowTicketCreated    = "inventory.borrow_ticket_created"
 	EventBorrowTicketApproved   = "inventory.borrow_ticket_approved"
@@ -139,6 +140,18 @@ type AssetLent struct {
 	TicketID     *uuid.UUID `json:"ticket_id,omitempty"`
 	TicketNumber int64      `json:"ticket_number,omitempty"`
 	ReturnBy     string     `json:"return_by,omitempty"`
+}
+
+// AssetReturned: khoản mượn đã trả; StatusID là status tài sản sau khi trả; ReturnedOn "YYYY-MM-DD"
+type AssetReturned struct {
+	AssetID      uuid.UUID  `json:"asset_id"`
+	LoanID       uuid.UUID  `json:"loan_id"`
+	BorrowerID   uuid.UUID  `json:"borrower_id"`
+	TicketID     *uuid.UUID `json:"ticket_id,omitempty"`
+	TicketNumber int64      `json:"ticket_number,omitempty"`
+	ReturnedOn   string     `json:"returned_on"`
+	StatusID     uuid.UUID  `json:"status_id"`
+	Note         string     `json:"note,omitempty"`
 }
 
 // BorrowTicketChanged: payload chung của các event trên phiếu mượn

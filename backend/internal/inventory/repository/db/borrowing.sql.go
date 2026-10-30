@@ -96,11 +96,12 @@ func (q *Queries) CancelBorrowTicket(ctx context.Context, arg CancelBorrowTicket
 }
 
 const countActiveLoans = `-- name: CountActiveLoans :one
-SELECT count(*) FROM inventory.loans WHERE returned_on IS NULL
+SELECT count(*) FROM inventory.loans
+WHERE returned_on IS NULL AND ($1::uuid IS NULL OR borrower_id = $1::uuid)
 `
 
-func (q *Queries) CountActiveLoans(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countActiveLoans)
+func (q *Queries) CountActiveLoans(ctx context.Context, borrowerID *uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveLoans, borrowerID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -166,7 +167,7 @@ func (q *Queries) CountBorrowTicketsByState(ctx context.Context) ([]CountBorrowT
 }
 
 const getActiveLoanForAsset = `-- name: GetActiveLoanForAsset :one
-SELECT l.id, l.asset_id, l.borrower_id, l.ticket_id, l.lent_by, l.started_on, l.return_by, l.returned_on, l.overdue_notified_on, l.created_at, coalesce(t.number, 0)::bigint AS ticket_number
+SELECT l.id, l.asset_id, l.borrower_id, l.ticket_id, l.lent_by, l.started_on, l.return_by, l.returned_on, l.overdue_notified_on, l.created_at, l.returned_by, l.return_note, coalesce(t.number, 0)::bigint AS ticket_number
 FROM inventory.loans l
 LEFT JOIN inventory.borrow_tickets t ON t.id = l.ticket_id
 WHERE l.asset_id = $1 AND l.returned_on IS NULL
@@ -183,6 +184,8 @@ type GetActiveLoanForAssetRow struct {
 	ReturnedOn        pgtype.Date
 	OverdueNotifiedOn pgtype.Date
 	CreatedAt         time.Time
+	ReturnedBy        *uuid.UUID
+	ReturnNote        *string
 	TicketNumber      int64
 }
 
@@ -200,7 +203,33 @@ func (q *Queries) GetActiveLoanForAsset(ctx context.Context, assetID uuid.UUID) 
 		&i.ReturnedOn,
 		&i.OverdueNotifiedOn,
 		&i.CreatedAt,
+		&i.ReturnedBy,
+		&i.ReturnNote,
 		&i.TicketNumber,
+	)
+	return i, err
+}
+
+const getActiveLoanForUpdate = `-- name: GetActiveLoanForUpdate :one
+SELECT id, asset_id, borrower_id, ticket_id, lent_by, started_on, return_by, returned_on, overdue_notified_on, created_at, returned_by, return_note FROM inventory.loans WHERE asset_id = $1 AND returned_on IS NULL FOR UPDATE
+`
+
+func (q *Queries) GetActiveLoanForUpdate(ctx context.Context, assetID uuid.UUID) (InventoryLoan, error) {
+	row := q.db.QueryRow(ctx, getActiveLoanForUpdate, assetID)
+	var i InventoryLoan
+	err := row.Scan(
+		&i.ID,
+		&i.AssetID,
+		&i.BorrowerID,
+		&i.TicketID,
+		&i.LentBy,
+		&i.StartedOn,
+		&i.ReturnBy,
+		&i.ReturnedOn,
+		&i.OverdueNotifiedOn,
+		&i.CreatedAt,
+		&i.ReturnedBy,
+		&i.ReturnNote,
 	)
 	return i, err
 }
@@ -300,7 +329,7 @@ func (q *Queries) GetBorrowTicketForUpdate(ctx context.Context, id uuid.UUID) (I
 }
 
 const getLoan = `-- name: GetLoan :one
-SELECT l.id, l.asset_id, l.borrower_id, l.ticket_id, l.lent_by, l.started_on, l.return_by, l.returned_on, l.overdue_notified_on, l.created_at, coalesce(t.number, 0)::bigint AS ticket_number
+SELECT l.id, l.asset_id, l.borrower_id, l.ticket_id, l.lent_by, l.started_on, l.return_by, l.returned_on, l.overdue_notified_on, l.created_at, l.returned_by, l.return_note, coalesce(t.number, 0)::bigint AS ticket_number
 FROM inventory.loans l
 LEFT JOIN inventory.borrow_tickets t ON t.id = l.ticket_id
 WHERE l.id = $1
@@ -317,6 +346,8 @@ type GetLoanRow struct {
 	ReturnedOn        pgtype.Date
 	OverdueNotifiedOn pgtype.Date
 	CreatedAt         time.Time
+	ReturnedBy        *uuid.UUID
+	ReturnNote        *string
 	TicketNumber      int64
 }
 
@@ -335,6 +366,8 @@ func (q *Queries) GetLoan(ctx context.Context, id uuid.UUID) (GetLoanRow, error)
 		&i.ReturnedOn,
 		&i.OverdueNotifiedOn,
 		&i.CreatedAt,
+		&i.ReturnedBy,
+		&i.ReturnNote,
 		&i.TicketNumber,
 	)
 	return i, err
@@ -434,7 +467,7 @@ func (q *Queries) InsertBorrowTicket(ctx context.Context, arg InsertBorrowTicket
 const insertLoan = `-- name: InsertLoan :one
 INSERT INTO inventory.loans (id, asset_id, borrower_id, ticket_id, lent_by, started_on, return_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, asset_id, borrower_id, ticket_id, lent_by, started_on, return_by, returned_on, overdue_notified_on, created_at
+RETURNING id, asset_id, borrower_id, ticket_id, lent_by, started_on, return_by, returned_on, overdue_notified_on, created_at, returned_by, return_note
 `
 
 type InsertLoanParams struct {
@@ -469,29 +502,33 @@ func (q *Queries) InsertLoan(ctx context.Context, arg InsertLoanParams) (Invento
 		&i.ReturnedOn,
 		&i.OverdueNotifiedOn,
 		&i.CreatedAt,
+		&i.ReturnedBy,
+		&i.ReturnNote,
 	)
 	return i, err
 }
 
 const listActiveLoans = `-- name: ListActiveLoans :many
-SELECT l.id, l.asset_id, l.borrower_id, l.ticket_id, l.lent_by, l.started_on, l.return_by, l.returned_on, l.overdue_notified_on, l.created_at, coalesce(t.number, 0)::bigint AS ticket_number
+SELECT l.id, l.asset_id, l.borrower_id, l.ticket_id, l.lent_by, l.started_on, l.return_by, l.returned_on, l.overdue_notified_on, l.created_at, l.returned_by, l.return_note, coalesce(t.number, 0)::bigint AS ticket_number
 FROM inventory.loans l
 LEFT JOIN inventory.borrow_tickets t ON t.id = l.ticket_id
 WHERE l.returned_on IS NULL
-ORDER BY CASE WHEN $1::text = 'started_on' THEN l.started_on END ASC,
-         CASE WHEN $1::text = '-started_on' THEN l.started_on END DESC,
-         CASE WHEN $1::text = 'return_by' THEN l.return_by END ASC NULLS LAST,
-         CASE WHEN $1::text = '-return_by' THEN l.return_by END DESC NULLS LAST,
-         (l.return_by IS NOT NULL AND l.return_by < $2::date) DESC,
+  AND ($1::uuid IS NULL OR l.borrower_id = $1::uuid)
+ORDER BY CASE WHEN $2::text = 'started_on' THEN l.started_on END ASC,
+         CASE WHEN $2::text = '-started_on' THEN l.started_on END DESC,
+         CASE WHEN $2::text = 'return_by' THEN l.return_by END ASC NULLS LAST,
+         CASE WHEN $2::text = '-return_by' THEN l.return_by END DESC NULLS LAST,
+         (l.return_by IS NOT NULL AND l.return_by < $3::date) DESC,
          l.return_by ASC NULLS LAST, l.started_on DESC, l.id
-LIMIT $4 OFFSET $3
+LIMIT $5 OFFSET $4
 `
 
 type ListActiveLoansParams struct {
-	Sort  string
-	Today pgtype.Date
-	Off   int32
-	Lim   int32
+	BorrowerID *uuid.UUID
+	Sort       string
+	Today      pgtype.Date
+	Off        int32
+	Lim        int32
 }
 
 type ListActiveLoansRow struct {
@@ -505,6 +542,8 @@ type ListActiveLoansRow struct {
 	ReturnedOn        pgtype.Date
 	OverdueNotifiedOn pgtype.Date
 	CreatedAt         time.Time
+	ReturnedBy        *uuid.UUID
+	ReturnNote        *string
 	TicketNumber      int64
 }
 
@@ -512,6 +551,7 @@ type ListActiveLoansRow struct {
 // theo hạn, rồi mới bắt đầu trước
 func (q *Queries) ListActiveLoans(ctx context.Context, arg ListActiveLoansParams) ([]ListActiveLoansRow, error) {
 	rows, err := q.db.Query(ctx, listActiveLoans,
+		arg.BorrowerID,
 		arg.Sort,
 		arg.Today,
 		arg.Off,
@@ -535,6 +575,8 @@ func (q *Queries) ListActiveLoans(ctx context.Context, arg ListActiveLoansParams
 			&i.ReturnedOn,
 			&i.OverdueNotifiedOn,
 			&i.CreatedAt,
+			&i.ReturnedBy,
+			&i.ReturnNote,
 			&i.TicketNumber,
 		); err != nil {
 			return nil, err
@@ -623,7 +665,7 @@ func (q *Queries) ListBorrowTickets(ctx context.Context, arg ListBorrowTicketsPa
 }
 
 const listOverdueUnnotifiedLoans = `-- name: ListOverdueUnnotifiedLoans :many
-SELECT id, asset_id, borrower_id, ticket_id, lent_by, started_on, return_by, returned_on, overdue_notified_on, created_at FROM inventory.loans
+SELECT id, asset_id, borrower_id, ticket_id, lent_by, started_on, return_by, returned_on, overdue_notified_on, created_at, returned_by, return_note FROM inventory.loans
 WHERE returned_on IS NULL AND return_by < $1::date AND overdue_notified_on IS NULL
 ORDER BY return_by, id
 LIMIT $2
@@ -656,6 +698,8 @@ func (q *Queries) ListOverdueUnnotifiedLoans(ctx context.Context, arg ListOverdu
 			&i.ReturnedOn,
 			&i.OverdueNotifiedOn,
 			&i.CreatedAt,
+			&i.ReturnedBy,
+			&i.ReturnNote,
 		); err != nil {
 			return nil, err
 		}
@@ -718,6 +762,45 @@ func (q *Queries) RejectBorrowTicket(ctx context.Context, arg RejectBorrowTicket
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const returnLoan = `-- name: ReturnLoan :one
+UPDATE inventory.loans
+SET returned_on = $1, returned_by = $2, return_note = $3
+WHERE id = $4 AND returned_on IS NULL
+RETURNING id, asset_id, borrower_id, ticket_id, lent_by, started_on, return_by, returned_on, overdue_notified_on, created_at, returned_by, return_note
+`
+
+type ReturnLoanParams struct {
+	ReturnedOn pgtype.Date
+	ReturnedBy *uuid.UUID
+	ReturnNote *string
+	ID         uuid.UUID
+}
+
+func (q *Queries) ReturnLoan(ctx context.Context, arg ReturnLoanParams) (InventoryLoan, error) {
+	row := q.db.QueryRow(ctx, returnLoan,
+		arg.ReturnedOn,
+		arg.ReturnedBy,
+		arg.ReturnNote,
+		arg.ID,
+	)
+	var i InventoryLoan
+	err := row.Scan(
+		&i.ID,
+		&i.AssetID,
+		&i.BorrowerID,
+		&i.TicketID,
+		&i.LentBy,
+		&i.StartedOn,
+		&i.ReturnBy,
+		&i.ReturnedOn,
+		&i.OverdueNotifiedOn,
+		&i.CreatedAt,
+		&i.ReturnedBy,
+		&i.ReturnNote,
 	)
 	return i, err
 }

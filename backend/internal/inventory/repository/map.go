@@ -23,6 +23,7 @@ import (
 const (
 	codeUniqueViolation     = "23505"
 	codeForeignKeyViolation = "23503"
+	codeCheckViolation      = "23514"
 )
 
 // pgCode trả mã lỗi Postgres và tên constraint, rỗng nếu không phải lỗi Postgres

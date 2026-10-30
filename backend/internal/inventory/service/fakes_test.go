@@ -680,6 +680,9 @@ type fakeBorrowing struct {
 	lends      int
 	lastFilter domain.TicketFilter
 	overdueOn  []time.Time
+	returns    []domain.LoanReturn
+	// loansOf: borrowerID của lần ListActiveLoans gần nhất (nil là mọi người)
+	loansOf *uuid.UUID
 }
 
 func newFakeBorrowing() *fakeBorrowing {
@@ -790,10 +793,36 @@ func (f *fakeBorrowing) Lend(_ context.Context, assetID, borrowerID uuid.UUID, s
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.lends++
-	return domain.Loan{ID: uuid.New(), AssetID: assetID, BorrowerID: borrowerID, StartedOn: startedOn, ReturnBy: returnBy}, nil
+	l := domain.Loan{ID: uuid.New(), AssetID: assetID, BorrowerID: borrowerID, StartedOn: startedOn, ReturnBy: returnBy}
+	f.loans[l.ID] = l
+	return l, nil
 }
 
-func (f *fakeBorrowing) ActiveLoan(context.Context, uuid.UUID) (*domain.Loan, error) { return nil, nil }
+func (f *fakeBorrowing) ActiveLoan(_ context.Context, assetID uuid.UUID) (*domain.Loan, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, l := range f.loans {
+		if l.AssetID == assetID && l.ReturnedOn == nil {
+			return &l, nil
+		}
+	}
+	return nil, nil
+}
+
+func (f *fakeBorrowing) Return(_ context.Context, assetID uuid.UUID, r domain.LoanReturn, _ int32) (domain.Loan, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for id, l := range f.loans {
+		if l.AssetID == assetID && l.ReturnedOn == nil {
+			d := r.ReturnedOn
+			l.ReturnedOn, l.ReturnNote = &d, r.Note
+			f.loans[id] = l
+			f.returns = append(f.returns, r)
+			return l, nil
+		}
+	}
+	return domain.Loan{}, domain.ErrNoActiveLoan
+}
 
 func (f *fakeBorrowing) ApprovedTicketFor(context.Context, uuid.UUID) (*domain.BorrowTicket, error) {
 	return nil, nil
@@ -809,7 +838,10 @@ func (f *fakeBorrowing) GetLoan(_ context.Context, id uuid.UUID) (domain.Loan, e
 	return l, nil
 }
 
-func (f *fakeBorrowing) ListActiveLoans(context.Context, time.Time, string, int, int) ([]domain.Loan, int64, error) {
+func (f *fakeBorrowing) ListActiveLoans(_ context.Context, _ time.Time, borrowerID *uuid.UUID, _ string, _, _ int) ([]domain.Loan, int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.loansOf = borrowerID
 	return nil, 0, nil
 }
 

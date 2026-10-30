@@ -19,7 +19,7 @@ type Querier interface {
 	ClearDefaultStatus(ctx context.Context, kind string) error
 	// Số tài sản chưa retire của mỗi loại, tách theo kind của status (sidebar, trang loại)
 	CountActiveAssetsByTypeAndKind(ctx context.Context) ([]CountActiveAssetsByTypeAndKindRow, error)
-	CountActiveLoans(ctx context.Context) (int64, error)
+	CountActiveLoans(ctx context.Context, borrowerID *uuid.UUID) (int64, error)
 	CountAssets(ctx context.Context, arg CountAssetsParams) (int64, error)
 	// Số tài sản (kể cả đã retire) đang dùng mỗi status
 	CountAssetsByStatus(ctx context.Context) ([]CountAssetsByStatusRow, error)
@@ -37,6 +37,7 @@ type Querier interface {
 	DeleteExportProfile(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteReplacement(ctx context.Context, oldAssetID uuid.UUID) error
 	GetActiveLoanForAsset(ctx context.Context, assetID uuid.UUID) (GetActiveLoanForAssetRow, error)
+	GetActiveLoanForUpdate(ctx context.Context, assetID uuid.UUID) (InventoryLoan, error)
 	// Phiếu đang giữ chỗ tài sản (nhiều nhất một)
 	GetApprovedTicketForAsset(ctx context.Context, assetID *uuid.UUID) (InventoryBorrowTicket, error)
 	GetAsset(ctx context.Context, id uuid.UUID) (InventoryAsset, error)
@@ -106,6 +107,7 @@ type Querier interface {
 	RestoreOption(ctx context.Context, arg RestoreOptionParams) (InventoryAssetAttributeOption, error)
 	RestoreStatus(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
 	RetireAsset(ctx context.Context, arg RetireAssetParams) (InventoryAsset, error)
+	ReturnLoan(ctx context.Context, arg ReturnLoanParams) (InventoryLoan, error)
 	// Đổi status do việc mượn (giữ chỗ, giao, huỷ): không qua UpdateAsset, không event asset_updated
 	SetAssetStatusQuiet(ctx context.Context, arg SetAssetStatusQuietParams) (InventoryAsset, error)
 	SetAssetTypeArchived(ctx context.Context, arg SetAssetTypeArchivedParams) (InventoryAssetType, error)

@@ -13,6 +13,7 @@ import (
 	"storeit/internal/inventory/contract"
 	"storeit/internal/inventory/domain"
 	"storeit/internal/inventory/repository"
+	"storeit/internal/platform/auth"
 	"storeit/internal/platform/events"
 	"storeit/internal/platform/jobs"
 )
@@ -349,12 +350,12 @@ func TestBorrowing_QueueOverdueEmails(t *testing.T) {
 	if n, err := r.borrowing.QueueOverdueEmails(ctx, borrowToday, 100); err != nil || n != 0 {
 		t.Errorf("second scan = %d, %v; want 0", n, err)
 	}
-	loans, total, err := r.borrowing.ListActiveLoans(ctx, borrowToday, "", 1, 50)
+	loans, total, err := r.borrowing.ListActiveLoans(ctx, borrowToday, nil, "", 1, 50)
 	if err != nil || total < 2 || loans[0].ID != lateLoan.ID {
 		t.Errorf("active loans: first = %+v (total %d, %v), want the overdue one first", loans, total, err)
 	}
 	// Sắp theo cột: ngày bắt đầu mới nhất trước
-	loans, _, err = r.borrowing.ListActiveLoans(ctx, borrowToday, "-started_on", 1, 50)
+	loans, _, err = r.borrowing.ListActiveLoans(ctx, borrowToday, nil, "-started_on", 1, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -362,6 +363,125 @@ func TestBorrowing_QueueOverdueEmails(t *testing.T) {
 		if loans[i].StartedOn.After(loans[i-1].StartedOn) {
 			t.Errorf("-started_on: %v after %v", loans[i].StartedOn, loans[i-1].StartedOn)
 		}
+	}
+}
+
+// lentAsset: tài sản đang cho mượn trực tiếp từ 2026-10-20; trả tài sản (đã đọc lại) và khoản mượn
+func lentAsset(t *testing.T, r repos, borrower uuid.UUID) (domain.Asset, domain.Loan) {
+	t.Helper()
+	ty := borrowType(t, r, true)
+	a := borrowAsset(t, r, ty.ID, domain.AvailableStatusID)
+	loan, err := r.borrowing.Lend(actorCtx(), a.ID, borrower, time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC), nil, a.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return getAsset(t, r, a.ID), loan
+}
+
+func TestBorrowing_Return(t *testing.T) {
+	r := newRepos(t)
+	a, loan := lentAsset(t, r, uuid.New())
+	officer := uuid.New()
+	ctx := auth.WithActor(context.Background(), auth.Actor{AccountID: officer})
+	got, err := r.borrowing.Return(ctx, a.ID, domain.LoanReturn{ReturnedOn: pastDay.AddDate(0, 0, 3), StatusID: domain.AvailableStatusID, Note: "scratched lid"}, a.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != loan.ID || got.ReturnedOn == nil || !got.ReturnedOn.Equal(pastDay.AddDate(0, 0, 3)) ||
+		got.ReturnedBy == nil || *got.ReturnedBy != officer || got.ReturnNote != "scratched lid" {
+		t.Errorf("returned loan = %+v", got)
+	}
+	if s := getAsset(t, r, a.ID).StatusID; s != domain.AvailableStatusID {
+		t.Errorf("status = %v, want Available", s)
+	}
+	if l, err := r.borrowing.ActiveLoan(context.Background(), a.ID); err != nil || l != nil {
+		t.Errorf("active loan after return = %+v, %v", l, err)
+	}
+	if n := emailJobs(t, r, "loan_returned", loan.ID); n != 1 {
+		t.Errorf("receipt jobs = %d, want 1", n)
+	}
+	if n := countEvents(t, r, contract.EventAssetReturned, a.ID); n != 1 {
+		t.Errorf("asset_returned events = %d, want 1", n)
+	}
+	again := getAsset(t, r, a.ID)
+	if _, err := r.borrowing.Lend(actorCtx(), a.ID, uuid.New(), borrowToday, nil, again.Version); err != nil {
+		t.Errorf("lend again after return: %v", err)
+	}
+}
+
+func TestBorrowing_ReturnRules(t *testing.T) {
+	r := newRepos(t)
+	ret := domain.LoanReturn{ReturnedOn: borrowToday, StatusID: domain.AvailableStatusID}
+	ty := borrowType(t, r, true)
+	free := borrowAsset(t, r, ty.ID, domain.AvailableStatusID)
+	if _, err := r.borrowing.Return(actorCtx(), free.ID, ret, free.Version); !errors.Is(err, domain.ErrNoActiveLoan) {
+		t.Errorf("available asset: %v, want ErrNoActiveLoan", err)
+	}
+	held := borrowAsset(t, r, ty.ID, domain.AvailableStatusID)
+	tk := newTicket(t, r, ty.ID)
+	if _, err := r.borrowing.Approve(actorCtx(), tk.ID, held.ID, tk.Version); err != nil {
+		t.Fatal(err)
+	}
+	held = getAsset(t, r, held.ID)
+	if _, err := r.borrowing.Return(actorCtx(), held.ID, ret, held.Version); !errors.Is(err, domain.ErrNoActiveLoan) {
+		t.Errorf("reserved asset: %v, want ErrNoActiveLoan", err)
+	}
+	if s := getAsset(t, r, held.ID).StatusID; s != domain.ReservedStatusID {
+		t.Errorf("reserved asset status changed to %v", s)
+	}
+	a, _ := lentAsset(t, r, uuid.New())
+	if _, err := r.borrowing.Return(actorCtx(), a.ID, ret, a.Version-1); !errors.Is(err, domain.ErrAssetChanged) {
+		t.Errorf("stale version: %v, want ErrAssetChanged", err)
+	}
+	ret.StatusID = domain.RepairStatusID
+	if _, err := r.borrowing.Return(actorCtx(), a.ID, ret, a.Version); err != nil {
+		t.Fatal(err)
+	}
+	if s := getAsset(t, r, a.ID).StatusID; s != domain.RepairStatusID {
+		t.Errorf("status = %v, want In repair", s)
+	}
+}
+
+// Hai người cùng ghi nhận trả một khoản: đúng một lần thành công, một thư
+func TestBorrowing_ConcurrentReturn(t *testing.T) {
+	r := newRepos(t)
+	for round := range 10 {
+		a, loan := lentAsset(t, r, uuid.New())
+		errs := make([]error, 2)
+		var wg sync.WaitGroup
+		for i := range 2 {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, errs[i] = r.borrowing.Return(actorCtx(), a.ID, domain.LoanReturn{ReturnedOn: borrowToday, StatusID: domain.AvailableStatusID}, a.Version)
+			}()
+		}
+		wg.Wait()
+		if (errs[0] == nil) == (errs[1] == nil) {
+			t.Fatalf("round %d: %v, %v; want exactly one success", round, errs[0], errs[1])
+		}
+		loser := errs[0]
+		if loser == nil {
+			loser = errs[1]
+		}
+		if !errors.Is(loser, domain.ErrNoActiveLoan) && !errors.Is(loser, domain.ErrAssetChanged) {
+			t.Errorf("round %d: loser %v", round, loser)
+		}
+		if n := emailJobs(t, r, "loan_returned", loan.ID); n != 1 {
+			t.Errorf("round %d: receipt jobs = %d, want 1", round, n)
+		}
+	}
+}
+
+// Khoản đang mượn của một người (My loans)
+func TestBorrowing_ActiveLoansOfBorrower(t *testing.T) {
+	r := newRepos(t)
+	me := uuid.New()
+	_, mine := lentAsset(t, r, me)
+	lentAsset(t, r, uuid.New())
+	loans, total, err := r.borrowing.ListActiveLoans(context.Background(), borrowToday, &me, "", 1, 50)
+	if err != nil || total != 1 || len(loans) != 1 || loans[0].ID != mine.ID {
+		t.Errorf("my loans = %+v (total %d, %v), want only mine", loans, total, err)
 	}
 }
 

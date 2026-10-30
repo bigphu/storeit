@@ -81,6 +81,15 @@ FROM inventory.loans l
 LEFT JOIN inventory.borrow_tickets t ON t.id = l.ticket_id
 WHERE l.id = @id;
 
+-- name: GetActiveLoanForUpdate :one
+SELECT * FROM inventory.loans WHERE asset_id = @asset_id AND returned_on IS NULL FOR UPDATE;
+
+-- name: ReturnLoan :one
+UPDATE inventory.loans
+SET returned_on = @returned_on, returned_by = sqlc.narg('returned_by'), return_note = sqlc.narg('return_note')
+WHERE id = @id AND returned_on IS NULL
+RETURNING *;
+
 -- name: GetActiveLoanForAsset :one
 SELECT l.*, coalesce(t.number, 0)::bigint AS ticket_number
 FROM inventory.loans l
@@ -94,6 +103,7 @@ SELECT l.*, coalesce(t.number, 0)::bigint AS ticket_number
 FROM inventory.loans l
 LEFT JOIN inventory.borrow_tickets t ON t.id = l.ticket_id
 WHERE l.returned_on IS NULL
+  AND (sqlc.narg('borrower_id')::uuid IS NULL OR l.borrower_id = sqlc.narg('borrower_id')::uuid)
 ORDER BY CASE WHEN @sort::text = 'started_on' THEN l.started_on END ASC,
          CASE WHEN @sort::text = '-started_on' THEN l.started_on END DESC,
          CASE WHEN @sort::text = 'return_by' THEN l.return_by END ASC NULLS LAST,
@@ -103,7 +113,8 @@ ORDER BY CASE WHEN @sort::text = 'started_on' THEN l.started_on END ASC,
 LIMIT @lim OFFSET @off;
 
 -- name: CountActiveLoans :one
-SELECT count(*) FROM inventory.loans WHERE returned_on IS NULL;
+SELECT count(*) FROM inventory.loans
+WHERE returned_on IS NULL AND (sqlc.narg('borrower_id')::uuid IS NULL OR borrower_id = sqlc.narg('borrower_id')::uuid);
 
 -- Khoản quá hạn chưa báo, khoá để hai lần quét cùng lúc không báo trùng
 -- name: ListOverdueUnnotifiedLoans :many

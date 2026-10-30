@@ -13,6 +13,7 @@ const (
 	EmailTicketRejected  = "ticket_rejected"
 	EmailTicketCancelled = "ticket_cancelled" // người quản lý huỷ phiếu đã duyệt
 	EmailLoanOverdue     = "loan_overdue"
+	EmailLoanReturned    = "loan_returned" // biên nhận trả cho người mượn
 )
 
 // BorrowingEmailArgs: gửi một thư về phiếu mượn (TicketID) hay khoản mượn (LoanID). Repository
