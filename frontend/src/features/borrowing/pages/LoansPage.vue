@@ -18,7 +18,8 @@ import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
 import { useKeepScrollOnPage, useListTable, useRowMenu } from '@/lib/tableRows'
 import { queryInt, queryString, useUrlState } from '@/lib/urlState'
 import { fromTableSort, toTableSort } from '@/features/assets/listQuery'
-import { useAsset } from '@/features/assets/api'
+import { useQueryClient } from '@tanstack/vue-query'
+import { assetKeys, useAsset } from '@/features/assets/api'
 import { type LoanParams, useLoans } from '../api'
 import { overdueLabel } from '../borrowing'
 import ReturnDialog from '../components/ReturnDialog.vue'
@@ -61,13 +62,16 @@ const openAsset = (l: Loan, e?: MouseEvent, newTab?: boolean) => openLocation(ro
 // Ghi nhận trả: dòng khoản mượn không có version tài sản, nên đọc tài sản trước khi mở hộp
 const returning = ref<Loan | null>(null)
 const returnOpen = ref(false)
-const { data: returningAsset } = useAsset(() => returning.value?.asset.id)
+const qc = useQueryClient()
+const { data: returningAsset, isFetching: assetLoading } = useAsset(() => returning.value?.asset.id)
+// chờ bản đọc mới: version trong cache có thể đã cũ (người khác vừa sửa tài sản)
 const returnTarget = computed(() =>
-  returning.value && returningAsset.value?.id === returning.value.asset.id
+  returning.value && !assetLoading.value && returningAsset.value?.id === returning.value.asset.id
     ? { id: returningAsset.value.id, tag: returningAsset.value.tag, version: returningAsset.value.version, startedOn: returning.value.started_on }
     : null,
 )
 function askReturn(l: Loan) {
+  qc.invalidateQueries({ queryKey: assetKeys.one(l.asset.id) })
   returning.value = l
   returnOpen.value = true
 }

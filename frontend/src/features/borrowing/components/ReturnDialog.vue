@@ -39,6 +39,12 @@ watch(
   },
   { immediate: true },
 )
+// ngày của server đến sau lúc mở (trước đó là ngày của máy): form chưa sửa thì lấy ngày server
+watch(today, (t) => {
+  if (!visible.value || form.dirty.value || returnedOn.value === t) return
+  returnedOn.value = t
+  form.reset()
+})
 
 const problem = computed(() => {
   if (!props.asset) return null
