@@ -75,10 +75,10 @@ func (s *Service) CreateAssetType(ctx context.Context, in domain.NewAssetType) (
 			attrs[i].Position = int32(i + 1)
 		}
 	}
-	return s.types.Create(ctx, domain.NewAssetType{Code: code, Name: name, Description: desc, Attributes: attrs})
+	return s.types.Create(ctx, domain.NewAssetType{Code: code, Name: name, Description: desc, CanBorrow: in.CanBorrow, Attributes: attrs})
 }
 
-func (s *Service) UpdateAssetType(ctx context.Context, id uuid.UUID, name, description *string, version int32) (domain.AssetType, error) {
+func (s *Service) UpdateAssetType(ctx context.Context, id uuid.UUID, name, description *string, canBorrow *bool, version int32) (domain.AssetType, error) {
 	if _, err := auth.Require(ctx, domain.PermTypeManage); err != nil {
 		return domain.AssetType{}, err
 	}
@@ -96,7 +96,7 @@ func (s *Service) UpdateAssetType(ctx context.Context, id uuid.UUID, name, descr
 		}
 		description = &d
 	}
-	return s.types.Update(ctx, id, name, description, version)
+	return s.types.Update(ctx, id, name, description, canBorrow, version)
 }
 
 // ArchiveAssetType: loại đã archive không chọn được cho tài sản mới; tài sản

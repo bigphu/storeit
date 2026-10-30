@@ -410,6 +410,10 @@ paths:
         - name: include_retired
           in: query
           schema: { type: boolean }
+        - name: borrowable
+          in: query
+          description: Chỉ tài sản cho mượn được ngay (loại bật can_borrow, status thuộc kind available).
+          schema: { type: boolean }
         - name: attr
           in: query
           description: |
@@ -810,13 +814,14 @@ components:
 
     AssetType:
       type: object
-      required: [id, code, name, description, is_system, version, created_at, updated_at]
+      required: [id, code, name, description, is_system, can_borrow, version, created_at, updated_at]
       properties:
         id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
         code: { type: string }
         name: { type: string }
         description: { type: string }
         is_system: { type: boolean }
+        can_borrow: { type: boolean, description: '"Can be borrowed": assets of this type can be lent (US-10)' }
         archived_at: { type: string, format: date-time }
         version: { type: integer, format: int32 }
         created_at: { type: string, format: date-time }
@@ -902,6 +907,7 @@ components:
         code: { type: string, minLength: 1, maxLength: 32 }
         name: { type: string, minLength: 1, maxLength: 100 }
         description: { type: string, maxLength: 500 }
+        can_borrow: { type: boolean, description: Default false }
         attributes:
           type: array
           maxItems: 100
@@ -913,6 +919,7 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 100 }
         description: { type: string, maxLength: 500 }
+        can_borrow: { type: boolean }
         version: { type: integer, format: int32 }
 
     UpdateAttributeRequest:

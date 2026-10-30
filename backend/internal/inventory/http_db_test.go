@@ -1126,3 +1126,75 @@ func TestReplacementOverHTTP(t *testing.T) {
 		t.Errorf("stale version = %d, want 409", rec.Code)
 	}
 }
+
+// Reserved và On loan chỉ việc mượn đặt (US-10): chọn tay khi tạo hay đổi hàng loạt là 422
+func TestBorrowingStatusesNotPickable(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	rec := a.do("POST", "/api/v1/assets", tok, map[string]any{
+		"tag": "BS-" + strings.ToUpper(uuid.NewString()[:8]), "name": "Projector",
+		"asset_type_id": domain.GeneralTypeID.String(), "status_id": domain.ReservedStatusID.String(),
+	})
+	if typ, _ := problem(t, rec); rec.Code != 422 || typ != "/errors/status-set-by-borrowing" {
+		t.Errorf("create with Reserved = %d %s", rec.Code, typ)
+	}
+	x := decode[assetDetail](t, a.do("POST", "/api/v1/assets", tok, map[string]any{
+		"tag": "BS-" + strings.ToUpper(uuid.NewString()[:8]), "name": "Projector", "asset_type_id": domain.GeneralTypeID.String(),
+	}), 201)
+	rec = a.do("POST", "/api/v1/assets/bulk-status", tok, map[string]any{
+		"status_id": domain.OnLoanStatusID.String(), "items": []map[string]any{{"id": x.ID, "version": x.Version}},
+	})
+	if typ, _ := problem(t, rec); rec.Code != 422 || typ != "/errors/status-set-by-borrowing" {
+		t.Errorf("bulk status On loan = %d %s", rec.Code, typ)
+	}
+}
+
+// "Can be borrowed" trên loại tài sản: mặc định tắt, sửa được
+func TestTypeCanBorrow(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	type typ struct {
+		ID        string
+		Version   int32
+		CanBorrow bool `json:"can_borrow"`
+	}
+	code := "CB" + strings.ToUpper(uuid.NewString()[:6])
+	created := decode[typ](t, a.do("POST", "/api/v1/asset-types", tok, map[string]any{"code": code, "name": "Projector " + code}), 201)
+	if created.CanBorrow {
+		t.Fatal("new type can be borrowed, want off by default")
+	}
+	upd := decode[typ](t, a.do("PATCH", "/api/v1/asset-types/"+created.ID, tok, map[string]any{"can_borrow": true, "version": created.Version}), 200)
+	if got := decode[typ](t, a.do("GET", "/api/v1/asset-types/"+created.ID, tok, nil), 200); !upd.CanBorrow || !got.CanBorrow {
+		t.Errorf("after turning it on: update %v, get %v", upd.CanBorrow, got.CanBorrow)
+	}
+}
+
+// borrowable=true: loại cho mượn được và status thuộc kind available
+func TestAssetsBorrowableFilter(t *testing.T) {
+	a := newApp(t)
+	tok := a.token(allPerms...)
+	mkType := func(borrow bool) string {
+		code := "BF" + strings.ToUpper(uuid.NewString()[:6])
+		ty := decode[typeDetail](t, a.do("POST", "/api/v1/asset-types", tok, map[string]any{"code": code, "name": "Type " + code}), 201)
+		if borrow {
+			decode[typeDetail](t, a.do("PATCH", "/api/v1/asset-types/"+ty.ID, tok, map[string]any{"can_borrow": true, "version": ty.Version}), 200)
+		}
+		return ty.ID
+	}
+	prefix := "BF" + strings.ToUpper(uuid.NewString()[:5])
+	mk := func(typeID, suffix string, status uuid.UUID) assetDetail {
+		return decode[assetDetail](t, a.do("POST", "/api/v1/assets", tok, map[string]any{
+			"tag": prefix + "-" + suffix, "name": "Asset " + suffix, "asset_type_id": typeID, "status_id": status.String(),
+		}), 201)
+	}
+	yes, no := mkType(true), mkType(false)
+	free := mk(yes, "1", domain.AvailableStatusID)
+	mk(yes, "2", domain.InUseStatusID)
+	mk(no, "3", domain.AvailableStatusID)
+
+	type page struct{ Items []struct{ ID string } }
+	got := decode[page](t, a.do("GET", "/api/v1/assets?borrowable=true&q="+prefix, tok, nil), 200)
+	if len(got.Items) != 1 || got.Items[0].ID != free.ID {
+		t.Errorf("borrowable = %+v, want only %s", got.Items, free.ID)
+	}
+}

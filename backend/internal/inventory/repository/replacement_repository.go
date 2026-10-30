@@ -46,6 +46,9 @@ func (r *AssetRepository) RecordReplacement(ctx context.Context, oldID, newID uu
 		if old.Version != version {
 			return domain.ErrAssetChanged
 		}
+		if domain.IsBorrowingStatus(old.StatusID) {
+			return domain.ErrAssetInBorrowing
+		}
 		if newID == oldID {
 			return invalidReplacement("replacement_asset_id", "can't be the same asset")
 		}

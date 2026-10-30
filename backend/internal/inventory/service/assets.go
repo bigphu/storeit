@@ -218,13 +218,17 @@ func (s *Service) fields(ctx context.Context, in AssetInput, cur *domain.Asset) 
 }
 
 // status chọn status cho tài sản: nil thì mặc định (tạo) hoặc giữ nguyên (sửa).
-// Status kind retired chỉ đặt bằng retire.
+// Status kind retired chỉ đặt bằng retire; Reserved và On loan chỉ việc mượn đặt (giữ nguyên
+// status đang có thì được, để sửa trường khác của tài sản đang mượn).
 func (s *Service) status(ctx context.Context, id *uuid.UUID, cur *domain.Asset) (domain.Status, error) {
 	if id == nil {
 		if cur != nil {
 			return s.statuses.Get(ctx, cur.StatusID)
 		}
 		return s.statuses.Default(ctx, domain.KindAvailable)
+	}
+	if domain.IsBorrowingStatus(*id) && (cur == nil || cur.StatusID != *id) {
+		return domain.Status{}, domain.ErrBorrowingStatus
 	}
 	st, err := s.statuses.Get(ctx, *id)
 	if err != nil {

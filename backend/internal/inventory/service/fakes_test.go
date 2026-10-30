@@ -70,7 +70,7 @@ func newAttr(typeID uuid.UUID, na domain.NewAttribute) domain.Attribute {
 	return a
 }
 
-func (f *fakeTypes) Update(_ context.Context, id uuid.UUID, name, description *string, version int32) (domain.AssetType, error) {
+func (f *fakeTypes) Update(_ context.Context, id uuid.UUID, name, description *string, canBorrow *bool, version int32) (domain.AssetType, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	t := f.types[id]

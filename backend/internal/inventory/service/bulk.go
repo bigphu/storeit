@@ -69,6 +69,9 @@ func (s *Service) SetAssetsStatus(ctx context.Context, items []BulkItem, statusI
 	if err != nil {
 		return BulkResult{}, err
 	}
+	if domain.IsBorrowingStatus(statusID) {
+		return BulkResult{}, domain.ErrBorrowingStatus
+	}
 	st, err := s.statuses.Get(ctx, statusID)
 	if err != nil {
 		return BulkResult{}, err

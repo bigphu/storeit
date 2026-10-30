@@ -21,6 +21,7 @@ type NewAttribute struct {
 
 type NewAssetType struct {
 	Code, Name, Description string
+	CanBorrow               bool
 	Attributes              []NewAttribute
 }
 
@@ -40,7 +41,8 @@ type TypeRepository interface {
 	// Create: ErrTypeCodeTaken, ErrTypeNameTaken, ErrAttributeKeyTaken...; event asset_type_created
 	Create(ctx context.Context, in NewAssetType) (AssetType, error)
 	// Update: ErrAssetTypeChanged khi version cũ; event asset_type_updated
-	Update(ctx context.Context, id uuid.UUID, name, description *string, version int32) (AssetType, error)
+	// canBorrow nil: giữ nguyên
+	Update(ctx context.Context, id uuid.UUID, name, description *string, canBorrow *bool, version int32) (AssetType, error)
 	SetArchived(ctx context.Context, id uuid.UUID, archived bool) (AssetType, error)
 	AddAttribute(ctx context.Context, typeID uuid.UUID, in NewAttribute) (Attribute, error)
 	// UpdateAttribute: đổi kiểu hay đơn vị khi đã có giá trị là ErrAttributeInUse;
@@ -144,6 +146,8 @@ type AssetFilter struct {
 	LocationID     *uuid.UUID
 	HolderMemberID *uuid.UUID
 	IncludeRetired bool
+	// Borrowable: chỉ tài sản cho mượn được ngay (loại bật Can be borrowed, status kind available)
+	Borrowable bool
 	// IDs: chỉ các tài sản này ("Export selected"); nil là không lọc
 	IDs           []uuid.UUID
 	Sort          AssetSort

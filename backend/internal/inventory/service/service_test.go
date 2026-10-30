@@ -68,7 +68,7 @@ func TestPermissionChecks(t *testing.T) {
 		"ListAssetTypes":   {domain.PermAssetRead, func(c context.Context) error { _, err := e.svc.ListAssetTypes(c, false); return err }},
 		"GetAssetType":     {domain.PermAssetRead, func(c context.Context) error { _, err := e.svc.GetAssetType(c, id); return err }},
 		"CreateAssetType":  {domain.PermTypeManage, func(c context.Context) error { _, err := e.svc.CreateAssetType(c, domain.NewAssetType{}); return err }},
-		"UpdateAssetType":  {domain.PermTypeManage, func(c context.Context) error { _, err := e.svc.UpdateAssetType(c, id, nil, nil, 1); return err }},
+		"UpdateAssetType":  {domain.PermTypeManage, func(c context.Context) error { _, err := e.svc.UpdateAssetType(c, id, nil, nil, nil, 1); return err }},
 		"ArchiveAssetType": {domain.PermTypeManage, func(c context.Context) error { _, err := e.svc.ArchiveAssetType(c, id); return err }},
 		"RestoreAssetType": {domain.PermTypeManage, func(c context.Context) error { _, err := e.svc.RestoreAssetType(c, id); return err }},
 		"AddAttribute":     {domain.PermTypeManage, func(c context.Context) error { _, err := e.svc.AddAttribute(c, id, domain.NewAttribute{}); return err }},

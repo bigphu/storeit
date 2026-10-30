@@ -112,11 +112,11 @@ func TestTypes_UpdateArchiveAndVersion(t *testing.T) {
 	ctx := actorCtx()
 	typ := laptop(t, r)
 
-	upd, err := r.types.Update(ctx, typ.ID, ptr("Notebook "+uniq()), ptr("Renamed"), typ.Version)
+	upd, err := r.types.Update(ctx, typ.ID, ptr("Notebook "+uniq()), ptr("Renamed"), nil, typ.Version)
 	if err != nil || upd.Version != typ.Version+1 || upd.Description != "Renamed" {
 		t.Fatalf("update = %+v, %v", upd, err)
 	}
-	if _, err := r.types.Update(ctx, typ.ID, ptr("Stale"), nil, typ.Version); !errors.Is(err, domain.ErrAssetTypeChanged) {
+	if _, err := r.types.Update(ctx, typ.ID, ptr("Stale"), nil, nil, typ.Version); !errors.Is(err, domain.ErrAssetTypeChanged) {
 		t.Errorf("stale version: %v", err)
 	}
 	arch, err := r.types.SetArchived(ctx, typ.ID, true)

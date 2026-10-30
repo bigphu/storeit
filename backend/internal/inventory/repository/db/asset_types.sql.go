@@ -23,8 +23,8 @@ func (q *Queries) AttributeHasValues(ctx context.Context, attributeID uuid.UUID)
 }
 
 const createAssetType = `-- name: CreateAssetType :one
-INSERT INTO inventory.asset_types (id, code, name, description)
-VALUES ($1, $2, $3, $4)
+INSERT INTO inventory.asset_types (id, code, name, description, can_borrow)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id, code, name, description, is_system, archived_at, version, created_at, updated_at, can_borrow
 `
 
@@ -33,6 +33,7 @@ type CreateAssetTypeParams struct {
 	Code        string
 	Name        string
 	Description string
+	CanBorrow   bool
 }
 
 func (q *Queries) CreateAssetType(ctx context.Context, arg CreateAssetTypeParams) (InventoryAssetType, error) {
@@ -41,6 +42,7 @@ func (q *Queries) CreateAssetType(ctx context.Context, arg CreateAssetTypeParams
 		arg.Code,
 		arg.Name,
 		arg.Description,
+		arg.CanBorrow,
 	)
 	var i InventoryAssetType
 	err := row.Scan(
@@ -553,14 +555,15 @@ func (q *Queries) SetOptionPosition(ctx context.Context, arg SetOptionPositionPa
 
 const updateAssetType = `-- name: UpdateAssetType :one
 UPDATE inventory.asset_types
-SET name = $1, description = $2, version = version + 1, updated_at = now()
-WHERE id = $3 AND version = $4
+SET name = $1, description = $2, can_borrow = $3, version = version + 1, updated_at = now()
+WHERE id = $4 AND version = $5
 RETURNING id, code, name, description, is_system, archived_at, version, created_at, updated_at, can_borrow
 `
 
 type UpdateAssetTypeParams struct {
 	Name        string
 	Description string
+	CanBorrow   bool
 	ID          uuid.UUID
 	Version     int32
 }
@@ -570,6 +573,7 @@ func (q *Queries) UpdateAssetType(ctx context.Context, arg UpdateAssetTypeParams
 	row := q.db.QueryRow(ctx, updateAssetType,
 		arg.Name,
 		arg.Description,
+		arg.CanBorrow,
 		arg.ID,
 		arg.Version,
 	)
