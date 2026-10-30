@@ -143,6 +143,12 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: 'My tickets', icon: 'pi pi-ticket', perm: Perm.BorrowRequest },
       },
       {
+        path: 'borrowing/mine/loans',
+        name: 'my-loans',
+        component: () => import('@/features/borrowing/pages/MyLoansPage.vue'),
+        meta: { title: 'My loans', icon: 'pi pi-clock', perm: Perm.BorrowRequest },
+      },
+      {
         path: 'borrowing/tickets',
         name: 'tickets',
         component: () => import('@/features/borrowing/pages/TicketsPage.vue'),

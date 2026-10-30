@@ -64,10 +64,13 @@ const workspace = computed<NavItem[]>(() => {
       }
     }
   }
-  // Mượn (US-10): phiếu của tôi; người quản lý thêm hàng chờ duyệt (có số) và đồ đang cho mượn
+  // Mượn (US-10, US-11): phiếu của tôi, đồ tôi đang mượn; người quản lý thêm hàng chờ duyệt (có số) và đồ đang cho mượn
   const borrowing: NavItem[] = []
   if (session.can(Perm.BorrowRequest)) {
-    borrowing.push({ label: 'My tickets', icon: 'pi pi-ticket', route: '/borrowing/mine', active: name.value === 'my-tickets' })
+    borrowing.push(
+      { label: 'My tickets', icon: 'pi pi-ticket', route: '/borrowing/mine', active: name.value === 'my-tickets' },
+      { label: 'My loans', icon: 'pi pi-clock', route: '/borrowing/mine/loans', active: name.value === 'my-loans' },
+    )
   }
   if (session.can(Perm.BorrowManage)) {
     borrowing.push(

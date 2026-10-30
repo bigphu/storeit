@@ -13,6 +13,7 @@ import {
   requirementLabels,
   returnConditionOptions,
   returnFormError,
+  ticketLoanLabel,
   satisfies,
   shortDay,
   ticketFormError,
@@ -98,6 +99,13 @@ describe('returnFormError', () => {
     expect(returnFormError('2026-10-19', '2026-10-20', '2026-10-30')).toBe('The loan started on 20 Oct; pick that day or later.')
     expect(returnFormError('2026-10-31', '2026-10-20', '2026-10-30')).toBe("That date hasn't come yet.")
     expect(returnFormError('2026-10-20', '2026-10-20', '2026-10-30')).toBeNull()
+  })
+})
+
+describe('ticketLoanLabel', () => {
+  it('says whether the loan is still out', () => {
+    expect(ticketLoanLabel({ started_on: '2026-11-01' })).toBe('On loan since 1 Nov')
+    expect(ticketLoanLabel({ started_on: '2026-11-01', returned_on: '2026-11-03' })).toBe('Returned on 3 Nov')
   })
 })
 

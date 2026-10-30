@@ -24,10 +24,11 @@ import { overdueLabel } from '../borrowing'
 import ReturnDialog from '../components/ReturnDialog.vue'
 
 // Tài sản đang cho mượn (người quản lý), mặc định quá hạn lên trước; Since và Return by sắp xếp
-// được. Bấm dòng mở tài sản.
+// được. Bấm dòng mở tài sản. mine: đồ chính mình đang mượn (My loans), chỉ xem.
+const props = defineProps<{ mine?: boolean }>()
 type Sort = NonNullable<LoanParams['sort']>
 const SORTS: Sort[] = ['started_on', '-started_on', 'return_by', '-return_by']
-const { size: pageSize, set: setPageSize } = usePageSize('loans')
+const { size: pageSize, set: setPageSize } = usePageSize(props.mine ? 'my-loans' : 'loans')
 const { state, update } = useUrlState(
   (q) => {
     const sort = queryString(q.sort) as Sort | undefined
@@ -35,7 +36,7 @@ const { state, update } = useUrlState(
   },
   (s) => ({ sort: s.sort, page: s.page > 1 ? String(s.page) : undefined }),
 )
-const params = computed<LoanParams>(() => ({ sort: state.value.sort, page: state.value.page, page_size: pageSize.value }))
+const params = computed<LoanParams>(() => ({ mine: props.mine || undefined, sort: state.value.sort, page: state.value.page, page_size: pageSize.value }))
 const tableSort = computed(() => toTableSort(state.value.sort))
 function onSort(e: DataTableSortEvent) {
   const field = typeof e.sortField === 'string' ? e.sortField : undefined
@@ -74,15 +75,15 @@ function askReturn(l: Loan) {
 const rowMenu = useRowMenu<Loan>((l) => [
   { label: 'Open asset', icon: 'pi pi-arrow-right', command: () => openAsset(l) },
   { label: 'Open in new tab', icon: 'pi pi-external-link', command: () => openAsset(l, undefined, true) },
-  { separator: true },
-  { label: 'Record return…', icon: 'pi pi-reply', command: () => askReturn(l) },
+  ...(props.mine ? [] : [{ separator: true }, { label: 'Record return…', icon: 'pi pi-reply', command: () => askReturn(l) }]),
 ])
 const table = useListTable({ open: openAsset, showMenu: rowMenu.showContext })
 </script>
 
 <template>
   <section>
-    <PageHeader title="On loan" subtitle="Assets lent out now, overdue first." />
+    <PageHeader v-if="mine" title="My loans" subtitle="What you have now, and when it's due back." />
+    <PageHeader v-else title="On loan" subtitle="Assets lent out now, overdue first." />
     <RowMenus :menu="rowMenu" />
     <DataTable
       ref="tableRef"
@@ -112,7 +113,7 @@ const table = useListTable({ open: openAsset, showMenu: rowMenu.showContext })
         </template>
       </Column>
       <Column header="Type" field="asset_type_name" />
-      <Column header="Borrower">
+      <Column v-if="!mine" header="Borrower">
         <template #body="{ data: l }: { data: Loan }"><PersonCell :name="l.borrower.name" :email="l.borrower.email" /></template>
       </Column>
       <Column header="Since" sort-field="started_on" sortable>
@@ -133,7 +134,7 @@ const table = useListTable({ open: openAsset, showMenu: rowMenu.showContext })
           <span v-else class="muted">Lent directly</span>
         </template>
       </Column>
-      <Column header="">
+      <Column v-if="!mine" header="">
         <template #body="{ data: l }: { data: Loan }">
           <Button label="Record return" size="small" text @click.stop="askReturn(l)" />
         </template>
@@ -145,10 +146,10 @@ const table = useListTable({ open: openAsset, showMenu: rowMenu.showContext })
       </Column>
       <template #empty>
         <TableSkeleton v-if="isLoading" :rows="8" />
-        <EmptyState v-else icon="pi pi-clock" text="Nothing is on loan right now." />
+        <EmptyState v-else icon="pi pi-clock" :text="mine ? 'You have nothing on loan.' : 'Nothing is on loan right now.'" />
       </template>
     </DataTable>
-    <ReturnDialog v-model:visible="returnOpen" :asset="returnTarget" />
+    <ReturnDialog v-if="!mine" v-model:visible="returnOpen" :asset="returnTarget" />
   </section>
 </template>
 

@@ -38,6 +38,11 @@ export function returnFormError(returnedOn: string, startedOn: string, today: st
   return null
 }
 
+// ticketLoanLabel: dòng khoản mượn trên trang phiếu đã giao
+export function ticketLoanLabel(loan: { started_on: string; returned_on?: string | null }): string {
+  return loan.returned_on ? `Returned on ${shortDay(loan.returned_on)}` : `On loan since ${shortDay(loan.started_on)}`
+}
+
 export const TICKET_STATE_LABEL: Record<TicketState, string> = {
   waiting: 'Waiting',
   approved: 'Ready for pickup',

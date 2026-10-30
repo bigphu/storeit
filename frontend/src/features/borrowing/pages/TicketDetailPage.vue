@@ -12,7 +12,7 @@ import { useTabTitle } from '@/app/tabs/tabPage'
 import { formatDate, formatDateTime } from '@/lib/dates'
 import { useAssetType } from '@/features/asset-types/api'
 import { useTicket } from '../api'
-import { requirementLabels, TICKET_STATE_LABEL, TICKET_STATE_TONE } from '../borrowing'
+import { requirementLabels, TICKET_STATE_LABEL, TICKET_STATE_TONE, ticketLoanLabel } from '../borrowing'
 import ApproveDialog from '../components/ApproveDialog.vue'
 import RejectDialog from '../components/RejectDialog.vue'
 import { useTicketActions } from '../useTicketActions'
@@ -93,6 +93,10 @@ const crumbs = computed(() => [
             <dd>
               <RouterLink :to="`/assets/${ticket.asset.id}`" class="mono">{{ ticket.asset.tag }}</RouterLink> · {{ ticket.asset.name }}
             </dd>
+          </template>
+          <template v-if="ticket.loan">
+            <dt>Loan</dt>
+            <dd>{{ ticketLoanLabel(ticket.loan) }}</dd>
           </template>
           <template v-if="ticket.decided_at">
             <dt>Decided</dt>
