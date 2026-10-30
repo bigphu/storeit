@@ -1,11 +1,13 @@
 // Mượn tài sản (US-10): phiếu mượn, khoản đang mượn, cho mượn trực tiếp. Mutation không tự
 // toast (meta toast false): trang và hộp thoại tự báo, lỗi field hiện trong form
-import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { keepPreviousData, type QueryClient, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 import { inventoryApi } from '@/lib/api/client'
 import type { operations } from '@/lib/api/inventory'
+import type { Attribute } from '@/lib/api/types'
 import { unwrap } from '@/lib/errors'
 import { refreshAssetLists } from '@/features/assets/api'
+import { typeKeys } from '@/features/asset-types/api'
 
 export type TicketParams = NonNullable<operations['listBorrowTickets']['parameters']['query']>
 export type LoanParams = NonNullable<operations['listLoans']['parameters']['query']>
@@ -115,4 +117,22 @@ export function useLendAsset() {
       }),
     ),
   )
+}
+
+// useTypeAttributes: thuộc tính của các loại (đọc yêu cầu của phiếu thành chữ), mỗi loại một
+// lần tải, dùng chung cache với trang loại
+export function useTypeAttributes(ids: MaybeRefOrGetter<string[]>) {
+  const results = useQueries({
+    queries: computed(() =>
+      [...new Set(toValue(ids))].map((id) => ({
+        queryKey: typeKeys.one(id),
+        queryFn: () => unwrap(inventoryApi.GET('/asset-types/{typeID}', { params: { path: { typeID: id } } })),
+      })),
+    ),
+  })
+  return computed(() => {
+    const out: Record<string, Attribute[]> = {}
+    for (const r of results.value) if (r.data) out[r.data.id] = r.data.attributes
+    return out
+  })
 }

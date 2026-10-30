@@ -135,6 +135,32 @@ export const routes: RouteRecordRaw[] = [
         props: true,
         meta: { title: 'Export profile', icon: 'pi pi-file-export', perm: Perm.AssetExport },
       },
+      // Mượn tài sản (US-10)
+      {
+        path: 'borrowing/mine',
+        name: 'my-tickets',
+        component: () => import('@/features/borrowing/pages/MyTicketsPage.vue'),
+        meta: { title: 'My tickets', icon: 'pi pi-ticket', perm: Perm.BorrowRequest },
+      },
+      {
+        path: 'borrowing/tickets',
+        name: 'tickets',
+        component: () => import('@/features/borrowing/pages/TicketsPage.vue'),
+        meta: { title: 'Tickets', icon: 'pi pi-inbox', perm: Perm.BorrowManage },
+      },
+      {
+        path: 'borrowing/tickets/:id',
+        name: 'ticket',
+        component: () => import('@/features/borrowing/pages/TicketDetailPage.vue'),
+        props: true,
+        meta: { title: 'Ticket', icon: 'pi pi-ticket', perm: Perm.BorrowRequest },
+      },
+      {
+        path: 'borrowing/loans',
+        name: 'loans',
+        component: () => import('@/features/borrowing/pages/LoansPage.vue'),
+        meta: { title: 'On loan', icon: 'pi pi-clock', perm: Perm.BorrowManage },
+      },
       {
         path: 'accounts',
         name: 'accounts',

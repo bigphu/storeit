@@ -4,10 +4,12 @@ import {
   ON_LOAN_STATUS_ID,
   RESERVED_STATUS_ID,
   TICKET_STATE_LABEL,
+  TICKET_STATE_TONE,
   overdueLabel,
   parseRequirement,
   pickableStatuses,
   requirementLabels,
+  satisfies,
   shortDay,
   ticketFormError,
 } from './borrowing'
@@ -32,6 +34,9 @@ describe('labels', () => {
       cancelled: 'Cancelled',
       handed_over: 'Handed over',
     })
+  })
+  it('colours states by meaning', () => {
+    expect(TICKET_STATE_TONE).toEqual({ waiting: 'warn', approved: 'info', handed_over: 'success', rejected: 'danger', cancelled: 'secondary' })
   })
   it('says how overdue a loan is', () => {
     expect(overdueLabel(0)).toBe('')
@@ -72,5 +77,25 @@ describe('ticketFormError', () => {
   it('accepts a complete ticket', () => {
     expect(ticketFormError(ok, today)).toBeNull()
     expect(ticketFormError({ ...ok, returnBy: '2026-10-30', note: 'x'.repeat(500) }, today)).toBeNull()
+  })
+})
+
+describe('satisfies', () => {
+  const v = (data_type: string, value: unknown) => ({ key: 'k', label: 'K', data_type, value }) as never
+  it('compares numbers, dates and text like the list filter', () => {
+    expect(satisfies({ key: 'k', op: 'gte', value: '16' }, v('number', 16))).toBe(true)
+    expect(satisfies({ key: 'k', op: 'gte', value: '16' }, v('number', 8))).toBe(false)
+    expect(satisfies({ key: 'k', op: 'lt', value: '2026-01-01' }, v('date', '2025-12-31'))).toBe(true)
+    expect(satisfies({ key: 'k', op: 'eq', value: 'dell' }, v('text', 'Dell'))).toBe(true)
+    expect(satisfies({ key: 'k', op: 'contains', value: 'HDMI' }, v('text', 'usb-c, hdmi'))).toBe(true)
+  })
+  it('checks booleans and select options', () => {
+    expect(satisfies({ key: 'k', op: 'eq', value: 'true' }, v('boolean', true))).toBe(true)
+    expect(satisfies({ key: 'k', op: 'in', value: 'o1,o2' }, v('select', 'o2'))).toBe(true)
+    expect(satisfies({ key: 'k', op: 'eq', value: 'o1' }, v('select', 'o2'))).toBe(false)
+  })
+  it('never matches an empty value', () => {
+    expect(satisfies({ key: 'k', op: 'eq', value: 'x' }, v('text', null))).toBe(false)
+    expect(satisfies({ key: 'k', op: 'eq', value: 'x' }, undefined)).toBe(false)
   })
 })
