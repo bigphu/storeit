@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -33,7 +34,7 @@ type borrowEnv struct {
 func newBorrowEnv(t *testing.T, now time.Time) *borrowEnv {
 	t.Helper()
 	e := &env{types: newFakeTypes(), statuses: newFakeStatuses(), assets: newFakeAssets(), profiles: newFakeProfiles()}
-	b := &borrowEnv{env: e, borrowing: newFakeBorrowing(), accounts: borrowAccounts{inactive: map[uuid.UUID]bool{}}, mail: &fakeMail{}}
+	b := &borrowEnv{env: e, borrowing: newFakeBorrowing(), accounts: borrowAccounts{inactive: map[uuid.UUID]bool{}, searchLimit: new(int)}, mail: &fakeMail{}}
 	e.svc = New(Deps{
 		Types: e.types, Statuses: e.statuses, Assets: e.assets, Profiles: e.profiles, Accounts: b.accounts,
 		Borrowing: b.borrowing, Location: hcm, Now: func() time.Time { return now }, Mail: b.mail, AppURL: "http://app.test",
@@ -73,6 +74,13 @@ func TestService_BusinessDay(t *testing.T) {
 		t.Fatalf("today() = %v, want 2026-10-30", got)
 	}
 	emp := asAccount(uuid.New(), domain.PermBorrowRequest)
+	// Form phiếu và hộp Lend lấy "hôm nay" từ đây, không theo đồng hồ của trình duyệt
+	if got, err := b.svc.BusinessDay(emp); err != nil || !got.Equal(day("2026-10-30")) {
+		t.Errorf("BusinessDay = %v, %v; want 2026-10-30", got, err)
+	}
+	if _, err := b.svc.BusinessDay(as(domain.PermAssetRead)); status(err) != 403 {
+		t.Errorf("BusinessDay without a borrowing permission = %v, want 403", err)
+	}
 	if _, err := b.svc.CreateTicket(emp, TicketInput{TypeID: b.typeID, NeededFrom: day("2026-10-30")}); err != nil {
 		t.Errorf("needed from the Vietnamese today: %v", err)
 	}
@@ -179,5 +187,48 @@ func TestCanBorrowNeedsBorrowManage(t *testing.T) {
 	}
 	if _, err := b.svc.UpdateAssetType(typesOnly, ty.ID, &name, nil, nil, got.Version); err != nil {
 		t.Errorf("type.manage renames: %v", err)
+	}
+}
+
+// Reserved và On loan do việc mượn đặt: không bao giờ là status mặc định của kind
+func TestBorrowingStatusesNeverDefault(t *testing.T) {
+	b := newBorrowEnv(t, time.Date(2026, 10, 30, 3, 0, 0, 0, time.UTC))
+	for _, id := range []uuid.UUID{domain.ReservedStatusID, domain.OnLoanStatusID} {
+		if _, err := b.svc.UpdateStatus(manager, id, domain.StatusChange{MakeDefault: true}); !errors.Is(err, domain.ErrBorrowingStatus) {
+			t.Errorf("make %v default: %v, want ErrBorrowingStatus", id, err)
+		}
+	}
+}
+
+// Danh sách phiếu đọc gộp: không đọc từng tài sản một (trước đây vài truy vấn mỗi dòng)
+func TestListTickets_ReadsAssetsInOneGo(t *testing.T) {
+	b := newBorrowEnv(t, time.Date(2026, 10, 30, 3, 0, 0, 0, time.UTC))
+	for i := range 3 {
+		tk, _ := approvedTicketTagged(t, b, fmt.Sprintf("LAP-%04d", i+1))
+		_ = tk
+	}
+	b.assets.gets = 0
+	views, _, err := b.svc.ListTickets(as(domain.PermBorrowManage), domain.TicketFilter{}, false)
+	if err != nil || len(views) != 3 {
+		t.Fatalf("list = %d, %v", len(views), err)
+	}
+	for _, v := range views {
+		if v.Asset == nil || v.Asset.Tag == "" || v.TypeName != "Projector" {
+			t.Errorf("view = %+v, want asset tag and type name", v)
+		}
+	}
+	if b.assets.gets != 0 {
+		t.Errorf("asset reads one by one = %d, want 0 (one batched list)", b.assets.gets)
+	}
+}
+
+// Tìm phiếu theo tên người: xét mọi account khớp (tên phổ biến như "Nguyễn" khớp rất nhiều người)
+func TestListTickets_SearchConsidersEveryone(t *testing.T) {
+	b := newBorrowEnv(t, time.Date(2026, 10, 30, 3, 0, 0, 0, time.UTC))
+	if _, _, err := b.svc.ListTickets(as(domain.PermBorrowManage), domain.TicketFilter{Q: "nguyen"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := *b.accounts.searchLimit; got < 1000 {
+		t.Errorf("people considered = %d, want at least 1000", got)
 	}
 }

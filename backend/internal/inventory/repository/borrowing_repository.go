@@ -353,9 +353,9 @@ func (r *BorrowingRepository) GetLoan(ctx context.Context, id uuid.UUID) (domain
 	}, row.TicketNumber), nil
 }
 
-func (r *BorrowingRepository) ListActiveLoans(ctx context.Context, today time.Time, page, pageSize int) ([]domain.Loan, int64, error) {
+func (r *BorrowingRepository) ListActiveLoans(ctx context.Context, today time.Time, sort string, page, pageSize int) ([]domain.Loan, int64, error) {
 	page, size := pageOf(page, pageSize)
-	rows, err := r.q.ListActiveLoans(ctx, db.ListActiveLoansParams{Today: toPgDate(&today), Off: int32((page - 1) * size), Lim: int32(size)})
+	rows, err := r.q.ListActiveLoans(ctx, db.ListActiveLoansParams{Today: toPgDate(&today), Sort: sort, Off: int32((page - 1) * size), Lim: int32(size)})
 	if err != nil {
 		return nil, 0, fmt.Errorf("inventory: list loans: %w", err)
 	}

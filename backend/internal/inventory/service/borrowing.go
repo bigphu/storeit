@@ -65,6 +65,9 @@ type TicketCounts struct{ Waiting, Approved int64 }
 
 const maxBorrowerResults = 10
 
+// maxTicketSearchPeople: số account tối đa xét khi tìm phiếu theo tên người (đủ cho cả công ty)
+const maxTicketSearchPeople = 1000
+
 // Today: ngày nghiệp vụ hôm nay (cmd/seed dùng để đặt ngày cho phiếu demo)
 func (s *Service) Today() time.Time { return s.today() }
 
@@ -72,6 +75,15 @@ func (s *Service) Today() time.Time { return s.today() }
 func (s *Service) today() time.Time {
 	y, m, d := s.now().In(s.loc).Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+}
+
+// BusinessDay: "hôm nay" theo múi giờ của ứng dụng, để form phiếu và hộp Lend kiểm ngày như
+// server thay vì theo đồng hồ của trình duyệt
+func (s *Service) BusinessDay(ctx context.Context) (time.Time, error) {
+	if _, _, err := borrowActor(ctx); err != nil {
+		return time.Time{}, err
+	}
+	return s.today(), nil
 }
 
 // borrowActor: actor có ít nhất một trong hai quyền mượn; canManage là có quyền manage
@@ -205,18 +217,16 @@ func (s *Service) ListTickets(ctx context.Context, f domain.TicketFilter, mine b
 	if err != nil {
 		return nil, 0, err
 	}
-	out := make([]TicketView, len(items))
-	for i, tk := range items {
-		if out[i], err = s.ticketView(ctx, tk); err != nil {
-			return nil, 0, err
-		}
+	out, err := s.ticketViews(ctx, items)
+	if err != nil {
+		return nil, 0, err
 	}
 	return out, total, nil
 }
 
 // matchTicketQuery: account có tên/email chứa q và loại có tên chứa q
 func (s *Service) matchTicketQuery(ctx context.Context, q string) ([]uuid.UUID, []uuid.UUID, error) {
-	accs, err := s.accounts.SearchAccounts(ctx, q, 50)
+	accs, err := s.accounts.SearchAccounts(ctx, q, maxTicketSearchPeople)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -349,34 +359,36 @@ func (s *Service) LendAsset(ctx context.Context, assetID, borrowerID uuid.UUID, 
 	return s.view(ctx, a)
 }
 
-func (s *Service) ListLoans(ctx context.Context, page, pageSize int) ([]LoanView, int64, error) {
+func (s *Service) ListLoans(ctx context.Context, sort string, page, pageSize int) ([]LoanView, int64, error) {
 	if _, err := auth.Require(ctx, domain.PermBorrowManage); err != nil {
 		return nil, 0, err
 	}
 	today := s.today()
-	loans, total, err := s.borrowing.ListActiveLoans(ctx, today, page, pageSize)
+	loans, total, err := s.borrowing.ListActiveLoans(ctx, today, sort, page, pageSize)
 	if err != nil {
 		return nil, 0, err
 	}
-	ids := make([]uuid.UUID, len(loans))
+	// đọc gộp: một lần cho người mượn, một lần cho tài sản (kèm tên loại)
+	borrowers := make([]uuid.UUID, len(loans))
+	assetIDs := make([]uuid.UUID, len(loans))
 	for i, l := range loans {
-		ids[i] = l.BorrowerID
+		borrowers[i], assetIDs[i] = l.BorrowerID, l.AssetID
 	}
-	people, err := s.accountMap(ctx, ids)
+	people, err := s.accountMap(ctx, borrowers)
+	if err != nil {
+		return nil, 0, err
+	}
+	assets, err := s.assetItems(ctx, assetIDs)
 	if err != nil {
 		return nil, 0, err
 	}
 	out := make([]LoanView, len(loans))
 	for i, l := range loans {
-		a, err := s.assets.Get(ctx, l.AssetID)
-		if err != nil {
-			return nil, 0, err
+		a := assets[l.AssetID]
+		out[i] = LoanView{
+			Loan: l, Asset: AssetRef{ID: l.AssetID, Tag: a.Tag, Name: a.Name}, TypeName: a.TypeName,
+			Borrower: people[l.BorrowerID], OverdueDays: l.OverdueDays(today),
 		}
-		v := LoanView{Loan: l, Asset: AssetRef{ID: a.ID, Tag: a.Tag, Name: a.Name}, Borrower: people[l.BorrowerID], OverdueDays: l.OverdueDays(today)}
-		if t, err := s.types.Get(ctx, a.TypeID); err == nil {
-			v.TypeName = t.Name
-		}
-		out[i] = v
 	}
 	return out, total, nil
 }
@@ -390,38 +402,76 @@ func (s *Service) SearchBorrowers(ctx context.Context, q string) ([]idcontract.A
 }
 
 func (s *Service) ticketView(ctx context.Context, tk domain.BorrowTicket) (TicketView, error) {
-	v := TicketView{BorrowTicket: tk}
-	people, err := s.accountMap(ctx, []uuid.UUID{tk.RequesterID})
+	vs, err := s.ticketViews(ctx, []domain.BorrowTicket{tk})
 	if err != nil {
 		return TicketView{}, err
 	}
-	v.Requester = people[tk.RequesterID]
-	if t, err := s.types.Get(ctx, tk.TypeID); err == nil {
-		v.TypeName = t.Name
-	} else if !errors.Is(err, domain.ErrTypeNotFound) {
-		return TicketView{}, err
-	}
-	if v.Asset, err = s.assetRef(ctx, tk.AssetID); err != nil {
-		return TicketView{}, err
-	}
-	if v.SuggestedAsset, err = s.assetRef(ctx, tk.SuggestedAssetID); err != nil {
-		return TicketView{}, err
-	}
-	return v, nil
+	return vs[0], nil
 }
 
-func (s *Service) assetRef(ctx context.Context, id *uuid.UUID) (*AssetRef, error) {
-	if id == nil {
-		return nil, nil
+// ticketViews: các phiếu kèm người gửi, tên loại và tài sản, đọc gộp (một lần cho người gửi,
+// một cho loại, một cho tài sản) thay vì vài truy vấn mỗi phiếu
+func (s *Service) ticketViews(ctx context.Context, tks []domain.BorrowTicket) ([]TicketView, error) {
+	requesters := make([]uuid.UUID, 0, len(tks))
+	var assetIDs []uuid.UUID
+	for _, tk := range tks {
+		requesters = append(requesters, tk.RequesterID)
+		for _, id := range []*uuid.UUID{tk.AssetID, tk.SuggestedAssetID} {
+			if id != nil {
+				assetIDs = append(assetIDs, *id)
+			}
+		}
 	}
-	a, err := s.assets.Get(ctx, *id)
-	if errors.Is(err, domain.ErrAssetNotFound) {
-		return nil, nil
-	}
+	people, err := s.accountMap(ctx, requesters)
 	if err != nil {
 		return nil, err
 	}
-	return &AssetRef{ID: a.ID, Tag: a.Tag, Name: a.Name}, nil
+	types, err := s.types.List(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	typeNames := make(map[uuid.UUID]string, len(types))
+	for _, t := range types {
+		typeNames[t.ID] = t.Name
+	}
+	assets, err := s.assetItems(ctx, assetIDs)
+	if err != nil {
+		return nil, err
+	}
+	ref := func(id *uuid.UUID) *AssetRef {
+		if id == nil {
+			return nil
+		}
+		a, ok := assets[*id]
+		if !ok {
+			return nil
+		}
+		return &AssetRef{ID: a.ID, Tag: a.Tag, Name: a.Name}
+	}
+	out := make([]TicketView, len(tks))
+	for i, tk := range tks {
+		out[i] = TicketView{
+			BorrowTicket: tk, Requester: people[tk.RequesterID], TypeName: typeNames[tk.TypeID],
+			Asset: ref(tk.AssetID), SuggestedAsset: ref(tk.SuggestedAssetID),
+		}
+	}
+	return out, nil
+}
+
+// assetItems: các tài sản theo ID (kể cả đã retire) trong một lần đọc, kèm tên loại
+func (s *Service) assetItems(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]domain.AssetListItem, error) {
+	out := make(map[uuid.UUID]domain.AssetListItem, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	items, _, err := s.assets.List(ctx, domain.AssetFilter{IDs: ids, IncludeRetired: true, Limit: int32(len(ids))})
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range items {
+		out[a.ID] = a
+	}
+	return out, nil
 }
 
 // accountMap: account theo ID; account không còn thì tên "Unknown user"

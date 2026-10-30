@@ -374,11 +374,15 @@ const attrOptions = (x: AttrDef) =>
       : undefined
 // khoá trường thuộc tính: "attr:<key>" để không trùng tên trường của tài sản
 const attrKey = (k: string) => `attr:${k}`
+// tài sản đang Reserved / On loan: status do việc mượn giữ, hiện mà không đổi được
+const quickBorrowing = computed(() => isBorrowingStatus(quickAsset.value?.status.id))
 const quickFields = computed<FieldDef[]>(() => {
   const base: FieldDef[] = [
     { key: 'name', label: 'Name', maxlength: 200 },
     { key: 'tag', label: 'Tag', lock: 'Tags never change.' },
-    { key: 'status_id', label: 'Status', kind: 'select', options: statusChoices.value },
+    quickBorrowing.value
+      ? { key: 'status_id', label: 'Status', kind: 'select', options: [{ label: quickAsset.value!.status.name, value: quickAsset.value!.status.id }], lock: 'Borrowing sets this status.' }
+      : { key: 'status_id', label: 'Status', kind: 'select', options: statusChoices.value },
     { key: 'purchase_date', label: 'Purchase date', kind: 'date' },
     { key: 'description', label: 'Description', kind: 'textarea' },
   ]

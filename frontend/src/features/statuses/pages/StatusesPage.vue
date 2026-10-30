@@ -29,6 +29,7 @@ import { useListTable, useRowMenu } from '@/lib/tableRows'
 import { kindSeverity, useCreateStatus, useReorderStatuses, useStatuses } from '../api'
 import { archiveBlock, KIND_INFO, KIND_ORDER, lanes, moveBy, orderAfterMove } from '../lanes'
 import { useStatusLifecycle, useStatusOverviewSave } from '../overviewSave'
+import { isBorrowingStatus } from '@/features/borrowing/borrowing'
 
 // Status chia theo kind thành bốn làn; kéo thả (hay Alt+↑/↓ trên tên) đổi thứ tự trong làn.
 // Bấm dòng mở trang của status; bút chì cạnh tên để đổi tại chỗ; nút thanh trượt (pi-sliders-h) mở ngăn kéo sửa nhanh
@@ -223,7 +224,7 @@ watch(statuses, (list) => {
                 </InlineCell>
                 <span v-if="s.is_default" class="default-pill"><i class="pi pi-star-fill" />Default</span>
                 <Button
-                  v-else-if="canManage && k !== 'retired'"
+                  v-else-if="canManage && k !== 'retired' && !isBorrowingStatus(s.id)"
                   label="Make default"
                   icon="pi pi-star"
                   text

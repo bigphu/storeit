@@ -112,7 +112,7 @@ const crumbs = computed(() => [
       </Panel>
     </div>
     <ApproveDialog v-model:visible="actions.approveOpen.value" :ticket="actions.approveTarget.value" />
-    <RejectDialog v-model:visible="actions.rejectOpen.value" :ticket="actions.rejectTarget.value" />
+    <RejectDialog v-model:visible="actions.rejectOpen.value" :ticket="actions.rejectTarget.value" :cancel="actions.rejectCancel.value" />
   </section>
   <EmptyState v-else-if="!isLoading" icon="pi pi-ticket" text="This ticket doesn't exist, or it isn't yours." />
 </template>

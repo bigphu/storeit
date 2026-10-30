@@ -617,6 +617,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/borrowing/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Today in the app's time zone, the day borrowing dates are checked against (inventory.borrow.request or inventory.borrow.manage) */
+        get: operations["getBusinessDay"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/borrow-tickets/{ticketID}": {
         parameters: {
             query?: never;
@@ -738,7 +755,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Assets on loan now, overdue first (inventory.borrow.manage) */
+        /** Assets on loan now, overdue first by default (inventory.borrow.manage) */
         get: operations["listLoans"];
         put?: never;
         post?: never;
@@ -1076,6 +1093,10 @@ export interface components {
             waiting: number;
             /** Format: int64 */
             approved: number;
+        };
+        BusinessDay: {
+            /** Format: date */
+            today: string;
         };
         CreateBorrowTicketRequest: {
             asset_type_id: components["schemas"]["ID"];
@@ -2505,6 +2526,27 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    getBusinessDay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Today */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessDay"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     getBorrowTicket: {
         parameters: {
             query?: never;
@@ -2666,6 +2708,7 @@ export interface operations {
     listLoans: {
         parameters: {
             query?: {
+                sort?: "started_on" | "-started_on" | "return_by" | "-return_by";
                 page?: components["parameters"]["Page"];
                 page_size?: components["parameters"]["PageSize"];
             };

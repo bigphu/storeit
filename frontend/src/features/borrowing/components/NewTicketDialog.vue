@@ -18,8 +18,7 @@ import AttributeFilterPopover from '@/features/assets/components/AttributeFilter
 import { attrFilterLabel } from '@/features/assets/filterChips'
 import type { AttrFilterRow } from '@/features/assets/listQuery'
 import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
-import { todayLocal } from '@/features/assets/replacement'
-import { useCreateTicket } from '../api'
+import { useBusinessDay, useCreateTicket } from '../api'
 import { ticketFormError } from '../borrowing'
 
 // Phiếu mượn mới: loại tài sản cho mượn được, yêu cầu thuộc tính chọn bằng bộ lọc của danh
@@ -37,7 +36,7 @@ const reqs = ref<AttrFilterRow[]>([])
 const neededFrom = ref('')
 const returnBy = ref('')
 const note = ref('')
-const today = ref(todayLocal(new Date()))
+const today = useBusinessDay(visible)
 const errors = useFormErrors()
 const create = useCreateTicket()
 const form = useDirty(() => ({ t: typeId.value, r: reqs.value, n: neededFrom.value, b: returnBy.value, note: note.value.trim() }))
@@ -46,7 +45,6 @@ watch(
   visible,
   (open) => {
     if (!open) return
-    today.value = todayLocal(new Date())
     typeId.value = props.presetTypeId
     reqs.value = []
     neededFrom.value = today.value
@@ -57,6 +55,13 @@ watch(
   },
   { immediate: true },
 )
+// ngày của server đến sau lúc mở và muộn hơn ngày của máy: dời "cần từ" lên, form vẫn coi là chưa sửa
+watch(today, (t) => {
+  if (!visible.value || !neededFrom.value || neededFrom.value >= t) return
+  const clean = !form.dirty.value
+  neededFrom.value = t
+  if (clean) form.reset()
+})
 
 const { data: type } = useAssetType(typeId)
 const attrs = computed(() => (type.value?.attributes ?? []).filter((a) => !a.removed))
@@ -155,7 +160,7 @@ async function submit() {
         <Chip v-for="(f, i) in reqs" :key="i" :label="attrFilterLabel(f, attrs)" removable @remove="removeReq(i)" />
         <Button
           v-if="attrs.length && reqs.length < 10"
-          label="Spec"
+          label="Add spec"
           icon="pi pi-plus"
           size="small"
           text
@@ -165,7 +170,7 @@ async function submit() {
       </div>
       <small v-for="(m, i) in reqErrors" :key="i" class="field-error">{{ m }}</small>
       <small v-if="matchText" class="hint">{{ matchText }}</small>
-      <AttributeFilterPopover ref="pop" :attributes="attrs" :builtins="false" lead="Ask for assets that match." @add="addReq" />
+      <AttributeFilterPopover ref="pop" :attributes="attrs" :builtins="false" lead="Ask for assets that match." action="Add spec" @add="addReq" />
     </div>
     <div class="dates">
       <div class="field">

@@ -68,7 +68,8 @@ type Querier interface {
 	InsertReplacement(ctx context.Context, arg InsertReplacementParams) error
 	// Nhãn thuộc tính đang dùng của mọi loại, theo thứ tự hiển thị (thẻ ở trang loại)
 	ListActiveAttributeLabels(ctx context.Context) ([]ListActiveAttributeLabelsRow, error)
-	// Khoản đang mượn: quá hạn trước (hạn sớm nhất trước), rồi theo hạn, rồi mới bắt đầu trước
+	// Khoản đang mượn: theo cột sort nếu có; mặc định quá hạn trước (hạn sớm nhất trước), rồi
+	// theo hạn, rồi mới bắt đầu trước
 	ListActiveLoans(ctx context.Context, arg ListActiveLoansParams) ([]ListActiveLoansRow, error)
 	// Khoá mọi status đang dùng khi đổi thứ tự
 	ListActiveStatusesForUpdate(ctx context.Context) ([]InventoryAssetStatus, error)

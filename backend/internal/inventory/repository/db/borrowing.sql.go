@@ -478,12 +478,17 @@ SELECT l.id, l.asset_id, l.borrower_id, l.ticket_id, l.lent_by, l.started_on, l.
 FROM inventory.loans l
 LEFT JOIN inventory.borrow_tickets t ON t.id = l.ticket_id
 WHERE l.returned_on IS NULL
-ORDER BY (l.return_by IS NOT NULL AND l.return_by < $1::date) DESC,
+ORDER BY CASE WHEN $1::text = 'started_on' THEN l.started_on END ASC,
+         CASE WHEN $1::text = '-started_on' THEN l.started_on END DESC,
+         CASE WHEN $1::text = 'return_by' THEN l.return_by END ASC NULLS LAST,
+         CASE WHEN $1::text = '-return_by' THEN l.return_by END DESC NULLS LAST,
+         (l.return_by IS NOT NULL AND l.return_by < $2::date) DESC,
          l.return_by ASC NULLS LAST, l.started_on DESC, l.id
-LIMIT $3 OFFSET $2
+LIMIT $4 OFFSET $3
 `
 
 type ListActiveLoansParams struct {
+	Sort  string
 	Today pgtype.Date
 	Off   int32
 	Lim   int32
@@ -503,9 +508,15 @@ type ListActiveLoansRow struct {
 	TicketNumber      int64
 }
 
-// Khoản đang mượn: quá hạn trước (hạn sớm nhất trước), rồi theo hạn, rồi mới bắt đầu trước
+// Khoản đang mượn: theo cột sort nếu có; mặc định quá hạn trước (hạn sớm nhất trước), rồi
+// theo hạn, rồi mới bắt đầu trước
 func (q *Queries) ListActiveLoans(ctx context.Context, arg ListActiveLoansParams) ([]ListActiveLoansRow, error) {
-	rows, err := q.db.Query(ctx, listActiveLoans, arg.Today, arg.Off, arg.Lim)
+	rows, err := q.db.Query(ctx, listActiveLoans,
+		arg.Sort,
+		arg.Today,
+		arg.Off,
+		arg.Lim,
+	)
 	if err != nil {
 		return nil, err
 	}

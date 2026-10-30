@@ -7,6 +7,7 @@ import type { operations } from '@/lib/api/inventory'
 import type { Attribute } from '@/lib/api/types'
 import { unwrap } from '@/lib/errors'
 import { refreshAssetLists } from '@/features/assets/api'
+import { todayLocal } from '@/features/assets/replacement'
 import { typeKeys } from '@/features/asset-types/api'
 
 export type TicketParams = NonNullable<operations['listBorrowTickets']['parameters']['query']>
@@ -54,6 +55,18 @@ export function useLoans(params: MaybeRefOrGetter<LoanParams>) {
   })
 }
 
+// useBusinessDay: "hôm nay" (YYYY-MM-DD) theo múi giờ của ứng dụng, ngày server dùng để kiểm phiếu
+// và khoản mượn; chưa tải xong (hay lỗi) thì theo máy người dùng
+export function useBusinessDay(enabled: MaybeRefOrGetter<boolean>) {
+  const q = useQuery({
+    queryKey: ['borrowing-today'],
+    queryFn: async () => (await unwrap(inventoryApi.GET('/borrowing/today'))).today,
+    enabled: computed(() => toValue(enabled)),
+    staleTime: 60_000,
+  })
+  return computed(() => q.data.value ?? todayLocal(new Date()))
+}
+
 // searchBorrowers: account đang hoạt động để chọn người mượn (hộp Lend)
 export async function searchBorrowers(q: string) {
   return (await unwrap(inventoryApi.GET('/borrowers', { params: { query: { q: q || undefined } } }))).items
@@ -64,9 +77,11 @@ export function refreshBorrowing(qc: QueryClient) {
   return Promise.all([qc.invalidateQueries({ queryKey: borrowKeys.all }), refreshAssetLists(qc)])
 }
 
+// Tải lại cả khi lỗi: lỗi thường do phiếu đã đổi (người khác duyệt/huỷ, sai version), bảng và
+// trang phải hiện trạng thái mới
 function useBorrowMutation<V, R>(fn: (v: V) => Promise<R>) {
   const qc = useQueryClient()
-  return useMutation({ mutationFn: fn, meta: { toast: false }, onSuccess: () => refreshBorrowing(qc) })
+  return useMutation({ mutationFn: fn, meta: { toast: false }, onSettled: () => refreshBorrowing(qc) })
 }
 
 const ticketPath = (id: string) => ({ params: { path: { ticketID: id } } })

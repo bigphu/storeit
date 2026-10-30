@@ -87,13 +87,18 @@ FROM inventory.loans l
 LEFT JOIN inventory.borrow_tickets t ON t.id = l.ticket_id
 WHERE l.asset_id = @asset_id AND l.returned_on IS NULL;
 
--- Khoản đang mượn: quá hạn trước (hạn sớm nhất trước), rồi theo hạn, rồi mới bắt đầu trước
+-- Khoản đang mượn: theo cột sort nếu có; mặc định quá hạn trước (hạn sớm nhất trước), rồi
+-- theo hạn, rồi mới bắt đầu trước
 -- name: ListActiveLoans :many
 SELECT l.*, coalesce(t.number, 0)::bigint AS ticket_number
 FROM inventory.loans l
 LEFT JOIN inventory.borrow_tickets t ON t.id = l.ticket_id
 WHERE l.returned_on IS NULL
-ORDER BY (l.return_by IS NOT NULL AND l.return_by < @today::date) DESC,
+ORDER BY CASE WHEN @sort::text = 'started_on' THEN l.started_on END ASC,
+         CASE WHEN @sort::text = '-started_on' THEN l.started_on END DESC,
+         CASE WHEN @sort::text = 'return_by' THEN l.return_by END ASC NULLS LAST,
+         CASE WHEN @sort::text = '-return_by' THEN l.return_by END DESC NULLS LAST,
+         (l.return_by IS NOT NULL AND l.return_by < @today::date) DESC,
          l.return_by ASC NULLS LAST, l.started_on DESC, l.id
 LIMIT @lim OFFSET @off;
 

@@ -194,8 +194,8 @@ the type isn't archived and its status is of kind `available` (`domain.Borrowabl
 | `POST /asset-types`, `PATCH /asset-types/{typeID}`, `POST …/archive`, `POST …/restore`, attributes (`POST`, `PATCH`, `DELETE`, `POST …/restore`, `PUT …/attributes/order`), options (`POST`, `PATCH`, `DELETE`, `POST …/restore`, `PUT …/options/order`) | `inventory.type.manage` |
 | `POST /asset-statuses`, `PATCH /asset-statuses/{statusID}`, `POST …/archive`, `POST …/restore`, `PUT /asset-statuses/order` | `inventory.status.manage` |
 | `POST /assets/export` | `inventory.asset.read` + `inventory.asset.export` |
-| `POST /borrow-tickets`; `GET /borrow-tickets`, `GET /borrow-tickets/{ticketID}`, `POST …/cancel` for your own tickets | `inventory.borrow.request` |
-| `GET /borrow-tickets` and `GET …/{ticketID}` for everyone's, `GET /borrow-tickets/summary`, `POST …/approve`, `POST …/reject`, `POST …/cancel` (approved), `POST …/hand-over`, `POST /assets/{assetID}/lend`, `GET /loans`, `GET /borrowers?q=` | `inventory.borrow.manage` |
+| `POST /borrow-tickets`; `GET /borrow-tickets`, `GET /borrow-tickets/{ticketID}`, `POST …/cancel` for your own tickets; `GET /borrowing/today` (the app's business day, also with `inventory.borrow.manage`) | `inventory.borrow.request` |
+| `GET /borrow-tickets` and `GET …/{ticketID}` for everyone's, `GET /borrow-tickets/summary`, `POST …/approve`, `POST …/reject`, `POST …/cancel` (approved), `POST …/hand-over`, `POST /assets/{assetID}/lend`, `GET /loans` (overdue first; `sort=started_on|return_by`, `-` for descending), `GET /borrowers?q=` | `inventory.borrow.manage` |
 | `GET`/`POST /export-profiles`, `GET /export-profiles/{profileID}` | `inventory.asset.export` |
 | `PATCH`/`DELETE /export-profiles/{profileID}`, `POST …/restore` | `inventory.asset.export`, and the profile's owner; a shared profile of someone else also needs `inventory.export_profile.manage` |
 

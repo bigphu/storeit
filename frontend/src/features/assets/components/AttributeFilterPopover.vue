@@ -15,10 +15,11 @@ import { type AttrFilterRow, BUILTIN_FIELDS, type FieldFilterRow, fieldOperators
 // "+ Filter": thêm một điều kiện "trường / toán tử / giá trị" (các điều kiện kết hợp AND).
 // Trường có sẵn (ngày mua, ngày tạo, ngày sửa, mô tả) luôn có; thuộc tính khi đang xem một loại.
 // Trường có sẵn mang khoá "field:<key>" trong ô chọn để không trùng key thuộc tính.
-// builtins false: chỉ thuộc tính của loại (phiếu mượn); lead: câu dẫn đầu hộp
-const props = withDefaults(defineProps<{ attributes: Attribute[]; builtins?: boolean; lead?: string }>(), {
+// builtins false: chỉ thuộc tính của loại (phiếu mượn); lead: câu dẫn đầu hộp; action: nhãn nút thêm
+const props = withDefaults(defineProps<{ attributes: Attribute[]; builtins?: boolean; lead?: string; action?: string }>(), {
   builtins: true,
   lead: 'Show only assets that match.',
+  action: 'Add filter',
 })
 const emit = defineEmits<{ add: [filter: AttrFilterRow]; addField: [filter: FieldFilterRow] }>()
 
@@ -154,7 +155,7 @@ defineExpose({
       </template>
       <div class="actions">
         <Button label="Cancel" size="small" text severity="secondary" @click="pop?.hide()" />
-        <Button type="submit" label="Add filter" size="small" :disabled="row.value === ''" />
+        <Button type="submit" :label="action" size="small" :disabled="row.value === ''" />
       </div>
     </form>
   </Popover>

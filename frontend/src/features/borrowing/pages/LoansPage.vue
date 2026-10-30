@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import Column from 'primevue/column'
-import DataTable, { type DataTablePageEvent } from 'primevue/datatable'
+import DataTable, { type DataTablePageEvent, type DataTableSortEvent } from 'primevue/datatable'
 import Tag from 'primevue/tag'
 import { computed, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
@@ -13,17 +13,29 @@ import { formatDate } from '@/lib/dates'
 import { openLocation } from '@/lib/navigation'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
 import { useKeepScrollOnPage, useListTable } from '@/lib/tableRows'
-import { queryInt, useUrlState } from '@/lib/urlState'
-import { useLoans } from '../api'
+import { queryInt, queryString, useUrlState } from '@/lib/urlState'
+import { fromTableSort, toTableSort } from '@/features/assets/listQuery'
+import { type LoanParams, useLoans } from '../api'
 import { overdueLabel } from '../borrowing'
 
-// Tài sản đang cho mượn (người quản lý), quá hạn lên trước. Bấm dòng mở tài sản.
+// Tài sản đang cho mượn (người quản lý), mặc định quá hạn lên trước; Since và Return by sắp xếp
+// được. Bấm dòng mở tài sản.
+type Sort = NonNullable<LoanParams['sort']>
+const SORTS: Sort[] = ['started_on', '-started_on', 'return_by', '-return_by']
 const { size: pageSize, set: setPageSize } = usePageSize('loans')
 const { state, update } = useUrlState(
-  (q) => ({ page: queryInt(q.page, 1) }),
-  (s) => ({ page: s.page > 1 ? String(s.page) : undefined }),
+  (q) => {
+    const sort = queryString(q.sort) as Sort | undefined
+    return { sort: sort && SORTS.includes(sort) ? sort : undefined, page: queryInt(q.page, 1) }
+  },
+  (s) => ({ sort: s.sort, page: s.page > 1 ? String(s.page) : undefined }),
 )
-const params = computed(() => ({ page: state.value.page, page_size: pageSize.value }))
+const params = computed<LoanParams>(() => ({ sort: state.value.sort, page: state.value.page, page_size: pageSize.value }))
+const tableSort = computed(() => toTableSort(state.value.sort))
+function onSort(e: DataTableSortEvent) {
+  const field = typeof e.sortField === 'string' ? e.sortField : undefined
+  update({ sort: fromTableSort(field, e.sortOrder) as Sort | undefined, page: 1 })
+}
 const { data, isFetching, isLoading } = useLoans(params)
 const tableRef = ref<{ $el: HTMLElement }>()
 const keepScroll = useKeepScrollOnPage(() => tableRef.value?.$el, data)
@@ -58,8 +70,12 @@ const table = useListTable({ open: (l: Loan, e?: MouseEvent) => openLocation(rou
       :loading="isFetching"
       data-key="id"
       scrollable
+      :sort-field="tableSort.field"
+      :sort-order="tableSort.order"
+      removable-sort
       v-bind="table.bind"
       @page="onPage"
+      @sort="onSort"
     >
       <Column header="Asset">
         <template #body="{ data: l }: { data: Loan }">
@@ -71,10 +87,10 @@ const table = useListTable({ open: (l: Loan, e?: MouseEvent) => openLocation(rou
       <Column header="Borrower">
         <template #body="{ data: l }: { data: Loan }"><PersonCell :name="l.borrower.name" :email="l.borrower.email" /></template>
       </Column>
-      <Column header="Since">
+      <Column header="Since" sort-field="started_on" sortable>
         <template #body="{ data: l }: { data: Loan }">{{ formatDate(l.started_on) }}</template>
       </Column>
-      <Column header="Return by">
+      <Column header="Return by" sort-field="return_by" sortable>
         <template #body="{ data: l }: { data: Loan }">{{ formatDate(l.return_by) }}</template>
       </Column>
       <Column header="Status">

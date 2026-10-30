@@ -59,14 +59,15 @@ export function parseRequirement(r: string): AttrFilterRow | null {
   return { key: r.slice(0, a), op: r.slice(a + 1, b), value: r.slice(b + 1) }
 }
 
-type AttrLike = Pick<Attribute, 'key' | 'label' | 'data_type' | 'unit'> & { options: { id: string; label: string }[] }
+type AttrLike = Pick<Attribute, 'key' | 'label' | 'data_type' | 'unit'> & { options: { id: string; label: string }[]; removed?: boolean }
 
 // requirementLabels: yêu cầu thành chữ như chip bộ lọc ("RAM ≥ 16 GB"); điều kiện không còn khớp
-// thuộc tính nào của loại (thuộc tính đã gỡ) hiện nguyên văn
+// thuộc tính đang dùng nào của loại (thuộc tính đã gỡ) hiện nguyên văn
 export function requirementLabels(reqs: string[], attrs: readonly AttrLike[]): string[] {
+  const live = attrs.filter((a) => !a.removed)
   return reqs.map((r) => {
     const f = parseRequirement(r)
-    return f && attrs.some((a) => a.key === f.key) ? attrFilterLabel(f, attrs) : r
+    return f && live.some((a) => a.key === f.key) ? attrFilterLabel(f, live) : r
   })
 }
 

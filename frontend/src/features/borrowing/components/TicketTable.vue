@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 import Column from 'primevue/column'
-import DataTable, { type DataTablePageEvent } from 'primevue/datatable'
+import DataTable, { type DataTablePageEvent, type DataTableSortEvent } from 'primevue/datatable'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import InputText from 'primevue/inputtext'
@@ -21,6 +21,7 @@ import { openLocation } from '@/lib/navigation'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
 import { useKeepScrollOnPage, useListTable, useRowMenu } from '@/lib/tableRows'
 import { queryInt, queryString, useUrlState } from '@/lib/urlState'
+import { fromTableSort, toTableSort } from '@/features/assets/listQuery'
 import { type TicketParams, useTickets, useTypeAttributes } from '../api'
 import { requirementLabels, TICKET_STATE_LABEL, TICKET_STATE_TONE } from '../borrowing'
 import { useTicketActions } from '../useTicketActions'
@@ -34,19 +35,29 @@ const props = defineProps<{ mine: boolean }>()
 type Filter = 'all' | 'waiting' | 'approved'
 const FILTERS: Filter[] = ['all', 'waiting', 'approved']
 const defaultFilter: Filter = props.mine ? 'all' : 'waiting'
+// cột sắp xếp được (API sort); trống là thứ tự mặc định của API
+type Sort = NonNullable<TicketParams['sort']>
+const SORTS: Sort[] = ['number', '-number', 'needed_from', '-needed_from']
 const { size: pageSize, set: setPageSize } = usePageSize(props.mine ? 'my-tickets' : 'tickets')
 const { state, update } = useUrlState(
   (q) => {
     const f = String(q.show ?? defaultFilter)
-    return { show: (FILTERS.includes(f as Filter) ? f : defaultFilter) as Filter, q: queryString(q.q) ?? '', page: queryInt(q.page, 1) }
+    const sort = queryString(q.sort) as Sort | undefined
+    return {
+      show: (FILTERS.includes(f as Filter) ? f : defaultFilter) as Filter,
+      q: queryString(q.q) ?? '',
+      sort: sort && SORTS.includes(sort) ? sort : undefined,
+      page: queryInt(q.page, 1),
+    }
   },
-  (s) => ({ show: s.show === defaultFilter ? undefined : s.show, q: s.q || undefined, page: s.page > 1 ? String(s.page) : undefined }),
+  (s) => ({ show: s.show === defaultFilter ? undefined : s.show, q: s.q || undefined, sort: s.sort, page: s.page > 1 ? String(s.page) : undefined }),
 )
 
 const params = computed<TicketParams>(() => ({
   mine: props.mine || undefined,
   state: state.value.show === 'all' ? undefined : [state.value.show as TicketState],
   q: state.value.q || undefined,
+  sort: state.value.sort,
   page: state.value.page,
   page_size: pageSize.value,
 }))
@@ -88,6 +99,12 @@ function onPage(e: DataTablePageEvent) {
   }
   keepScroll.beforePageChange()
   update({ page: e.page + 1 })
+}
+
+const tableSort = computed(() => toTableSort(state.value.sort))
+function onSort(e: DataTableSortEvent) {
+  const field = typeof e.sortField === 'string' ? e.sortField : undefined
+  update({ sort: fromTableSort(field, e.sortOrder) as Sort | undefined, page: 1 })
 }
 
 const actions = useTicketActions()
@@ -134,10 +151,14 @@ const emptyText = computed(() =>
     :loading="isFetching"
     data-key="id"
     scrollable
+    :sort-field="tableSort.field"
+    :sort-order="tableSort.order"
+    removable-sort
     v-bind="table.bind"
     @page="onPage"
+    @sort="onSort"
   >
-    <Column header="#">
+    <Column header="#" sort-field="number" sortable>
       <template #body="{ data: t }: { data: BorrowTicket }">
         <RouterLink :to="`/borrowing/tickets/${t.id}`" class="num">#{{ t.number }}</RouterLink>
       </template>
@@ -156,7 +177,7 @@ const emptyText = computed(() =>
         <span v-else class="muted">—</span>
       </template>
     </Column>
-    <Column header="Needed from">
+    <Column header="Needed from" sort-field="needed_from" sortable>
       <template #body="{ data: t }: { data: BorrowTicket }">{{ formatDate(t.needed_from) }}</template>
     </Column>
     <Column header="Return by">
@@ -193,7 +214,7 @@ const emptyText = computed(() =>
     </template>
   </DataTable>
   <ApproveDialog v-model:visible="actions.approveOpen.value" :ticket="actions.approveTarget.value" />
-  <RejectDialog v-model:visible="actions.rejectOpen.value" :ticket="actions.rejectTarget.value" />
+  <RejectDialog v-model:visible="actions.rejectOpen.value" :ticket="actions.rejectTarget.value" :cancel="actions.rejectCancel.value" />
 </template>
 
 <style scoped>

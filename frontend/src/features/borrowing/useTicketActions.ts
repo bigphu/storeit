@@ -1,5 +1,6 @@
 // Hành động trên phiếu mượn, dùng chung cho bảng phiếu và trang phiếu: duyệt (ApproveDialog),
-// từ chối (RejectDialog), giao, huỷ (hỏi trước). Không có Undo: giữ chỗ và khoản mượn gửi
+// từ chối (RejectDialog), giao, huỷ (phiếu của mình: hỏi trước; của người khác: RejectDialog
+// cancel, lý do tuỳ chọn). Không có Undo: giữ chỗ và khoản mượn gửi
 // thư và là hồ sơ, đảo lại là huỷ rõ ràng (spec)
 import type { MenuItem } from 'primevue/menuitem'
 import { computed, ref } from 'vue'
@@ -22,6 +23,8 @@ export function useTicketActions() {
   const approveOpen = ref(false)
   const rejectTarget = ref<BorrowTicket | null>(null)
   const rejectOpen = ref(false)
+  // rejectCancel: hộp RejectDialog đang huỷ (người quản lý) chứ không từ chối
+  const rejectCancel = ref(false)
 
   const isOwn = (t: BorrowTicket) => t.requester.id === session.me?.account.id
   const can = {
@@ -37,8 +40,9 @@ export function useTicketActions() {
     approveTarget.value = t
     approveOpen.value = true
   }
-  function askReject(t: BorrowTicket) {
+  function askReject(t: BorrowTicket, cancel = false) {
     rejectTarget.value = t
+    rejectCancel.value = cancel
     rejectOpen.value = true
   }
 
@@ -52,16 +56,15 @@ export function useTicketActions() {
   }
 
   async function doCancel(t: BorrowTicket) {
+    // phiếu của người khác: người gửi nhận thư, người quản lý ghi lý do nếu muốn
+    if (!isOwn(t)) return askReject(t, true)
     const reserved = t.state === 'approved' && t.asset
     const ok = await confirmAction({
       title: `Cancel ticket #${t.number}?`,
-      body: isOwn(t)
-        ? 'The request is withdrawn.'
-        : `${t.requester.name} gets an email saying the ticket was cancelled.`,
+      body: 'The request is withdrawn.',
       impact: reserved ? [`${t.asset!.tag} is no longer reserved and becomes available.`] : undefined,
       action: 'Cancel ticket',
       danger: false,
-      warn: !isOwn(t),
       icon: 'alert',
     })
     if (!ok) return
@@ -83,5 +86,5 @@ export function useTicketActions() {
     return items
   }
 
-  return { canManage, can, isOwn, approveTarget, approveOpen, rejectTarget, rejectOpen, askApprove, askReject, doHandOver, doCancel, menuItems }
+  return { canManage, can, isOwn, approveTarget, approveOpen, rejectTarget, rejectOpen, rejectCancel, askApprove, askReject, doHandOver, doCancel, menuItems }
 }

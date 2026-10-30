@@ -141,7 +141,7 @@ func (s *Service) SendBorrowingEmail(ctx context.Context, args job.BorrowingEmai
 	if err != nil {
 		return fmt.Errorf("inventory: send %s email: %w", args.EmailKind, err)
 	}
-	log.InfoContext(ctx, "sent borrowing email", slog.String("kind", args.EmailKind), slog.String("account_id", to.String()))
+	log.InfoContext(ctx, "borrowing email handed to mail transport", slog.String("kind", args.EmailKind), slog.String("account_id", to.String()))
 	return nil
 }
 

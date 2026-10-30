@@ -207,6 +207,6 @@ your own password. Payloads never carry hashes or tokens.
 - Check permissions in your service with `auth.Require(ctx, "<module>.<thing>.<action>")`.
 - Show "changed by": `contract.AccountReader` (`GetAccount`, `GetAccounts`). Pick a person
   (e.g. a borrower): `SearchAccounts(ctx, q, limit)`, active accounts whose name or email
-  contains `q`, by name, `limit` clamped to 1..50.
+  contains `q`, by name, `limit` clamped to 1..1000.
 - Jobs run as the requesting account: `jobs.RestoreActor(ctx, id, module.LoadActor)`.
   A deleted account cancels the job; a disabled one runs with no permissions.

@@ -23,6 +23,7 @@ import { useTicket } from '@/features/borrowing/api'
 import { canSeeTicket, overdueLabel } from '@/features/borrowing/borrowing'
 import LendDialog from '@/features/borrowing/components/LendDialog.vue'
 import NewTicketDialog from '@/features/borrowing/components/NewTicketDialog.vue'
+import RejectDialog from '@/features/borrowing/components/RejectDialog.vue'
 import { useTicketActions } from '@/features/borrowing/useTicketActions'
 import { fetchAssetPage, useAsset } from '../api'
 import AssetActivity from '../components/AssetActivity.vue'
@@ -267,6 +268,7 @@ usePageKeys((e) => {
          kịp báo đóng thì replaceOpen kẹt true và hộp tự mở lại khi Undo -->
     <ReplaceDialog v-model:visible="replaceOpen" :asset="asset" :type-id="asset.asset_type.id" />
     <LendDialog v-model:visible="lendOpen" :asset="asset" />
+    <RejectDialog v-model:visible="ticketActions.rejectOpen.value" :ticket="ticketActions.rejectTarget.value" :cancel="ticketActions.rejectCancel.value" />
     <NewTicketDialog v-model:visible="askOpen" :preset-type-id="asset.asset_type.id" :suggested="{ id: asset.id, tag: asset.tag }" />
   </section>
 </template>

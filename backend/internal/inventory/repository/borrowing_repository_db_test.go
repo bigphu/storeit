@@ -336,7 +336,7 @@ func TestBorrowing_QueueOverdueEmails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.borrowing.Lend(ctx, soon.ID, uuid.New(), time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC), &laterDay, soon.Version); err != nil {
+	if _, err := r.borrowing.Lend(ctx, soon.ID, uuid.New(), time.Date(2026, 10, 22, 0, 0, 0, 0, time.UTC), &laterDay, soon.Version); err != nil {
 		t.Fatal(err)
 	}
 	n, err := r.borrowing.QueueOverdueEmails(ctx, borrowToday, 100)
@@ -349,9 +349,19 @@ func TestBorrowing_QueueOverdueEmails(t *testing.T) {
 	if n, err := r.borrowing.QueueOverdueEmails(ctx, borrowToday, 100); err != nil || n != 0 {
 		t.Errorf("second scan = %d, %v; want 0", n, err)
 	}
-	loans, total, err := r.borrowing.ListActiveLoans(ctx, borrowToday, 1, 50)
+	loans, total, err := r.borrowing.ListActiveLoans(ctx, borrowToday, "", 1, 50)
 	if err != nil || total < 2 || loans[0].ID != lateLoan.ID {
 		t.Errorf("active loans: first = %+v (total %d, %v), want the overdue one first", loans, total, err)
+	}
+	// Sắp theo cột: ngày bắt đầu mới nhất trước
+	loans, _, err = r.borrowing.ListActiveLoans(ctx, borrowToday, "-started_on", 1, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i < len(loans); i++ {
+		if loans[i].StartedOn.After(loans[i-1].StartedOn) {
+			t.Errorf("-started_on: %v after %v", loans[i].StartedOn, loans[i-1].StartedOn)
+		}
 	}
 }
 

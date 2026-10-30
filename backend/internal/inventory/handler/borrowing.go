@@ -50,6 +50,14 @@ func (h *Handler) BorrowTicketSummary(ctx context.Context, _ api.BorrowTicketSum
 	return api.BorrowTicketSummary200JSONResponse{Waiting: c.Waiting, Approved: c.Approved}, nil
 }
 
+func (h *Handler) GetBusinessDay(ctx context.Context, _ api.GetBusinessDayRequestObject) (api.GetBusinessDayResponseObject, error) {
+	d, err := h.svc.BusinessDay(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return api.GetBusinessDay200JSONResponse{Today: *toAPIDate(&d)}, nil
+}
+
 func (h *Handler) GetBorrowTicket(ctx context.Context, req api.GetBorrowTicketRequestObject) (api.GetBorrowTicketResponseObject, error) {
 	t, err := h.svc.GetTicket(ctx, req.TicketID)
 	if err != nil {
@@ -100,7 +108,7 @@ func (h *Handler) LendAsset(ctx context.Context, req api.LendAssetRequestObject)
 
 func (h *Handler) ListLoans(ctx context.Context, req api.ListLoansRequestObject) (api.ListLoansResponseObject, error) {
 	page, size := paging(req.Params.Page, req.Params.PageSize)
-	loans, total, err := h.svc.ListLoans(ctx, page, size)
+	loans, total, err := h.svc.ListLoans(ctx, string(deref(req.Params.Sort)), page, size)
 	if err != nil {
 		return nil, err
 	}

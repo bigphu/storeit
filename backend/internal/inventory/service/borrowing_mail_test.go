@@ -15,7 +15,12 @@ import (
 // approvedTicket: phiếu của một người, đã duyệt với tài sản LAP-0042
 func approvedTicket(t *testing.T, b *borrowEnv) (domain.BorrowTicket, uuid.UUID) {
 	t.Helper()
-	asset, err := b.svc.CreateAsset(manager, "LAP-0042", AssetInput{Name: "Dell Latitude 7440", TypeID: b.typeID})
+	return approvedTicketTagged(t, b, "LAP-0042")
+}
+
+func approvedTicketTagged(t *testing.T, b *borrowEnv, tag string) (domain.BorrowTicket, uuid.UUID) {
+	t.Helper()
+	asset, err := b.svc.CreateAsset(manager, tag, AssetInput{Name: "Dell Latitude 7440", TypeID: b.typeID})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -37,7 +37,7 @@ const assets = useQuery({
   enabled: computed(() => visible.value && !!typeId.value),
 })
 
-const attrs = computed(() => type.value?.attributes ?? [])
+const attrs = computed(() => (type.value?.attributes ?? []).filter((a) => !a.removed))
 // yêu cầu còn khớp một thuộc tính của loại (thuộc tính đã gỡ thì bỏ khỏi việc so)
 const reqs = computed(() =>
   (props.ticket?.requirements ?? [])

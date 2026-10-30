@@ -225,6 +225,6 @@ type BorrowingRepository interface {
 	ActiveLoan(ctx context.Context, assetID uuid.UUID) (*Loan, error)
 	ApprovedTicketFor(ctx context.Context, assetID uuid.UUID) (*BorrowTicket, error)
 	GetLoan(ctx context.Context, id uuid.UUID) (Loan, error)
-	ListActiveLoans(ctx context.Context, today time.Time, page, pageSize int) ([]Loan, int64, error)
+	ListActiveLoans(ctx context.Context, today time.Time, sort string, page, pageSize int) ([]Loan, int64, error)
 	QueueOverdueEmails(ctx context.Context, today time.Time, limit int) (int, error)
 }

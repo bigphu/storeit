@@ -354,6 +354,7 @@ type fakeAssets struct {
 	mu         sync.Mutex
 	assets     map[uuid.UUID]domain.Asset
 	lastFilter domain.AssetFilter // bộ lọc List nhận gần nhất
+	gets       int                // số lần Get (kiểm việc đọc gộp)
 }
 
 func newFakeAssets() *fakeAssets { return &fakeAssets{assets: map[uuid.UUID]domain.Asset{}} }
@@ -392,6 +393,7 @@ func (f *fakeAssets) Replacements(context.Context, uuid.UUID) (*domain.Replaceme
 func (f *fakeAssets) Get(_ context.Context, id uuid.UUID) (domain.Asset, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.gets++
 	a, ok := f.assets[id]
 	if !ok {
 		return domain.Asset{}, domain.ErrAssetNotFound
@@ -428,7 +430,14 @@ func (f *fakeAssets) List(_ context.Context, filter domain.AssetFilter) ([]domai
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.lastFilter = filter
-	return nil, 0, nil
+	// lọc theo IDs (đọc gộp tài sản cho phiếu, khoản mượn); bộ lọc khác: rỗng
+	var out []domain.AssetListItem
+	for _, id := range filter.IDs {
+		if a, ok := f.assets[id]; ok {
+			out = append(out, domain.AssetListItem{Asset: a})
+		}
+	}
+	return out, int64(len(out)), nil
 }
 
 func (f *fakeAssets) Replace(_ context.Context, id uuid.UUID, in domain.AssetFields, version int32) (domain.Asset, error) {
@@ -800,7 +809,7 @@ func (f *fakeBorrowing) GetLoan(_ context.Context, id uuid.UUID) (domain.Loan, e
 	return l, nil
 }
 
-func (f *fakeBorrowing) ListActiveLoans(context.Context, time.Time, int, int) ([]domain.Loan, int64, error) {
+func (f *fakeBorrowing) ListActiveLoans(context.Context, time.Time, string, int, int) ([]domain.Loan, int64, error) {
 	return nil, 0, nil
 }
 
@@ -812,7 +821,10 @@ func (f *fakeBorrowing) QueueOverdueEmails(_ context.Context, today time.Time, _
 }
 
 // borrowAccounts: như fakeAccounts nhưng đánh dấu được account bị khoá
-type borrowAccounts struct{ inactive map[uuid.UUID]bool }
+type borrowAccounts struct {
+	inactive    map[uuid.UUID]bool
+	searchLimit *int // giới hạn của lần SearchAccounts gần nhất
+}
 
 func (a borrowAccounts) GetAccount(_ context.Context, id uuid.UUID) (idcontract.Account, error) {
 	return idcontract.Account{ID: id, Name: "Account " + id.String()[:8], Email: id.String()[:8] + "@storeit.test", Active: !a.inactive[id]}, nil
@@ -826,7 +838,10 @@ func (a borrowAccounts) GetAccounts(ctx context.Context, ids []uuid.UUID) ([]idc
 	return out, nil
 }
 
-func (borrowAccounts) SearchAccounts(context.Context, string, int) ([]idcontract.Account, error) {
+func (a borrowAccounts) SearchAccounts(_ context.Context, _ string, limit int) ([]idcontract.Account, error) {
+	if a.searchLimit != nil {
+		*a.searchLimit = limit
+	}
 	return nil, nil
 }
 

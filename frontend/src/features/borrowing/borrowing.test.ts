@@ -61,6 +61,10 @@ describe('requirements', () => {
   it('reads conditions like the filter chips; unknown ones stay as written', () => {
     expect(requirementLabels(['ram:gte:16', 'os:in:o1,o2', 'gone:eq:x'], attrs)).toEqual(['RAM ≥ 16 GB', 'OS any of Windows, macOS', 'gone:eq:x'])
   })
+  it('reads a condition on a removed attribute as written', () => {
+    const removed = [{ ...attrs[0]!, removed: true }]
+    expect(requirementLabels(['ram:gte:16'], removed)).toEqual(['ram:gte:16'])
+  })
 })
 
 describe('ticketFormError', () => {

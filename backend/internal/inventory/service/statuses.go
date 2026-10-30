@@ -67,6 +67,10 @@ func (s *Service) UpdateStatus(ctx context.Context, id uuid.UUID, ch domain.Stat
 		}
 		ch.Name = &n
 	}
+	// Reserved / On loan chỉ việc mượn đặt: không là mặc định của kind nào
+	if ch.MakeDefault && domain.IsBorrowingStatus(id) {
+		return domain.Status{}, domain.ErrBorrowingStatus
+	}
 	return s.statuses.Update(ctx, id, ch)
 }
 

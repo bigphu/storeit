@@ -97,7 +97,7 @@ func (r accountReader) GetAccounts(ctx context.Context, ids []uuid.UUID) ([]cont
 }
 
 func (r accountReader) SearchAccounts(ctx context.Context, q string, limit int) ([]contract.Account, error) {
-	limit = min(max(limit, 1), 50)
+	limit = min(max(limit, 1), 1000)
 	active := true
 	as, _, err := r.s.accounts.List(ctx, domain.AccountFilter{Query: strings.TrimSpace(q), Active: &active, Limit: int32(limit)})
 	if err != nil {

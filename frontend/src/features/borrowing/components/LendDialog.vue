@@ -7,8 +7,7 @@ import type { Person } from '@/lib/api/types'
 import { fromDateString, toDateString } from '@/lib/dates'
 import { useDirty, useFormErrors } from '@/lib/forms'
 import { notify } from '@/lib/notify'
-import { todayLocal } from '@/features/assets/replacement'
-import { searchBorrowers, useLendAsset } from '../api'
+import { searchBorrowers, useBusinessDay, useLendAsset } from '../api'
 
 // Cho mượn trực tiếp (người quản lý), không cần phiếu: chọn người (account đang hoạt động), hạn
 // trả tuỳ chọn; khoản mượn bắt đầu hôm nay, tài sản thành On loan
@@ -19,7 +18,7 @@ const lend = useLendAsset()
 const errors = useFormErrors()
 const person = ref<Person | null>(null)
 const returnBy = ref('')
-const today = ref(todayLocal(new Date()))
+const today = useBusinessDay(visible)
 const suggestions = ref<Person[]>([])
 const form = useDirty(() => ({ p: person.value?.id ?? '', r: returnBy.value }))
 
@@ -27,7 +26,6 @@ watch(
   visible,
   (open) => {
     if (!open) return
-    today.value = todayLocal(new Date())
     person.value = null
     returnBy.value = ''
     errors.clear()

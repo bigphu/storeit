@@ -51,13 +51,15 @@ const typeOptions = computed(() =>
 )
 // Status kind retired chỉ đặt bằng thao tác Retire
 const { data: statuses } = useStatuses(true)
-// tài sản đang Reserved / On loan: status do việc mượn giữ, chỉ hiện status đó
+// tài sản đang Reserved / On loan: status do việc mượn giữ, chỉ hiện status đó; loại cũng không đổi
+// (yêu cầu của phiếu theo loại)
+const borrowing = computed(() => isBorrowingStatus(asset.value?.status.id))
 const statusOptions = computed(() =>
   (statuses.value ?? []).filter(
     (s) =>
       s.kind !== 'retired' &&
       (!s.archived_at || s.id === asset.value?.status.id) &&
-      (isBorrowingStatus(asset.value?.status.id) ? s.id === asset.value?.status.id : !isBorrowingStatus(s.id)),
+      (borrowing.value ? s.id === asset.value?.status.id : !isBorrowingStatus(s.id)),
   ),
 )
 
@@ -232,7 +234,9 @@ const crumbs = computed<Crumb[]>(() => {
           option-value="id"
           placeholder="Choose a type"
           filter
+          :disabled="borrowing"
         />
+        <small v-if="borrowing" class="hint">The type can't change while the asset is reserved or on loan.</small>
         <Message v-if="typeChanged" severity="warn">
           Changing the type drops all attribute values of the old type when you save.
         </Message>
