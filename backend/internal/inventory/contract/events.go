@@ -14,6 +14,17 @@ const (
 	EventAssetReplaced          = "inventory.asset_replaced"
 	EventAssetReplaces          = "inventory.asset_replaces"
 	EventAssetReplacementUndone = "inventory.asset_replacement_undone"
+	// Mượn (US-10), trên tài sản: giữ chỗ khi duyệt phiếu, huỷ giữ chỗ, bắt đầu khoản mượn (giao
+	// theo phiếu hay cho mượn trực tiếp)
+	EventAssetReserved             = "inventory.asset_reserved"
+	EventAssetReservationCancelled = "inventory.asset_reservation_cancelled"
+	EventAssetLent                 = "inventory.asset_lent"
+	// Trên phiếu mượn (aggregate borrow_ticket)
+	EventBorrowTicketCreated    = "inventory.borrow_ticket_created"
+	EventBorrowTicketApproved   = "inventory.borrow_ticket_approved"
+	EventBorrowTicketRejected   = "inventory.borrow_ticket_rejected"
+	EventBorrowTicketCancelled  = "inventory.borrow_ticket_cancelled"
+	EventBorrowTicketHandedOver = "inventory.borrow_ticket_handed_over"
 
 	EventAssetTypeCreated  = "inventory.asset_type_created"
 	EventAssetTypeUpdated  = "inventory.asset_type_updated"
@@ -40,6 +51,8 @@ const (
 
 	AggregateExportProfile = "export_profile"
 	AggregateAssetExport   = "asset_export"
+
+	AggregateBorrowTicket = "borrow_ticket"
 )
 
 // FieldChange là giá trị trước và sau của một field. Thuộc tính riêng dùng
@@ -98,6 +111,42 @@ type AssetReplacementUndone struct {
 	OtherID  uuid.UUID `json:"other_id"`
 	OtherTag string    `json:"other_tag"`
 	Role     string    `json:"role"`
+}
+
+// AssetReserved: tài sản được giữ chỗ cho người gửi phiếu (AccountID)
+type AssetReserved struct {
+	AssetID      uuid.UUID `json:"asset_id"`
+	TicketID     uuid.UUID `json:"ticket_id"`
+	TicketNumber int64     `json:"ticket_number"`
+	AccountID    uuid.UUID `json:"account_id"`
+}
+
+// AssetReservationCancelled: phiếu đã duyệt bị huỷ; ByManager là người quản lý huỷ (không
+// phải người gửi phiếu)
+type AssetReservationCancelled struct {
+	AssetID      uuid.UUID `json:"asset_id"`
+	TicketID     uuid.UUID `json:"ticket_id"`
+	TicketNumber int64     `json:"ticket_number"`
+	AccountID    uuid.UUID `json:"account_id"`
+	ByManager    bool      `json:"by_manager"`
+}
+
+// AssetLent: khoản mượn bắt đầu; TicketID nil là cho mượn trực tiếp; ReturnBy "YYYY-MM-DD" hay rỗng
+type AssetLent struct {
+	AssetID      uuid.UUID  `json:"asset_id"`
+	LoanID       uuid.UUID  `json:"loan_id"`
+	BorrowerID   uuid.UUID  `json:"borrower_id"`
+	TicketID     *uuid.UUID `json:"ticket_id,omitempty"`
+	TicketNumber int64      `json:"ticket_number,omitempty"`
+	ReturnBy     string     `json:"return_by,omitempty"`
+}
+
+// BorrowTicketChanged: payload chung của các event trên phiếu mượn
+type BorrowTicketChanged struct {
+	TicketID uuid.UUID  `json:"ticket_id"`
+	Number   int64      `json:"number"`
+	AssetID  *uuid.UUID `json:"asset_id,omitempty"`
+	Reason   string     `json:"reason,omitempty"`
 }
 
 type AssetTypeCreated struct {

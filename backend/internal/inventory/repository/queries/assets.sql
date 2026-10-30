@@ -27,6 +27,13 @@ SET retired_at = now(), retired_reason = sqlc.narg('reason'), status_id = @statu
 WHERE id = @id
 RETURNING *;
 
+-- Đổi status do việc mượn (giữ chỗ, giao, huỷ): không qua UpdateAsset, không event asset_updated
+-- name: SetAssetStatusQuiet :one
+UPDATE inventory.assets
+SET status_id = @status_id, version = version + 1, updated_at = now()
+WHERE id = @id
+RETURNING *;
+
 -- name: RestoreAsset :one
 UPDATE inventory.assets
 SET retired_at = NULL, retired_reason = NULL, status_id = @status_id,

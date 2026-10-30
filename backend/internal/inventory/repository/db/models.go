@@ -155,6 +155,7 @@ type InventoryAssetType struct {
 	Version     int32
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	CanBorrow   bool
 }
 
 type InventoryAssetTypeAttribute struct {
@@ -171,6 +172,28 @@ type InventoryAssetTypeAttribute struct {
 	UpdatedAt   time.Time
 }
 
+type InventoryBorrowTicket struct {
+	ID               uuid.UUID
+	Number           *int64
+	RequesterID      uuid.UUID
+	AssetTypeID      uuid.UUID
+	Requirements     []string
+	SuggestedAssetID *uuid.UUID
+	NeededFrom       pgtype.Date
+	ReturnBy         pgtype.Date
+	Note             string
+	State            string
+	AssetID          *uuid.UUID
+	DecidedBy        *uuid.UUID
+	DecidedAt        *time.Time
+	Reason           string
+	CancelledBy      *uuid.UUID
+	CancelledAt      *time.Time
+	Version          int32
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
 type InventoryExportProfile struct {
 	ID        uuid.UUID
 	OwnerID   uuid.UUID
@@ -181,6 +204,19 @@ type InventoryExportProfile struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt *time.Time
+}
+
+type InventoryLoan struct {
+	ID                uuid.UUID
+	AssetID           uuid.UUID
+	BorrowerID        uuid.UUID
+	TicketID          *uuid.UUID
+	LentBy            *uuid.UUID
+	StartedOn         pgtype.Date
+	ReturnBy          pgtype.Date
+	ReturnedOn        pgtype.Date
+	OverdueNotifiedOn pgtype.Date
+	CreatedAt         time.Time
 }
 
 type PlatformEvent struct {

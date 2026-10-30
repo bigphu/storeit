@@ -86,6 +86,22 @@ func TestSchema_Seeds(t *testing.T) {
 	if want := []string{"available", "in_use", "retired", "unavailable"}; !slices.Equal(kinds, want) {
 		t.Errorf("default statuses = %v, want %v", kinds, want)
 	}
+	// Hai status do việc mượn đặt (US-10): hệ thống, không là mặc định của kind nào
+	for id, want := range map[string]string{
+		"00000000-0000-7000-8000-000000000205": "Reserved/unavailable",
+		"00000000-0000-7000-8000-000000000206": "On loan/in_use",
+	} {
+		var name, kind string
+		var def, sys bool
+		if err := pool.QueryRow(ctx, `SELECT name, kind, is_default, is_system FROM inventory.asset_statuses WHERE id = $1`, id).
+			Scan(&name, &kind, &def, &sys); err != nil || name+"/"+kind != want || def || !sys {
+			t.Errorf("status %s = %s/%s default=%v system=%v err=%v, want %s system", id, name, kind, def, sys, err, want)
+		}
+	}
+	var canBorrow bool
+	if err := pool.QueryRow(ctx, `SELECT can_borrow FROM inventory.asset_types WHERE code = 'GENERAL'`).Scan(&canBorrow); err != nil || canBorrow {
+		t.Errorf("GENERAL can_borrow = %v, %v; want false", canBorrow, err)
+	}
 
 	grants := func(role string) []string {
 		t.Helper()
@@ -105,10 +121,10 @@ func TestSchema_Seeds(t *testing.T) {
 		return out
 	}
 	for role, want := range map[string][]string{
-		"Administrator":      {"inventory.asset.export", "inventory.asset.manage", "inventory.asset.read", "inventory.export_profile.manage", "inventory.status.manage", "inventory.type.manage"},
-		"Authorized Manager": {"inventory.asset.export", "inventory.asset.read", "inventory.export_profile.manage", "inventory.status.manage", "inventory.type.manage"},
-		"Inventory Officer":  {"inventory.asset.export", "inventory.asset.manage", "inventory.asset.read"},
-		"Employee":           {"inventory.asset.export", "inventory.asset.read"},
+		"Administrator":      {"inventory.asset.export", "inventory.asset.manage", "inventory.asset.read", "inventory.borrow.manage", "inventory.borrow.request", "inventory.export_profile.manage", "inventory.status.manage", "inventory.type.manage"},
+		"Authorized Manager": {"inventory.asset.export", "inventory.asset.read", "inventory.borrow.request", "inventory.export_profile.manage", "inventory.status.manage", "inventory.type.manage"},
+		"Inventory Officer":  {"inventory.asset.export", "inventory.asset.manage", "inventory.asset.read", "inventory.borrow.manage", "inventory.borrow.request"},
+		"Employee":           {"inventory.asset.export", "inventory.asset.read", "inventory.borrow.request"},
 	} {
 		if got := grants(role); !slices.Equal(got, want) {
 			t.Errorf("%s inventory permissions = %v, want %v", role, got, want)

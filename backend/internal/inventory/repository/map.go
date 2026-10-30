@@ -111,7 +111,7 @@ func appendEvent(ctx context.Context, tx pgx.Tx, outbox *events.Outbox, typ, agg
 
 func toAssetType(t db.InventoryAssetType) domain.AssetType {
 	return domain.AssetType{
-		ID: t.ID, Code: t.Code, Name: t.Name, Description: t.Description, IsSystem: t.IsSystem,
+		ID: t.ID, Code: t.Code, Name: t.Name, Description: t.Description, IsSystem: t.IsSystem, CanBorrow: t.CanBorrow,
 		ArchivedAt: t.ArchivedAt, Version: t.Version, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	}
 }

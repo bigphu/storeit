@@ -14,6 +14,23 @@ var (
 	ErrInvalidReplacement = errs.Unprocessable("/errors/invalid-replacement", "Invalid replacement")
 	ErrAssetNotReplaced   = errs.Conflict("/errors/asset-not-replaced", "Asset not replaced")
 
+	// Mượn tài sản (US-10)
+	ErrBorrowingStatus = errs.Unprocessable("/errors/status-set-by-borrowing", "Status set by borrowing",
+		errs.WithFields(errs.FieldError{Field: "status_id", Detail: "Reserved and On loan are set by borrowing"}))
+	ErrAssetInBorrowing = errs.Conflict("/errors/asset-reserved-or-on-loan", "Asset reserved or on loan",
+		errs.WithDetail("The asset is reserved or on loan. Cancel the reservation or wait for it to be returned first."))
+	ErrNotBorrowable = errs.Conflict("/errors/asset-not-borrowable", "Asset not available",
+		errs.WithDetail("This asset can't be lent right now: it isn't available, or its type can't be borrowed."))
+	ErrTicketNotFound = errs.NotFound("/errors/borrow-ticket-not-found", "Borrow ticket not found")
+	ErrTicketState    = errs.Conflict("/errors/borrow-ticket-state", "Ticket can't do that now",
+		errs.WithDetail("The ticket has moved on since. Reload it to see where it stands."))
+	ErrTicketChanged = errs.Conflict("/errors/borrow-ticket-changed", "Ticket changed",
+		errs.WithDetail("The ticket was changed by someone else. Reload it and try again."))
+	// field: asset_type_id, requirements[i], suggested_asset_id, needed_from, return_by, note, reason, requester
+	ErrInvalidTicket = errs.Unprocessable("/errors/invalid-borrow-ticket", "Invalid borrow ticket")
+	// field: borrower_id, return_by
+	ErrInvalidLoan = errs.Unprocessable("/errors/invalid-loan", "Invalid loan")
+
 	ErrInvalidBulk = errs.Unprocessable("/errors/invalid-bulk", "Invalid selection",
 		errs.WithFields(errs.FieldError{Field: "items", Detail: "choose between 1 and 200 assets"}))
 

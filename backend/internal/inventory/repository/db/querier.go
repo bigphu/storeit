@@ -11,15 +11,20 @@ import (
 )
 
 type Querier interface {
+	ApproveBorrowTicket(ctx context.Context, arg ApproveBorrowTicketParams) (InventoryBorrowTicket, error)
 	ArchiveStatus(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
 	AttributeHasValues(ctx context.Context, attributeID uuid.UUID) (bool, error)
+	CancelBorrowTicket(ctx context.Context, arg CancelBorrowTicketParams) (InventoryBorrowTicket, error)
 	// Chuyển cờ mặc định: bỏ cờ của kind trước, rồi đặt cho status mới (cùng tx)
 	ClearDefaultStatus(ctx context.Context, kind string) error
 	// Số tài sản chưa retire của mỗi loại, tách theo kind của status (sidebar, trang loại)
 	CountActiveAssetsByTypeAndKind(ctx context.Context) ([]CountActiveAssetsByTypeAndKindRow, error)
+	CountActiveLoans(ctx context.Context) (int64, error)
 	CountAssets(ctx context.Context, arg CountAssetsParams) (int64, error)
 	// Số tài sản (kể cả đã retire) đang dùng mỗi status
 	CountAssetsByStatus(ctx context.Context) ([]CountAssetsByStatusRow, error)
+	CountBorrowTickets(ctx context.Context, arg CountBorrowTicketsParams) (int64, error)
+	CountBorrowTicketsByState(ctx context.Context) ([]CountBorrowTicketsByStateRow, error)
 	CreateAsset(ctx context.Context, arg CreateAssetParams) (InventoryAsset, error)
 	CreateAssetType(ctx context.Context, arg CreateAssetTypeParams) (InventoryAssetType, error)
 	CreateAttribute(ctx context.Context, arg CreateAttributeParams) (InventoryAssetTypeAttribute, error)
@@ -31,27 +36,40 @@ type Querier interface {
 	// Xoá mềm
 	DeleteExportProfile(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteReplacement(ctx context.Context, oldAssetID uuid.UUID) error
+	GetActiveLoanForAsset(ctx context.Context, assetID uuid.UUID) (GetActiveLoanForAssetRow, error)
+	// Phiếu đang giữ chỗ tài sản (nhiều nhất một)
+	GetApprovedTicketForAsset(ctx context.Context, assetID *uuid.UUID) (InventoryBorrowTicket, error)
 	GetAsset(ctx context.Context, id uuid.UUID) (InventoryAsset, error)
 	// NO KEY UPDATE: không chặn insert tham chiếu tài sản (giá trị thuộc tính, sau này là phiếu mượn)
 	GetAssetForUpdate(ctx context.Context, id uuid.UUID) (InventoryAsset, error)
 	GetAssetType(ctx context.Context, id uuid.UUID) (InventoryAssetType, error)
 	GetAssetTypeForUpdate(ctx context.Context, id uuid.UUID) (InventoryAssetType, error)
 	GetAttributeForUpdate(ctx context.Context, arg GetAttributeForUpdateParams) (InventoryAssetTypeAttribute, error)
+	GetBorrowTicket(ctx context.Context, id uuid.UUID) (InventoryBorrowTicket, error)
+	GetBorrowTicketForUpdate(ctx context.Context, id uuid.UUID) (InventoryBorrowTicket, error)
 	GetDefaultStatus(ctx context.Context, kind string) (InventoryAssetStatus, error)
 	GetExportProfile(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error)
 	// Kể cả profile đã xoá (khôi phục, kiểm tra quyền khôi phục)
 	GetExportProfileAny(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error)
 	GetExportProfileAnyForUpdate(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error)
 	GetExportProfileForUpdate(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error)
+	// Khoản mượn kèm số phiếu (0: cho mượn trực tiếp)
+	GetLoan(ctx context.Context, id uuid.UUID) (GetLoanRow, error)
 	GetOptionForUpdate(ctx context.Context, arg GetOptionForUpdateParams) (InventoryAssetAttributeOption, error)
 	// Liên kết của tài sản cũ, kèm tag và tên tài sản thay nó
 	GetReplacementByOld(ctx context.Context, oldAssetID uuid.UUID) (GetReplacementByOldRow, error)
 	GetStatus(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
 	GetStatusForUpdate(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
+	HandOverBorrowTicket(ctx context.Context, id uuid.UUID) (InventoryBorrowTicket, error)
 	InsertAssetValue(ctx context.Context, arg InsertAssetValueParams) error
+	// Mượn tài sản (US-10): phiếu mượn và khoản mượn
+	InsertBorrowTicket(ctx context.Context, arg InsertBorrowTicketParams) (InventoryBorrowTicket, error)
+	InsertLoan(ctx context.Context, arg InsertLoanParams) (InventoryLoan, error)
 	InsertReplacement(ctx context.Context, arg InsertReplacementParams) error
 	// Nhãn thuộc tính đang dùng của mọi loại, theo thứ tự hiển thị (thẻ ở trang loại)
 	ListActiveAttributeLabels(ctx context.Context) ([]ListActiveAttributeLabelsRow, error)
+	// Khoản đang mượn: quá hạn trước (hạn sớm nhất trước), rồi theo hạn, rồi mới bắt đầu trước
+	ListActiveLoans(ctx context.Context, arg ListActiveLoansParams) ([]ListActiveLoansRow, error)
 	// Khoá mọi status đang dùng khi đổi thứ tự
 	ListActiveStatusesForUpdate(ctx context.Context) ([]InventoryAssetStatus, error)
 	// Loại hệ thống (GENERAL) đứng đầu, rồi theo tên
@@ -62,14 +80,21 @@ type Querier interface {
 	ListAssets(ctx context.Context, arg ListAssetsParams) ([]ListAssetsRow, error)
 	// Mọi thuộc tính của loại, kể cả đã gỡ, theo thứ tự hiển thị
 	ListAttributes(ctx context.Context, assetTypeID uuid.UUID) ([]InventoryAssetTypeAttribute, error)
+	// Lọc: trạng thái (rỗng là mọi trạng thái), người gửi (nil là mọi người), từ khoá (service
+	// đã dịch thành danh sách người gửi và loại khớp: phiếu khớp một trong hai)
+	ListBorrowTickets(ctx context.Context, arg ListBorrowTicketsParams) ([]InventoryBorrowTicket, error)
 	// Của mình và mọi profile được chia sẻ
 	ListExportProfiles(ctx context.Context, ownerID uuid.UUID) ([]InventoryExportProfile, error)
 	ListOptionsForType(ctx context.Context, assetTypeID uuid.UUID) ([]InventoryAssetAttributeOption, error)
+	// Khoản quá hạn chưa báo, khoá để hai lần quét cùng lúc không báo trùng
+	ListOverdueUnnotifiedLoans(ctx context.Context, arg ListOverdueUnnotifiedLoansParams) ([]InventoryLoan, error)
 	// Các tài sản mà tài sản mới đã thay, mới nhất trước
 	ListReplacementsByNew(ctx context.Context, newAssetID uuid.UUID) ([]ListReplacementsByNewRow, error)
 	ListStatuses(ctx context.Context, includeArchived bool) ([]InventoryAssetStatus, error)
 	// Giá trị của nhiều tài sản một lần (các dòng của một trang danh sách)
 	ListValuesForAssets(ctx context.Context, assetIds []uuid.UUID) ([]ListValuesForAssetsRow, error)
+	MarkLoanOverdueNotified(ctx context.Context, arg MarkLoanOverdueNotifiedParams) error
+	RejectBorrowTicket(ctx context.Context, arg RejectBorrowTicketParams) (InventoryBorrowTicket, error)
 	RemoveAttribute(ctx context.Context, arg RemoveAttributeParams) (int64, error)
 	RemoveOption(ctx context.Context, arg RemoveOptionParams) (int64, error)
 	RestoreAsset(ctx context.Context, arg RestoreAssetParams) (InventoryAsset, error)
@@ -80,6 +105,8 @@ type Querier interface {
 	RestoreOption(ctx context.Context, arg RestoreOptionParams) (InventoryAssetAttributeOption, error)
 	RestoreStatus(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
 	RetireAsset(ctx context.Context, arg RetireAssetParams) (InventoryAsset, error)
+	// Đổi status do việc mượn (giữ chỗ, giao, huỷ): không qua UpdateAsset, không event asset_updated
+	SetAssetStatusQuiet(ctx context.Context, arg SetAssetStatusQuietParams) (InventoryAsset, error)
 	SetAssetTypeArchived(ctx context.Context, arg SetAssetTypeArchivedParams) (InventoryAssetType, error)
 	// Sắp xếp lại (kéo thả): chỉ đổi vị trí
 	SetAttributePosition(ctx context.Context, arg SetAttributePositionParams) error

@@ -673,6 +673,41 @@ func (q *Queries) RetireAsset(ctx context.Context, arg RetireAssetParams) (Inven
 	return i, err
 }
 
+const setAssetStatusQuiet = `-- name: SetAssetStatusQuiet :one
+UPDATE inventory.assets
+SET status_id = $1, version = version + 1, updated_at = now()
+WHERE id = $2
+RETURNING id, tag, name, description, asset_type_id, status_id, location_id, holder_member_id, purchase_date, retired_at, retired_reason, version, created_at, updated_at
+`
+
+type SetAssetStatusQuietParams struct {
+	StatusID uuid.UUID
+	ID       uuid.UUID
+}
+
+// Đổi status do việc mượn (giữ chỗ, giao, huỷ): không qua UpdateAsset, không event asset_updated
+func (q *Queries) SetAssetStatusQuiet(ctx context.Context, arg SetAssetStatusQuietParams) (InventoryAsset, error) {
+	row := q.db.QueryRow(ctx, setAssetStatusQuiet, arg.StatusID, arg.ID)
+	var i InventoryAsset
+	err := row.Scan(
+		&i.ID,
+		&i.Tag,
+		&i.Name,
+		&i.Description,
+		&i.AssetTypeID,
+		&i.StatusID,
+		&i.LocationID,
+		&i.HolderMemberID,
+		&i.PurchaseDate,
+		&i.RetiredAt,
+		&i.RetiredReason,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateAsset = `-- name: UpdateAsset :one
 UPDATE inventory.assets
 SET name = $1, description = $2, asset_type_id = $3, status_id = $4,

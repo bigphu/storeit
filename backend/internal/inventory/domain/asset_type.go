@@ -37,6 +37,7 @@ type AssetType struct {
 	Name        string
 	Description string
 	IsSystem    bool // loại GENERAL seed sẵn: không archive được
+	CanBorrow   bool // "Can be borrowed": tài sản loại này cho mượn được (US-10)
 	ArchivedAt  *time.Time
 	Version     int32
 	CreatedAt   time.Time
