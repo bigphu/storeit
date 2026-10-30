@@ -389,3 +389,28 @@ func TestBorrowing_AtomicOnEnqueueFailure(t *testing.T) {
 		t.Errorf("asset_reserved = %d, want 0", c)
 	}
 }
+
+// Giao muộn sau hạn trả của phiếu (giữ chỗ không tự hết hạn): vẫn giao được, khoản mượn có hạn
+// trả là ngày giao (quá hạn từ hôm sau) thay vì lỗi ràng buộc return_by >= started_on
+func TestBorrowing_HandOverAfterReturnBy(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	ty := borrowType(t, r, true)
+	a := borrowAsset(t, r, ty.ID, domain.AvailableStatusID)
+	due := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
+	tk, err := r.borrowing.CreateTicket(ctx, domain.NewBorrowTicket{RequesterID: uuid.New(), TypeID: ty.ID, NeededFrom: pastDay, ReturnBy: &due})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ap, err := r.borrowing.Approve(ctx, tk.ID, a.ID, tk.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, loan, err := r.borrowing.HandOver(ctx, tk.ID, borrowToday, ap.Version)
+	if err != nil {
+		t.Fatalf("late hand over: %v", err)
+	}
+	if loan.ReturnBy == nil || !loan.ReturnBy.Equal(borrowToday) {
+		t.Errorf("loan return_by = %v, want the hand-over day %v", loan.ReturnBy, borrowToday)
+	}
+}

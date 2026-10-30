@@ -20,7 +20,7 @@ import { usePageKeys } from '@/lib/pageKeys'
 import { kindSeverity } from '@/features/statuses/api'
 import { useAssetType } from '@/features/asset-types/api'
 import { useTicket } from '@/features/borrowing/api'
-import { overdueLabel } from '@/features/borrowing/borrowing'
+import { canSeeTicket, overdueLabel } from '@/features/borrowing/borrowing'
 import LendDialog from '@/features/borrowing/components/LendDialog.vue'
 import NewTicketDialog from '@/features/borrowing/components/NewTicketDialog.vue'
 import { useTicketActions } from '@/features/borrowing/useTicketActions'
@@ -59,7 +59,11 @@ const borrowable = computed(() => !retired.value && asset.value?.status.kind ===
 const canLend = computed(() => borrowable.value && session.can(Perm.BorrowManage))
 const canAsk = computed(() => borrowable.value && session.can(Perm.BorrowRequest))
 const ticketActions = useTicketActions()
-const { data: heldTicket } = useTicket(() => (borrowing.value?.state === 'reserved' ? borrowing.value.ticket?.id : undefined))
+// phiếu chỉ người quản lý và người mượn mở được (người khác: API 404, không tải, không link)
+const seeTicket = computed(() => canSeeTicket(borrowing.value, session.me?.account.id, session.can(Perm.BorrowManage)))
+const { data: heldTicket } = useTicket(() =>
+  borrowing.value?.state === 'reserved' && seeTicket.value ? borrowing.value.ticket?.id : undefined,
+)
 const lendOpen = ref(false)
 const askOpen = ref(false)
 useTabTitle(() => asset.value?.tag)
@@ -204,7 +208,8 @@ usePageKeys((e) => {
                   <dd>
                     {{ borrowing.account.name }}
                     <template v-if="borrowing.ticket">
-                      · <RouterLink :to="`/borrowing/tickets/${borrowing.ticket.id}`">ticket #{{ borrowing.ticket.number }}</RouterLink>
+                      · <RouterLink v-if="seeTicket" :to="`/borrowing/tickets/${borrowing.ticket.id}`">ticket #{{ borrowing.ticket.number }}</RouterLink>
+                      <span v-else>ticket #{{ borrowing.ticket.number }}</span>
                     </template>
                   </dd>
                 </template>
@@ -213,7 +218,8 @@ usePageKeys((e) => {
                   <dd>
                     {{ borrowing.account.name }}
                     <template v-if="borrowing.ticket">
-                      · <RouterLink :to="`/borrowing/tickets/${borrowing.ticket.id}`">ticket #{{ borrowing.ticket.number }}</RouterLink>
+                      · <RouterLink v-if="seeTicket" :to="`/borrowing/tickets/${borrowing.ticket.id}`">ticket #{{ borrowing.ticket.number }}</RouterLink>
+                      <span v-else>ticket #{{ borrowing.ticket.number }}</span>
                     </template>
                   </dd>
                   <dt>Since</dt>

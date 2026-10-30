@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  canSeeTicket,
   isBorrowingStatus,
   ON_LOAN_STATUS_ID,
   RESERVED_STATUS_ID,
@@ -97,5 +98,15 @@ describe('satisfies', () => {
   it('never matches an empty value', () => {
     expect(satisfies({ key: 'k', op: 'eq', value: 'x' }, v('text', null))).toBe(false)
     expect(satisfies({ key: 'k', op: 'eq', value: 'x' }, undefined)).toBe(false)
+  })
+})
+
+describe('canSeeTicket', () => {
+  const b = { account: { id: 'ha' } }
+  it('lets managers and the borrower open the ticket, nobody else', () => {
+    expect(canSeeTicket(b, 'someone', true)).toBe(true)
+    expect(canSeeTicket(b, 'ha', false)).toBe(true)
+    expect(canSeeTicket(b, 'an', false)).toBe(false)
+    expect(canSeeTicket(null, 'ha', true)).toBe(false)
   })
 })

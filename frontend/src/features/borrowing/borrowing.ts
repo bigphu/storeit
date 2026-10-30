@@ -127,3 +127,9 @@ export function satisfies(f: AttrFilterRow, v: ValueLike | undefined): boolean {
     }
   }
 }
+
+// canSeeTicket: người xem mở được phiếu giữ chỗ / cho mượn một tài sản không: người quản lý, hay
+// chính người mượn (API trả 404 cho người khác)
+export function canSeeTicket(b: { account: { id: string } } | null | undefined, meId: string | undefined, canManage: boolean): boolean {
+  return !!b && (canManage || b.account.id === meId)
+}

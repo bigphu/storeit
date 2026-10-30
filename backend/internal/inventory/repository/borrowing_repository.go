@@ -241,7 +241,14 @@ func (r *BorrowingRepository) HandOver(ctx context.Context, ticketID uuid.UUID, 
 			return domain.ErrTicketState
 		}
 		ticket := tk.ID
-		if loan, err = r.insertLoan(ctx, q, assetID, tk.RequesterID, &ticket, startedOn, tk.ReturnBy); err != nil {
+		// giữ chỗ không tự hết hạn: giao muộn sau hạn trả của phiếu thì hạn trả là ngày giao
+		// (quá hạn từ hôm sau) thay vì vi phạm return_by >= started_on
+		returnBy := tk.ReturnBy
+		if returnBy != nil && returnBy.Before(startedOn) {
+			due := startedOn
+			returnBy = &due
+		}
+		if loan, err = r.insertLoan(ctx, q, assetID, tk.RequesterID, &ticket, startedOn, returnBy); err != nil {
 			return err
 		}
 		loan.TicketNumber = tk.Number
