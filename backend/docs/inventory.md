@@ -112,7 +112,7 @@ Seeded IDs are in `domain/permissions.go` (`GeneralTypeID`, `AvailableStatusID`,
 records that another asset replaced this one. The old asset must not be retired; the new one
 must exist, not be retired and not be the old one (`/errors/invalid-replacement`, field
 `replacement_asset_id`). `replaced_on` may not be after the server's UTC date + 1 day (the
-user's day), `reason` is 1–500 characters. In one transaction (both assets locked in ID
+user's day) nor before either asset's purchase date (when set), `reason` is 1–500 characters. In one transaction (both assets locked in ID
 order): a row in `inventory.asset_replacements` (one per old asset), the old asset retired to
 the default retired status with reason "Replaced by <tag>: <reason>" (cut to 500), events
 `inventory.asset_replaced` (old) and `inventory.asset_replaces` (new), no `asset_retired`.

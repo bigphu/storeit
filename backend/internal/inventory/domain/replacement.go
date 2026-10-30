@@ -36,6 +36,25 @@ func CheckReplacedOn(day, now time.Time) error {
 	return nil
 }
 
+// CheckReplacedAfterPurchase: ngày thay không trước ngày mua của tài sản cũ hay tài sản thay
+// (chưa mua thì chưa dùng hay thay được); tài sản không có ngày mua thì không xét
+func CheckReplacedAfterPurchase(day time.Time, old, repl Asset) error {
+	dy, dm, dd := day.Date()
+	d := time.Date(dy, dm, dd, 0, 0, 0, 0, time.UTC)
+	for _, a := range []Asset{old, repl} {
+		if a.PurchaseDate == nil {
+			continue
+		}
+		py, pm, pd := a.PurchaseDate.Date()
+		if p := time.Date(py, pm, pd, 0, 0, 0, 0, time.UTC); d.Before(p) {
+			return ErrInvalidReplacement.With(errs.WithFields(errs.FieldError{
+				Field: "replaced_on", Detail: "can't be before " + a.Tag + " was purchased (" + p.Format(time.DateOnly) + ")",
+			}))
+		}
+	}
+	return nil
+}
+
 // ReplacementRetireReason: lý do retire của tài sản cũ, "Replaced by <tag>: <lý do>", cắt
 // còn MaxReplacementReason ký tự
 func ReplacementRetireReason(newTag, reason string) string {

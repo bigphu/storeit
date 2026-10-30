@@ -5,6 +5,13 @@ export interface ReplacementForm {
   replacementId?: string
   replacedOn?: string // YYYY-MM-DD
   reason: string
+  // ngày mua (YYYY-MM-DD) của tài sản cũ và tài sản thay: ngày thay không được trước
+  purchased?: Purchased[]
+}
+
+export interface Purchased {
+  tag: string
+  on?: string
 }
 
 const MAX_REASON = 500
@@ -19,10 +26,17 @@ export function replacementFormError(f: ReplacementForm, today: string): string 
   if (!f.replacementId) return 'Pick the replacement asset.'
   if (!f.replacedOn) return 'Pick the date.'
   if (f.replacedOn > today) return "The date can't be in the future."
+  const early = f.purchased?.find((p) => p.on && f.replacedOn! < p.on)
+  if (early) return `The date can't be before ${early.tag} was purchased (${early.on}).`
   const reason = f.reason.trim()
   if (!reason) return 'Give a reason.'
   if (reason.length > MAX_REASON) return 'Keep the reason under 500 characters.'
   return null
+}
+
+// earliestReplacementDay: ngày sớm nhất được chọn (ngày mua muộn nhất trong hai tài sản)
+export function earliestReplacementDay(purchased: Purchased[]): string | undefined {
+  return purchased.reduce<string | undefined>((max, p) => (p.on && (!max || p.on > max) ? p.on : max), undefined)
 }
 
 export interface ReplacementGroup<T> {

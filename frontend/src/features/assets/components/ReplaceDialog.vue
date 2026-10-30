@@ -9,7 +9,7 @@ import type { AssetListItem } from '@/lib/api/types'
 import { fromDateString, toDateString } from '@/lib/dates'
 import { useDirty, useFormErrors } from '@/lib/forms'
 import { searchAssets, useRecordReplacement } from '../api'
-import { type ReplacementGroup, replacementFormError, replacementGroups, todayLocal } from '../replacement'
+import { earliestReplacementDay, type ReplacementGroup, replacementFormError, replacementGroups, todayLocal } from '../replacement'
 import { type ActionAsset, useAssetActions } from '../useAssetActions'
 
 // Thay tài sản này bằng một tài sản khác (US-13): chọn tài sản thay, ngày, lý do. Tài sản này
@@ -44,8 +44,18 @@ watch(
   { immediate: true },
 )
 
+// ngày thay không trước ngày mua của tài sản này hay tài sản thay (server cũng kiểm)
+const purchased = computed(() => [
+  { tag: props.asset.tag, on: props.asset.purchase_date },
+  ...(picked.value ? [{ tag: picked.value.tag, on: picked.value.purchase_date }] : []),
+])
+const minDay = computed(() => earliestReplacementDay(purchased.value))
+
 const problem = computed(() =>
-  replacementFormError({ replacementId: picked.value?.id, replacedOn: replacedOn.value, reason: reason.value }, today.value),
+  replacementFormError(
+    { replacementId: picked.value?.id, replacedOn: replacedOn.value, reason: reason.value, purchased: purchased.value },
+    today.value,
+  ),
 )
 
 // gợi ý: tìm theo tag hay tên (nút ▾ xem tất cả), bỏ chính tài sản này, cùng loại lên trước
@@ -127,6 +137,7 @@ async function submit() {
         :model-value="fromDateString(replacedOn)"
         input-id="replaced-on"
         date-format="yy-mm-dd"
+        :min-date="fromDateString(minDay) ?? undefined"
         :max-date="fromDateString(today) ?? undefined"
         fluid
         @update:model-value="(d) => (replacedOn = toDateString(d as Date | null) ?? '')"

@@ -56,6 +56,9 @@ func (r *AssetRepository) RecordReplacement(ctx context.Context, oldID, newID uu
 		if repl.Retired() {
 			return invalidReplacement("replacement_asset_id", "is retired")
 		}
+		if err := domain.CheckReplacedAfterPurchase(replacedOn, old, repl); err != nil {
+			return err
+		}
 
 		day := replacedOn
 		if err := q.InsertReplacement(ctx, db.InsertReplacementParams{

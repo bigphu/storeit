@@ -19,6 +19,8 @@ export interface ActionAsset {
   // trang tài sản có sẵn; dòng danh sách không có thì đọc lúc restore
   retired_reason?: string
   replaced_by?: ReplacementLink | null
+  // hộp Replace: ngày thay không trước ngày mua
+  purchase_date?: string
 }
 
 export function useAssetActions() {

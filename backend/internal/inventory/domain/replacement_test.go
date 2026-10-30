@@ -39,3 +39,30 @@ func TestReplacementRetireReason(t *testing.T) {
 		t.Errorf("long reason has %d runes, want %d", n, MaxReplacementReason)
 	}
 }
+
+// Ngày thay không trước ngày mua của tài sản nào trong hai (ngày mua có thì mới xét)
+func TestCheckReplacedAfterPurchase(t *testing.T) {
+	day := func(s string) time.Time { d, _ := time.Parse(time.DateOnly, s); return d }
+	ptr := func(s string) *time.Time { d := day(s); return &d }
+	old := Asset{Tag: "LAP-0001", PurchaseDate: ptr("2026-10-10")}
+	repl := Asset{Tag: "LAP-0042", PurchaseDate: ptr("2026-10-15")}
+	for _, ok := range []string{"2026-10-15", "2026-10-20"} {
+		if err := CheckReplacedAfterPurchase(day(ok), old, repl); err != nil {
+			t.Errorf("%s: %v, want ok", ok, err)
+		}
+	}
+	for s, want := range map[string]string{
+		"2026-10-09": "can't be before LAP-0001 was purchased (2026-10-10)",
+		"2026-10-14": "can't be before LAP-0042 was purchased (2026-10-15)",
+	} {
+		err := CheckReplacedAfterPurchase(day(s), old, repl)
+		var e *errs.Error
+		if !errors.Is(err, ErrInvalidReplacement) || !errors.As(err, &e) || len(e.Fields()) != 1 ||
+			e.Fields()[0].Field != "replaced_on" || e.Fields()[0].Detail != want {
+			t.Errorf("%s: %v, want replaced_on %q", s, err, want)
+		}
+	}
+	if err := CheckReplacedAfterPurchase(day("2001-01-01"), Asset{}, Asset{}); err != nil {
+		t.Errorf("no purchase dates: %v, want ok", err)
+	}
+}
