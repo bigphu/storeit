@@ -105,7 +105,8 @@ Two new **system** statuses, set and cleared only by borrowing:
   Bulk actions report such assets as skipped, the way they already report retired ones.
 - The demo seed drops its hand-made "Cho mượn" status and uses On loan. *My call:* it also
   creates a few tickets and loans in each state (waiting, approved, handed over, rejected,
-  one overdue loan), written directly with no email jobs.
+  a direct loan due back today, so it shows as overdue from tomorrow) through the normal
+  service; the emails this queues go to `@storeit.test` and the mail guard drops them.
 
 ## Specs on a ticket (decided with the user)
 
