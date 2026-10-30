@@ -1,9 +1,10 @@
 // Hành động nhanh trên một tài sản, dùng chung cho danh sách và trang tài sản: mở, sửa,
-// retire (RetireDialog, có Undo), restore (chạy ngay, có Undo), sửa nhanh từ danh sách
+// retire (RetireDialog, có Undo), thay thế (ReplaceDialog, có Undo), restore (chạy ngay, có Undo),
+// sửa nhanh từ danh sách
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { runAction, type UndoOptions } from '@/lib/actions'
-import type { AssetDetail } from '@/lib/api/types'
+import type { AssetDetail, ReplacementLink } from '@/lib/api/types'
 import { openLocation } from '@/lib/navigation'
 import { fetchAsset, useRecordReplacement, useReplaceAsset, useRestoreAsset, useRetireAsset, useUndoReplacement } from './api'
 import { type AssetQuickChange, quickAssetBody } from './quickEdit'
@@ -17,6 +18,7 @@ export interface ActionAsset {
   retired_at?: string
   // trang tài sản có sẵn; dòng danh sách không có thì đọc lúc restore
   retired_reason?: string
+  replaced_by?: ReplacementLink | null
 }
 
 export function useAssetActions() {
@@ -30,10 +32,15 @@ export function useAssetActions() {
   // retireTarget + retireOpen gắn vào <RetireDialog>
   const retireTarget = ref<ActionAsset | null>(null)
   const retireOpen = ref(false)
+  // replaceTarget + replaceOpen gắn vào <ReplaceDialog>
+  const replaceTarget = ref<{ asset: ActionAsset; typeId: string } | null>(null)
+  const replaceOpen = ref(false)
 
   return {
     retireTarget,
     retireOpen,
+    replaceTarget,
+    replaceOpen,
     open(a: ActionAsset, e?: MouseEvent, newTab?: boolean) {
       openLocation(router, `/assets/${a.id}`, e, newTab)
     },
@@ -43,6 +50,10 @@ export function useAssetActions() {
     askRetire(a: ActionAsset) {
       retireTarget.value = a
       retireOpen.value = true
+    },
+    askReplace(a: ActionAsset, typeId: string) {
+      replaceTarget.value = { asset: a, typeId }
+      replaceOpen.value = true
     },
     // Sửa nhanh từ danh sách: đọc bản mới nhất, chỉ đổi phần vừa sửa (attrPatch: thuộc tính
     // vừa sửa, các thuộc tính khác giữ nguyên), PUT với version; Undo đặt lại
@@ -85,18 +96,24 @@ export function useAssetActions() {
         undoFailed: `Couldn't replace ${a.tag} again. It stays restored.`,
       })
     },
+    // restore: tài sản đã bị thay thì restore là hoàn tác thay thế (server bỏ liên kết), nên
+    // Undo ghi lại đúng lần thay đó thay vì chỉ retire lại
     restore(a: ActionAsset) {
       return runAction({
         run: async () => {
-          // giữ lý do để Undo retire lại đúng như cũ
-          const reason = a.retired_reason ?? (await fetchAsset(a.id)).retired_reason ?? ''
+          // giữ lý do và liên kết thay thế để Undo đặt lại đúng như cũ
+          const known = a.retired_reason !== undefined && a.replaced_by !== undefined
+          const d = known ? a : await fetchAsset(a.id)
           const restored = await restoreAsset.mutateAsync({ id: a.id, version: a.version })
-          return { restored, reason }
+          return { restored, reason: d.retired_reason ?? '', by: d.replaced_by ?? null }
         },
-        done: `${a.tag} restored.`,
+        done: ({ by }) => (by ? `Replacement undone. ${a.tag} restored.` : `${a.tag} restored.`),
         failed: `Couldn't restore ${a.tag}.`,
-        undo: ({ restored, reason }) => retireAsset.mutateAsync({ id: a.id, reason, version: restored.version }),
-        undone: `${a.tag} retired again.`,
+        undo: ({ restored, reason, by }) =>
+          by
+            ? recordReplacement.mutateAsync({ id: a.id, replacementId: by.id, replacedOn: by.replaced_on, reason: by.reason, version: restored.version })
+            : retireAsset.mutateAsync({ id: a.id, reason, version: restored.version }),
+        undone: ({ by }) => (by ? `${a.tag} replaced by ${by.tag} again.` : `${a.tag} retired again.`),
         undoFailed: `Couldn't retire ${a.tag} again. It stays restored.`,
       })
     },

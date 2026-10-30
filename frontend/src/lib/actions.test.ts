@@ -24,6 +24,13 @@ describe('runAction', () => {
     expect(seen[1]).toMatchObject({ severity: 'success', summary: 'Laptop restored.' })
   })
 
+  it('undone may read the result too', async () => {
+    await runAction({ run: async () => 'LAP-0042', done: 'Done.', undo: async () => {}, undone: (t) => `${t} back.` })
+    seen[0].undo!()
+    await flush()
+    expect(seen[1].summary).toBe('LAP-0042 back.')
+  })
+
   it('has no Undo button without undo, and done may read the result', async () => {
     await runAction({ run: async () => 3, done: (n) => `Ended ${n} sessions.` })
     expect(seen[0].summary).toBe('Ended 3 sessions.')

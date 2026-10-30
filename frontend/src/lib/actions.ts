@@ -8,8 +8,8 @@ export interface UndoOptions<T> {
   done: string | ((result: T) => string)
   // đảo lại, nhận kết quả của lần chạy (vd version mới); không có thì không có nút Undo
   undo?: (result: T) => Promise<unknown>
-  // "Laptop restored."
-  undone?: string
+  // "Laptop restored."; hàm khi câu phụ thuộc kết quả của lần chạy
+  undone?: string | ((result: T) => string)
   // nói điều đang đúng: "Couldn't restore Laptop. It is still archived."
   undoFailed?: string
   // Undo đặt lại cả một danh sách (quyền của role, role của tài khoản): khoá của thứ bị đổi.
@@ -53,7 +53,7 @@ export function announce<T>(result: T, o: UndoOptions<T>): void {
         () => {
           // chính lần Undo cũng là một thay đổi: các Undo cũ hơn vẫn không chạy
           if (o.undoKey) latestChange.set(o.undoKey, ++changeSeq)
-          notify.success(o.undone ?? 'Undone.')
+          notify.success((typeof o.undone === 'function' ? o.undone(result) : o.undone) ?? 'Undone.')
         },
         (err) => notify.error(o.undoFailed ?? "Couldn't undo that.", { detail: describeError(err) }),
       )
