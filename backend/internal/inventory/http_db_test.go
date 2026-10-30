@@ -1112,6 +1112,12 @@ func TestReplacementOverHTTP(t *testing.T) {
 	if typ, _ := problem(t, rec3); rec3.Code != 409 || typ != "/errors/asset-not-replaced" {
 		t.Errorf("undo without link = %d %s", rec3.Code, typ)
 	}
+	if rec := a.do("POST", p2+"/undo", a.token(domain.PermAssetRead), map[string]any{"version": o2.Version}); rec.Code != 403 {
+		t.Errorf("undo without manage = %d, want 403", rec.Code)
+	}
+	if rec := a.do("POST", "/api/v1/assets/"+uuid.NewString()+"/replacement/undo", tok, map[string]any{"version": 1}); rec.Code != 404 {
+		t.Errorf("undo unknown asset = %d, want 404", rec.Code)
+	}
 	if rec := a.do("POST", p2, tok, map[string]any{"replacement_asset_id": n2.ID, "replaced_on": today, "reason": "x", "version": o2.Version + 7}); rec.Code != 409 {
 		t.Errorf("stale version = %d, want 409", rec.Code)
 	}

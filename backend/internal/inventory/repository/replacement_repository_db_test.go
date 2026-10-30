@@ -175,32 +175,76 @@ func TestReplacement_Concurrent(t *testing.T) {
 }
 
 // A thay bằng B và B thay bằng A cùng lúc: khoá theo thứ tự ID nên không deadlock, đúng một
-// lần thành công
+// lần thành công. 100 cặp chạy cùng lúc để các transaction thật sự chen nhau (một cặp lẻ thường
+// xong trước khi cặp kia bắt đầu)
 func TestReplacement_OppositeOrderNoDeadlock(t *testing.T) {
 	r := newRepos(t)
-	a, b := activeAsset(t, r, "A"), activeAsset(t, r, "B")
-	ctx, cancel := context.WithTimeout(actorCtx(), 10*time.Second)
+	const pairs = 100
+	ctx, cancel := context.WithTimeout(actorCtx(), 30*time.Second)
 	defer cancel()
-	errs := make([]error, 2)
+	type pair struct{ a, b domain.Asset }
+	ps := make([]pair, pairs)
+	for i := range ps {
+		ps[i] = pair{activeAsset(t, r, "A"), activeAsset(t, r, "B")}
+	}
+	errs := make([][2]error, pairs)
 	var wg sync.WaitGroup
-	for i, pair := range [][2]domain.Asset{{a, b}, {b, a}} {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			_, errs[i] = r.assets.RecordReplacement(ctx, pair[0].ID, pair[1].ID, replacedDay, "x", domain.RetiredStatusID, pair[0].Version)
-		}()
+	for i, p := range ps {
+		for k, o := range [][2]domain.Asset{{p.a, p.b}, {p.b, p.a}} {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, errs[i][k] = r.assets.RecordReplacement(ctx, o[0].ID, o[1].ID, replacedDay, "x", domain.RetiredStatusID, o[0].Version)
+			}()
+		}
 	}
 	wg.Wait()
 	if ctx.Err() != nil {
 		t.Fatal("timed out: possible deadlock")
 	}
-	ok := 0
-	for _, err := range errs {
-		if err == nil {
-			ok++
+	// Postgres tự gỡ deadlock (huỷ một transaction, lỗi 40P01) nên vẫn có đúng một lần thành
+	// công; phải kiểm lỗi của lần thua: khoá đúng thứ tự thì nó chờ rồi thấy tài sản thay đã
+	// bị retire
+	for i, e := range errs {
+		ok := 0
+		for _, err := range e {
+			switch {
+			case err == nil:
+				ok++
+			case !errors.Is(err, domain.ErrInvalidReplacement):
+				t.Errorf("pair %d: loser error = %v, want ErrInvalidReplacement (replacement retired), not a deadlock", i, err)
+			}
+		}
+		if ok != 1 {
+			t.Errorf("pair %d: successes = %d, want exactly 1 (%v)", i, ok, e)
 		}
 	}
-	if ok != 1 {
-		t.Errorf("successes = %d, want exactly 1 (%v)", ok, errs)
+}
+
+// Ngày thay trước ngày mua của một trong hai tài sản: 422 ở replaced_on, không ghi gì
+func TestReplacement_NotBeforePurchase(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	bought := func(name, on string) domain.Asset {
+		t.Helper()
+		d, _ := time.Parse(time.DateOnly, on)
+		a, err := r.assets.Create(ctx, "RP-"+uniq(), domain.AssetFields{
+			Name: name, TypeID: domain.GeneralTypeID, StatusID: domain.AvailableStatusID, PurchaseDate: &d,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	o, n := bought("Old", "2026-10-10"), bought("New", "2026-10-15")
+	early := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
+	if _, err := r.assets.RecordReplacement(ctx, o.ID, n.ID, early, "x", domain.RetiredStatusID, o.Version); !errors.Is(err, domain.ErrInvalidReplacement) {
+		t.Fatalf("before the new asset was bought: %v, want ErrInvalidReplacement", err)
+	}
+	if by, _, _ := r.assets.Replacements(ctx, o.ID); by != nil {
+		t.Errorf("link written despite the error: %+v", by)
+	}
+	if _, err := r.assets.RecordReplacement(ctx, o.ID, n.ID, early.AddDate(0, 0, 1), "x", domain.RetiredStatusID, o.Version); err != nil {
+		t.Errorf("on the purchase day: %v, want ok", err)
 	}
 }
