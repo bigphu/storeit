@@ -27,6 +27,9 @@ const ICONS: Record<ActivityEntry['kind'], string> = {
   replaced: 'pi pi-sync',
   replaces: 'pi pi-sync',
   replacement_undone: 'pi pi-undo',
+  reserved: 'pi pi-bookmark',
+  reservation_cancelled: 'pi pi-times-circle',
+  lent: 'pi pi-arrow-right-arrow-left',
   other: 'pi pi-circle',
 }
 

@@ -17,6 +17,7 @@ import { isApiError } from '@/lib/errors'
 import { useFormErrors } from '@/lib/forms'
 import { notify } from '@/lib/notify'
 import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
+import { isBorrowingStatus } from '@/features/borrowing/borrowing'
 import { useStatuses } from '@/features/statuses/api'
 import { useAsset, useCreateAsset, useReplaceAsset } from '../api'
 import AttributeInput from '../components/AttributeInput.vue'
@@ -50,9 +51,13 @@ const typeOptions = computed(() =>
 )
 // Status kind retired chỉ đặt bằng thao tác Retire
 const { data: statuses } = useStatuses(true)
+// tài sản đang Reserved / On loan: status do việc mượn giữ, chỉ hiện status đó
 const statusOptions = computed(() =>
   (statuses.value ?? []).filter(
-    (s) => s.kind !== 'retired' && (!s.archived_at || s.id === asset.value?.status.id),
+    (s) =>
+      s.kind !== 'retired' &&
+      (!s.archived_at || s.id === asset.value?.status.id) &&
+      (isBorrowingStatus(asset.value?.status.id) ? s.id === asset.value?.status.id : !isBorrowingStatus(s.id)),
   ),
 )
 

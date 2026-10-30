@@ -32,6 +32,7 @@ import { notify } from '@/lib/notify'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
 import { stepPage, useKeepScrollOnPage, useListTable, useRowMenu } from '@/lib/tableRows'
 import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
+import { pickableStatuses } from '@/features/borrowing/borrowing'
 import { kindSeverity, statusKinds, useStatuses } from '@/features/statuses/api'
 import { assetListQuery, assetQuery, useAsset, useAssetList } from '../api'
 import EmptyState from '@/components/EmptyState.vue'
@@ -326,7 +327,7 @@ function cell(row: AssetListItem, key: string) {
 // Sửa nhanh: bút chì cạnh tên, status, ngày mua để đổi tại chỗ; nút thanh trượt (pi-sliders-h) mở ngăn kéo (các trường
 // của tài sản và thuộc tính của loại). Tài sản đã retire không sửa nhanh được
 const statusChoices = computed(() =>
-  (statuses.value ?? []).filter((x) => !x.archived_at && x.kind !== 'retired').map((x) => ({ label: x.name, value: x.id })),
+  pickableStatuses(statuses.value ?? []).filter((x) => !x.archived_at && x.kind !== 'retired').map((x) => ({ label: x.name, value: x.id })),
 )
 const statusLabel = (id: string) => statusChoices.value.find((o) => o.value === id)?.label ?? 'another status'
 const canQuick = (a: AssetListItem) => canManage.value && !a.retired_at

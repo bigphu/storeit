@@ -582,6 +582,189 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/borrow-tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Borrow tickets; without inventory.borrow.manage only your own */
+        get: operations["listBorrowTickets"];
+        put?: never;
+        /** Ask to borrow an asset of a type (inventory.borrow.request) */
+        post: operations["createBorrowTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/borrow-tickets/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tickets waiting and approved, for the sidebar (inventory.borrow.manage) */
+        get: operations["borrowTicketSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/borrow-tickets/{ticketID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticketID: components["parameters"]["TicketID"];
+            };
+            cookie?: never;
+        };
+        /** One ticket; someone else's is 404 without inventory.borrow.manage */
+        get: operations["getBorrowTicket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/borrow-tickets/{ticketID}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticketID: components["parameters"]["TicketID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a waiting ticket by reserving an available asset of its type (inventory.borrow.manage) */
+        post: operations["approveBorrowTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/borrow-tickets/{ticketID}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticketID: components["parameters"]["TicketID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject a waiting ticket with a reason (inventory.borrow.manage) */
+        post: operations["rejectBorrowTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/borrow-tickets/{ticketID}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticketID: components["parameters"]["TicketID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel your own ticket (waiting or approved), or as a manager an approved one; frees the reserved asset */
+        post: operations["cancelBorrowTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/borrow-tickets/{ticketID}/hand-over": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticketID: components["parameters"]["TicketID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hand the reserved asset over; the loan starts today (inventory.borrow.manage) */
+        post: operations["handOverBorrowTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/{assetID}/lend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assetID: components["parameters"]["AssetID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Lend an available asset directly, without a ticket (inventory.borrow.manage) */
+        post: operations["lendAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/loans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Assets on loan now, overdue first (inventory.borrow.manage) */
+        get: operations["listLoans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/borrowers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Active accounts to lend to, by name or email (inventory.borrow.manage) */
+        get: operations["searchBorrowers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -596,6 +779,8 @@ export interface components {
             name: string;
             description: string;
             is_system: boolean;
+            /** @description "Can be borrowed": assets of this type can be lent (US-10) */
+            can_borrow: boolean;
             /** Format: date-time */
             archived_at?: string;
             /** Format: int32 */
@@ -665,11 +850,14 @@ export interface components {
             code: string;
             name: string;
             description?: string;
+            /** @description Default false */
+            can_borrow?: boolean;
             attributes?: components["schemas"]["NewAttribute"][];
         };
         UpdateAssetTypeRequest: {
             name?: string;
             description?: string;
+            can_borrow?: boolean;
             /** Format: int32 */
             version: number;
         };
@@ -732,7 +920,7 @@ export interface components {
         AssetActivityEntry: {
             id: components["schemas"]["ID"];
             /** @enum {string} */
-            kind: "created" | "updated" | "retired" | "restored" | "replaced" | "replaces" | "replacement_undone" | "other";
+            kind: "created" | "updated" | "retired" | "restored" | "replaced" | "replaces" | "replacement_undone" | "reserved" | "reservation_cancelled" | "lent" | "other";
             /** @description Raw event type */
             type: string;
             /** Format: date-time */
@@ -743,6 +931,15 @@ export interface components {
             /** @description On retired and replaced, when one was given */
             reason?: string;
             related?: components["schemas"]["ActivityRelated"];
+            /** @description On reserved, reservation_cancelled and lent: who it was reserved for or lent to */
+            person?: components["schemas"]["ActivityActor"] | null;
+            /**
+             * Format: int64
+             * @description Borrow ticket number; 0 for a direct loan
+             */
+            ticket_number?: number;
+            /** Format: date */
+            return_by?: string | null;
         };
         /** @description The asset at the other end of a replacement (US-13) */
         ActivityRelated: {
@@ -826,11 +1023,141 @@ export interface components {
             replaced_on: string;
             reason: string;
         };
+        /** @enum {string} */
+        TicketState: "waiting" | "approved" | "rejected" | "cancelled" | "handed_over";
+        Person: {
+            id: components["schemas"]["ID"];
+            name: string;
+            email: string;
+        };
+        AssetRef: {
+            id: components["schemas"]["ID"];
+            tag: string;
+            name: string;
+        };
+        BorrowTicket: {
+            id: components["schemas"]["ID"];
+            /** Format: int64 */
+            number: number;
+            state: components["schemas"]["TicketState"];
+            requester: components["schemas"]["Person"];
+            asset_type: {
+                id: components["schemas"]["ID"];
+                name: string;
+            };
+            /** @description Attribute conditions "<key>:<op>:<value>", as in the asset list's attr filter */
+            requirements: string[];
+            suggested_asset?: components["schemas"]["AssetRef"] | null;
+            /** @description The reserved asset, once approved */
+            asset?: components["schemas"]["AssetRef"] | null;
+            /** Format: date */
+            needed_from: string;
+            /** Format: date */
+            return_by?: string | null;
+            note: string;
+            /** @description Why it was rejected or cancelled */
+            reason: string;
+            /** Format: date-time */
+            decided_at?: string | null;
+            /** Format: date-time */
+            cancelled_at?: string | null;
+            /** Format: int32 */
+            version: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        BorrowTicketPage: components["schemas"]["Paged"] & {
+            items: components["schemas"]["BorrowTicket"][];
+        };
+        BorrowTicketSummary: {
+            /** Format: int64 */
+            waiting: number;
+            /** Format: int64 */
+            approved: number;
+        };
+        CreateBorrowTicketRequest: {
+            asset_type_id: components["schemas"]["ID"];
+            requirements?: string[];
+            suggested_asset_id?: components["schemas"]["ID"];
+            /** Format: date */
+            needed_from: string;
+            /** Format: date */
+            return_by?: string;
+            note?: string;
+        };
+        ApproveTicketRequest: {
+            asset_id: components["schemas"]["ID"];
+            /** Format: int32 */
+            version: number;
+        };
+        RejectTicketRequest: {
+            reason: string;
+            /** Format: int32 */
+            version: number;
+        };
+        CancelTicketRequest: {
+            reason?: string;
+            /** Format: int32 */
+            version: number;
+        };
+        LendRequest: {
+            borrower_id: components["schemas"]["ID"];
+            /** Format: date */
+            return_by?: string;
+            /** Format: int32 */
+            version: number;
+        };
+        Loan: {
+            id: components["schemas"]["ID"];
+            asset: components["schemas"]["AssetRef"];
+            asset_type_name: string;
+            borrower: components["schemas"]["Person"];
+            ticket_id?: components["schemas"]["ID"];
+            /**
+             * Format: int64
+             * @description 0 for a direct loan
+             */
+            ticket_number: number;
+            /** Format: date */
+            started_on: string;
+            /** Format: date */
+            return_by?: string | null;
+            /** @description 0 when not overdue */
+            overdue_days: number;
+        };
+        LoanPage: components["schemas"]["Paged"] & {
+            items: components["schemas"]["Loan"][];
+        };
+        BorrowerList: {
+            items: components["schemas"]["Person"][];
+        };
+        AssetBorrowing: {
+            /** @enum {string} */
+            state: "reserved" | "on_loan";
+            account: {
+                id: components["schemas"]["ID"];
+                name: string;
+            };
+            ticket?: {
+                id: components["schemas"]["ID"];
+                /** Format: int64 */
+                number: number;
+            } | null;
+            /** Format: date */
+            since?: string | null;
+            /** Format: date */
+            return_by?: string | null;
+            overdue_days: number;
+        };
         AssetDetail: {
             /** @description The asset that replaced this one (US-13) */
             replaced_by?: components["schemas"]["ReplacementLink"] | null;
             /** @description Assets this one replaced, newest first */
             replaces: components["schemas"]["ReplacementLink"][];
+            /** @description Reserved for someone, or on loan (US-10) */
+            borrowing?: components["schemas"]["AssetBorrowing"] | null;
             id: components["schemas"]["ID"];
             tag: string;
             name: string;
@@ -1039,6 +1366,7 @@ export interface components {
         OptionID: components["schemas"]["ID"];
         StatusID: components["schemas"]["ID"];
         AssetID: components["schemas"]["ID"];
+        TicketID: components["schemas"]["ID"];
         IncludeArchived: boolean;
         Page: number;
         PageSize: number;
@@ -1622,6 +1950,8 @@ export interface operations {
                 location_id?: components["schemas"]["ID"];
                 holder_member_id?: components["schemas"]["ID"];
                 include_retired?: boolean;
+                /** @description Chỉ tài sản cho mượn được ngay (loại bật can_borrow, status thuộc kind available). */
+                borrowable?: boolean;
                 /**
                  * @description Lọc theo thuộc tính tuỳ chỉnh, cần `type_id`; lặp lại để kết hợp (AND).
                  *     Dạng `<key>:<op>:<value>`. Toán tử theo kiểu: text `eq` (không phân biệt
@@ -2094,6 +2424,287 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listBorrowTickets: {
+        parameters: {
+            query?: {
+                state?: components["schemas"]["TicketState"][];
+                /** @description Only my own tickets (managers see everyone's otherwise) */
+                mine?: boolean;
+                /** @description Requester name or email, or asset type name */
+                q?: string;
+                sort?: "number" | "-number" | "needed_from" | "-needed_from";
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of tickets, newest first by default */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BorrowTicketPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createBorrowTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBorrowTicketRequest"];
+            };
+        };
+        responses: {
+            /** @description The new ticket */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BorrowTicket"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    borrowTicketSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BorrowTicketSummary"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getBorrowTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticketID: components["parameters"]["TicketID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The ticket */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BorrowTicket"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    approveBorrowTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticketID: components["parameters"]["TicketID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveTicketRequest"];
+            };
+        };
+        responses: {
+            /** @description The approved ticket */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BorrowTicket"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    rejectBorrowTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticketID: components["parameters"]["TicketID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectTicketRequest"];
+            };
+        };
+        responses: {
+            /** @description The rejected ticket */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BorrowTicket"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    cancelBorrowTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticketID: components["parameters"]["TicketID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelTicketRequest"];
+            };
+        };
+        responses: {
+            /** @description The cancelled ticket */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BorrowTicket"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    handOverBorrowTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ticketID: components["parameters"]["TicketID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionRequest"];
+            };
+        };
+        responses: {
+            /** @description The handed-over ticket */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BorrowTicket"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    lendAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assetID: components["parameters"]["AssetID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LendRequest"];
+            };
+        };
+        responses: {
+            /** @description The asset, now on loan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listLoans: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                page_size?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of active loans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    searchBorrowers: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Up to 10 accounts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BorrowerList"];
                 };
             };
             default: components["responses"]["Problem"];
