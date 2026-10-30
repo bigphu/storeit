@@ -208,3 +208,23 @@ type AssetRepository interface {
 	Retire(ctx context.Context, id uuid.UUID, reason string, retiredStatus uuid.UUID, version int32) (Asset, error)
 	Restore(ctx context.Context, id uuid.UUID, availableStatus uuid.UUID, version int32) (Asset, error)
 }
+
+// BorrowingRepository: phiếu mượn và khoản mượn (US-10). Mỗi thao tác ghi là một transaction:
+// khoá phiếu rồi tới tài sản, kiểm tra, ghi, đổi status tài sản (không event asset_updated),
+// thêm event và xếp thư trong cùng transaction.
+type BorrowingRepository interface {
+	CreateTicket(ctx context.Context, t NewBorrowTicket) (BorrowTicket, error)
+	GetTicket(ctx context.Context, id uuid.UUID) (BorrowTicket, error)
+	ListTickets(ctx context.Context, f TicketFilter) ([]BorrowTicket, int64, error)
+	TicketCounts(ctx context.Context) (waiting, approved int64, err error)
+	Approve(ctx context.Context, ticketID, assetID uuid.UUID, version int32) (BorrowTicket, error)
+	Reject(ctx context.Context, ticketID uuid.UUID, reason string, version int32) (BorrowTicket, error)
+	Cancel(ctx context.Context, ticketID uuid.UUID, reason string, byManager bool, version int32) (BorrowTicket, error)
+	HandOver(ctx context.Context, ticketID uuid.UUID, startedOn time.Time, version int32) (BorrowTicket, Loan, error)
+	Lend(ctx context.Context, assetID, borrowerID uuid.UUID, startedOn time.Time, returnBy *time.Time, version int32) (Loan, error)
+	ActiveLoan(ctx context.Context, assetID uuid.UUID) (*Loan, error)
+	ApprovedTicketFor(ctx context.Context, assetID uuid.UUID) (*BorrowTicket, error)
+	GetLoan(ctx context.Context, id uuid.UUID) (Loan, error)
+	ListActiveLoans(ctx context.Context, today time.Time, page, pageSize int) ([]Loan, int64, error)
+	QueueOverdueEmails(ctx context.Context, today time.Time, limit int) (int, error)
+}

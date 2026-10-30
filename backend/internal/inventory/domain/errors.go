@@ -22,6 +22,7 @@ var (
 	ErrNotBorrowable = errs.Conflict("/errors/asset-not-borrowable", "Asset not available",
 		errs.WithDetail("This asset can't be lent right now: it isn't available, or its type can't be borrowed."))
 	ErrTicketNotFound = errs.NotFound("/errors/borrow-ticket-not-found", "Borrow ticket not found")
+	ErrLoanNotFound   = errs.NotFound("/errors/loan-not-found", "Loan not found")
 	ErrTicketState    = errs.Conflict("/errors/borrow-ticket-state", "Ticket can't do that now",
 		errs.WithDetail("The ticket has moved on since. Reload it to see where it stands."))
 	ErrTicketChanged = errs.Conflict("/errors/borrow-ticket-changed", "Ticket changed",

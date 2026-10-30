@@ -113,7 +113,10 @@ func (l Loan) OverdueDays(today time.Time) int {
 type TicketFilter struct {
 	States      []TicketState
 	RequesterID *uuid.UUID // nil: mọi người (chỉ người quản lý)
-	Q           string     // tên người mượn hay loại tài sản (service dịch sang ID)
+	Q           string     // tên người mượn hay loại tài sản; service dịch sang hai danh sách dưới
+	// Q khác rỗng: phiếu của một trong MatchRequesters hay thuộc một trong MatchTypes
+	MatchRequesters []uuid.UUID
+	MatchTypes      []uuid.UUID
 	Sort        string     // "-number" (mặc định) | "number" | "needed_from" | "-needed_from"
 	Page        int
 	PageSize    int
