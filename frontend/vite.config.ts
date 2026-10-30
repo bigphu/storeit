@@ -61,7 +61,7 @@ export default defineConfig({
       // font biểu tượng không cần chữ dự phòng
       skipFontFaceGeneration: (name) => name.startsWith('primeicons'),
     }),
-    preloadFonts([/be-vietnam-pro-latin-400-normal-[\w-]+\.woff2$/, /bricolage-grotesque-latin-wght-normal-[\w-]+\.woff2$/]),
+    preloadFonts([/jetbrains-mono-latin-400-normal-[\w-]+\.woff2$/]),
     nonBlockingCss(),
   ],
   resolve: {
