@@ -199,7 +199,9 @@ usePageKeys((e) => {
     </Tabs>
 
     <RetireDialog v-model:visible="actions.retireOpen.value" :asset="actions.retireTarget.value" />
-    <ReplaceDialog v-if="!retired" v-model:visible="replaceOpen" :asset="asset" :type-id="asset.asset_type.id" />
+    <!-- luôn gắn (không v-if theo retired): thay xong tài sản retire ngay, hộp bị gỡ trước khi
+         kịp báo đóng thì replaceOpen kẹt true và hộp tự mở lại khi Undo -->
+    <ReplaceDialog v-model:visible="replaceOpen" :asset="asset" :type-id="asset.asset_type.id" />
   </section>
 </template>
 
