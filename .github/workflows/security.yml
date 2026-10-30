@@ -1,0 +1,70 @@
+# SAST: CodeQL (bộ truy vấn security-extended) quét Go của backend và TypeScript/Vue của
+# frontend; cảnh báo hiện ở tab Security của repo. Job cuối mang đúng tên check mà ruleset
+# của main yêu cầu ("Security / SAST Scanner") và luôn báo kết quả
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # thứ Hai hằng tuần: truy vấn mới của CodeQL cũng quét lại code cũ
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: go
+            build-mode: manual
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - uses: actions/checkout@v7
+
+      - if: matrix.language == 'go'
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+
+      - if: matrix.build-mode == 'manual'
+        name: Build backend
+        working-directory: backend
+        run: go build ./...
+
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
+
+  sast:
+    name: Security / SAST Scanner
+    needs: codeql
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: CodeQL ran
+        run: |
+          echo "codeql: ${{ needs.codeql.result }}"
+          [ "${{ needs.codeql.result }}" = success ]

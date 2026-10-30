@@ -1,27 +1,12 @@
-# CI của frontend: type-check, test, build; type API phải khớp spec của backend
+# CI của frontend: type-check, test, build; type API phải khớp spec của backend. Gọi từ
+# ci.yml (workflow_call)
 name: frontend
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "frontend/**"
-      - "backend/internal/*/handler/openapi.yaml"
-      - "backend/api/**"
-      - ".github/workflows/frontend.yml"
-  pull_request:
-    paths:
-      - "frontend/**"
-      - "backend/internal/*/handler/openapi.yaml"
-      - "backend/api/**"
-      - ".github/workflows/frontend.yml"
+  workflow_call:
 
 permissions:
   contents: read
-
-concurrency:
-  group: frontend-${{ github.ref }}
-  cancel-in-progress: true
 
 defaults:
   run:

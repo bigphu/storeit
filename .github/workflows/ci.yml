@@ -1,0 +1,34 @@
+# CI gộp: gọi backend.yml và frontend.yml trên mọi PR và mỗi lần push lên main. Job cuối mang
+# đúng tên check mà ruleset của main yêu cầu ("CI / Build and Test": ruleset so với tên job,
+# không có tên workflow đứng trước) và luôn báo kết quả, kể cả khi job con lỗi hay bị huỷ
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    uses: ./.github/workflows/backend.yml
+
+  frontend:
+    uses: ./.github/workflows/frontend.yml
+
+  build-and-test:
+    name: CI / Build and Test
+    needs: [backend, frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Backend and frontend passed
+        run: |
+          echo "backend: ${{ needs.backend.result }}, frontend: ${{ needs.frontend.result }}"
+          [ "${{ needs.backend.result }}" = success ] && [ "${{ needs.frontend.result }}" = success ]

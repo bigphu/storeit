@@ -1,19 +1,11 @@
-# CI của backend: chạy đúng các make target như trên máy dev
+# CI của backend: chạy đúng các make target như trên máy dev. Gọi từ ci.yml (workflow_call)
 name: backend
 
 on:
-  push:
-    branches: [main]
-    paths: ["backend/**", ".github/workflows/backend.yml"]
-  pull_request:
-    paths: ["backend/**", ".github/workflows/backend.yml"]
+  workflow_call:
 
 permissions:
   contents: read
-
-concurrency:
-  group: backend-${{ github.ref }}
-  cancel-in-progress: true
 
 defaults:
   run:
