@@ -24,3 +24,23 @@ export function replacementFormError(f: ReplacementForm, today: string): string 
   if (reason.length > MAX_REASON) return 'Keep the reason under 500 characters.'
   return null
 }
+
+export interface ReplacementGroup<T> {
+  label: string
+  items: T[]
+}
+
+// replacementGroups: gợi ý cho hộp Replace, bỏ chính tài sản; tài sản cùng loại lên trước
+// (thường thay bằng tài sản cùng loại), nhóm rỗng thì bỏ
+export function replacementGroups<T extends { id: string; asset_type_id: string; asset_type_name: string }>(
+  items: T[],
+  self: { id: string; typeId: string },
+): ReplacementGroup<T>[] {
+  const others = items.filter((a) => a.id !== self.id)
+  const same = others.filter((a) => a.asset_type_id === self.typeId)
+  const rest = others.filter((a) => a.asset_type_id !== self.typeId)
+  const groups: ReplacementGroup<T>[] = []
+  if (same.length) groups.push({ label: same[0].asset_type_name, items: same })
+  if (rest.length) groups.push({ label: 'Other types', items: rest })
+  return groups
+}

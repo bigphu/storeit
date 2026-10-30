@@ -71,7 +71,7 @@ behaves the same everywhere.
 | `AppBreadcrumb` | Breadcrumb with the per-tab back button |
 | `KeyHint` | Key cap after a button label (`<KeyHint keys="N" />`); give the button `aria-label="New … (N)"`. Hidden on touch screens |
 | `AssetActivity` (features/assets) | The asset page's Activity tab: timeline from `useAssetActivity` (infinite query under `assetKeys.one(id)`, refreshed by any asset invalidation), summary and relative time from `features/assets/activity.ts`, long values clamped with Show more |
-| `ReplaceDialog` (features/assets) | Replace an asset (US-13): pick the replacement, date, reason; calls the API itself so field errors show in the form, then `announce`s with Undo (`useAssetActions().replacementUndo`). A replaced asset shows **Undo replacement** instead of Restore |
+| `ReplaceDialog` (features/assets) | Replace an asset (US-13), from the asset page or the list's row menu (`useAssetActions().askReplace`): pick the replacement (search by tag or name, ▾ browses; same type listed first), date, reason; calls the API itself so field errors show in the form, then `announce`s with Undo (`useAssetActions().replacementUndo`). A replaced asset shows **Undo replacement** instead of Restore; Restore from the list on a replaced asset also undoes the replacement, and its Undo records it again |
 
 Keyboard shortcuts are listed once in `lib/shortcuts.ts` (grouped); the `?` dialog renders that
 list, so add a new key there first. List pages page with J/K through `stepPage()`, and keep their

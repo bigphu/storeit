@@ -39,6 +39,7 @@ import KeyHint from '@/components/KeyHint.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import AttributeFilterPopover from '../components/AttributeFilterPopover.vue'
 import BulkActionDialog from '../components/BulkActionDialog.vue'
+import ReplaceDialog from '../components/ReplaceDialog.vue'
 import RetireDialog from '../components/RetireDialog.vue'
 import { attrFilterLabel, type FilterChip, filterChips, removeChip } from '../filterChips'
 import DataExportDialog from '../export/components/DataExportDialog.vue'
@@ -284,7 +285,7 @@ function openBulk(mode: 'status' | 'retire') {
   bulkOpen.value = true
 }
 
-// Menu của dòng (chuột phải và nút ☰ cuối dòng): mở, sửa nhanh, sửa, retire / restore
+// Menu của dòng (chuột phải và nút ☰ cuối dòng): mở, sửa nhanh, sửa, retire, thay thế / restore
 const rowMenu = useRowMenu<AssetListItem>((a) => {
   const items: MenuItem[] = [
     { label: 'Open', icon: 'pi pi-arrow-right', command: () => actions.open(a) },
@@ -297,6 +298,7 @@ const rowMenu = useRowMenu<AssetListItem>((a) => {
       items.push({ label: 'Quick edit', icon: 'pi pi-sliders-h', command: () => openQuick(a) })
       items.push({ label: 'Edit', icon: 'pi pi-pencil', command: () => actions.edit(a) })
       items.push({ label: 'Retire', icon: 'pi pi-ban', command: () => actions.askRetire(a) })
+      items.push({ label: 'Replace…', icon: 'pi pi-sync', command: () => actions.askReplace(a, a.asset_type_id) })
     }
   }
   return items
@@ -656,6 +658,12 @@ watch(rows, (list) => {
     </QuickEditDrawer>
 
     <RetireDialog v-model:visible="actions.retireOpen.value" :asset="actions.retireTarget.value" />
+    <ReplaceDialog
+      v-if="actions.replaceTarget.value"
+      v-model:visible="actions.replaceOpen.value"
+      :asset="actions.replaceTarget.value.asset"
+      :type-id="actions.replaceTarget.value.typeId"
+    />
   </section>
 </template>
 

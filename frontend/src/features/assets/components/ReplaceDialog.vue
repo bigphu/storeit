@@ -5,16 +5,17 @@ import Textarea from 'primevue/textarea'
 import { computed, ref, watch } from 'vue'
 import FormDialog from '@/components/FormDialog.vue'
 import { announce } from '@/lib/actions'
-import type { AssetDetail, AssetListItem } from '@/lib/api/types'
+import type { AssetListItem } from '@/lib/api/types'
 import { fromDateString, toDateString } from '@/lib/dates'
 import { useDirty, useFormErrors } from '@/lib/forms'
 import { searchAssets, useRecordReplacement } from '../api'
-import { replacementFormError, todayLocal } from '../replacement'
-import { useAssetActions } from '../useAssetActions'
+import { type ReplacementGroup, replacementFormError, replacementGroups, todayLocal } from '../replacement'
+import { type ActionAsset, useAssetActions } from '../useAssetActions'
 
 // Thay tài sản này bằng một tài sản khác (US-13): chọn tài sản thay, ngày, lý do. Tài sản này
-// bị retire; thông báo thành công có Undo. Lỗi của form (vd ngày tương lai) hiện trong hộp
-const props = defineProps<{ asset: AssetDetail }>()
+// bị retire; thông báo thành công có Undo. Lỗi của form (vd ngày tương lai) hiện trong hộp.
+// typeId: loại của tài sản này, để gợi ý tài sản cùng loại trước
+const props = defineProps<{ asset: ActionAsset; typeId: string }>()
 const visible = defineModel<boolean>('visible', { required: true })
 
 const errors = useFormErrors()
@@ -25,27 +26,41 @@ const picked = ref<AssetListItem | null>(null)
 const replacedOn = ref('')
 const reason = ref('')
 const today = ref(todayLocal(new Date()))
-const suggestions = ref<AssetListItem[]>([])
+const suggestions = ref<ReplacementGroup<AssetListItem>[]>([])
 const form = useDirty(() => ({ p: picked.value?.id ?? '', d: replacedOn.value, r: reason.value.trim() }))
 
-watch(visible, (open) => {
-  if (!open) return
-  today.value = todayLocal(new Date())
-  picked.value = null
-  replacedOn.value = today.value
-  reason.value = ''
-  errors.clear()
-  form.reset()
-})
+// immediate: danh sách gắn hộp lúc đã mở (visible đúng ngay từ đầu)
+watch(
+  visible,
+  (open) => {
+    if (!open) return
+    today.value = todayLocal(new Date())
+    picked.value = null
+    replacedOn.value = today.value
+    reason.value = ''
+    errors.clear()
+    form.reset()
+  },
+  { immediate: true },
+)
 
 const problem = computed(() =>
   replacementFormError({ replacementId: picked.value?.id, replacedOn: replacedOn.value, reason: reason.value }, today.value),
 )
 
-// gợi ý: tìm theo tag hay tên, bỏ chính tài sản này (tài sản đã retire không có trong kết quả)
+// gợi ý: tìm theo tag hay tên (nút ▾ xem tất cả), bỏ chính tài sản này, cùng loại lên trước
+// (tài sản đã retire không có trong kết quả). Câu trả lời cũ đến sau câu mới thì bỏ
+let searchSeq = 0
 async function search(e: AutoCompleteCompleteEvent) {
-  const items = await searchAssets(e.query)
-  suggestions.value = items.filter((a) => a.id !== props.asset.id)
+  const mine = ++searchSeq
+  let items: AssetListItem[] = []
+  try {
+    items = await searchAssets(e.query.trim())
+  } catch {
+    // lỗi mạng: không có gợi ý, gõ lại để thử
+  }
+  if (mine !== searchSeq) return
+  suggestions.value = replacementGroups(items, { id: props.asset.id, typeId: props.typeId })
 }
 const optionLabel = (a: AssetListItem) => `${a.tag} · ${a.name}`
 
@@ -88,13 +103,20 @@ async function submit() {
         input-id="replacement-asset"
         :suggestions="suggestions"
         :option-label="optionLabel"
+        option-group-label="label"
+        option-group-children="items"
         placeholder="Search tag or name"
+        empty-search-message="No active assets match."
+        dropdown
         force-selection
         fluid
         @complete="search"
       >
         <template #option="{ option }: { option: AssetListItem }">
-          <span class="opt"><span class="mono">{{ option.tag }}</span> · {{ option.name }} <small>· {{ option.asset_type_name }}</small></span>
+          <span class="opt">
+            <span class="mono">{{ option.tag }}</span> · {{ option.name }}
+            <small>· {{ option.asset_type_name }} · {{ option.status_name }}</small>
+          </span>
         </template>
       </AutoComplete>
       <small v-if="errors.fields.value.replacement_asset_id" class="field-error">{{ errors.fields.value.replacement_asset_id }}</small>

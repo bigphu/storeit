@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { replacementFormError, todayLocal } from './replacement'
+import { replacementFormError, replacementGroups, todayLocal } from './replacement'
 
 describe('replacementFormError', () => {
   const ok = { replacementId: 'n1', replacedOn: '2026-10-29', reason: 'Broken screen' }
@@ -21,5 +21,22 @@ describe('todayLocal', () => {
   it('is the local calendar day', () => {
     expect(todayLocal(new Date(2026, 9, 29, 23, 30))).toBe('2026-10-29')
     expect(todayLocal(new Date(2026, 0, 5, 0, 5))).toBe('2026-01-05')
+  })
+})
+
+describe('replacementGroups', () => {
+  const item = (id: string, typeId: string, typeName: string) => ({ id, tag: id.toUpperCase(), asset_type_id: typeId, asset_type_name: typeName })
+  it('drops the asset itself and lists the same type first', () => {
+    const items = [item('a', 'mon', 'Monitor'), item('self', 'lap', 'Laptop'), item('b', 'lap', 'Laptop'), item('c', 'lap', 'Laptop')]
+    expect(replacementGroups(items, { id: 'self', typeId: 'lap' })).toEqual([
+      { label: 'Laptop', items: [items[2], items[3]] },
+      { label: 'Other types', items: [items[0]] },
+    ])
+  })
+  it('leaves out empty groups', () => {
+    expect(replacementGroups([item('a', 'mon', 'Monitor')], { id: 'self', typeId: 'lap' })).toEqual([
+      { label: 'Other types', items: [{ id: 'a', tag: 'A', asset_type_id: 'mon', asset_type_name: 'Monitor' }] },
+    ])
+    expect(replacementGroups([], { id: 'self', typeId: 'lap' })).toEqual([])
   })
 })

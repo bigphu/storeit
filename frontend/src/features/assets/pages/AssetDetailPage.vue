@@ -199,7 +199,7 @@ usePageKeys((e) => {
     </Tabs>
 
     <RetireDialog v-model:visible="actions.retireOpen.value" :asset="actions.retireTarget.value" />
-    <ReplaceDialog v-if="!retired" v-model:visible="replaceOpen" :asset="asset" />
+    <ReplaceDialog v-if="!retired" v-model:visible="replaceOpen" :asset="asset" :type-id="asset.asset_type.id" />
   </section>
 </template>
 
