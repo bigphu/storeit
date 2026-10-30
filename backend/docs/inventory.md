@@ -141,7 +141,9 @@ skipped. Built by `service.AssetActivity` from `events.ListForAggregate` (index
 ## Borrowing (US-10)
 
 Asset types have `can_borrow` ("Can be borrowed", off by default; migration 00008 leaves every
-existing type off). An asset can be **reserved or lent** only when its type can be borrowed,
+existing type off). Changing it, or creating a type with it on, needs `inventory.borrow.manage`
+(name and description still need `inventory.type.manage`), so inventory officers can turn
+borrowing on. An asset can be **reserved or lent** only when its type can be borrowed,
 the type isn't archived and its status is of kind `available` (`domain.Borrowable`);
 `GET /assets?borrowable=true` lists exactly those.
 

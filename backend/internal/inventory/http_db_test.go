@@ -143,7 +143,7 @@ func problem(t *testing.T, rec *httptest.ResponseRecorder) (typ string, fields [
 }
 
 var allPerms = []string{domain.PermAssetRead, domain.PermAssetManage, domain.PermTypeManage, domain.PermStatusManage,
-	domain.PermAssetExport, domain.PermExportProfileManage}
+	domain.PermAssetExport, domain.PermExportProfileManage, domain.PermBorrowRequest, domain.PermBorrowManage}
 
 type typeDetail struct {
 	ID         string

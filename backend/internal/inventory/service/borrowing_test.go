@@ -38,7 +38,7 @@ func newBorrowEnv(t *testing.T, now time.Time) *borrowEnv {
 		Types: e.types, Statuses: e.statuses, Assets: e.assets, Profiles: e.profiles, Accounts: b.accounts,
 		Borrowing: b.borrowing, Location: hcm, Now: func() time.Time { return now }, Mail: b.mail, AppURL: "http://app.test",
 	})
-	ty, err := e.svc.CreateAssetType(manager, domain.NewAssetType{Code: "PROJ", Name: "Projector", CanBorrow: true})
+	ty, err := e.svc.CreateAssetType(as(domain.PermTypeManage, domain.PermBorrowManage), domain.NewAssetType{Code: "PROJ", Name: "Projector", CanBorrow: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,5 +151,33 @@ func TestBorrowingPermissions(t *testing.T) {
 	}
 	if _, err := b.svc.CancelTicket(asAccount(uuid.New(), domain.PermBorrowManage), w.ID, "", w.Version); !errors.Is(err, domain.ErrTicketState) {
 		t.Errorf("manager cancels a waiting ticket: %v, want ErrTicketState", err)
+	}
+}
+
+// "Can be borrowed" thuộc về việc mượn: bật/tắt cần borrow.manage (người quản lý kho), đổi tên
+// loại vẫn cần type.manage
+func TestCanBorrowNeedsBorrowManage(t *testing.T) {
+	b := newBorrowEnv(t, time.Date(2026, 10, 30, 3, 0, 0, 0, time.UTC))
+	ty, err := b.svc.CreateAssetType(manager, domain.NewAssetType{Code: "CAM", Name: "Camera"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	on := true
+	officer := as(domain.PermAssetRead, domain.PermBorrowManage)
+	got, err := b.svc.UpdateAssetType(officer, ty.ID, nil, nil, &on, ty.Version)
+	if err != nil || !got.CanBorrow {
+		t.Fatalf("officer turns it on = %+v, %v", got, err)
+	}
+	typesOnly := as(domain.PermAssetRead, domain.PermTypeManage)
+	off := false
+	if _, err := b.svc.UpdateAssetType(typesOnly, ty.ID, nil, nil, &off, got.Version); status(err) != 403 {
+		t.Errorf("type.manage alone toggles it: %v, want 403", err)
+	}
+	name := "Cameras"
+	if _, err := b.svc.UpdateAssetType(officer, ty.ID, &name, nil, nil, got.Version); status(err) != 403 {
+		t.Errorf("borrow.manage alone renames the type: %v, want 403", err)
+	}
+	if _, err := b.svc.UpdateAssetType(typesOnly, ty.ID, &name, nil, nil, got.Version); err != nil {
+		t.Errorf("type.manage renames: %v", err)
 	}
 }

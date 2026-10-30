@@ -115,7 +115,9 @@ useTabDirty(() => isDirty(draft))
 useLeaveGuard(() => isDirty(draft))
 const saveOverview = useTypeOverviewSave()
 
-// "Can be borrowed" (US-10): lưu ngay khi bật/tắt, như cột Required
+// "Can be borrowed" (US-10): lưu ngay khi bật/tắt, như cột Required. Thuộc về việc mượn nên cần
+// quyền borrow.manage (người quản lý kho), không phải quyền sửa loại
+const canSwitchBorrow = computed(() => session.can(Perm.BorrowManage))
 const updateType = useUpdateAssetType()
 const savingBorrow = ref(false)
 async function setCanBorrow(on: boolean) {
@@ -255,7 +257,7 @@ const table = useListTable<Attribute>({ open: (a) => openAttribute(a), clickable
         <ToggleSwitch
           :model-value="type.can_borrow"
           input-id="type-can-borrow"
-          :disabled="!canManage || savingBorrow"
+          :disabled="!canSwitchBorrow || savingBorrow"
           @update:model-value="setCanBorrow"
         />
         <label for="type-can-borrow">

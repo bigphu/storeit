@@ -83,8 +83,8 @@ waiting ──approve (pick asset)──▶ approved ──hand over──▶ ha
 - An asset can be reserved or lent only if its type can be borrowed **and** its status is of
   kind `available`. Nothing per asset: to keep one specific asset in, give it an
   `unavailable` status as today.
-- *My call:* the switch follows the type's existing permission, `inventory.type.manage`
-  (Administrators and Authorized Managers), like every other type setting. Turning it off later
+- Decided with the user after the walk-through: the switch needs `inventory.borrow.manage`
+  (Administrators and Inventory Officers), since the people who run borrowing turn it on. Turning it off later
   doesn't touch existing reservations or loans; it only stops new ones.
 
 ## Statuses (decided with the user)
