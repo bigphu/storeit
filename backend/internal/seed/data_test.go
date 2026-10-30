@@ -53,7 +53,7 @@ func TestData_Shape(t *testing.T) {
 	if total != 300 {
 		t.Errorf("asset count = %d, want 300", total)
 	}
-	if len(accounts) != 6 || len(statuses) != 2 || len(profiles) != 3 {
+	if len(accounts) != 6 || len(statuses) != 1 || len(profiles) != 3 {
 		t.Errorf("accounts %d, statuses %d, profiles %d", len(accounts), len(statuses), len(profiles))
 	}
 	for _, p := range profiles {

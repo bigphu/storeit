@@ -65,6 +65,9 @@ type TicketCounts struct{ Waiting, Approved int64 }
 
 const maxBorrowerResults = 10
 
+// Today: ngày nghiệp vụ hôm nay (cmd/seed dùng để đặt ngày cho phiếu demo)
+func (s *Service) Today() time.Time { return s.today() }
+
 // today: ngày hiện tại theo múi giờ ứng dụng, ở dạng UTC 00:00 (khớp cột date)
 func (s *Service) today() time.Time {
 	y, m, d := s.now().In(s.loc).Date()

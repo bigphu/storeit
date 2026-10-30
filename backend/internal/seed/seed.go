@@ -44,6 +44,7 @@ type Deps struct {
 type Summary struct {
 	Skipped                                              bool
 	Accounts, Statuses, Types, Assets, Retired, Profiles int
+	Tickets, Loans                                       int
 }
 
 // Run ghi toàn bộ dữ liệu demo. DB đã có loại tài sản không phải hệ thống thì bỏ
@@ -71,6 +72,7 @@ func Run(ctx context.Context, d Deps) (Summary, error) {
 
 	var sum Summary
 	owners := map[string]uuid.UUID{}
+	people := map[string]uuid.UUID{} // email -> account
 	for _, a := range accounts {
 		id, err := d.Accounts.SeedAccount(ctx, a.Email, a.Name, d.Password, []uuid.UUID{a.Role})
 		if err != nil {
@@ -79,6 +81,7 @@ func Run(ctx context.Context, d Deps) (Summary, error) {
 		if a.Key != "" {
 			owners[a.Key] = id
 		}
+		people[a.Email] = id
 		sum.Accounts++
 	}
 
@@ -89,11 +92,13 @@ func Run(ctx context.Context, d Deps) (Summary, error) {
 	sum.Statuses = len(statuses)
 
 	r := rand.New(rand.NewPCG(20261006, 1))
+	typeIDs := map[string]uuid.UUID{} // code -> loại
 	for _, ts := range types {
 		t, err := d.Inventory.CreateAssetType(sys, newAssetType(ts))
 		if err != nil {
 			return sum, fmt.Errorf("seed: type %s: %w", ts.Code, err)
 		}
+		typeIDs[ts.Code] = t.ID
 		sum.Types++
 		made, retired, err := seedAssets(sys, d.Inventory, r, ts, t, st)
 		sum.Assets += made
@@ -101,6 +106,10 @@ func Run(ctx context.Context, d Deps) (Summary, error) {
 		if err != nil {
 			return sum, err
 		}
+	}
+
+	if sum.Tickets, sum.Loans, err = seedBorrowing(ctx, d.Inventory, people, typeIDs); err != nil {
+		return sum, err
 	}
 
 	for _, p := range profiles {
@@ -115,7 +124,7 @@ func Run(ctx context.Context, d Deps) (Summary, error) {
 
 // statusIDs: status dùng khi sinh tài sản
 type statusIDs struct {
-	inUse, loan, repair uuid.UUID
+	inUse, repair uuid.UUID
 }
 
 func seedStatuses(ctx context.Context, svc *service.Service) (statusIDs, error) {
@@ -134,10 +143,7 @@ func seedStatuses(ctx context.Context, svc *service.Service) (statusIDs, error) 
 		if err != nil {
 			return statusIDs{}, fmt.Errorf("seed: status %s: %w", spec.Name, err)
 		}
-		switch spec.Name {
-		case loanStatus:
-			ids.loan = s.ID
-		case repairStatus:
+		if spec.Name == repairStatus {
 			ids.repair = s.ID
 		}
 	}
@@ -148,7 +154,7 @@ func seedStatuses(ctx context.Context, svc *service.Service) (statusIDs, error) 
 }
 
 func newAssetType(ts typeSpec) domain.NewAssetType {
-	out := domain.NewAssetType{Code: ts.Code, Name: ts.Name, Description: ts.Description}
+	out := domain.NewAssetType{Code: ts.Code, Name: ts.Name, Description: ts.Description, CanBorrow: ts.Borrow}
 	for i, a := range ts.Attrs {
 		out.Attributes = append(out.Attributes, domain.NewAttribute{
 			Key: a.Key, Label: a.Label, DataType: a.Type, Unit: a.Unit, Required: a.Required,
@@ -187,10 +193,8 @@ func seedAssets(ctx context.Context, svc *service.Service, r *rand.Rand, ts type
 		}
 		roll := r.IntN(100)
 		switch {
-		case roll < 13:
-			in.StatusID = &st.inUse
 		case roll < 25:
-			in.StatusID = &st.loan
+			in.StatusID = &st.inUse
 		case roll < 30:
 			in.StatusID = &st.repair
 		}
@@ -211,4 +215,91 @@ func seedAssets(ctx context.Context, svc *service.Service, r *rand.Rand, ts type
 		}
 	}
 	return made, retired, nil
+}
+
+// seedBorrowing tạo phiếu mượn ở mọi trạng thái và hai khoản đang mượn (US-10), qua service như
+// người dùng thật: nhân viên gửi phiếu, người quản lý kho duyệt, giao, từ chối, cho mượn trực
+// tiếp. Thư được xếp như thường; địa chỉ @storeit.test bị mail guard bỏ.
+func seedBorrowing(ctx context.Context, svc *service.Service, people, typeIDs map[string]uuid.UUID) (int, int, error) {
+	as := func(email string, perms ...string) context.Context {
+		return auth.WithActor(ctx, auth.Actor{AccountID: people[email], Permissions: perms})
+	}
+	officer := as("officer@storeit.test", domain.PermAssetRead, domain.PermBorrowRequest, domain.PermBorrowManage)
+	today := svc.Today()
+	week := today.AddDate(0, 0, 7)
+	tickets, loans := 0, 0
+
+	ask := func(email, code, note string, reqs ...string) (service.TicketView, error) {
+		t, err := svc.CreateTicket(as(email, domain.PermBorrowRequest), service.TicketInput{
+			TypeID: typeIDs[code], Requirements: reqs, NeededFrom: today, ReturnBy: &week, Note: note,
+		})
+		if err != nil {
+			return t, fmt.Errorf("seed: ticket for %s by %s: %w", code, email, err)
+		}
+		tickets++
+		return t, nil
+	}
+	// free: tài sản đầu tiên của loại đang cho mượn được
+	free := func(code string) (domain.AssetListItem, error) {
+		id := typeIDs[code]
+		items, _, err := svc.ListAssets(officer, domain.AssetFilter{TypeID: &id, Borrowable: true, Sort: domain.SortTag, Limit: 1})
+		if err != nil || len(items) == 0 {
+			return domain.AssetListItem{}, fmt.Errorf("seed: no free %s: %w", code, err)
+		}
+		return items[0], nil
+	}
+
+	// ba phiếu đang chờ, một có yêu cầu thuộc tính
+	if _, err := ask("employee@storeit.test", "LAPTOP", "Client demo in Đà Nẵng", "ram_gb:gte:16"); err != nil {
+		return tickets, loans, err
+	}
+	if _, err := ask("nguyen.an@storeit.test", "MONITOR", ""); err != nil {
+		return tickets, loans, err
+	}
+	if _, err := ask("do.linh@storeit.test", "PHONE", "Field trip next week"); err != nil {
+		return tickets, loans, err
+	}
+	// đã duyệt, chờ nhận
+	t, err := ask("vo.minh@storeit.test", "LAPTOP", "")
+	if err != nil {
+		return tickets, loans, err
+	}
+	a, err := free("LAPTOP")
+	if err != nil {
+		return tickets, loans, err
+	}
+	if _, err := svc.ApproveTicket(officer, t.ID, a.ID, t.Version); err != nil {
+		return tickets, loans, fmt.Errorf("seed: approve: %w", err)
+	}
+	// đã giao: một khoản mượn theo phiếu
+	if t, err = ask("employee@storeit.test", "MONITOR", "Second screen for the audit"); err != nil {
+		return tickets, loans, err
+	}
+	if a, err = free("MONITOR"); err != nil {
+		return tickets, loans, err
+	}
+	ap, err := svc.ApproveTicket(officer, t.ID, a.ID, t.Version)
+	if err != nil {
+		return tickets, loans, fmt.Errorf("seed: approve: %w", err)
+	}
+	if _, err := svc.HandOverTicket(officer, t.ID, ap.Version); err != nil {
+		return tickets, loans, fmt.Errorf("seed: hand over: %w", err)
+	}
+	loans++
+	// bị từ chối
+	if t, err = ask("nguyen.an@storeit.test", "PROJECTOR", "Training on Friday"); err != nil {
+		return tickets, loans, err
+	}
+	if _, err := svc.RejectTicket(officer, t.ID, "No spare projector this week", t.Version); err != nil {
+		return tickets, loans, fmt.Errorf("seed: reject: %w", err)
+	}
+	// cho mượn trực tiếp, hạn hôm nay: từ mai thành quá hạn
+	if a, err = free("PHONE"); err != nil {
+		return tickets, loans, err
+	}
+	if _, err := svc.LendAsset(officer, a.ID, people["do.linh@storeit.test"], &today, a.Version); err != nil {
+		return tickets, loans, fmt.Errorf("seed: lend: %w", err)
+	}
+	loans++
+	return tickets, loans, nil
 }
