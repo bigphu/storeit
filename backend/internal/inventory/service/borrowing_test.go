@@ -25,6 +25,7 @@ type borrowEnv struct {
 	*env
 	borrowing *fakeBorrowing
 	accounts  borrowAccounts
+	mail      *fakeMail
 	typeID    uuid.UUID
 }
 
@@ -32,10 +33,10 @@ type borrowEnv struct {
 func newBorrowEnv(t *testing.T, now time.Time) *borrowEnv {
 	t.Helper()
 	e := &env{types: newFakeTypes(), statuses: newFakeStatuses(), assets: newFakeAssets(), profiles: newFakeProfiles()}
-	b := &borrowEnv{env: e, borrowing: newFakeBorrowing(), accounts: borrowAccounts{inactive: map[uuid.UUID]bool{}}}
+	b := &borrowEnv{env: e, borrowing: newFakeBorrowing(), accounts: borrowAccounts{inactive: map[uuid.UUID]bool{}}, mail: &fakeMail{}}
 	e.svc = New(Deps{
 		Types: e.types, Statuses: e.statuses, Assets: e.assets, Profiles: e.profiles, Accounts: b.accounts,
-		Borrowing: b.borrowing, Location: hcm, Now: func() time.Time { return now },
+		Borrowing: b.borrowing, Location: hcm, Now: func() time.Time { return now }, Mail: b.mail, AppURL: "http://app.test",
 	})
 	ty, err := e.svc.CreateAssetType(manager, domain.NewAssetType{Code: "PROJ", Name: "Projector", CanBorrow: true})
 	if err != nil {

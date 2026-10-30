@@ -172,6 +172,16 @@ the type isn't archived and its status is of kind `available` (`domain.Borrowabl
   ticket {id, number} (null for a direct loan), since, return_by, overdue_days}`.
 - **Activity:** kinds `reserved`, `reservation_cancelled`, `lent` carry `person` (who it was
   reserved for or lent to), `ticket_number` (absent for a direct loan) and `return_by`.
+- **Email** (worker; `inventory.RegisterWorkers` needs `Deps.Mail`): the requester gets
+  "Ticket #N approved: TAG is ready for pickup", "Ticket #N was not approved" (with the
+  reason) and, when a manager cancels an approved ticket, "Ticket #N was cancelled"; a
+  borrower gets "TAG was due back on D MMM" once per overdue loan. Jobs
+  (`inventory.send_borrowing_email`) are queued in the same transaction and re-read the ticket
+  or loan when they run: a ticket that moved on, a returned loan or a disabled account sends
+  nothing. The periodic `inventory.scan_overdue_loans` runs hourly and only queues from 08:00
+  in `INVENTORY_TIME_ZONE`, marking `overdue_notified_on`. Templates in `service/templates`,
+  links to `INVENTORY_APP_URL/borrowing/mine`, idempotency key
+  `inventory/borrowing/<kind>/<ticket or loan id>`.
 
 ## API (`/api/v1`) and permissions
 

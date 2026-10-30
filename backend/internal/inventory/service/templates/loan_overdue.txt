@@ -1,0 +1,6 @@
+{{define "loan_overdue.txt"}}Hello {{.Name}},
+
+Please return {{.Tag}} · {{.AssetName}} to the inventory team. It was due back on {{.Due}}.
+
+See your tickets: {{.Link}}
+{{end}}

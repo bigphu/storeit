@@ -1,0 +1,7 @@
+{{define "ticket_cancelled.txt"}}Hello {{.Name}},
+
+Your borrow ticket #{{.Number}} was cancelled by the inventory team.{{if .AssetName}} {{.Tag}} · {{.AssetName}} is no longer reserved for you.{{end}}
+{{if .Reason}}Reason: {{.Reason}}{{end}}
+
+See your tickets: {{.Link}}
+{{end}}

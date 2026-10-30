@@ -11,6 +11,7 @@ import (
 
 	idcontract "storeit/internal/identity/contract"
 	"storeit/internal/inventory/domain"
+	"storeit/internal/platform/mail"
 )
 
 type Deps struct {
@@ -29,6 +30,9 @@ type Deps struct {
 	Borrowing domain.BorrowingRepository
 	Location  *time.Location
 	Now       func() time.Time
+	// Mail gửi thư của việc mượn (chỉ worker cần); AppURL là địa chỉ frontend cho link trong thư
+	Mail   mail.Sender
+	AppURL string
 }
 
 type Service struct {
@@ -42,6 +46,8 @@ type Service struct {
 	borrowing     domain.BorrowingRepository
 	loc           *time.Location
 	now           func() time.Time
+	mail          mail.Sender
+	appURL        string
 }
 
 func New(d Deps) *Service {
@@ -58,7 +64,7 @@ func New(d Deps) *Service {
 	}
 	return &Service{
 		types: d.Types, statuses: d.Statuses, assets: d.Assets, profiles: d.Profiles, accounts: d.Accounts, events: d.Events,
-		exportMaxRows: maxRows, borrowing: d.Borrowing, loc: loc, now: now,
+		exportMaxRows: maxRows, borrowing: d.Borrowing, loc: loc, now: now, mail: d.Mail, appURL: d.AppURL,
 	}
 }
 

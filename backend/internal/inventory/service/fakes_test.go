@@ -12,6 +12,7 @@ import (
 
 	idcontract "storeit/internal/identity/contract"
 	"storeit/internal/inventory/domain"
+	"storeit/internal/platform/mail"
 )
 
 // Fake repository trong bộ nhớ: đủ để kiểm tra luật của service. SQL, khoá
@@ -665,6 +666,7 @@ func (fakeAccounts) SearchAccounts(context.Context, string, int) ([]idcontract.A
 type fakeBorrowing struct {
 	mu         sync.Mutex
 	tickets    map[uuid.UUID]domain.BorrowTicket
+	loans      map[uuid.UUID]domain.Loan
 	handOvers  int
 	lends      int
 	lastFilter domain.TicketFilter
@@ -672,7 +674,7 @@ type fakeBorrowing struct {
 }
 
 func newFakeBorrowing() *fakeBorrowing {
-	return &fakeBorrowing{tickets: map[uuid.UUID]domain.BorrowTicket{}}
+	return &fakeBorrowing{tickets: map[uuid.UUID]domain.BorrowTicket{}, loans: map[uuid.UUID]domain.Loan{}}
 }
 
 func (f *fakeBorrowing) CreateTicket(_ context.Context, n domain.NewBorrowTicket) (domain.BorrowTicket, error) {
@@ -788,8 +790,14 @@ func (f *fakeBorrowing) ApprovedTicketFor(context.Context, uuid.UUID) (*domain.B
 	return nil, nil
 }
 
-func (f *fakeBorrowing) GetLoan(context.Context, uuid.UUID) (domain.Loan, error) {
-	return domain.Loan{}, domain.ErrLoanNotFound
+func (f *fakeBorrowing) GetLoan(_ context.Context, id uuid.UUID) (domain.Loan, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	l, ok := f.loans[id]
+	if !ok {
+		return domain.Loan{}, domain.ErrLoanNotFound
+	}
+	return l, nil
 }
 
 func (f *fakeBorrowing) ListActiveLoans(context.Context, time.Time, int, int) ([]domain.Loan, int64, error) {
@@ -820,4 +828,21 @@ func (a borrowAccounts) GetAccounts(ctx context.Context, ids []uuid.UUID) ([]idc
 
 func (borrowAccounts) SearchAccounts(context.Context, string, int) ([]idcontract.Account, error) {
 	return nil, nil
+}
+
+// fakeMail ghi lại thư đã gửi
+type fakeMail struct {
+	mu   sync.Mutex
+	sent []mail.Message
+	err  error
+}
+
+func (f *fakeMail) Send(_ context.Context, m mail.Message) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return f.err
+	}
+	f.sent = append(f.sent, m)
+	return nil
 }

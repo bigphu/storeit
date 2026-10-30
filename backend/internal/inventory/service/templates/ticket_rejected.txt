@@ -1,0 +1,7 @@
+{{define "ticket_rejected.txt"}}Hello {{.Name}},
+
+Your borrow ticket #{{.Number}} was not approved.
+Reason: {{.Reason}}
+
+See your tickets: {{.Link}}
+{{end}}
