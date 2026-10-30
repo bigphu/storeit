@@ -56,6 +56,8 @@ type Querier interface {
 	GetExportProfileForUpdate(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error)
 	// Khoản mượn kèm số phiếu (0: cho mượn trực tiếp)
 	GetLoan(ctx context.Context, id uuid.UUID) (GetLoanRow, error)
+	// Khoản mượn sinh ra từ một phiếu (nhiều nhất một)
+	GetLoanByTicket(ctx context.Context, ticketID *uuid.UUID) (InventoryLoan, error)
 	GetOptionForUpdate(ctx context.Context, arg GetOptionForUpdateParams) (InventoryAssetAttributeOption, error)
 	// Liên kết của tài sản cũ, kèm tag và tên tài sản thay nó
 	GetReplacementByOld(ctx context.Context, oldAssetID uuid.UUID) (GetReplacementByOldRow, error)

@@ -108,7 +108,7 @@ func (h *Handler) LendAsset(ctx context.Context, req api.LendAssetRequestObject)
 
 func (h *Handler) ListLoans(ctx context.Context, req api.ListLoansRequestObject) (api.ListLoansResponseObject, error) {
 	page, size := paging(req.Params.Page, req.Params.PageSize)
-	loans, total, err := h.svc.ListLoans(ctx, string(deref(req.Params.Sort)), page, size)
+	loans, total, err := h.svc.ListLoans(ctx, false, string(deref(req.Params.Sort)), page, size)
 	if err != nil {
 		return nil, err
 	}

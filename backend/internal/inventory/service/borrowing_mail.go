@@ -42,6 +42,7 @@ type borrowEmail struct {
 	AssetName string
 	Reason    string
 	Due       string // "25 Oct 2026"
+	Returned  string // "3 Nov 2026"
 	Link      string
 	LogoURL   string
 }
@@ -99,6 +100,24 @@ func (s *Service) SendBorrowingEmail(ctx context.Context, args job.BorrowingEmai
 		to, key, due = l.BorrowerID, l.ID.String(), *l.ReturnBy
 		assetID = &l.AssetID
 		data.Due = due.Format("2 Jan 2006")
+	case job.EmailLoanReturned:
+		if args.LoanID == nil {
+			return errors.New("inventory: return email without loan")
+		}
+		l, err := s.borrowing.GetLoan(ctx, *args.LoanID)
+		if errors.Is(err, domain.ErrLoanNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if l.ReturnedOn == nil {
+			log.InfoContext(ctx, "borrowing email skipped, loan not returned", slog.String("loan_id", l.ID.String()))
+			return nil
+		}
+		to, key = l.BorrowerID, l.ID.String()
+		assetID = &l.AssetID
+		data.Returned = l.ReturnedOn.Format("2 Jan 2006")
 	default:
 		return fmt.Errorf("inventory: unknown borrowing email %q", args.EmailKind)
 	}
@@ -124,6 +143,7 @@ func (s *Service) SendBorrowingEmail(ctx context.Context, args job.BorrowingEmai
 		job.EmailTicketRejected:  fmt.Sprintf("Ticket #%d was not approved", data.Number),
 		job.EmailTicketCancelled: fmt.Sprintf("Ticket #%d was cancelled", data.Number),
 		job.EmailLoanOverdue:     fmt.Sprintf("%s was due back on %s", data.Tag, due.Format("2 Jan")),
+		job.EmailLoanReturned:    fmt.Sprintf("%s return recorded", data.Tag),
 	}[args.EmailKind]
 
 	var text, html bytes.Buffer

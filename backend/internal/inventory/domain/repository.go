@@ -223,6 +223,8 @@ type BorrowingRepository interface {
 	HandOver(ctx context.Context, ticketID uuid.UUID, startedOn time.Time, version int32) (BorrowTicket, Loan, error)
 	Lend(ctx context.Context, assetID, borrowerID uuid.UUID, startedOn time.Time, returnBy *time.Time, version int32) (Loan, error)
 	ActiveLoan(ctx context.Context, assetID uuid.UUID) (*Loan, error)
+	// LoanForTicket: khoản mượn của phiếu đã giao; nil khi phiếu chưa giao
+	LoanForTicket(ctx context.Context, ticketID uuid.UUID) (*Loan, error)
 	ApprovedTicketFor(ctx context.Context, assetID uuid.UUID) (*BorrowTicket, error)
 	GetLoan(ctx context.Context, id uuid.UUID) (Loan, error)
 	// ListActiveLoans: borrowerID nil là mọi người

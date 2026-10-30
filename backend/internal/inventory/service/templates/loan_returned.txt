@@ -1,0 +1,6 @@
+{{define "loan_returned.txt"}}Hello {{.Name}},
+
+We recorded {{.Tag}} · {{.AssetName}} as returned on {{.Returned}}. Thanks.
+
+See your tickets: {{.Link}}
+{{end}}

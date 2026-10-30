@@ -81,6 +81,10 @@ FROM inventory.loans l
 LEFT JOIN inventory.borrow_tickets t ON t.id = l.ticket_id
 WHERE l.id = @id;
 
+-- Khoản mượn sinh ra từ một phiếu (nhiều nhất một)
+-- name: GetLoanByTicket :one
+SELECT * FROM inventory.loans WHERE ticket_id = @ticket_id;
+
 -- name: GetActiveLoanForUpdate :one
 SELECT * FROM inventory.loans WHERE asset_id = @asset_id AND returned_on IS NULL FOR UPDATE;
 

@@ -27,7 +27,7 @@ type AssetEventReader interface {
 
 type ActivityEntry struct {
 	ID         uuid.UUID
-	Kind       string // "created" | "updated" | "retired" | "restored" | "replaced" | "replaces" | "replacement_undone" | "reserved" | "reservation_cancelled" | "lent" | "other"
+	Kind       string // "created" | "updated" | "retired" | "restored" | "replaced" | "replaces" | "replacement_undone" | "reserved" | "reservation_cancelled" | "lent" | "returned" | "other"
 	Type       string // event type gốc (để hiện "other")
 	OccurredAt time.Time
 	Actor      *ActivityActor // nil = hệ thống
@@ -39,6 +39,8 @@ type ActivityEntry struct {
 	Person       *ActivityActor
 	TicketNumber int64
 	ReturnBy     *time.Time
+	// StatusName: status sau khi trả (returned), rỗng khi tài sản về Available
+	StatusName string
 }
 
 // ActivityRelated: tài sản liên quan; Role chỉ có ở replacement_undone, là vai của tài sản
@@ -277,6 +279,14 @@ func resolveActivity(evts []events.Event, lk activityLookups) []ActivityEntry {
 					en.ReturnBy = &d
 				}
 			}
+		case contract.EventAssetReturned:
+			en.Kind = "returned"
+			if p, err := events.Decode[contract.AssetReturned](e); err == nil {
+				en.Person, en.TicketNumber = lk.actor(p.BorrowerID), p.TicketNumber
+				if st, found := lk.statuses[p.StatusID]; found && st.Kind != domain.KindAvailable {
+					en.StatusName = st.Name
+				}
+			}
 		case contract.EventAssetUpdated:
 			en.Kind = "updated"
 			p, err := events.Decode[contract.AssetUpdated](e)
@@ -443,6 +453,10 @@ func borrowingPerson(e events.Event) uuid.UUID {
 		}
 	case contract.EventAssetLent:
 		if p, err := events.Decode[contract.AssetLent](e); err == nil {
+			return p.BorrowerID
+		}
+	case contract.EventAssetReturned:
+		if p, err := events.Decode[contract.AssetReturned](e); err == nil {
 			return p.BorrowerID
 		}
 	}

@@ -392,6 +392,18 @@ func (r *BorrowingRepository) ActiveLoan(ctx context.Context, assetID uuid.UUID)
 	return &l, nil
 }
 
+func (r *BorrowingRepository) LoanForTicket(ctx context.Context, ticketID uuid.UUID) (*domain.Loan, error) {
+	row, err := r.q.GetLoanByTicket(ctx, &ticketID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("inventory: loan of ticket: %w", err)
+	}
+	l := toLoan(row, 0)
+	return &l, nil
+}
+
 func (r *BorrowingRepository) ApprovedTicketFor(ctx context.Context, assetID uuid.UUID) (*domain.BorrowTicket, error) {
 	row, err := r.q.GetApprovedTicketForAsset(ctx, &assetID)
 	if errors.Is(err, pgx.ErrNoRows) {

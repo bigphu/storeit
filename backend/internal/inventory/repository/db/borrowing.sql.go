@@ -373,6 +373,31 @@ func (q *Queries) GetLoan(ctx context.Context, id uuid.UUID) (GetLoanRow, error)
 	return i, err
 }
 
+const getLoanByTicket = `-- name: GetLoanByTicket :one
+SELECT id, asset_id, borrower_id, ticket_id, lent_by, started_on, return_by, returned_on, overdue_notified_on, created_at, returned_by, return_note FROM inventory.loans WHERE ticket_id = $1
+`
+
+// Khoản mượn sinh ra từ một phiếu (nhiều nhất một)
+func (q *Queries) GetLoanByTicket(ctx context.Context, ticketID *uuid.UUID) (InventoryLoan, error) {
+	row := q.db.QueryRow(ctx, getLoanByTicket, ticketID)
+	var i InventoryLoan
+	err := row.Scan(
+		&i.ID,
+		&i.AssetID,
+		&i.BorrowerID,
+		&i.TicketID,
+		&i.LentBy,
+		&i.StartedOn,
+		&i.ReturnBy,
+		&i.ReturnedOn,
+		&i.OverdueNotifiedOn,
+		&i.CreatedAt,
+		&i.ReturnedBy,
+		&i.ReturnNote,
+	)
+	return i, err
+}
+
 const handOverBorrowTicket = `-- name: HandOverBorrowTicket :one
 UPDATE inventory.borrow_tickets
 SET state = 'handed_over', version = version + 1, updated_at = now()

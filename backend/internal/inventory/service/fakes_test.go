@@ -784,9 +784,23 @@ func (f *fakeBorrowing) HandOver(_ context.Context, id uuid.UUID, startedOn time
 		return t, domain.Loan{}, err
 	}
 	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.handOvers++
-	f.mu.Unlock()
-	return t, domain.Loan{ID: uuid.New(), AssetID: *t.AssetID, BorrowerID: t.RequesterID, StartedOn: startedOn}, nil
+	ticket := t.ID
+	l := domain.Loan{ID: uuid.New(), AssetID: *t.AssetID, BorrowerID: t.RequesterID, TicketID: &ticket, TicketNumber: t.Number, StartedOn: startedOn}
+	f.loans[l.ID] = l
+	return t, l, nil
+}
+
+func (f *fakeBorrowing) LoanForTicket(_ context.Context, ticketID uuid.UUID) (*domain.Loan, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, l := range f.loans {
+		if l.TicketID != nil && *l.TicketID == ticketID {
+			return &l, nil
+		}
+	}
+	return nil, nil
 }
 
 func (f *fakeBorrowing) Lend(_ context.Context, assetID, borrowerID uuid.UUID, startedOn time.Time, returnBy *time.Time, _ int32) (domain.Loan, error) {

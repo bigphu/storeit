@@ -40,6 +40,15 @@ type TicketView struct {
 	TypeName       string
 	Asset          *AssetRef
 	SuggestedAsset *AssetRef
+	// Loan: khoản mượn của phiếu đã giao, chỉ có ở trang phiếu (GetTicket)
+	Loan *domain.Loan
+}
+
+// ReturnInput: ghi nhận trả; StatusID nil là status mặc định Available (tình trạng tốt)
+type ReturnInput struct {
+	ReturnedOn time.Time
+	StatusID   *uuid.UUID
+	Note       string
 }
 
 type LoanView struct {
@@ -179,7 +188,12 @@ func (s *Service) GetTicket(ctx context.Context, id uuid.UUID) (TicketView, erro
 	if err != nil {
 		return TicketView{}, err
 	}
-	return s.ticketView(ctx, tk)
+	v, err := s.ticketView(ctx, tk)
+	if err != nil || tk.State != domain.TicketHandedOver {
+		return v, err
+	}
+	v.Loan, err = s.borrowing.LoanForTicket(ctx, tk.ID)
+	return v, err
 }
 
 func (s *Service) visibleTicket(ctx context.Context, id uuid.UUID) (domain.BorrowTicket, error) {
@@ -334,6 +348,64 @@ func (s *Service) HandOverTicket(ctx context.Context, id uuid.UUID, version int3
 	return s.ticketView(ctx, out)
 }
 
+// ReturnLoan ghi nhận trả khoản mượn đang hiệu lực của tài sản (US-11): ngày trả từ ngày bắt
+// đầu tới hôm nay; tình trạng là status sau khi trả (không phải retired, Reserved, On loan hay
+// status đã lưu trữ)
+func (s *Service) ReturnLoan(ctx context.Context, assetID uuid.UUID, in ReturnInput, version int32) (AssetView, error) {
+	if _, err := auth.Require(ctx, domain.PermBorrowManage); err != nil {
+		return AssetView{}, err
+	}
+	loan, err := s.borrowing.ActiveLoan(ctx, assetID)
+	if err != nil {
+		return AssetView{}, err
+	}
+	if loan == nil {
+		return AssetView{}, domain.ErrNoActiveLoan
+	}
+	if err := domain.CheckReturnedOn(loan.StartedOn, in.ReturnedOn, s.today()); err != nil {
+		return AssetView{}, err
+	}
+	st, err := s.returnStatus(ctx, in.StatusID)
+	if err != nil {
+		return AssetView{}, err
+	}
+	note, err := cleanText(in.Note, domain.MaxTicketNote)
+	if err != nil {
+		return AssetView{}, loanField("note", "must be text up to 500 characters")
+	}
+	if _, err := s.borrowing.Return(ctx, assetID, domain.LoanReturn{ReturnedOn: in.ReturnedOn, StatusID: st, Note: note}, version); err != nil {
+		return AssetView{}, err
+	}
+	a, err := s.assets.Get(ctx, assetID)
+	if err != nil {
+		return AssetView{}, err
+	}
+	return s.view(ctx, a)
+}
+
+// returnStatus: status tài sản sau khi trả; nil là status mặc định của kind available
+func (s *Service) returnStatus(ctx context.Context, id *uuid.UUID) (uuid.UUID, error) {
+	if id == nil {
+		st, err := s.statuses.Default(ctx, domain.KindAvailable)
+		return st.ID, err
+	}
+	st, err := s.statuses.Get(ctx, *id)
+	if errors.Is(err, domain.ErrStatusNotFound) {
+		return uuid.Nil, loanField("status_id", "unknown status")
+	}
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if st.Archived() || st.Kind == domain.KindRetired || domain.IsBorrowingStatus(st.ID) {
+		return uuid.Nil, loanField("status_id", "pick a status an asset can be returned to")
+	}
+	return st.ID, nil
+}
+
+func loanField(field, detail string) error {
+	return domain.ErrInvalidLoan.With(errs.WithFields(errs.FieldError{Field: field, Detail: detail}))
+}
+
 // LendAsset cho mượn trực tiếp, bắt đầu hôm nay
 func (s *Service) LendAsset(ctx context.Context, assetID, borrowerID uuid.UUID, returnBy *time.Time, version int32) (AssetView, error) {
 	if _, err := auth.Require(ctx, domain.PermBorrowManage); err != nil {
@@ -359,12 +431,21 @@ func (s *Service) LendAsset(ctx context.Context, assetID, borrowerID uuid.UUID, 
 	return s.view(ctx, a)
 }
 
-func (s *Service) ListLoans(ctx context.Context, sort string, page, pageSize int) ([]LoanView, int64, error) {
-	if _, err := auth.Require(ctx, domain.PermBorrowManage); err != nil {
+// ListLoans: khoản đang mượn; mine là của chính actor (quyền mượn nào cũng được), không thì của
+// mọi người (borrow.manage)
+func (s *Service) ListLoans(ctx context.Context, mine bool, sort string, page, pageSize int) ([]LoanView, int64, error) {
+	var borrower *uuid.UUID
+	if mine {
+		actor, _, err := borrowActor(ctx)
+		if err != nil {
+			return nil, 0, err
+		}
+		borrower = &actor.AccountID
+	} else if _, err := auth.Require(ctx, domain.PermBorrowManage); err != nil {
 		return nil, 0, err
 	}
 	today := s.today()
-	loans, total, err := s.borrowing.ListActiveLoans(ctx, today, nil, sort, page, pageSize)
+	loans, total, err := s.borrowing.ListActiveLoans(ctx, today, borrower, sort, page, pageSize)
 	if err != nil {
 		return nil, 0, err
 	}
