@@ -66,7 +66,7 @@ export function useCreateAssetType() {
 
 export function useUpdateAssetType() {
   return useTypeMutation(
-    ({ id, ...body }: { id: string; name: string; description: string; version: number }) =>
+    ({ id, ...body }: { id: string; name?: string; description?: string; can_borrow?: boolean; version: number }) =>
       unwrap(inventoryApi.PATCH('/asset-types/{typeID}', { ...typePath(id), body })),
     false,
   )

@@ -18,6 +18,12 @@ import { useSession } from '@/lib/auth/session'
 import { formatDate, formatDateTime } from '@/lib/dates'
 import { usePageKeys } from '@/lib/pageKeys'
 import { kindSeverity } from '@/features/statuses/api'
+import { useAssetType } from '@/features/asset-types/api'
+import { useTicket } from '@/features/borrowing/api'
+import { overdueLabel } from '@/features/borrowing/borrowing'
+import LendDialog from '@/features/borrowing/components/LendDialog.vue'
+import NewTicketDialog from '@/features/borrowing/components/NewTicketDialog.vue'
+import { useTicketActions } from '@/features/borrowing/useTicketActions'
 import { fetchAssetPage, useAsset } from '../api'
 import AssetActivity from '../components/AssetActivity.vue'
 import ReplaceDialog from '../components/ReplaceDialog.vue'
@@ -44,6 +50,18 @@ const tab = ref<'details' | 'activity'>('details')
 // hộp "Replace" (US-13)
 const replaceOpen = ref(false)
 const retired = computed(() => !!asset.value?.retired_at)
+
+// Mượn (US-10): đang giữ chỗ / đang cho mượn thì không retire, thay hay đổi status được;
+// tài sản rảnh của loại cho mượn được thì cho mượn trực tiếp hay gửi phiếu "Borrow this…"
+const borrowing = computed(() => asset.value?.borrowing ?? null)
+const { data: assetType } = useAssetType(() => asset.value?.asset_type.id)
+const borrowable = computed(() => !retired.value && asset.value?.status.kind === 'available' && !!assetType.value?.can_borrow)
+const canLend = computed(() => borrowable.value && session.can(Perm.BorrowManage))
+const canAsk = computed(() => borrowable.value && session.can(Perm.BorrowRequest))
+const ticketActions = useTicketActions()
+const { data: heldTicket } = useTicket(() => (borrowing.value?.state === 'reserved' ? borrowing.value.ticket?.id : undefined))
+const lendOpen = ref(false)
+const askOpen = ref(false)
 useTabTitle(() => asset.value?.tag)
 
 // Danh sách đã mở trước đó (nếu tài sản này nằm trong nó): quay lại và bước qua kết quả
@@ -106,19 +124,29 @@ usePageKeys((e) => {
       </span>
     </div>
 
-    <div v-if="canManage" class="actions page-actions">
-      <template v-if="!retired">
-        <Button aria-label="Edit (E)" @click="(e: MouseEvent) => actions.edit(asset!, e)">
-          <i class="pi pi-pencil" aria-hidden="true" />
-          <span>Edit</span>
-          <KeyHint keys="E" />
-        </Button>
-        <Button label="Retire" icon="pi pi-ban" severity="secondary" outlined @click="actions.askRetire(asset)" />
-        <Button label="Replace…" icon="pi pi-sync" severity="secondary" outlined @click="replaceOpen = true" />
+    <div v-if="canManage || canLend || canAsk || (heldTicket && ticketActions.canManage.value)" class="actions page-actions">
+      <template v-if="canManage">
+        <template v-if="!retired">
+          <Button aria-label="Edit (E)" @click="(e: MouseEvent) => actions.edit(asset!, e)">
+            <i class="pi pi-pencil" aria-hidden="true" />
+            <span>Edit</span>
+            <KeyHint keys="E" />
+          </Button>
+          <template v-if="!borrowing">
+            <Button label="Retire" icon="pi pi-ban" severity="secondary" outlined @click="actions.askRetire(asset)" />
+            <Button label="Replace…" icon="pi pi-sync" severity="secondary" outlined @click="replaceOpen = true" />
+          </template>
+        </template>
+        <!-- tài sản bị thay: khôi phục là hoàn tác thay thế -->
+        <Button v-else-if="asset.replaced_by" label="Undo replacement" icon="pi pi-undo" @click="actions.undoReplacement(asset)" />
+        <Button v-else label="Restore" icon="pi pi-replay" @click="actions.restore(asset)" />
       </template>
-      <!-- tài sản bị thay: khôi phục là hoàn tác thay thế -->
-      <Button v-else-if="asset.replaced_by" label="Undo replacement" icon="pi pi-undo" @click="actions.undoReplacement(asset)" />
-      <Button v-else label="Restore" icon="pi pi-replay" @click="actions.restore(asset)" />
+      <template v-if="heldTicket && ticketActions.canManage.value">
+        <Button label="Hand over" icon="pi pi-arrow-right-arrow-left" @click="ticketActions.doHandOver(heldTicket)" />
+        <Button label="Cancel reservation" severity="secondary" outlined @click="ticketActions.doCancel(heldTicket)" />
+      </template>
+      <Button v-if="canLend" label="Lend…" icon="pi pi-arrow-right-arrow-left" severity="secondary" outlined @click="lendOpen = true" />
+      <Button v-if="canAsk" label="Borrow this…" icon="pi pi-ticket" severity="secondary" outlined @click="askOpen = true" />
     </div>
 
     <!-- Details | Activity: lịch sử hoạt động của tài sản -->
@@ -168,6 +196,36 @@ usePageKeys((e) => {
                 <RouterLink v-if="canManageTypes" :to="`/types/${asset.asset_type.id}/settings`">Add some in the type's settings</RouterLink>
               </p>
             </Panel>
+            <!-- đang giữ chỗ hay đang cho mượn (US-10) -->
+            <Panel v-if="borrowing" header="Borrowing">
+              <dl class="props">
+                <template v-if="borrowing.state === 'reserved'">
+                  <dt>Reserved for</dt>
+                  <dd>
+                    {{ borrowing.account.name }}
+                    <template v-if="borrowing.ticket">
+                      · <RouterLink :to="`/borrowing/tickets/${borrowing.ticket.id}`">ticket #{{ borrowing.ticket.number }}</RouterLink>
+                    </template>
+                  </dd>
+                </template>
+                <template v-else>
+                  <dt>On loan to</dt>
+                  <dd>
+                    {{ borrowing.account.name }}
+                    <template v-if="borrowing.ticket">
+                      · <RouterLink :to="`/borrowing/tickets/${borrowing.ticket.id}`">ticket #{{ borrowing.ticket.number }}</RouterLink>
+                    </template>
+                  </dd>
+                  <dt>Since</dt>
+                  <dd>{{ formatDate(borrowing.since) }}</dd>
+                </template>
+                <dt>Return by</dt>
+                <dd>
+                  {{ borrowing.return_by ? formatDate(borrowing.return_by) : 'Not set' }}
+                  <Tag v-if="borrowing.overdue_days > 0" :value="overdueLabel(borrowing.overdue_days)" severity="danger" class="overdue" />
+                </dd>
+              </dl>
+            </Panel>
             <!-- liên kết thay thế: lần ngược nguồn gốc qua "Replaces" -->
             <Panel v-if="asset.replaced_by || asset.replaces.length" header="Replacement">
               <dl class="props">
@@ -202,10 +260,15 @@ usePageKeys((e) => {
     <!-- luôn gắn (không v-if theo retired): thay xong tài sản retire ngay, hộp bị gỡ trước khi
          kịp báo đóng thì replaceOpen kẹt true và hộp tự mở lại khi Undo -->
     <ReplaceDialog v-model:visible="replaceOpen" :asset="asset" :type-id="asset.asset_type.id" />
+    <LendDialog v-model:visible="lendOpen" :asset="asset" />
+    <NewTicketDialog v-model:visible="askOpen" :preset-type-id="asset.asset_type.id" :suggested="{ id: asset.id, tag: asset.tag }" />
   </section>
 </template>
 
 <style scoped>
+.overdue {
+  margin-left: 0.4rem;
+}
 .pre {
   white-space: pre-wrap;
 }

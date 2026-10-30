@@ -33,7 +33,7 @@ export function fieldFilterLabel(f: FieldFilterRow): string {
 }
 
 export type FilterChip =
-  | { kind: 'search' | 'status' | 'statusKind' | 'retired'; label: string }
+  | { kind: 'search' | 'status' | 'statusKind' | 'retired' | 'borrowable'; label: string }
   | { kind: 'attr'; label: string; index: number }
   | { kind: 'field'; label: string; index: number }
 
@@ -47,6 +47,7 @@ export function filterChips(
   if (s.statusId) chips.push({ kind: 'status', label: `Status: ${statuses.find((x) => x.id === s.statusId)?.name ?? '…'}` })
   if (s.statusKind) chips.push({ kind: 'statusKind', label: `Status kind: ${s.statusKind.replace('_', ' ')}` })
   if (s.includeRetired) chips.push({ kind: 'retired', label: 'Including retired' })
+  if (s.borrowable) chips.push({ kind: 'borrowable', label: 'Borrowable now' })
   s.filters.forEach((f, index) => chips.push({ kind: 'attr', label: attrFilterLabel(f, attrs), index }))
   s.fields.forEach((f, index) => chips.push({ kind: 'field', label: fieldFilterLabel(f), index }))
   return chips
@@ -63,6 +64,8 @@ export function removeChip(s: AssetListState, chip: FilterChip): Partial<AssetLi
       return { statusKind: undefined, page: 1 }
     case 'retired':
       return { includeRetired: false, page: 1 }
+    case 'borrowable':
+      return { borrowable: undefined, page: 1 }
     case 'attr':
       return { filters: s.filters.filter((_, i) => i !== chip.index), page: 1 }
     case 'field':

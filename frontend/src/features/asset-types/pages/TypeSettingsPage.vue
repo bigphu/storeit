@@ -7,6 +7,7 @@ import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
 import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
+import ToggleSwitch from 'primevue/toggleswitch'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useLeaveGuard, useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
@@ -28,7 +29,7 @@ import { describeError } from '@/lib/errors'
 import { notify } from '@/lib/notify'
 import { useListTable, useRowMenu } from '@/lib/tableRows'
 import { useUrlState } from '@/lib/urlState'
-import { useAssetType, useAssetTypes, useRemoveAttribute, useReorderAttributes, useRestoreAttribute, useUpdateAttribute } from '../api'
+import { useAssetType, useAssetTypes, useRemoveAttribute, useReorderAttributes, useRestoreAttribute, useUpdateAssetType, useUpdateAttribute } from '../api'
 import { useTypeArchive, useTypeOverviewSave } from '../overviewSave'
 import AttributeDialog from '../components/AttributeDialog.vue'
 import OptionsDialog from '../components/OptionsDialog.vue'
@@ -113,6 +114,23 @@ const draft = reactive(emptyDraft())
 useTabDirty(() => isDirty(draft))
 useLeaveGuard(() => isDirty(draft))
 const saveOverview = useTypeOverviewSave()
+
+// "Can be borrowed" (US-10): lưu ngay khi bật/tắt, như cột Required
+const updateType = useUpdateAssetType()
+const savingBorrow = ref(false)
+async function setCanBorrow(on: boolean) {
+  const t = type.value
+  if (!t) return
+  savingBorrow.value = true
+  try {
+    await updateType.mutateAsync({ id: t.id, can_borrow: on, version: t.version })
+    notify.success(on ? `${t.name} can be borrowed.` : `${t.name} can't be borrowed anymore.`)
+  } catch (err) {
+    notify.error(describeError(err))
+  } finally {
+    savingBorrow.value = false
+  }
+}
 const saving = ref(false)
 async function save() {
   const t = type.value
@@ -233,6 +251,18 @@ const table = useListTable<Attribute>({ open: (a) => openAttribute(a), clickable
 
     <template v-if="state.tab === 'overview'">
       <OverviewFields :fields="fields" :saved="saved" :draft="draft" :readonly="!canManage" />
+      <div class="borrow-row">
+        <ToggleSwitch
+          :model-value="type.can_borrow"
+          input-id="type-can-borrow"
+          :disabled="!canManage || savingBorrow"
+          @update:model-value="setCanBorrow"
+        />
+        <label for="type-can-borrow">
+          <strong>Can be borrowed</strong>
+          <span class="borrow-hint">Employees can ask to borrow available {{ type.name }} assets, and the inventory team can lend them.</span>
+        </label>
+      </div>
       <SaveBar v-if="canManage && changeCount(draft, 'overview')" :count="changeCount(draft, 'overview')" :saving="saving" @save="save" @discard="discard" />
     </template>
 
@@ -314,6 +344,21 @@ const table = useListTable<Attribute>({ open: (a) => openAttribute(a), clickable
 </template>
 
 <style scoped>
+.borrow-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-top: 1rem;
+}
+.borrow-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.borrow-hint {
+  color: var(--p-text-muted-color);
+  font-size: 0.9rem;
+}
 .section-tabs {
   margin-bottom: 1rem;
 }
