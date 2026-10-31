@@ -1,10 +1,10 @@
 module storeit
 
-go 1.26.4
+go 1.26.10
 
 require (
 	github.com/caarlos0/env/v11 v11.4.1
-	github.com/getkin/kin-openapi v0.142.0
+	github.com/getkin/kin-openapi v0.144.0
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-playground/validator/v10 v10.30.5
 	github.com/golang-jwt/jwt/v5 v5.3.1
@@ -18,8 +18,8 @@ require (
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	github.com/wneessen/go-mail v0.8.1
-	github.com/xuri/excelize/v2 v2.11.0
-	golang.org/x/crypto v0.57.0
+	github.com/xuri/excelize/v2 v2.11.1-0.20260915055537-22f76f9acb94
+	golang.org/x/crypto v0.58.0
 	golang.org/x/time v0.16.0
 )
 
@@ -83,12 +83,12 @@ require (
 	github.com/mfridman/xflag v0.1.0 // indirect
 	github.com/microsoft/go-mssqldb v1.11.0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
-	github.com/moby/go-archive v0.2.0 // indirect
+	github.com/moby/go-archive v0.3.0 // indirect
 	github.com/moby/moby/api v1.55.0 // indirect
 	github.com/moby/moby/client v0.5.1 // indirect
 	github.com/moby/patternmatcher v0.6.1 // indirect
 	github.com/moby/sys/sequential v0.7.0 // indirect
-	github.com/moby/sys/user v0.4.0 // indirect
+	github.com/moby/sys/user v0.4.1 // indirect
 	github.com/moby/sys/userns v0.1.0 // indirect
 	github.com/moby/term v0.5.2 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
@@ -103,7 +103,7 @@ require (
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/prometheus/procfs v0.22.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/richardlehane/mscfb v1.0.7 // indirect
+	github.com/richardlehane/mscfb v1.0.8 // indirect
 	github.com/richardlehane/msoleps v1.0.6 // indirect
 	github.com/riverqueue/river/riverdriver v0.47.0 // indirect
 	github.com/riverqueue/river/rivershared v0.47.0 // indirect
@@ -141,11 +141,11 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/exp v0.0.0-20260824195058-e88cd73687aa // indirect
 	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
-	golang.org/x/text v0.42.0 // indirect
-	golang.org/x/tools v0.49.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
+	golang.org/x/tools v0.51.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260831171406-18b4a7587f8a // indirect
 	google.golang.org/grpc v1.83.2 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
-ARG NODE_VERSION=24
-ARG NGINX_VERSION=1.30
+ARG NODE_VERSION=24.22.1
+ARG NGINX_VERSION=1.30.6
 
 # --- Dev: Vite với source mount từ host (compose.yml), node_modules trong volume ---
 FROM node:${NODE_VERSION}-alpine AS dev

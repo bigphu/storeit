@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG GO_VERSION=1.26.4
+ARG GO_VERSION=1.26.10
 ARG AIR_VERSION=v1.67.4
 
 # --- Base: toolchain + module cache (được dev & build dùng) ---
