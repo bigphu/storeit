@@ -1,0 +1,21 @@
+---
+title: Storeit
+description: Asset management for a small organisation — track what you own, who holds it and what state it is in.
+template: splash
+---
+
+Storeit is an asset management app. A Go backend (modular monolith) serves a Vue single-page app;
+Postgres holds everything, and a worker sends email and runs background jobs.
+
+## Start here
+
+- [Getting started](/guides/getting-started/): run the Docker stack, demo data and accounts, production setup.
+- [Architecture](/guides/architecture/): the services, the backend layers and how a request flows.
+- [Sign-in and sessions](/guides/authentication/): tokens, refresh rotation, invitations and password reset.
+- [Roles and permissions](/guides/roles-and-permissions/): who can do what.
+- [Inventory model](/guides/inventory-model/): asset types, custom attributes, statuses, assets and search.
+- [Exporting assets](/guides/exporting-assets/): Excel data export, reports and export profiles.
+- [Configuration and operations](/guides/operations/): environment variables, `make` targets, CI and deployment.
+- [Adding a backend module](/guides/writing-a-module/): the checklist for a new module.
+
+Generated reference pages (Go packages, SQL, Vue components, Postgres) appear in the sidebar once you run `devdocs build`.

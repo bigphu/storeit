@@ -1,0 +1,35 @@
+# devdocs configuration. Reference: https://github.com (see PLUGINS.md)
+
+[site]
+title = "Storeit"
+description = ""
+
+[theme]
+accent = "#6d5dfc"
+
+[[sources]]
+plugin = "postgres"
+path = "."
+
+[sources.options]
+files = ["backend/migrations/*.sql"]
+
+[[sources]]
+plugin = "go"
+path = "backend"
+name = "go-backend"
+
+[[sources]]
+plugin = "sql"
+path = "backend"
+name = "sql-backend"
+
+[[sources]]
+plugin = "vue"
+path = "frontend"
+name = "vue-frontend"
+
+# Publish with `devdocs deploy`:
+# [deploy]
+# adapter = "cloudflare-pages"   # cloudflare-pages | netlify | github-pages | command
+# project = "my-project"
