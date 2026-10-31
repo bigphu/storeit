@@ -88,6 +88,9 @@ describe('borrowing routes', () => {
     expect(r.name).toBe('my-loans')
     expect(r.meta.perm).toBe(Perm.BorrowRequest)
   })
+  it('calls the loans page Loans', () => {
+    expect(router.resolve('/borrowing/loans').meta.title).toBe('Loans')
+  })
   it('keeps the queue and the loans to managers', () => {
     expect(router.resolve('/borrowing/tickets').meta.perm).toBe(Perm.BorrowManage)
     expect(router.resolve('/borrowing/loans').meta.perm).toBe(Perm.BorrowManage)

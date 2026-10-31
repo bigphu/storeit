@@ -81,7 +81,7 @@ const workspace = computed<NavItem[]>(() => {
         count: ticketCounts.value?.waiting || undefined,
         active: name.value === 'tickets' || name.value === 'ticket',
       },
-      { label: 'On loan', icon: 'pi pi-clock', route: '/borrowing/loans', active: name.value === 'loans' },
+      { label: 'Loans', icon: 'pi pi-clock', route: '/borrowing/loans', active: name.value === 'loans' },
     )
   }
   if (borrowing.length) items.push({ label: 'Borrowing', items: borrowing })
