@@ -41,14 +41,13 @@ page has a Loans tab, and `My loans` shows a person's own loans.
 ## Emails
 
 The worker sends these, in the background, and skips them when they no longer apply (the request moved on, the
-loan was returned, or the account was disabled). The emails still call a request "Ticket #N", the number
-shown in the app as `REQ-000N`:
+loan was returned, or the account was disabled):
 
 | When | To | Subject |
 |---|---|---|
-| Request approved | Requester | Ticket #N approved: TAG is ready for pickup |
-| Request rejected | Requester | Ticket #N was not approved (with the reason) |
-| Approved request cancelled by the team | Requester | Ticket #N was cancelled |
+| Request approved | Requester | REQ-0004 approved: TAG is ready for pickup |
+| Request rejected | Requester | REQ-0004 was not approved (with the reason) |
+| Approved request cancelled by the team | Requester | REQ-0004 was cancelled |
 | Loan overdue (once, from 08:00 local time) | Borrower | TAG was due back on D MMM |
 | Return recorded | Borrower | TAG return recorded |
 

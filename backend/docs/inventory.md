@@ -200,8 +200,9 @@ the type isn't archived and its status is of kind `available` (`domain.Borrowabl
   loan) and `return_by`; `returned` has `status_name` when the asset did not go back to
   Available.
 - **Email** (worker; `inventory.RegisterWorkers` needs `Deps.Mail`): the requester gets
-  "Ticket #N approved: TAG is ready for pickup", "Ticket #N was not approved" (with the
-  reason) and, when a manager cancels an approved ticket, "Ticket #N was cancelled"; a
+  "REQ-0004 approved: TAG is ready for pickup", "REQ-0004 was not approved" (with the
+  reason) and, when a manager cancels an approved ticket, "REQ-0004 was cancelled" (the
+  ticket number as `REQ-%04d`, like the app); a
   borrower gets "TAG was due back on D MMM" once per overdue loan and "TAG return recorded"
   when a return is recorded. Jobs
   (`inventory.send_borrowing_email`) are queued in the same transaction and re-read the ticket

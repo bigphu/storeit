@@ -2,5 +2,5 @@
 
 Please return {{.Tag}} · {{.AssetName}} to the inventory team. It was due back on {{.Due}}.
 
-See your tickets: {{.Link}}
+See your requests: {{.Link}}
 {{end}}

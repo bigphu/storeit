@@ -1,7 +1,7 @@
 {{define "ticket_approved.txt"}}Hello {{.Name}},
 
-Your borrow ticket #{{.Number}} is approved. {{.Tag}} · {{.AssetName}} is reserved for you.
+Your request {{.Code}} is approved. {{.Tag}} · {{.AssetName}} is reserved for you.
 Contact the inventory team to pick it up.
 
-See your tickets: {{.Link}}
+See your requests: {{.Link}}
 {{end}}

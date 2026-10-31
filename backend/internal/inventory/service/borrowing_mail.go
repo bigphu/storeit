@@ -38,6 +38,7 @@ const overdueScanHour = 8
 type borrowEmail struct {
 	Name      string
 	Number    int64
+	Code      string // "REQ-0004": số phiếu như app hiện (requestCode ở frontend)
 	Tag       string
 	AssetName string
 	Reason    string
@@ -81,7 +82,7 @@ func (s *Service) SendBorrowingEmail(ctx context.Context, args job.BorrowingEmai
 			return nil
 		}
 		to, assetID, key = tk.RequesterID, tk.AssetID, tk.ID.String()
-		data.Number, data.Reason = tk.Number, tk.Reason
+		data.Number, data.Code, data.Reason = tk.Number, requestCode(tk.Number), tk.Reason
 	case job.EmailLoanOverdue:
 		if args.LoanID == nil {
 			return errors.New("inventory: overdue email without loan")
@@ -139,9 +140,9 @@ func (s *Service) SendBorrowingEmail(ctx context.Context, args job.BorrowingEmai
 		data.Tag, data.AssetName = a.Tag, a.Name
 	}
 	subject := map[string]string{
-		job.EmailTicketApproved:  fmt.Sprintf("Ticket #%d approved: %s is ready for pickup", data.Number, data.Tag),
-		job.EmailTicketRejected:  fmt.Sprintf("Ticket #%d was not approved", data.Number),
-		job.EmailTicketCancelled: fmt.Sprintf("Ticket #%d was cancelled", data.Number),
+		job.EmailTicketApproved:  fmt.Sprintf("%s approved: %s is ready for pickup", data.Code, data.Tag),
+		job.EmailTicketRejected:  fmt.Sprintf("%s was not approved", data.Code),
+		job.EmailTicketCancelled: fmt.Sprintf("%s was cancelled", data.Code),
 		job.EmailLoanOverdue:     fmt.Sprintf("%s was due back on %s", data.Tag, due.Format("2 Jan")),
 		job.EmailLoanReturned:    fmt.Sprintf("%s return recorded", data.Tag),
 	}[args.EmailKind]
@@ -182,3 +183,6 @@ func (s *Service) ScanOverdueLoans(ctx context.Context) error {
 		}
 	}
 }
+
+// requestCode: số phiếu mượn như app hiện, REQ-0004 (ít nhất 4 chữ số)
+func requestCode(n int64) string { return fmt.Sprintf("REQ-%04d", n) }

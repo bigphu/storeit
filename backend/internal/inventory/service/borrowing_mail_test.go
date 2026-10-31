@@ -49,10 +49,10 @@ func TestSendBorrowingEmail(t *testing.T) {
 	if m.To.Email != requester.String()[:8]+"@storeit.test" {
 		t.Errorf("to = %+v, want the requester", m.To)
 	}
-	if m.Subject != "Ticket #1 approved: LAP-0042 is ready for pickup" {
+	if m.Subject != "REQ-0001 approved: LAP-0042 is ready for pickup" {
 		t.Errorf("subject = %q", m.Subject)
 	}
-	for _, want := range []string{"LAP-0042 · Dell Latitude 7440", "http://app.test/borrowing/mine"} {
+	for _, want := range []string{"Your request REQ-0001", "LAP-0042 · Dell Latitude 7440", "http://app.test/borrowing/mine"} {
 		if !strings.Contains(m.Text, want) || !strings.Contains(m.HTML, want) {
 			t.Errorf("text or HTML lacks %q:\n%s", want, m.Text)
 		}
