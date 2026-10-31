@@ -232,7 +232,7 @@ onBeforeUnmount(() => {
 .topbar {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 1fr auto 1fr; /* Forces perfect centering of the middle item */
+  grid-template-columns: 1fr minmax(15rem, 30rem) 1fr; /* Forces perfect centering of the middle item */
   align-items: center;
   padding: 0.5rem 1rem;
   background: var(--p-content-background);
@@ -249,6 +249,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  width: 100%;
 }
 .topbar-right {
   display: flex;
@@ -266,6 +267,7 @@ onBeforeUnmount(() => {
 }
 /* ô "Go to asset type…" trông như ô tìm kiếm */
 .go-type {
+  flex: 1;
   gap: 2rem;
   justify-content: space-between;
   min-width: 15rem;
