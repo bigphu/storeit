@@ -108,14 +108,14 @@ func TestListLoans_Mine(t *testing.T) {
 	if _, _, err := b.svc.ListLoans(asAccount(me, domain.PermBorrowRequest), true, "", 1, 50); err != nil {
 		t.Fatal(err)
 	}
-	if f := b.borrowing.loansOf; f == nil || *f != me {
+	if f := b.borrowing.lastLoanFilter.BorrowerID; f == nil || *f != me {
 		t.Errorf("mine: borrower filter = %v, want the actor", f)
 	}
 	if _, _, err := b.svc.ListLoans(asAccount(me, domain.PermBorrowRequest), false, "", 1, 50); status(err) != 403 {
 		t.Errorf("everyone's loans without manage = %v, want 403", err)
 	}
-	if _, _, err := b.svc.ListLoans(officer, false, "", 1, 50); err != nil || b.borrowing.loansOf != nil {
-		t.Errorf("manager, everyone: err %v, filter %v", err, b.borrowing.loansOf)
+	if _, _, err := b.svc.ListLoans(officer, false, "", 1, 50); err != nil || b.borrowing.lastLoanFilter.BorrowerID != nil {
+		t.Errorf("manager, everyone: err %v, filter %v", err, b.borrowing.lastLoanFilter.BorrowerID)
 	}
 }
 
