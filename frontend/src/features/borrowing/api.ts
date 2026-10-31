@@ -25,7 +25,8 @@ export const borrowKeys = {
 export function useTickets(params: MaybeRefOrGetter<TicketParams>) {
   return useQuery({
     queryKey: computed(() => borrowKeys.tickets(toValue(params))),
-    queryFn: () => unwrap(inventoryApi.GET('/borrow-tickets', { params: { query: toValue(params) } })),
+    // tham số lấy từ khoá, không từ ref (lib/queryKeyId.ts)
+    queryFn: ({ queryKey }) => unwrap(inventoryApi.GET('/borrow-tickets', { params: { query: queryKey[2] } })),
     placeholderData: keepPreviousData,
   })
 }
@@ -51,7 +52,7 @@ export function useTicketCounts(enabled: MaybeRefOrGetter<boolean>) {
 export function useLoans(params: MaybeRefOrGetter<LoanParams>) {
   return useQuery({
     queryKey: computed(() => borrowKeys.loans(toValue(params))),
-    queryFn: () => unwrap(inventoryApi.GET('/loans', { params: { query: toValue(params) } })),
+    queryFn: ({ queryKey }) => unwrap(inventoryApi.GET('/loans', { params: { query: queryKey[2] } })),
     placeholderData: keepPreviousData,
   })
 }

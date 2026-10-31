@@ -36,7 +36,7 @@ export function statusesQuery(includeArchived: boolean, withCounts: boolean) {
 export function useStatuses(includeArchived: MaybeRefOrGetter<boolean> = false, withCounts = false) {
   return useQuery({
     queryKey: computed(() => statusesQuery(toValue(includeArchived), withCounts).queryKey),
-    queryFn: () => statusesQuery(toValue(includeArchived), withCounts).queryFn(),
+    queryFn: ({ queryKey }) => statusesQuery(queryKey[1], queryKey[2]).queryFn(),
   })
 }
 

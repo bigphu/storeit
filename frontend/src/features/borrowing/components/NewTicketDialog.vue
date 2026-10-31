@@ -20,6 +20,7 @@ import type { AttrFilterRow } from '@/features/assets/listQuery'
 import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
 import { useBusinessDay, useCreateTicket } from '../api'
 import { requestCode, ticketFormError } from '../borrowing'
+import { keyId } from '@/lib/queryKeyId'
 
 // Phiếu mượn mới: loại tài sản cho mượn được, yêu cầu thuộc tính chọn bằng bộ lọc của danh
 // sách (đếm ngay số tài sản khớp và đang rảnh), ngày cần, hạn trả (tuỳ chọn), ghi chú.
@@ -73,10 +74,11 @@ watch(typeId, (id, old) => {
 const reqStrings = computed(() => reqs.value.map((f) => `${f.key}:${f.op}:${f.value}`))
 const matches = useQuery({
   queryKey: computed(() => [...assetKeys.all, 'borrowable-count', typeId.value ?? '', reqStrings.value] as const),
-  queryFn: () =>
+  // loại và yêu cầu lấy từ khoá: hộp vừa đóng thì typeId đã rỗng (lib/queryKeyId.ts)
+  queryFn: ({ queryKey }) =>
     unwrap(
       inventoryApi.GET('/assets', {
-        params: { query: { type_id: typeId.value, attr: reqStrings.value.length ? reqStrings.value : undefined, borrowable: true, page: 1, page_size: 1 } },
+        params: { query: { type_id: keyId(queryKey, 2), attr: queryKey[3].length ? [...queryKey[3]] : undefined, borrowable: true, page: 1, page_size: 1 } },
       }),
     ),
   enabled: computed(() => visible.value && !!typeId.value),

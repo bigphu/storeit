@@ -30,7 +30,7 @@ export function assetTypesQuery(includeArchived: boolean, withCounts: boolean) {
 export function useAssetTypes(includeArchived: MaybeRefOrGetter<boolean> = false, withCounts = false) {
   return useQuery({
     queryKey: computed(() => assetTypesQuery(toValue(includeArchived), withCounts).queryKey),
-    queryFn: () => assetTypesQuery(toValue(includeArchived), withCounts).queryFn(),
+    queryFn: ({ queryKey }) => assetTypesQuery(queryKey[2], queryKey[3]).queryFn(),
   })
 }
 

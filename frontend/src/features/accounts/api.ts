@@ -3,6 +3,7 @@ import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 import { identityApi } from '@/lib/api/client'
 import type { Account } from '@/lib/api/types'
 import { unwrap } from '@/lib/errors'
+import { keyId } from '@/lib/queryKeyId'
 
 export type AccountStatus = Account['status']
 
@@ -24,7 +25,8 @@ export const accountKeys = {
 export function useAccounts(params: MaybeRefOrGetter<AccountListParams>, enabled: MaybeRefOrGetter<boolean> = true) {
   return useQuery({
     queryKey: computed(() => accountKeys.list(toValue(params))),
-    queryFn: () => unwrap(identityApi.GET('/accounts', { params: { query: toValue(params) } })),
+    // tham số lấy từ khoá, không từ ref (lib/queryKeyId.ts)
+    queryFn: ({ queryKey }) => unwrap(identityApi.GET('/accounts', { params: { query: queryKey[2] } })),
     placeholderData: keepPreviousData,
     enabled: computed(() => toValue(enabled)),
   })
@@ -33,8 +35,8 @@ export function useAccounts(params: MaybeRefOrGetter<AccountListParams>, enabled
 export function useAccount(id: MaybeRefOrGetter<string>) {
   return useQuery({
     queryKey: computed(() => accountKeys.one(toValue(id))),
-    queryFn: () =>
-      unwrap(identityApi.GET('/accounts/{accountID}', { params: { path: { accountID: toValue(id) } } })),
+    queryFn: ({ queryKey }) =>
+      unwrap(identityApi.GET('/accounts/{accountID}', { params: { path: { accountID: keyId(queryKey, 1) } } })),
   })
 }
 

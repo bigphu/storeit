@@ -18,6 +18,7 @@ import { useAssetType } from '@/features/asset-types/api'
 import { useApproveTicket } from '../api'
 import { parseRequirement, requestCode, requirementLabels, satisfies, shortDay } from '../borrowing'
 import CodeTag from '@/components/CodeTag.vue'
+import { keyId } from '@/lib/queryKeyId'
 
 // Duyệt phiếu: chọn một tài sản đang rảnh của loại được hỏi. Bảng có một cột cho mỗi yêu cầu;
 // tài sản thoả mọi yêu cầu lên trước, còn lại mờ đi và gạch ô không thoả. Duyệt là giữ chỗ
@@ -29,10 +30,11 @@ const typeId = computed(() => props.ticket?.asset_type.id)
 const { data: type } = useAssetType(typeId)
 const assets = useQuery({
   queryKey: computed(() => [...assetKeys.all, 'borrowable', typeId.value ?? ''] as const),
-  queryFn: () =>
+  // loại lấy từ khoá: hộp vừa đóng thì typeId đã rỗng (lib/queryKeyId.ts)
+  queryFn: ({ queryKey }) =>
     unwrap(
       inventoryApi.GET('/assets', {
-        params: { query: { type_id: typeId.value, borrowable: true, sort: 'tag', page: 1, page_size: 200 } },
+        params: { query: { type_id: keyId(queryKey, 2), borrowable: true, sort: 'tag', page: 1, page_size: 200 } },
       }),
     ),
   enabled: computed(() => visible.value && !!typeId.value),

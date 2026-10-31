@@ -2,6 +2,7 @@ import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tansta
 import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 import { identityApi } from '@/lib/api/client'
 import { unwrap } from '@/lib/errors'
+import { keyId } from '@/lib/queryKeyId'
 
 export const roleKeys = {
   all: ['roles'] as const,
@@ -16,7 +17,7 @@ export function useRoles() {
 export function useRole(id: MaybeRefOrGetter<string>) {
   return useQuery({
     queryKey: computed(() => roleKeys.one(toValue(id))),
-    queryFn: () => unwrap(identityApi.GET('/roles/{roleID}', { params: { path: { roleID: toValue(id) } } })),
+    queryFn: ({ queryKey }) => unwrap(identityApi.GET('/roles/{roleID}', { params: { path: { roleID: keyId(queryKey, 1) } } })),
   })
 }
 

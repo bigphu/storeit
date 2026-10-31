@@ -42,7 +42,7 @@ export function assetListQuery(params: ListParams) {
 export function useAssetList(params: MaybeRefOrGetter<ListParams>) {
   return useQuery({
     queryKey: computed(() => assetListQuery(toValue(params)).queryKey),
-    queryFn: () => assetListQuery(toValue(params)).queryFn(),
+    queryFn: ({ queryKey }) => assetListQuery(queryKey[2]).queryFn(),
     placeholderData: keepPreviousData,
   })
 }
