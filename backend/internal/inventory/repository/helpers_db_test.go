@@ -57,7 +57,7 @@ func laptop(t *testing.T, r repos) domain.AssetType {
 	t.Helper()
 	u := uniq()
 	created, err := r.types.Create(actorCtx(), domain.NewAssetType{
-		Code: "LAP" + u, Name: "Laptop " + u, Description: "Portable computers",
+		Code: "LAP" + u, TagPrefix: "L" + u, Name: "Laptop " + u, Description: "Portable computers",
 		Attributes: []domain.NewAttribute{
 			{Key: "serial", Label: "Serial", DataType: domain.TypeText, Required: true, Position: 1},
 			{Key: "ram_gb", Label: "RAM", DataType: domain.TypeNumber, Unit: "GB", Position: 2},

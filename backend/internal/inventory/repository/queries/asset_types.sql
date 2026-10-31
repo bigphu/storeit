@@ -1,6 +1,6 @@
 -- name: CreateAssetType :one
-INSERT INTO inventory.asset_types (id, code, name, description, can_borrow)
-VALUES (@id, @code, @name, @description, @can_borrow)
+INSERT INTO inventory.asset_types (id, code, name, description, can_borrow, tag_prefix)
+VALUES (@id, @code, @name, @description, @can_borrow, @tag_prefix)
 RETURNING *;
 
 -- name: GetAssetType :one
@@ -18,7 +18,8 @@ ORDER BY is_system DESC, lower(name), id;
 -- Optimistic locking: 0 hàng là version đã đổi
 -- name: UpdateAssetType :one
 UPDATE inventory.asset_types
-SET name = @name, description = @description, can_borrow = @can_borrow, version = version + 1, updated_at = now()
+SET name = @name, description = @description, can_borrow = @can_borrow, tag_prefix = @tag_prefix,
+    version = version + 1, updated_at = now()
 WHERE id = @id AND version = @version
 RETURNING *;
 

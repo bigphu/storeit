@@ -39,6 +39,7 @@ func pgCode(err error) (code, constraint string) {
 var uniqueErrors = map[string]error{
 	"assets_tag_key":                      domain.ErrTagTaken,
 	"asset_types_code_key":                domain.ErrTypeCodeTaken,
+	"asset_types_tag_prefix_key":          domain.ErrTagPrefixTaken,
 	"asset_types_name_lower":              domain.ErrTypeNameTaken,
 	"asset_type_attributes_key_key":       domain.ErrAttributeKeyTaken,
 	"asset_type_attributes_label_lower":   domain.ErrAttributeLabelTaken,
@@ -112,7 +113,7 @@ func appendEvent(ctx context.Context, tx pgx.Tx, outbox *events.Outbox, typ, agg
 
 func toAssetType(t db.InventoryAssetType) domain.AssetType {
 	return domain.AssetType{
-		ID: t.ID, Code: t.Code, Name: t.Name, Description: t.Description, IsSystem: t.IsSystem, CanBorrow: t.CanBorrow,
+		ID: t.ID, Code: t.Code, TagPrefix: t.TagPrefix, Name: t.Name, Description: t.Description, IsSystem: t.IsSystem, CanBorrow: t.CanBorrow,
 		ArchivedAt: t.ArchivedAt, Version: t.Version, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	}
 }

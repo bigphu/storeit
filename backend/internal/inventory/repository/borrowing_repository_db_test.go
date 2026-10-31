@@ -28,7 +28,7 @@ var (
 func borrowType(t *testing.T, r repos, canBorrow bool) domain.AssetType {
 	t.Helper()
 	u := uniq()
-	ty, err := r.types.Create(actorCtx(), domain.NewAssetType{Code: "BR" + u, Name: "Borrow " + u, CanBorrow: canBorrow})
+	ty, err := r.types.Create(actorCtx(), domain.NewAssetType{Code: "BR" + u, TagPrefix: "B" + u, Name: "Borrow " + u, CanBorrow: canBorrow})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +316,7 @@ func TestBorrowing_SwitchOffAfterApprove(t *testing.T) {
 		t.Fatal(err)
 	}
 	off := false
-	if _, err := r.types.Update(ctx, ty.ID, nil, nil, &off, ty.Version); err != nil {
+	if _, err := r.types.Update(ctx, ty.ID, nil, nil, nil, &off, ty.Version); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := r.borrowing.HandOver(ctx, tk.ID, borrowToday, ap.Version); err != nil {

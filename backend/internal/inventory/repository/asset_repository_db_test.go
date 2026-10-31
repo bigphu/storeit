@@ -390,7 +390,7 @@ func TestAssets_SortByTypeAndStatus(t *testing.T) {
 	ctx := actorCtx()
 	u := uniq()
 	lap := laptop(t, r) // tên "Laptop …"
-	aard, err := r.types.Create(ctx, domain.NewAssetType{Code: "AAR" + u, Name: "Aardvark " + u})
+	aard, err := r.types.Create(ctx, domain.NewAssetType{Code: "AAR" + u, TagPrefix: "A" + u, Name: "Aardvark " + u})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -583,5 +583,74 @@ func TestAssets_ListByBuiltinField(t *testing.T) {
 				t.Errorf("got %q, want %q", got, c.want)
 			}
 		})
+	}
+}
+
+// Tag tự sinh: <tiền tố>-<số lớn nhất + 1> (4 chữ số), tính cả tag nhập tay cùng dạng; hai lần
+// tạo cùng lúc của một loại không lấy trùng số; tiền tố trùng loại khác là ErrTagPrefixTaken
+func TestAssets_GeneratedTags(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	u := uniq()
+	typ, err := r.types.Create(ctx, domain.NewAssetType{Code: "GEN" + u, TagPrefix: "G" + u, Name: "Generated " + u})
+	if err != nil {
+		t.Fatal(err)
+	}
+	create := func(tag string) domain.Asset {
+		t.Helper()
+		a, err := r.assets.Create(ctx, tag, domain.AssetFields{Name: "Gen", TypeID: typ.ID, StatusID: domain.AvailableStatusID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	p := "G" + u + "-"
+	if got := create("").Tag; got != p+"0001" {
+		t.Errorf("first tag = %q, want %s0001", got, p)
+	}
+	if got := create("").Tag; got != p+"0002" {
+		t.Errorf("second tag = %q, want %s0002", got, p)
+	}
+	create(p + "0041")
+	if got := create("").Tag; got != p+"0042" {
+		t.Errorf("after a typed tag = %q, want %s0042", got, p)
+	}
+
+	// hai lần tạo cùng lúc: hai số khác nhau, không lỗi trùng
+	var wg sync.WaitGroup
+	tags := make([]string, 2)
+	errs := make([]error, 2)
+	for i := range tags {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			a, err := r.assets.Create(ctx, "", domain.AssetFields{Name: "Gen", TypeID: typ.ID, StatusID: domain.AvailableStatusID})
+			tags[i], errs[i] = a.Tag, err
+		}()
+	}
+	wg.Wait()
+	if errs[0] != nil || errs[1] != nil || tags[0] == tags[1] {
+		t.Errorf("concurrent: tags=%v errs=%v", tags, errs)
+	}
+
+	// loại khác có dãy số riêng
+	other, err := r.types.Create(ctx, domain.NewAssetType{Code: "OTH" + u, TagPrefix: "H" + u, Name: "Other " + u})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := r.assets.Create(ctx, "", domain.AssetFields{Name: "Gen", TypeID: other.ID, StatusID: domain.AvailableStatusID})
+	if err != nil || a.Tag != "H"+u+"-0001" {
+		t.Errorf("other type tag = %q, %v", a.Tag, err)
+	}
+
+	if _, err := r.types.Create(ctx, domain.NewAssetType{Code: "DUP" + u, TagPrefix: "G" + u, Name: "Dup " + u}); !errors.Is(err, domain.ErrTagPrefixTaken) {
+		t.Errorf("duplicate prefix on create: %v", err)
+	}
+	if _, err := r.types.Update(ctx, other.ID, nil, nil, ptr("G"+u), nil, other.Version); !errors.Is(err, domain.ErrTagPrefixTaken) {
+		t.Errorf("duplicate prefix on update: %v", err)
+	}
+	// migration 00010: loại GENERAL seed sẵn (chưa có tag dạng PREFIX-123) lấy 3 ký tự đầu của code
+	if g, err := r.types.Get(ctx, domain.GeneralTypeID); err != nil || g.TagPrefix != "GEN" {
+		t.Errorf("GENERAL prefix = %q, %v; want GEN", g.TagPrefix, err)
 	}
 }

@@ -156,6 +156,7 @@ type InventoryAssetType struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	CanBorrow   bool
+	TagPrefix   string
 }
 
 type InventoryAssetTypeAttribute struct {

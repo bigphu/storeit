@@ -1077,10 +1077,11 @@ components:
 
     AssetType:
       type: object
-      required: [id, code, name, description, is_system, can_borrow, version, created_at, updated_at]
+      required: [id, code, tag_prefix, name, description, is_system, can_borrow, version, created_at, updated_at]
       properties:
         id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
         code: { type: string }
+        tag_prefix: { type: string, description: 'New assets of this type get the tag <tag_prefix>-<next number>, e.g. LAP-0091' }
         name: { type: string }
         description: { type: string }
         is_system: { type: boolean }
@@ -1168,6 +1169,10 @@ components:
       required: [code, name]
       properties:
         code: { type: string, minLength: 1, maxLength: 32 }
+        tag_prefix:
+          type: string
+          maxLength: 10
+          description: 'A-Z and 0-9, unique among types. Omitted or "" = the first 3 letters or digits of the code'
         name: { type: string, minLength: 1, maxLength: 100 }
         description: { type: string, maxLength: 500 }
         can_borrow: { type: boolean, description: Default false }
@@ -1183,6 +1188,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 100 }
         description: { type: string, maxLength: 500 }
         can_borrow: { type: boolean }
+        tag_prefix: { type: string, minLength: 1, maxLength: 10, description: Only affects assets created afterwards }
         version: { type: integer, format: int32 }
 
     UpdateAttributeRequest:
@@ -1628,9 +1634,12 @@ components:
 
     CreateAssetRequest:
       type: object
-      required: [tag, name, asset_type_id]
+      required: [name, asset_type_id]
       properties:
-        tag: { type: string, minLength: 1, maxLength: 64 }
+        tag:
+          type: string
+          maxLength: 64
+          description: Omitted or "" = generated from the type's tag prefix (LAP-0091). Imports may still send their own tag
         name: { type: string, minLength: 1, maxLength: 200 }
         description: { type: string, maxLength: 2000 }
         asset_type_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }

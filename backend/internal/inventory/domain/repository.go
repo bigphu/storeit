@@ -21,6 +21,7 @@ type NewAttribute struct {
 
 type NewAssetType struct {
 	Code, Name, Description string
+	TagPrefix               string // "" là DefaultTagPrefix(Code)
 	CanBorrow               bool
 	Attributes              []NewAttribute
 }
@@ -42,7 +43,7 @@ type TypeRepository interface {
 	Create(ctx context.Context, in NewAssetType) (AssetType, error)
 	// Update: ErrAssetTypeChanged khi version cũ; event asset_type_updated
 	// canBorrow nil: giữ nguyên
-	Update(ctx context.Context, id uuid.UUID, name, description *string, canBorrow *bool, version int32) (AssetType, error)
+	Update(ctx context.Context, id uuid.UUID, name, description, tagPrefix *string, canBorrow *bool, version int32) (AssetType, error)
 	SetArchived(ctx context.Context, id uuid.UUID, archived bool) (AssetType, error)
 	AddAttribute(ctx context.Context, typeID uuid.UUID, in NewAttribute) (Attribute, error)
 	// UpdateAttribute: đổi kiểu hay đơn vị khi đã có giá trị là ErrAttributeInUse;

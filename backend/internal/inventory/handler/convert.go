@@ -13,7 +13,7 @@ import (
 
 func toAPIType(t domain.AssetType) api.AssetType {
 	return api.AssetType{
-		Id: t.ID, Code: t.Code, Name: t.Name, Description: t.Description, IsSystem: t.IsSystem, CanBorrow: t.CanBorrow,
+		Id: t.ID, Code: t.Code, TagPrefix: t.TagPrefix, Name: t.Name, Description: t.Description, IsSystem: t.IsSystem, CanBorrow: t.CanBorrow,
 		ArchivedAt: t.ArchivedAt, Version: t.Version, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	}
 }
@@ -24,7 +24,7 @@ func toAPITypeDetail(t domain.AssetType) api.AssetTypeDetail {
 		attrs[i] = toAPIAttribute(a)
 	}
 	return api.AssetTypeDetail{
-		Id: t.ID, Code: t.Code, Name: t.Name, Description: t.Description, IsSystem: t.IsSystem, CanBorrow: t.CanBorrow,
+		Id: t.ID, Code: t.Code, TagPrefix: t.TagPrefix, Name: t.Name, Description: t.Description, IsSystem: t.IsSystem, CanBorrow: t.CanBorrow,
 		ArchivedAt: t.ArchivedAt, Version: t.Version, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 		Attributes: attrs,
 	}

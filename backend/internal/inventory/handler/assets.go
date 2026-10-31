@@ -56,7 +56,7 @@ func (h *Handler) ListAssets(ctx context.Context, req api.ListAssetsRequestObjec
 
 func (h *Handler) CreateAsset(ctx context.Context, req api.CreateAssetRequestObject) (api.CreateAssetResponseObject, error) {
 	b := req.Body
-	v, err := h.svc.CreateAsset(ctx, b.Tag, service.AssetInput{
+	v, err := h.svc.CreateAsset(ctx, deref(b.Tag), service.AssetInput{
 		Name: b.Name, Description: deref(b.Description), TypeID: b.AssetTypeId, StatusID: b.StatusId,
 		LocationID: b.LocationId, HolderMemberID: b.HolderMemberId, PurchaseDate: fromAPIDate(b.PurchaseDate),
 		Attributes: deref(b.Attributes),

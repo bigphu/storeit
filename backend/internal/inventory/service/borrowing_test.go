@@ -172,20 +172,20 @@ func TestCanBorrowNeedsBorrowManage(t *testing.T) {
 	}
 	on := true
 	officer := as(domain.PermAssetRead, domain.PermBorrowManage)
-	got, err := b.svc.UpdateAssetType(officer, ty.ID, nil, nil, &on, ty.Version)
+	got, err := b.svc.UpdateAssetType(officer, ty.ID, nil, nil, nil, &on, ty.Version)
 	if err != nil || !got.CanBorrow {
 		t.Fatalf("officer turns it on = %+v, %v", got, err)
 	}
 	typesOnly := as(domain.PermAssetRead, domain.PermTypeManage)
 	off := false
-	if _, err := b.svc.UpdateAssetType(typesOnly, ty.ID, nil, nil, &off, got.Version); status(err) != 403 {
+	if _, err := b.svc.UpdateAssetType(typesOnly, ty.ID, nil, nil, nil, &off, got.Version); status(err) != 403 {
 		t.Errorf("type.manage alone toggles it: %v, want 403", err)
 	}
 	name := "Cameras"
-	if _, err := b.svc.UpdateAssetType(officer, ty.ID, &name, nil, nil, got.Version); status(err) != 403 {
+	if _, err := b.svc.UpdateAssetType(officer, ty.ID, &name, nil, nil, nil, got.Version); status(err) != 403 {
 		t.Errorf("borrow.manage alone renames the type: %v, want 403", err)
 	}
-	if _, err := b.svc.UpdateAssetType(typesOnly, ty.ID, &name, nil, nil, got.Version); err != nil {
+	if _, err := b.svc.UpdateAssetType(typesOnly, ty.ID, &name, nil, nil, nil, got.Version); err != nil {
 		t.Errorf("type.manage renames: %v", err)
 	}
 }

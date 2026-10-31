@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -72,6 +73,23 @@ func (s *Service) CreateAssetType(ctx context.Context, in domain.NewAssetType) (
 	if err != nil {
 		return domain.AssetType{}, err
 	}
+	// tiền tố không nêu: 3 chữ / số đầu của code, thêm số nếu loại khác đã dùng (MON, MON2)
+	var prefix string
+	if strings.TrimSpace(in.TagPrefix) != "" {
+		if prefix, err = domain.NormalizeTagPrefix(in.TagPrefix); err != nil {
+			return domain.AssetType{}, err
+		}
+	} else {
+		all, err := s.types.List(ctx, true)
+		if err != nil {
+			return domain.AssetType{}, err
+		}
+		taken := make(map[string]bool, len(all))
+		for _, t := range all {
+			taken[t.TagPrefix] = true
+		}
+		prefix = domain.FreeTagPrefix(domain.DefaultTagPrefix(code), taken)
+	}
 	attrs := make([]domain.NewAttribute, len(in.Attributes))
 	for i, a := range in.Attributes {
 		if attrs[i], err = cleanNewAttribute(a); err != nil {
@@ -81,13 +99,13 @@ func (s *Service) CreateAssetType(ctx context.Context, in domain.NewAssetType) (
 			attrs[i].Position = int32(i + 1)
 		}
 	}
-	return s.types.Create(ctx, domain.NewAssetType{Code: code, Name: name, Description: desc, CanBorrow: in.CanBorrow, Attributes: attrs})
+	return s.types.Create(ctx, domain.NewAssetType{Code: code, TagPrefix: prefix, Name: name, Description: desc, CanBorrow: in.CanBorrow, Attributes: attrs})
 }
 
-// UpdateAssetType: tên, mô tả cần type.manage; "Can be borrowed" thuộc về việc mượn nên cần
+// UpdateAssetType: tên, mô tả, tiền tố tag cần type.manage; "Can be borrowed" thuộc về việc mượn nên cần
 // borrow.manage (người quản lý kho bật được mà không cần quyền sửa loại)
-func (s *Service) UpdateAssetType(ctx context.Context, id uuid.UUID, name, description *string, canBorrow *bool, version int32) (domain.AssetType, error) {
-	if name != nil || description != nil || canBorrow == nil {
+func (s *Service) UpdateAssetType(ctx context.Context, id uuid.UUID, name, description, tagPrefix *string, canBorrow *bool, version int32) (domain.AssetType, error) {
+	if name != nil || description != nil || tagPrefix != nil || canBorrow == nil {
 		if _, err := auth.Require(ctx, domain.PermTypeManage); err != nil {
 			return domain.AssetType{}, err
 		}
@@ -111,7 +129,15 @@ func (s *Service) UpdateAssetType(ctx context.Context, id uuid.UUID, name, descr
 		}
 		description = &d
 	}
-	return s.types.Update(ctx, id, name, description, canBorrow, version)
+	// tiền tố mới chỉ áp cho tài sản tạo sau; tag đã có giữ nguyên
+	if tagPrefix != nil {
+		p, err := domain.NormalizeTagPrefix(*tagPrefix)
+		if err != nil {
+			return domain.AssetType{}, err
+		}
+		tagPrefix = &p
+	}
+	return s.types.Update(ctx, id, name, description, tagPrefix, canBorrow, version)
 }
 
 // ArchiveAssetType: loại đã archive không chọn được cho tài sản mới; tài sản

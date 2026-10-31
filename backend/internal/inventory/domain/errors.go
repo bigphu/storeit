@@ -43,6 +43,8 @@ var (
 
 	ErrInvalidTag = errs.Unprocessable("/errors/invalid-tag", "Invalid asset tag",
 		errs.WithFields(errs.FieldError{Field: "tag", Detail: "must be 1-64 characters: A-Z, 0-9, '.', '_' or '-', starting with a letter or digit"}))
+	ErrInvalidTagPrefix = errs.Unprocessable("/errors/invalid-tag-prefix", "Invalid tag prefix",
+		errs.WithFields(errs.FieldError{Field: "tag_prefix", Detail: "must be 1-10 characters: A-Z or 0-9"}))
 	ErrInvalidTypeCode = errs.Unprocessable("/errors/invalid-type-code", "Invalid asset type code",
 		errs.WithFields(errs.FieldError{Field: "code", Detail: "must be 1-32 characters: A-Z, 0-9, '_' or '-'"}))
 	ErrInvalidAttributeKey = errs.Unprocessable("/errors/invalid-attribute-key", "Invalid attribute key",
@@ -72,8 +74,10 @@ var (
 		errs.WithDetail("Choose between 1 and 200 assets to export."),
 		errs.WithFields(errs.FieldError{Field: "filters.ids", Detail: "choose between 1 and 200 assets"}))
 
-	ErrTagTaken            = errs.Conflict("/errors/tag-taken", "Asset tag already in use")
-	ErrTypeCodeTaken       = errs.Conflict("/errors/type-code-taken", "Asset type code already in use")
+	ErrTagTaken       = errs.Conflict("/errors/tag-taken", "Asset tag already in use")
+	ErrTypeCodeTaken  = errs.Conflict("/errors/type-code-taken", "Asset type code already in use")
+	ErrTagPrefixTaken = errs.Conflict("/errors/tag-prefix-taken", "Tag prefix already used by another type",
+		errs.WithFields(errs.FieldError{Field: "tag_prefix", Detail: "another type already uses this prefix"}))
 	ErrTypeNameTaken       = errs.Conflict("/errors/type-name-taken", "Asset type name already in use")
 	ErrAttributeKeyTaken   = errs.Conflict("/errors/attribute-key-taken", "Attribute key already used in this type")
 	ErrAttributeLabelTaken = errs.Conflict("/errors/attribute-label-taken", "Attribute label already used in this type")

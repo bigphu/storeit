@@ -154,7 +154,7 @@ func seedStatuses(ctx context.Context, svc *service.Service) (statusIDs, error) 
 }
 
 func newAssetType(ts typeSpec) domain.NewAssetType {
-	out := domain.NewAssetType{Code: ts.Code, Name: ts.Name, Description: ts.Description, CanBorrow: ts.Borrow}
+	out := domain.NewAssetType{Code: ts.Code, TagPrefix: ts.Prefix, Name: ts.Name, Description: ts.Description, CanBorrow: ts.Borrow}
 	for i, a := range ts.Attrs {
 		out.Attributes = append(out.Attributes, domain.NewAttribute{
 			Key: a.Key, Label: a.Label, DataType: a.Type, Unit: a.Unit, Required: a.Required,

@@ -99,6 +99,10 @@ type Querier interface {
 	// Giá trị của nhiều tài sản một lần (các dòng của một trang danh sách)
 	ListValuesForAssets(ctx context.Context, assetIds []uuid.UUID) ([]ListValuesForAssetsRow, error)
 	MarkLoanOverdueNotified(ctx context.Context, arg MarkLoanOverdueNotifiedParams) error
+	// Tag tự sinh kế tiếp của loại: <tiền tố>-<số lớn nhất đang có + 1>, ít nhất 4 chữ số. Gọi sau
+	// khi đã khoá dòng loại bằng câu riêng (GetAssetTypeForUpdate): câu này chụp dữ liệu mới, thấy
+	// tag của giao dịch vừa nhả khoá. Tiền tố là duy nhất nên loại khác không dùng chung dãy số
+	NextAssetTag(ctx context.Context, assetTypeID uuid.UUID) (string, error)
 	RejectBorrowTicket(ctx context.Context, arg RejectBorrowTicketParams) (InventoryBorrowTicket, error)
 	RemoveAttribute(ctx context.Context, arg RemoveAttributeParams) (int64, error)
 	RemoveOption(ctx context.Context, arg RemoveOptionParams) (int64, error)

@@ -65,10 +65,13 @@ func TestPermissionChecks(t *testing.T) {
 		perm string
 		call func(context.Context) error
 	}{
-		"ListAssetTypes":   {domain.PermAssetRead, func(c context.Context) error { _, err := e.svc.ListAssetTypes(c, false); return err }},
-		"GetAssetType":     {domain.PermAssetRead, func(c context.Context) error { _, err := e.svc.GetAssetType(c, id); return err }},
-		"CreateAssetType":  {domain.PermTypeManage, func(c context.Context) error { _, err := e.svc.CreateAssetType(c, domain.NewAssetType{}); return err }},
-		"UpdateAssetType":  {domain.PermTypeManage, func(c context.Context) error { _, err := e.svc.UpdateAssetType(c, id, nil, nil, nil, 1); return err }},
+		"ListAssetTypes":  {domain.PermAssetRead, func(c context.Context) error { _, err := e.svc.ListAssetTypes(c, false); return err }},
+		"GetAssetType":    {domain.PermAssetRead, func(c context.Context) error { _, err := e.svc.GetAssetType(c, id); return err }},
+		"CreateAssetType": {domain.PermTypeManage, func(c context.Context) error { _, err := e.svc.CreateAssetType(c, domain.NewAssetType{}); return err }},
+		"UpdateAssetType": {domain.PermTypeManage, func(c context.Context) error {
+			_, err := e.svc.UpdateAssetType(c, id, nil, nil, nil, nil, 1)
+			return err
+		}},
 		"ArchiveAssetType": {domain.PermTypeManage, func(c context.Context) error { _, err := e.svc.ArchiveAssetType(c, id); return err }},
 		"RestoreAssetType": {domain.PermTypeManage, func(c context.Context) error { _, err := e.svc.RestoreAssetType(c, id); return err }},
 		"AddAttribute":     {domain.PermTypeManage, func(c context.Context) error { _, err := e.svc.AddAttribute(c, id, domain.NewAttribute{}); return err }},
@@ -479,4 +482,42 @@ func (e *env) generalAsset(t *testing.T, tag string) domain.Asset {
 		t.Fatal(err)
 	}
 	return v.Asset
+}
+
+// Tag tự sinh: tag trống tới kho là "" (kho lấy tiền tố của loại); tiền tố của loại mặc định
+// từ code, tránh tiền tố loại khác đã dùng, hoặc theo người tạo nêu
+func TestGeneratedTagsAndPrefixes(t *testing.T) {
+	e := newEnv()
+	typ := e.laptop(t)
+	if typ.TagPrefix != "LAP" {
+		t.Errorf("laptop prefix = %q, want LAP", typ.TagPrefix)
+	}
+	v, err := e.svc.CreateAsset(manager, "  ", AssetInput{Name: "X", TypeID: typ.ID, Attributes: map[string]any{"serial": "S1"}})
+	if err != nil || v.Tag != "" {
+		t.Fatalf("blank tag: tag=%q err=%v, want the repository to generate it", v.Tag, err)
+	}
+	if _, err := e.svc.CreateAsset(manager, "bad tag!", AssetInput{Name: "X", TypeID: typ.ID}); !errors.Is(err, domain.ErrInvalidTag) {
+		t.Errorf("bad tag: %v", err)
+	}
+
+	again, err := e.svc.CreateAssetType(manager, domain.NewAssetType{Code: "LAPTOP_PRO", Name: "Laptop Pro"})
+	if err != nil || again.TagPrefix != "LAP2" {
+		t.Errorf("second LAP type prefix = %q, %v; want LAP2", again.TagPrefix, err)
+	}
+	own, err := e.svc.CreateAssetType(manager, domain.NewAssetType{Code: "DESK", Name: "Desk", TagPrefix: " dsk "})
+	if err != nil || own.TagPrefix != "DSK" {
+		t.Errorf("explicit prefix = %q, %v; want DSK", own.TagPrefix, err)
+	}
+	if _, err := e.svc.CreateAssetType(manager, domain.NewAssetType{Code: "CHAIR", Name: "Chair", TagPrefix: "CH-R"}); !errors.Is(err, domain.ErrInvalidTagPrefix) {
+		t.Errorf("invalid prefix: %v", err)
+	}
+	p := "dk"
+	upd, err := e.svc.UpdateAssetType(manager, own.ID, nil, nil, &p, nil, own.Version)
+	if err != nil || upd.TagPrefix != "DK" {
+		t.Errorf("update prefix = %q, %v; want DK", upd.TagPrefix, err)
+	}
+	bad := "D K"
+	if _, err := e.svc.UpdateAssetType(manager, own.ID, nil, nil, &bad, nil, upd.Version); !errors.Is(err, domain.ErrInvalidTagPrefix) {
+		t.Errorf("update invalid prefix: %v", err)
+	}
 }

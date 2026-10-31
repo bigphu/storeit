@@ -5,6 +5,18 @@ VALUES (@id, @tag, @name, @description, @asset_type_id, @status_id,
         sqlc.narg('location_id'), sqlc.narg('holder_member_id'), sqlc.narg('purchase_date'))
 RETURNING *;
 
+-- Tag tự sinh kế tiếp của loại: <tiền tố>-<số lớn nhất đang có + 1>, ít nhất 4 chữ số. Gọi sau
+-- khi đã khoá dòng loại bằng câu riêng (GetAssetTypeForUpdate): câu này chụp dữ liệu mới, thấy
+-- tag của giao dịch vừa nhả khoá. Tiền tố là duy nhất nên loại khác không dùng chung dãy số
+-- name: NextAssetTag :one
+WITH t AS (
+    SELECT ty.tag_prefix FROM inventory.asset_types ty WHERE ty.id = @asset_type_id
+)
+SELECT (t.tag_prefix || '-' || lpad((coalesce(max(substring(a.tag FROM '-([0-9]{1,9})$')::bigint), 0) + 1)::text, 4, '0'))::text AS tag
+FROM t
+LEFT JOIN inventory.assets a ON a.tag ~ ('^' || t.tag_prefix || '-[0-9]{1,9}$')
+GROUP BY t.tag_prefix;
+
 -- name: GetAsset :one
 SELECT * FROM inventory.assets WHERE id = @id;
 

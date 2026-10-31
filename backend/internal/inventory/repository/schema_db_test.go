@@ -46,7 +46,7 @@ func newSchemaFixture(t *testing.T, pool *pgxpool.Pool) schemaFixture {
 			t.Fatalf("%s: %v", sql, err)
 		}
 	}
-	exec(`INSERT INTO inventory.asset_types (id, code, name) VALUES ($1, $2, $3), ($4, $5, $6)`,
+	exec(`INSERT INTO inventory.asset_types (id, code, name, tag_prefix) VALUES ($1, $2, $3, $2), ($4, $5, $6, $5)`,
 		f.typeID, "T"+suffix, "Type "+suffix, f.otherTypeID, "O"+suffix, "Other "+suffix)
 	attr := `INSERT INTO inventory.asset_type_attributes (id, asset_type_id, key, label, data_type) VALUES ($1, $2, $3, $3, $4)`
 	exec(attr, f.text, f.typeID, "serial", "text")

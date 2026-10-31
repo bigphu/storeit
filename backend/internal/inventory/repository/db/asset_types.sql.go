@@ -23,9 +23,9 @@ func (q *Queries) AttributeHasValues(ctx context.Context, attributeID uuid.UUID)
 }
 
 const createAssetType = `-- name: CreateAssetType :one
-INSERT INTO inventory.asset_types (id, code, name, description, can_borrow)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, code, name, description, is_system, archived_at, version, created_at, updated_at, can_borrow
+INSERT INTO inventory.asset_types (id, code, name, description, can_borrow, tag_prefix)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, code, name, description, is_system, archived_at, version, created_at, updated_at, can_borrow, tag_prefix
 `
 
 type CreateAssetTypeParams struct {
@@ -34,6 +34,7 @@ type CreateAssetTypeParams struct {
 	Name        string
 	Description string
 	CanBorrow   bool
+	TagPrefix   string
 }
 
 func (q *Queries) CreateAssetType(ctx context.Context, arg CreateAssetTypeParams) (InventoryAssetType, error) {
@@ -43,6 +44,7 @@ func (q *Queries) CreateAssetType(ctx context.Context, arg CreateAssetTypeParams
 		arg.Name,
 		arg.Description,
 		arg.CanBorrow,
+		arg.TagPrefix,
 	)
 	var i InventoryAssetType
 	err := row.Scan(
@@ -56,6 +58,7 @@ func (q *Queries) CreateAssetType(ctx context.Context, arg CreateAssetTypeParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CanBorrow,
+		&i.TagPrefix,
 	)
 	return i, err
 }
@@ -149,7 +152,7 @@ func (q *Queries) DeleteAttributeOptions(ctx context.Context, attributeID uuid.U
 }
 
 const getAssetType = `-- name: GetAssetType :one
-SELECT id, code, name, description, is_system, archived_at, version, created_at, updated_at, can_borrow FROM inventory.asset_types WHERE id = $1
+SELECT id, code, name, description, is_system, archived_at, version, created_at, updated_at, can_borrow, tag_prefix FROM inventory.asset_types WHERE id = $1
 `
 
 func (q *Queries) GetAssetType(ctx context.Context, id uuid.UUID) (InventoryAssetType, error) {
@@ -166,12 +169,13 @@ func (q *Queries) GetAssetType(ctx context.Context, id uuid.UUID) (InventoryAsse
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CanBorrow,
+		&i.TagPrefix,
 	)
 	return i, err
 }
 
 const getAssetTypeForUpdate = `-- name: GetAssetTypeForUpdate :one
-SELECT id, code, name, description, is_system, archived_at, version, created_at, updated_at, can_borrow FROM inventory.asset_types WHERE id = $1 FOR NO KEY UPDATE
+SELECT id, code, name, description, is_system, archived_at, version, created_at, updated_at, can_borrow, tag_prefix FROM inventory.asset_types WHERE id = $1 FOR NO KEY UPDATE
 `
 
 func (q *Queries) GetAssetTypeForUpdate(ctx context.Context, id uuid.UUID) (InventoryAssetType, error) {
@@ -188,6 +192,7 @@ func (q *Queries) GetAssetTypeForUpdate(ctx context.Context, id uuid.UUID) (Inve
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CanBorrow,
+		&i.TagPrefix,
 	)
 	return i, err
 }
@@ -282,7 +287,7 @@ func (q *Queries) ListActiveAttributeLabels(ctx context.Context) ([]ListActiveAt
 }
 
 const listAssetTypes = `-- name: ListAssetTypes :many
-SELECT id, code, name, description, is_system, archived_at, version, created_at, updated_at, can_borrow FROM inventory.asset_types
+SELECT id, code, name, description, is_system, archived_at, version, created_at, updated_at, can_borrow, tag_prefix FROM inventory.asset_types
 WHERE $1::boolean OR archived_at IS NULL
 ORDER BY is_system DESC, lower(name), id
 `
@@ -308,6 +313,7 @@ func (q *Queries) ListAssetTypes(ctx context.Context, includeArchived bool) ([]I
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CanBorrow,
+			&i.TagPrefix,
 		); err != nil {
 			return nil, err
 		}
@@ -498,7 +504,7 @@ UPDATE inventory.asset_types
 SET archived_at = CASE WHEN $1::boolean THEN coalesce(archived_at, now()) END,
     version = version + 1, updated_at = now()
 WHERE id = $2
-RETURNING id, code, name, description, is_system, archived_at, version, created_at, updated_at, can_borrow
+RETURNING id, code, name, description, is_system, archived_at, version, created_at, updated_at, can_borrow, tag_prefix
 `
 
 type SetAssetTypeArchivedParams struct {
@@ -520,6 +526,7 @@ func (q *Queries) SetAssetTypeArchived(ctx context.Context, arg SetAssetTypeArch
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CanBorrow,
+		&i.TagPrefix,
 	)
 	return i, err
 }
@@ -555,15 +562,17 @@ func (q *Queries) SetOptionPosition(ctx context.Context, arg SetOptionPositionPa
 
 const updateAssetType = `-- name: UpdateAssetType :one
 UPDATE inventory.asset_types
-SET name = $1, description = $2, can_borrow = $3, version = version + 1, updated_at = now()
-WHERE id = $4 AND version = $5
-RETURNING id, code, name, description, is_system, archived_at, version, created_at, updated_at, can_borrow
+SET name = $1, description = $2, can_borrow = $3, tag_prefix = $4,
+    version = version + 1, updated_at = now()
+WHERE id = $5 AND version = $6
+RETURNING id, code, name, description, is_system, archived_at, version, created_at, updated_at, can_borrow, tag_prefix
 `
 
 type UpdateAssetTypeParams struct {
 	Name        string
 	Description string
 	CanBorrow   bool
+	TagPrefix   string
 	ID          uuid.UUID
 	Version     int32
 }
@@ -574,6 +583,7 @@ func (q *Queries) UpdateAssetType(ctx context.Context, arg UpdateAssetTypeParams
 		arg.Name,
 		arg.Description,
 		arg.CanBorrow,
+		arg.TagPrefix,
 		arg.ID,
 		arg.Version,
 	)
@@ -589,6 +599,7 @@ func (q *Queries) UpdateAssetType(ctx context.Context, arg UpdateAssetTypeParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CanBorrow,
+		&i.TagPrefix,
 	)
 	return i, err
 }

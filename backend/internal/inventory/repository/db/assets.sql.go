@@ -614,6 +614,26 @@ func (q *Queries) ListValuesForAssets(ctx context.Context, assetIds []uuid.UUID)
 	return items, nil
 }
 
+const nextAssetTag = `-- name: NextAssetTag :one
+WITH t AS (
+    SELECT ty.tag_prefix FROM inventory.asset_types ty WHERE ty.id = $1
+)
+SELECT (t.tag_prefix || '-' || lpad((coalesce(max(substring(a.tag FROM '-([0-9]{1,9})$')::bigint), 0) + 1)::text, 4, '0'))::text AS tag
+FROM t
+LEFT JOIN inventory.assets a ON a.tag ~ ('^' || t.tag_prefix || '-[0-9]{1,9}$')
+GROUP BY t.tag_prefix
+`
+
+// Tag tự sinh kế tiếp của loại: <tiền tố>-<số lớn nhất đang có + 1>, ít nhất 4 chữ số. Gọi sau
+// khi đã khoá dòng loại bằng câu riêng (GetAssetTypeForUpdate): câu này chụp dữ liệu mới, thấy
+// tag của giao dịch vừa nhả khoá. Tiền tố là duy nhất nên loại khác không dùng chung dãy số
+func (q *Queries) NextAssetTag(ctx context.Context, assetTypeID uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, nextAssetTag, assetTypeID)
+	var tag string
+	err := row.Scan(&tag)
+	return tag, err
+}
+
 const restoreAsset = `-- name: RestoreAsset :one
 UPDATE inventory.assets
 SET retired_at = NULL, retired_reason = NULL, status_id = $1,

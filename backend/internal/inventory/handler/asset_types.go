@@ -41,7 +41,7 @@ func (h *Handler) ListAssetTypes(ctx context.Context, req api.ListAssetTypesRequ
 }
 
 func (h *Handler) CreateAssetType(ctx context.Context, req api.CreateAssetTypeRequestObject) (api.CreateAssetTypeResponseObject, error) {
-	in := domain.NewAssetType{Code: req.Body.Code, Name: req.Body.Name, Description: deref(req.Body.Description), CanBorrow: deref(req.Body.CanBorrow)}
+	in := domain.NewAssetType{Code: req.Body.Code, TagPrefix: deref(req.Body.TagPrefix), Name: req.Body.Name, Description: deref(req.Body.Description), CanBorrow: deref(req.Body.CanBorrow)}
 	for _, a := range deref(req.Body.Attributes) {
 		in.Attributes = append(in.Attributes, toNewAttribute(a))
 	}
@@ -61,7 +61,7 @@ func (h *Handler) GetAssetType(ctx context.Context, req api.GetAssetTypeRequestO
 }
 
 func (h *Handler) UpdateAssetType(ctx context.Context, req api.UpdateAssetTypeRequestObject) (api.UpdateAssetTypeResponseObject, error) {
-	t, err := h.svc.UpdateAssetType(ctx, req.TypeID, req.Body.Name, req.Body.Description, req.Body.CanBorrow, req.Body.Version)
+	t, err := h.svc.UpdateAssetType(ctx, req.TypeID, req.Body.Name, req.Body.Description, req.Body.TagPrefix, req.Body.CanBorrow, req.Body.Version)
 	if err != nil {
 		return nil, err
 	}

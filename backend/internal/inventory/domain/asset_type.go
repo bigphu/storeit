@@ -2,6 +2,7 @@ package domain
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -34,6 +35,7 @@ func (d DataType) Valid() bool {
 type AssetType struct {
 	ID          uuid.UUID
 	Code        string // 'LAPTOP': viết hoa, không đổi
+	TagPrefix   string // 'LAP': tài sản mới không nhập tag thì lấy LAP-<số kế tiếp>; duy nhất giữa các loại
 	Name        string
 	Description string
 	IsSystem    bool // loại GENERAL seed sẵn: không archive được
@@ -86,6 +88,52 @@ var (
 	typeCodePattern = regexp.MustCompile(`^[A-Z0-9_-]{1,32}$`)
 	attrKeyPattern  = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
 )
+
+var tagPrefixPattern = regexp.MustCompile(`^[A-Z0-9]{1,10}$`)
+
+// NormalizeTagPrefix bỏ khoảng trắng, viết hoa và kiểm tra tiền tố tag (1-10 chữ A-Z, số)
+func NormalizeTagPrefix(s string) (string, error) {
+	p := strings.ToUpper(strings.TrimSpace(s))
+	if !tagPrefixPattern.MatchString(p) {
+		return "", ErrInvalidTagPrefix
+	}
+	return p, nil
+}
+
+// DefaultTagPrefix: tiền tố khi tạo loại không nêu: 3 chữ / số đầu của code (LAPTOP -> LAP);
+// code không có chữ / số nào (chỉ '_' '-') thì AST
+func DefaultTagPrefix(code string) string {
+	var b strings.Builder
+	for _, r := range strings.ToUpper(code) {
+		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			if b.Len() == 3 {
+				break
+			}
+		}
+	}
+	if b.Len() == 0 {
+		return "AST"
+	}
+	return b.String()
+}
+
+// FreeTagPrefix: base nếu chưa loại nào dùng, không thì base2, base3... (cắt base để vừa 10 ký tự)
+func FreeTagPrefix(base string, taken map[string]bool) string {
+	if !taken[base] {
+		return base
+	}
+	for n := 2; ; n++ {
+		suffix := strconv.Itoa(n)
+		p := base
+		if len(p)+len(suffix) > 10 {
+			p = p[:10-len(suffix)]
+		}
+		if !taken[p+suffix] {
+			return p + suffix
+		}
+	}
+}
 
 // NormalizeTypeCode bỏ khoảng trắng, viết hoa và kiểm tra dạng code
 func NormalizeTypeCode(s string) (string, error) {

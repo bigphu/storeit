@@ -202,3 +202,30 @@ func TestActiveAttributesAndRetired(t *testing.T) {
 		t.Error("Retired() wrong")
 	}
 }
+
+func TestTagPrefix(t *testing.T) {
+	if got, err := NormalizeTagPrefix(" lap "); err != nil || got != "LAP" {
+		t.Errorf("NormalizeTagPrefix = %q, %v", got, err)
+	}
+	for _, bad := range []string{"", "  ", "LA-P", "L.P", strings.Repeat("A", 11), "ÄB"} {
+		if _, err := NormalizeTagPrefix(bad); !errors.Is(err, ErrInvalidTagPrefix) {
+			t.Errorf("NormalizeTagPrefix(%q) err = %v, want ErrInvalidTagPrefix", bad, err)
+		}
+	}
+	for code, want := range map[string]string{"LAPTOP": "LAP", "PC": "PC", "NETWORK_GEAR": "NET", "A_B-C9": "ABC", "__": "AST"} {
+		if got := DefaultTagPrefix(code); got != want {
+			t.Errorf("DefaultTagPrefix(%q) = %q, want %q", code, got, want)
+		}
+	}
+	taken := map[string]bool{"MON": true, "MON2": true, "ABCDEFGHIJ": true}
+	if got := FreeTagPrefix("MON", taken); got != "MON3" {
+		t.Errorf("FreeTagPrefix(MON) = %q, want MON3", got)
+	}
+	if got := FreeTagPrefix("LAP", taken); got != "LAP" {
+		t.Errorf("FreeTagPrefix(LAP) = %q, want LAP", got)
+	}
+	// vừa 10 ký tự: cắt base cho chỗ của số
+	if got := FreeTagPrefix("ABCDEFGHIJ", taken); got != "ABCDEFGHI2" {
+		t.Errorf("FreeTagPrefix(ABCDEFGHIJ) = %q, want ABCDEFGHI2", got)
+	}
+}

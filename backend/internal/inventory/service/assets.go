@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -106,9 +107,13 @@ func (s *Service) CreateAsset(ctx context.Context, tag string, in AssetInput) (A
 	if _, err := auth.Require(ctx, domain.PermAssetManage); err != nil {
 		return AssetView{}, err
 	}
-	t, err := domain.NormalizeTag(tag)
-	if err != nil {
-		return AssetView{}, err
+	// tag "" (hay chỉ khoảng trắng): kho tự sinh theo tiền tố của loại (LAP-0091)
+	t := ""
+	if strings.TrimSpace(tag) != "" {
+		var err error
+		if t, err = domain.NormalizeTag(tag); err != nil {
+			return AssetView{}, err
+		}
 	}
 	f, err := s.fields(ctx, in, nil)
 	if err != nil {

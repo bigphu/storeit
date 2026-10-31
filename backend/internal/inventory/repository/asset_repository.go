@@ -39,6 +39,23 @@ func (r *AssetRepository) Create(ctx context.Context, tag string, f domain.Asset
 	var out domain.Asset
 	err = database.WithTx(ctx, r.pool, func(tx pgx.Tx) error {
 		q := r.q.WithTx(tx)
+		// tag "": lấy tag kế tiếp của loại. Khoá dòng loại trước (NO KEY UPDATE: không chặn insert
+		// tham chiếu loại) để hai lần tạo cùng lúc xếp hàng; tính số ở câu sau để thấy tag vừa tạo
+		if tag == "" {
+			if _, err := q.GetAssetTypeForUpdate(ctx, f.TypeID); errors.Is(err, pgx.ErrNoRows) {
+				return domain.ErrTypeNotFound
+			} else if err != nil {
+				return fmt.Errorf("inventory: lock asset type: %w", err)
+			}
+			next, err := q.NextAssetTag(ctx, f.TypeID)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return domain.ErrTypeNotFound
+			}
+			if err != nil {
+				return fmt.Errorf("inventory: next asset tag: %w", err)
+			}
+			tag = next
+		}
 		if _, err := q.CreateAsset(ctx, db.CreateAssetParams{
 			ID: id, Tag: tag, Name: f.Name, Description: f.Description, AssetTypeID: f.TypeID, StatusID: f.StatusID,
 			LocationID: f.LocationID, HolderMemberID: f.HolderMemberID, PurchaseDate: toPgDate(f.PurchaseDate),

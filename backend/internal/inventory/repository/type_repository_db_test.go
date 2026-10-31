@@ -60,10 +60,10 @@ func TestTypes_DuplicatesAndRemoval(t *testing.T) {
 	ctx := actorCtx()
 	typ := laptop(t, r)
 
-	if _, err := r.types.Create(ctx, domain.NewAssetType{Code: typ.Code, Name: "Other " + uniq()}); !errors.Is(err, domain.ErrTypeCodeTaken) {
+	if _, err := r.types.Create(ctx, domain.NewAssetType{Code: typ.Code, TagPrefix: "O" + uniq(), Name: "Other " + uniq()}); !errors.Is(err, domain.ErrTypeCodeTaken) {
 		t.Errorf("duplicate code: %v", err)
 	}
-	if _, err := r.types.Create(ctx, domain.NewAssetType{Code: "X" + uniq(), Name: strings.ToUpper(typ.Name)}); !errors.Is(err, domain.ErrTypeNameTaken) {
+	if _, err := r.types.Create(ctx, domain.NewAssetType{Code: "X" + uniq(), TagPrefix: "X" + uniq(), Name: strings.ToUpper(typ.Name)}); !errors.Is(err, domain.ErrTypeNameTaken) {
 		t.Errorf("duplicate name any case: %v", err)
 	}
 	if _, err := r.types.AddAttribute(ctx, typ.ID, domain.NewAttribute{Key: "serial", Label: "Serial 2", DataType: domain.TypeText}); !errors.Is(err, domain.ErrAttributeKeyTaken) {
@@ -112,11 +112,11 @@ func TestTypes_UpdateArchiveAndVersion(t *testing.T) {
 	ctx := actorCtx()
 	typ := laptop(t, r)
 
-	upd, err := r.types.Update(ctx, typ.ID, ptr("Notebook "+uniq()), ptr("Renamed"), nil, typ.Version)
+	upd, err := r.types.Update(ctx, typ.ID, ptr("Notebook "+uniq()), ptr("Renamed"), nil, nil, typ.Version)
 	if err != nil || upd.Version != typ.Version+1 || upd.Description != "Renamed" {
 		t.Fatalf("update = %+v, %v", upd, err)
 	}
-	if _, err := r.types.Update(ctx, typ.ID, ptr("Stale"), nil, nil, typ.Version); !errors.Is(err, domain.ErrAssetTypeChanged) {
+	if _, err := r.types.Update(ctx, typ.ID, ptr("Stale"), nil, nil, nil, typ.Version); !errors.Is(err, domain.ErrAssetTypeChanged) {
 		t.Errorf("stale version: %v", err)
 	}
 	arch, err := r.types.SetArchived(ctx, typ.ID, true)

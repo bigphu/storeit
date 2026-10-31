@@ -54,7 +54,7 @@ func (f *fakeTypes) Get(_ context.Context, id uuid.UUID) (domain.AssetType, erro
 func (f *fakeTypes) Create(_ context.Context, in domain.NewAssetType) (domain.AssetType, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	t := domain.AssetType{ID: uuid.New(), Code: in.Code, Name: in.Name, Description: in.Description, CanBorrow: in.CanBorrow, Version: 1}
+	t := domain.AssetType{ID: uuid.New(), Code: in.Code, TagPrefix: in.TagPrefix, Name: in.Name, Description: in.Description, CanBorrow: in.CanBorrow, Version: 1}
 	for _, na := range in.Attributes {
 		t.Attributes = append(t.Attributes, newAttr(t.ID, na))
 	}
@@ -71,7 +71,7 @@ func newAttr(typeID uuid.UUID, na domain.NewAttribute) domain.Attribute {
 	return a
 }
 
-func (f *fakeTypes) Update(_ context.Context, id uuid.UUID, name, description *string, canBorrow *bool, version int32) (domain.AssetType, error) {
+func (f *fakeTypes) Update(_ context.Context, id uuid.UUID, name, description, tagPrefix *string, canBorrow *bool, version int32) (domain.AssetType, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	t := f.types[id]
@@ -83,6 +83,9 @@ func (f *fakeTypes) Update(_ context.Context, id uuid.UUID, name, description *s
 	}
 	if canBorrow != nil {
 		t.CanBorrow = *canBorrow
+	}
+	if tagPrefix != nil {
+		t.TagPrefix = *tagPrefix
 	}
 	if description != nil {
 		t.Description = *description

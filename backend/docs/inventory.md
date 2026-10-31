@@ -26,8 +26,9 @@ HTTP and end-to-end tests are at the module root (`*_db_test.go`, `package inven
 
 ## Schema (`migrations/00003_inventory.sql`, schema `inventory`)
 
-- `asset_types`: `code` (`^[A-Z0-9_-]{1,32}$`, immutable), `name` unique ignoring case,
-  `is_system` (seeded `GENERAL`), `archived_at`, `version`.
+- `asset_types`: `code` (`^[A-Z0-9_-]{1,32}$`, immutable), `tag_prefix` (`^[A-Z0-9]{1,10}$`,
+  unique, editable; `00010_asset_tag_prefix.sql`), `name` unique ignoring case, `is_system`
+  (seeded `GENERAL`, prefix `GEN`), `archived_at`, `version`.
 - `asset_type_attributes`: `key` (`^[a-z][a-z0-9_]{0,31}$`, immutable, never reused in a
   type), `label` (unique among active), `data_type` text/number/date/boolean/select,
   `unit` (number only, ≤ 16), `is_required`, `position`, `removed_at`.
@@ -51,6 +52,14 @@ Seeded IDs are in `domain/permissions.go` (`GeneralTypeID`, `AvailableStatusID`,
   digits or 6 decimals (rejected, never rounded), date `YYYY-MM-DD`, text 1..1000 chars
   (newlines allowed), select = id of an active option. All errors come back together as
   422 `/errors/invalid-attribute-values` with one field per key (`attributes.<key>`).
+- Tags: create without a tag (omitted, "" or blanks) gets `<tag_prefix>-<n>`, where n is
+  one more than the highest number among tags of that exact form (typed ones included), at
+  least 4 digits (`LAP-0091`). The repository locks the type row (`GetAssetTypeForUpdate`)
+  in its own statement, then runs `NextAssetTag`, so concurrent creates of one type queue
+  instead of colliding. A sent tag is still normalised and kept (imports). Type create
+  without `tag_prefix` uses the first 3 letters/digits of the code, adding 2, 3… if another
+  type has it (`domain.FreeTagPrefix`); a taken prefix sent explicitly is 409
+  `/errors/tag-prefix-taken`. Changing the prefix only affects assets created afterwards.
 - Assets: create requires an active type and status (`status_id` omitted = default
   available). `PUT` replaces everything: omitted attributes and optional fields are
   cleared, `status_id` omitted keeps the current status, stale `version` is 409. Changing
