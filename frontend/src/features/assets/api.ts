@@ -4,6 +4,7 @@ import { inventoryApi } from '@/lib/api/client'
 import { unwrap } from '@/lib/errors'
 import { typeKeys } from '@/features/asset-types/api'
 import type { toApiParams } from './listQuery'
+import { keyId } from '@/lib/queryKeyId'
 
 export type ListParams = ReturnType<typeof toApiParams>
 
@@ -18,10 +19,10 @@ export const assetKeys = {
 export function useAssetActivity(id: MaybeRefOrGetter<string>, enabled: MaybeRefOrGetter<boolean>) {
   return useInfiniteQuery({
     queryKey: computed(() => [...assetKeys.one(toValue(id)), 'activity'] as const),
-    queryFn: ({ pageParam }) =>
+    queryFn: ({ queryKey, pageParam }) =>
       unwrap(
         inventoryApi.GET('/assets/{assetID}/activity', {
-          params: { path: { assetID: toValue(id) }, query: { before: pageParam, limit: 50 } },
+          params: { path: { assetID: keyId(queryKey, 1) }, query: { before: pageParam, limit: 50 } },
         }),
       ),
     initialPageParam: undefined as string | undefined,
@@ -63,7 +64,8 @@ export function assetQuery(id: string) {
 export function useAsset(id: MaybeRefOrGetter<string | undefined>) {
   return useQuery({
     queryKey: computed(() => assetQuery(toValue(id) ?? '').queryKey),
-    queryFn: () => assetQuery(toValue(id)!).queryFn(),
+    // id lấy từ khoá: ref có thể đã rỗng khi query được tải lại (lib/queryKeyId.ts)
+    queryFn: ({ queryKey }) => assetQuery(keyId(queryKey, 1)).queryFn(),
     enabled: computed(() => !!toValue(id)),
   })
 }

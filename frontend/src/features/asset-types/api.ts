@@ -3,6 +3,7 @@ import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 import { inventoryApi } from '@/lib/api/client'
 import type { DataType } from '@/lib/api/types'
 import { unwrap } from '@/lib/errors'
+import { keyId } from '@/lib/queryKeyId'
 
 export const typeKeys = {
   all: ['asset-types'] as const,
@@ -37,8 +38,8 @@ export function useAssetTypes(includeArchived: MaybeRefOrGetter<boolean> = false
 export function useAssetType(id: MaybeRefOrGetter<string | undefined>) {
   return useQuery({
     queryKey: computed(() => typeKeys.one(toValue(id) ?? '')),
-    queryFn: () =>
-      unwrap(inventoryApi.GET('/asset-types/{typeID}', { params: { path: { typeID: toValue(id)! } } })),
+    queryFn: ({ queryKey }) =>
+      unwrap(inventoryApi.GET('/asset-types/{typeID}', { params: { path: { typeID: keyId(queryKey, 1) } } })),
     enabled: computed(() => !!toValue(id)),
   })
 }

@@ -9,6 +9,7 @@ import { unwrap } from '@/lib/errors'
 import { refreshAssetLists } from '@/features/assets/api'
 import { todayLocal } from '@/features/assets/replacement'
 import { typeKeys } from '@/features/asset-types/api'
+import { keyId } from '@/lib/queryKeyId'
 
 export type TicketParams = NonNullable<operations['listBorrowTickets']['parameters']['query']>
 export type LoanParams = NonNullable<operations['listLoans']['parameters']['query']>
@@ -32,7 +33,7 @@ export function useTickets(params: MaybeRefOrGetter<TicketParams>) {
 export function useTicket(id: MaybeRefOrGetter<string | undefined>) {
   return useQuery({
     queryKey: computed(() => borrowKeys.ticket(toValue(id) ?? '')),
-    queryFn: () => unwrap(inventoryApi.GET('/borrow-tickets/{ticketID}', { params: { path: { ticketID: toValue(id)! } } })),
+    queryFn: ({ queryKey }) => unwrap(inventoryApi.GET('/borrow-tickets/{ticketID}', { params: { path: { ticketID: keyId(queryKey, 2) } } })),
     enabled: computed(() => !!toValue(id)),
   })
 }
