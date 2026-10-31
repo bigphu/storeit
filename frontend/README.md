@@ -1,8 +1,9 @@
 # storeit frontend
 
-Vue prototype covering the identity and inventory modules. Design:
-`../docs/superpowers/specs/2026-10-02-frontend-prototype-design.md`. Styling is PrimeVue's
-Aura theme plus minimal layout CSS (`src/app/base.css`); restyle freely.
+The StoreIt web app: identity, inventory and borrowing. Vue 3, TypeScript, PrimeVue 4 and
+Vue Query. The look is an iOS-style preset over PrimeVue's Aura theme (`src/app/theme.ts`) plus
+shared tokens and layout CSS (`src/app/base.css`): grey ground with a faint dot pattern, white
+cards, tinted tags, grey secondary buttons, one green accent.
 
 ## Run
 
@@ -62,9 +63,11 @@ behaves the same everywhere.
 | Component | Use it for |
 |---|---|
 | `PageHeader` | List page title, one-line subtitle, primary action (default slot) |
-| `DetailHeader` | Detail page header card: `#media`, title + `#tags`, details (default slot), `#actions` |
+| `DetailHeader` | Every detail page's header card: icon tile (or `#media` avatar), `code` chip above the title, `#tags`, `#actions`, and a `facts` strip of 3–4 label/value pairs (`HeaderFact`, optional `to` link) |
+| `CodeTag` | Every auto-generated code (asset tag `DSK-0022`, request `REQ-0004`, type code): grey mono chip, link colour inside a link. Use it in tables, cards and dialogs instead of styling codes per page |
+| `SettingsGroup`, `SettingsRow` | iOS Settings-style grouped lists (title, card of rows with hairlines, footer); a row is a label and hint on the left, a control on the right (`stacked` for wide inputs). Used by the Settings page |
 | `CardGrid`, `EntityCard`, `AddCard` | Card grids (asset types, roles). `EntityCard` opens `to` on click/Enter, Ctrl/middle-click opens a new tab, emits `menu` on right-click; `AddCard` is the dashed "New …" tile and stretches to the row height |
-| `SegmentedFilter` | One-of-few switches (status filters with `count`, Cards/Table with `icon-only`) |
+| `SegmentedFilter` | The only segmented control: list filters (with `count`), Cards/Table (`icon-only`), and detail-page section tabs (`class="section-tabs"`, options may carry `dirty` and `disabled`). The bold active label keeps its width |
 | `IconAction` | Every icon-only action: tooltip and `aria-label` from `label`, `danger`, `to` for real links, `disabled` + `reason` shows why in the tooltip |
 | `PersonCell` | Avatar + name + email in tables (`muted` for disabled, `you`) |
 | `SaveBar` | Sticky unsaved-changes bar with Discard/Save; `blocked` when a rule (lock-out) forbids saving |
@@ -72,7 +75,7 @@ behaves the same everywhere.
 | `KeyHint` | Key cap after a button label (`<KeyHint keys="N" />`); give the button `aria-label="New … (N)"`. Hidden on touch screens |
 | `AssetActivity` (features/assets) | The asset page's Activity tab: timeline from `useAssetActivity` (infinite query under `assetKeys.one(id)`, refreshed by any asset invalidation), summary and relative time from `features/assets/activity.ts`, long values clamped with Show more |
 | `ReplaceDialog` (features/assets) | Replace an asset (US-13), from the asset page or the list's row menu (`useAssetActions().askReplace`): pick the replacement (search by tag or name, ▾ browses; same type listed first), date, reason; calls the API itself so field errors show in the form, then `announce`s with Undo (`useAssetActions().replacementUndo`). A replaced asset shows **Undo replacement** instead of Restore; Restore from the list on a replaced asset also undoes the replacement, and its Undo records it again |
-| `features/borrowing` | Borrowing (US-10). Pages: My tickets (`/borrowing/mine`, `inventory.borrow.request`), Tickets and On loan (`/borrowing/tickets`, `/borrowing/loans`, `inventory.borrow.manage`; the sidebar shows the waiting count), a ticket page. `TicketTable` is shared by both ticket lists; `useTicketActions` holds approve / reject / hand over / cancel (no toast Undo: these send email and are records; cancel asks first). `NewTicketDialog` asks for a borrowable type with specs picked by `AttributeFilterPopover :builtins="false"` and a live match count; `ApproveDialog` lists the type's free assets with one column per spec, matches first (`satisfies` in `borrowing.ts`), failing cells struck; `LendDialog` lends directly. Asset page: Borrowing panel, Hand over / Cancel reservation, Lend… / Borrow this…; list: the same in the row menu and a "Borrowable now" filter; type settings: "Can be borrowed". Reserved / On loan are never offered in status pickers (`pickableStatuses`). |
+| `features/borrowing` | Borrowing (US-10..12). Pages: My requests and My loans (`/borrowing/mine`, `/borrowing/mine/loans`, `inventory.borrow.request`), Requests and Loans (`/borrowing/tickets`, `/borrowing/loans`, `inventory.borrow.manage`; the sidebar shows the waiting count), a request page. Requests are shown as `REQ-0004` (`requestCode` in `borrowing.ts`); routes and API keep the word "ticket". `TicketTable` is shared by both ticket lists; `useTicketActions` holds approve / reject / hand over / cancel (no toast Undo: these send email and are records; cancel asks first). `NewTicketDialog` asks for a borrowable type with specs picked by `AttributeFilterPopover :builtins="false"` and a live match count; `ApproveDialog` lists the type's free assets with one column per spec, matches first (`satisfies` in `borrowing.ts`), failing cells struck; `LendDialog` lends directly. Asset page: Borrowing panel, Hand over / Cancel reservation, Lend… / Borrow this…; list: the same in the row menu and a "Borrowable now" filter; type settings: "Can be borrowed". Reserved / On loan are never offered in status pickers (`pickableStatuses`). |
 
 Keyboard shortcuts are listed once in `lib/shortcuts.ts` (grouped); the `?` dialog renders that
 list, so add a new key there first. List pages page with J/K through `stepPage()`, and keep their
@@ -94,13 +97,15 @@ Selection styling lives in `app/theme.ts` (token preset over Aura) and `app/base
   `holder_member_id` even though it doesn't show them.
 - Asset list state (filters, attribute filters, sort, page) lives in the URL using the API
   parameter names (`features/assets/listQuery.ts`).
-- Navigation: the sidebar (`app/layouts/AppSidebar.vue`) has a workspace level (All assets
-  expanding to every type with counts from `GET /asset-types?with_counts=true`,
-  Configuration, Administration) and a type level for routes under `/types/:typeId`
+- Navigation: the sidebar (`app/layouts/AppSidebar.vue`) has a workspace level in four groups:
+  Inventory (All assets, expanding to every type with counts from
+  `GET /asset-types?with_counts=true`), Borrowing, Setup (Types, Statuses, Exports) and People
+  (Accounts, Roles); and a type level for routes under `/types/:typeId`
   and an asset's own pages (Assets, Settings). `Ctrl K` or the switcher opens
   `TypeSwitcher.vue`; choosing a type keeps the section (`app/useTypeNav.ts`).
   Old `/asset-types…` and `/assets?type_id=` links redirect.
-- Account settings live at `/account/(profile|password|preferences)`; preferences (theme,
+- Settings live at `/account/(profile|password|preferences)`, built from `SettingsGroup` /
+  `SettingsRow`; preferences (theme,
   density, default rows per page, tables with their own size, recent types) are per
   account on the device (`lib/preferences.ts`). The theme toggles `app-dark` on `<html>`,
   PrimeVue's `darkModeSelector`; compact density overrides the DataTable padding tokens.
@@ -152,8 +157,6 @@ Selection styling lives in `app/theme.ts` (token preset over Aura) and `app/base
 
 ## Interaction patterns
 
-Spec: `docs/superpowers/specs/2026-10-07-ui-patterns-design.md`.
-
 - **Act now, offer Undo.**
   - Use `runAction({ run, done, undo?, undone?, undoFailed?, failed? })` from `lib/actions.ts` for anything the server can reverse.
   - `undo` receives `run`'s result, for example the new `version`.
@@ -173,14 +176,12 @@ Spec: `docs/superpowers/specs/2026-10-07-ui-patterns-design.md`.
 - **Lists:** `EmptyState` and `TableSkeleton` in every DataTable `#empty` slot.
 - **Colour:**
   - `--app-{brand,info,warn,danger,neutral}[-strong|-ink|-soft]` in `app/base.css`;
-  - tags are solid via `lib/tones.ts`;
+  - tags are tinted (soft background, ink text) via `lib/tones.ts` and the tag preset in `app/theme.ts`;
   - no coloured stripe on one side of anything.
 
 ## Detail pages and quick edit
 
-Spec: `docs/superpowers/specs/2026-10-07-detail-flows-design.md`.
-
-- **The detail page** is `DetailHeader` (`icon`, tags, facts, then actions in this order: link or main action, state change, More, Delete), then tabs with Overview first.
+- **The detail page** is `DetailHeader` (`icon`, `code`, tags, `facts`, then actions in this order: link or main action, state change, More, Delete), then `SegmentedFilter class="section-tabs"` with Overview (or Details) first, then each section as a `Panel` card holding `dl.props` or `OverviewFields` rows. Don't repeat a fact from the header strip inside a card.
 - **Fields** are `OverviewFields` over a `detailDraft` (`lib/detailDraft.ts`). There are no Edit buttons.
   - `SaveBar :count` saves with Ctrl/⌘ S.
   - Discard offers Undo.
@@ -202,4 +203,4 @@ Spec: `docs/superpowers/specs/2026-10-07-detail-flows-design.md`.
 - `src/lib/download.ts` saves the returned file.
 - The preview formatting must match `backend/internal/inventory/spreadsheet/format.go`,
   or the preview and the downloaded file will differ.
-- The Export profiles page (`src/features/export-profiles/`) lists saved layouts.
+- The Exports page (`src/features/export-profiles/`) lists saved report layouts.

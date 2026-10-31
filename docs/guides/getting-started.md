@@ -64,14 +64,14 @@ The Administrator is the `ADMIN_EMAIL` account.
 
 ## Production
 
+StoreIt runs at https://storeit.bigphu.io.vn on one Ubuntu server: the repository is cloned to `/opt/storeit`,
+the images are built there from a release tag, and host nginx terminates HTTPS in front of the `web` container.
+
 ```sh
-make images TAG=1.0.0 REGISTRY=registry.example.com   # then docker push both
-cp .env.prod.example .env                             # set STOREIT_IMAGE, STOREIT_WEB_IMAGE, APP_URL, MAIL_FROM
-sh deploy/scripts/init.sh                             # new secrets and certs for the server
-docker compose -f compose.prod.yml up -d
+git fetch --tags && git checkout v1.1.1               # the release tag
+make images TAG=v1.1.1                                # storeit/storeit:v1.1.1 and storeit/storeit-web:v1.1.1
+# first time only: sh deploy/scripts/init.sh, then cp .env.prod.example .env and fill it in
+docker compose -f compose.prod.yml up -d              # migrate runs before app and worker
 ```
 
-`web` (nginx) is the only published service, on `127.0.0.1:${WEB_PORT}`: it serves the
-SPA and proxies `/api` to the app. Put a reverse proxy with HTTPS in front of it:
-`deploy/nginx/storeit.bigphu.io.vn.conf` is the host nginx site for
-`storeit.bigphu.io.vn` (Let's Encrypt via certbot; install steps in the file).
+Every later release follows [Shipping features and migrations](/guides/deploying/).

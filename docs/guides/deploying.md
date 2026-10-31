@@ -106,18 +106,14 @@ docker compose -f compose.prod.yml exec -T postgres \
   pg_dump -U "$(cat deploy/postgres/secrets/pg_user.txt)" -Fc storeit > backup-$(date +%F)-pre-v1.1.0.dump
 ```
 
-Build and push the images (from the tagged commit):
+The server builds its own images from the tag (it has no registry), in `/opt/storeit`:
 
 ```sh
-make images TAG=1.1.0 REGISTRY=registry.example.com
-docker push registry.example.com/storeit:1.1.0
-docker push registry.example.com/storeit-web:1.1.0
-```
-
-On the server, set the new tags in `.env` (`STOREIT_IMAGE`, `STOREIT_WEB_IMAGE`), then:
-
-```sh
-docker compose -f compose.prod.yml pull
+git fetch --tags && git checkout v1.1.1
+TAG=$(git describe --tags --exact-match)
+make images TAG=$TAG                                   # storeit/storeit:$TAG, storeit/storeit-web:$TAG
+sed -i "s|^STOREIT_IMAGE=.*|STOREIT_IMAGE=storeit/storeit:$TAG|" .env
+sed -i "s|^STOREIT_WEB_IMAGE=.*|STOREIT_WEB_IMAGE=storeit/storeit-web:$TAG|" .env
 docker compose -f compose.prod.yml up -d
 ```
 
@@ -129,8 +125,11 @@ docker compose -f compose.prod.yml logs migrate     # "applied migration … 000
 docker compose -f compose.prod.yml ps               # app, worker, web running
 ```
 
-Then sign in and try the new feature once. For v1.1.0, create an asset and check that it gets the next tag
-(for example `LAP-0091`).
+Then open https://storeit.bigphu.io.vn, sign in and try the new feature once. For v1.1.0, create an asset and
+check that it gets the next tag (for example `LAP-0091`).
+
+Finally, publish the GitHub release for the tag with notes (`gh release create vX.Y.Z --notes-file …`): new
+features, fixes, and a **Deploy notes** section listing migrations and new `.env` settings.
 
 ## 6. When something goes wrong
 
@@ -149,4 +148,5 @@ Do not run `goose down` in production. Down migrations drop columns and the data
 - [ ] New migration file only (none edited), backfills existing data, has tests
 - [ ] PR with a deploy note; checks green; `main` fast-forwarded
 - [ ] Tag pushed; images built and pushed with the same version
-- [ ] Backup taken; `.env` image tags updated; `up -d`; `logs migrate` clean; feature tried once
+- [ ] Backup taken; images built from the tag; `.env` image tags updated; `up -d`; `logs migrate` clean; feature tried once
+- [ ] GitHub release published with notes

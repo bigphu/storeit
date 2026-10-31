@@ -43,16 +43,23 @@ Never edit `*.gen.go`, `events/db` or the generated `frontend/src/lib/api/*.d.ts
 
 ## Production
 
-For releases with new features or migrations, follow [Shipping features and migrations](/guides/deploying/).
+The live site is https://storeit.bigphu.io.vn. Releases follow
+[Shipping features and migrations](/guides/deploying/).
 
-1. `make images TAG=1.0.0 REGISTRY=registry.example.com`, then push both images.
-2. Copy `.env.prod.example` to `.env` and set the image names, `APP_URL` and `MAIL_FROM`.
-3. `sh deploy/scripts/init.sh` on the server for new secrets and certificates.
-4. `docker compose -f compose.prod.yml up -d`.
+First setup of a server:
 
-Only the `web` container publishes a port, on `127.0.0.1:${WEB_PORT}`. Put an HTTPS reverse proxy in front of it;
-`deploy/nginx/storeit.bigphu.io.vn.conf` is the nginx site for `storeit.bigphu.io.vn` (Let's Encrypt through
-certbot, install steps inside the file).
+1. Clone the repository to `/opt/storeit` and check out the release tag.
+2. `sh deploy/scripts/init.sh` for new secrets and certificates (never copy them from a dev machine).
+3. Copy `.env.prod.example` to `.env` and set `APP_URL`, `MAIL_FROM`, `MAIL_TRANSPORT` and, for the first start
+   only, `ADMIN_EMAIL` and `ADMIN_PASSWORD`.
+4. `make images TAG=<tag>` builds `storeit/storeit:<tag>` and `storeit/storeit-web:<tag>` on the server; set
+   `STOREIT_IMAGE` and `STOREIT_WEB_IMAGE` in `.env` to them.
+5. `docker compose -f compose.prod.yml up -d`.
 
-Production mail goes through Resend's SMTP; put the API key in `deploy/app/secrets/smtp_password.txt`. The worker
-refuses to start while that file is empty.
+Only the `web` container publishes a port, on `127.0.0.1:${WEB_PORT}`. Host nginx terminates HTTPS in front of it:
+`deploy/nginx/storeit.bigphu.io.vn.conf` is the site file (Let's Encrypt certificates through certbot's
+Cloudflare DNS plugin, because the provider blocks inbound traffic from abroad).
+
+Production mail goes through Resend. The provider blocks outbound SMTP ports, so the server uses Resend's HTTPS
+API: `MAIL_TRANSPORT=resend`, with the API key in `deploy/app/secrets/smtp_password.txt`. The worker refuses to
+start while that file is empty.

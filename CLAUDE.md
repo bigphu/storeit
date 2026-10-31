@@ -1,6 +1,6 @@
 # storeit
 
-Asset management app, monorepo: `backend/` (Go modular monolith: chi, oapi-codegen strict
+Asset management app (live at https://storeit.bigphu.io.vn), monorepo: `backend/` (Go modular monolith: chi, oapi-codegen strict
 server, pgx, River, sqlc, goose) and `frontend/` (Vue). The repo root owns the Docker
 stack: `compose.yml` (dev: postgres, migrate, app, worker, web, mailpit, pgadmin),
 `compose.prod.yml`, `deploy/` (secrets, certs, initdb, `init.sh`), `.env`, and a
@@ -47,3 +47,10 @@ stack: `compose.yml` (dev: postgres, migrate, app, worker, web, mailpit, pgadmin
   `npm run check` (vue-tsc, Vitest, build), `npm run gen:api` after changing a backend
   OpenAPI spec (commit the generated `src/lib/api/*.d.ts`; never hand-edit them).
 - Comments in Vietnamese like the backend; UI text in English.
+
+## Docs
+
+- `docs/guides/` (served by devdocs from `docs/index.mdx`) explains features and operations to
+  people; `backend/docs/*.md` and `frontend/README.md` are the developer references. Update both
+  in the same change when behaviour changes. Finished plans and specs are not kept in the repo.
+- Releases: follow `docs/guides/deploying.md`, and publish a GitHub release with notes for each tag.

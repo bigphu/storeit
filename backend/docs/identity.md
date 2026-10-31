@@ -2,9 +2,8 @@
 
 `backend/internal/identity`: sign-in, sessions with rotating refresh tokens,
 role-based access control, and emailed links for invitations and password resets.
-Design: `docs/superpowers/specs/2026-10-01-identity-module-design.md` and
-`docs/superpowers/specs/2026-10-01-account-invitations-design.md`.
-Platform APIs it builds on: `docs/platform.md`.
+Platform APIs it builds on: `docs/platform.md`. User-facing overview:
+`docs/guides/authentication.md` and `docs/guides/roles-and-permissions.md` at the repo root.
 
 ## Layout
 

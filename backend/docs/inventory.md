@@ -1,15 +1,14 @@
 # Inventory module: reference
 
-`backend/internal/inventory`: asset types with typed custom attributes, statuses, and
-assets (create, view, full update, retire, restore, search), Excel export and export
-profiles. Design:
-`docs/superpowers/specs/2026-10-02-inventory-schema-design.md`; export:
-`docs/superpowers/specs/2026-10-06-excel-export-design.md`. Platform APIs:
-`docs/platform.md`.
+`backend/internal/inventory`: asset types with typed custom attributes and tag prefixes,
+statuses, and assets (create with generated tags, view, full update, retire, restore, search,
+bulk actions), replacement, activity history, borrowing (requests, loans, returns, emails),
+Excel export and export profiles. Platform APIs: `docs/platform.md`. User-facing overview:
+`docs/guides/inventory-model.md` and `docs/guides/borrowing.md` at the repo root.
 
-Not built yet (sketched in the spec): borrowing and returns, replacement, parent/child
-assets, QR redirect, Excel import, validation of `location_id` and
-`holder_member_id` against the directory module.
+Not built yet: parent/child assets, QR redirect (`GET /a/{tag}`, `TODO(M4)` in
+`handler/redirect.go`), Excel import (`TODO(M5)` in `service/import.go`), validation of
+`location_id` and `holder_member_id` against a directory module.
 
 ## Layout
 

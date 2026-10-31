@@ -7,13 +7,17 @@ template: splash
 Storeit is an asset management app. A Go backend (modular monolith) serves a Vue single-page app;
 Postgres holds everything, and a worker sends email and runs background jobs.
 
+Live at https://storeit.bigphu.io.vn. Release notes are on
+[GitHub releases](https://github.com/bigphu/storeit/releases).
+
 ## Start here
 
 - [Getting started](/guides/getting-started/): run the Docker stack, demo data and accounts, production setup.
 - [Architecture](/guides/architecture/): the services, the backend layers and how a request flows.
 - [Sign-in and sessions](/guides/authentication/): tokens, refresh rotation, invitations and password reset.
 - [Roles and permissions](/guides/roles-and-permissions/): who can do what.
-- [Inventory model](/guides/inventory-model/): asset types, custom attributes, statuses, assets and search.
+- [Inventory model](/guides/inventory-model/): asset types, custom attributes, statuses, tags, replacement, activity history and search.
+- [Borrowing](/guides/borrowing/): requests, reservations, loans, returns and the emails they send.
 - [Exporting assets](/guides/exporting-assets/): Excel data export, reports and export profiles.
 - [Configuration and operations](/guides/operations/): environment variables, `make` targets, CI and deployment.
 - [Shipping features and migrations](/guides/deploying/): branch, PR, release tag, database migrations and rollout.
