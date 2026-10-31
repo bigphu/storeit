@@ -24,3 +24,8 @@ desktop.ini
 .idea/
 *.swp
 .devdocs/
+
+# Tài liệu môn học / kế hoạch sprint: giữ trên máy, không đưa vào repo
+docs/StoreIT-*.md
+backend/docs/*.pdf
+backend/docs/tasks/

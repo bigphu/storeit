@@ -24,7 +24,6 @@ Monorepo: the root owns the Docker stack, each app has its own folder and Docker
 | `backend/` | Go API, worker and migrations. Module references in `backend/docs/` |
 | `frontend/` | Vue SPA (`frontend/README.md`) |
 | `docs/guides/` | User and maintainer guides (start at `docs/index.mdx`) |
-| `docs/StoreIT-Sprint3-*.md` | Sprint 3 requirements and planning (Vietnamese) |
 | `compose.yml` | Dev stack: postgres, migrate, app, worker, web, mailpit, pgadmin (profile `tools`) |
 | `compose.prod.yml` | Single-server production stack |
 | `deploy/` | Postgres initdb, pgAdmin config, host nginx site, `scripts/init.sh`; generated secrets and certs (git-ignored) |
