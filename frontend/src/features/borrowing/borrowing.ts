@@ -19,11 +19,15 @@ export function pickableStatuses<T extends { id: string }>(statuses: T[]): T[] {
   return statuses.filter((s) => !isBorrowingStatus(s.id))
 }
 
-// returnConditionOptions: tình trạng khi nhận lại tài sản; null là tốt (về Available mặc định),
-// còn lại là status đang dùng không thuộc kind available hay retired và không do việc mượn đặt
-export function returnConditionOptions(statuses: readonly Status[]): { label: string; value: string | null }[] {
+// RETURN_FINE: tình trạng tốt (về Available mặc định, không gửi status_id). Không dùng null: Select
+// của PrimeVue coi null là chưa chọn và không hiện nhãn
+export const RETURN_FINE = 'fine'
+
+// returnConditionOptions: tình trạng khi nhận lại tài sản; RETURN_FINE trước, còn lại là status đang
+// dùng không thuộc kind available hay retired và không do việc mượn đặt
+export function returnConditionOptions(statuses: readonly Status[]): { label: string; value: string }[] {
   return [
-    { label: 'Fine — back to Available', value: null },
+    { label: 'Fine — back to Available', value: RETURN_FINE },
     ...statuses
       .filter((s) => !s.archived_at && s.kind !== 'available' && s.kind !== 'retired' && !isBorrowingStatus(s.id))
       .map((s) => ({ label: s.name, value: s.id })),

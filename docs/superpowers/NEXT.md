@@ -1,25 +1,18 @@
-# Next up (handoff, 2026-10-31)
+# Next up (handoff, updated 2026-10-31)
 
 Short on purpose: read this first when resuming, then only the files it points to.
 
 ## Where things stand
 
-- `main` (origin) = `d4cf060`: Sprint 3 US-10 borrowing, US-11 returns, US-13, US-16, iOS-style skin. Migrations up to `00009_loan_returns.sql`, applied on the dev DB.
-- Branch `fix/us11-minors` (local, not pushed), 2 commits on `main`: the two US-11 follow-ups (return dialog follows the server day; On loan page reads a fresh asset version) and this note. Land it the usual way: PR for the two required checks, then fast-forward `main`.
-- Dev data: DSK-0004 was returned to "Under repair" in the US-11 walk-through. `make seed` restores the demo data if wanted.
+- `main` (origin): Sprint 3 US-10 borrowing, US-11 returns (and follow-ups), US-13, US-16 and the iOS-style skin. Migrations up to `00009_loan_returns.sql`, applied on the dev DB. Branches are cleaned up.
+- The US-11 click-through in the browser is done. It found one bug: the return dialog's Condition showed blank instead of "Fine — back to Available". The fix is on branch `fix/return-condition-default`.
+- Dev data: DSK-0004 (Under repair) and DSK-0002 (Available) were returned during walk-throughs; LAP-0001 is still on loan to the officer. `make seed` restores the demo data.
 
 ## To do, in order
 
-1. **Clean up branches** (blocked for Claude as destructive; run yourself):
-   `git branch -D feat/ui-skin feat/us10-borrowing feat/us11-returns` and
-   `git push origin --delete feat/us11-returns feat/identity-module feat/inventory-module`.
-   All their content is in `main`.
-2. **Land `fix/us11-minors`** (PR → checks → ff push to `main`).
-3. **US-11 UI click-through** in a browser (only the API was walked through): Record return
-   from the asset page and from On loan (inline button and row menu), My loans, the "Loan" line
-   on a handed-over ticket.
-4. **US-12 — View borrowing history** (next story; not designed yet). See below.
-5. **VPS deploy** (you): migrations 00008 and 00009 run on deploy; `backup.sh` still open.
+1. Land `fix/return-condition-default` (PR → checks → merge).
+2. **US-12 — View borrowing history.** You said lookups are mostly **by period**. Design in progress; see below.
+3. **VPS deploy** (you): migrations 00008 and 00009 run on deploy; `backup.sh` still open.
 
 ## US-12 brief (to start the design quickly)
 

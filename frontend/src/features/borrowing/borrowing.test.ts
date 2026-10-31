@@ -13,6 +13,7 @@ import {
   parseRequirement,
   pickableStatuses,
   requirementLabels,
+  RETURN_FINE,
   returnConditionOptions,
   returnFormError,
   ticketLoanLabel,
@@ -76,6 +77,10 @@ describe('requirements', () => {
 describe('returnConditionOptions', () => {
   const st = (id: string, kind: string, archived = false) =>
     ({ id, name: id, kind, archived_at: archived ? '2026-10-01T00:00:00Z' : null }) as unknown as Status
+  // Select của PrimeVue coi null là "chưa chọn": Fine phải có giá trị thật để hiện sẵn
+  it('gives Fine a real value so the select shows it as chosen', () => {
+    expect(RETURN_FINE).toBeTruthy()
+  })
   it('puts Fine first, then statuses an asset can come back damaged to', () => {
     const all = [
       st('Available', 'available'),
@@ -88,7 +93,7 @@ describe('returnConditionOptions', () => {
       st('Retired', 'retired'),
     ]
     expect(returnConditionOptions(all)).toEqual([
-      { label: 'Fine — back to Available', value: null },
+      { label: 'Fine — back to Available', value: RETURN_FINE },
       { label: 'In repair', value: 'In repair' },
       { label: 'In use', value: 'In use' },
     ])

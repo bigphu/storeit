@@ -10,7 +10,7 @@ import { useDirty, useFormErrors } from '@/lib/forms'
 import { notify } from '@/lib/notify'
 import { useStatuses } from '@/features/statuses/api'
 import { useBusinessDay, useReturnAsset } from '../api'
-import { returnConditionOptions, returnFormError, shortDay } from '../borrowing'
+import { RETURN_FINE, returnConditionOptions, returnFormError, shortDay } from '../borrowing'
 
 // Ghi nhận trả (US-11, người quản lý): ngày trả (mặc định hôm nay, không trước ngày bắt đầu), tình
 // trạng (tốt thì về Available, hỏng thì chọn status khác), ghi chú. Người mượn nhận thư biên nhận
@@ -23,7 +23,7 @@ const today = useBusinessDay(visible)
 const { data: statuses } = useStatuses()
 const conditions = computed(() => returnConditionOptions(statuses.value ?? []))
 const returnedOn = ref('')
-const statusId = ref<string | null>(null)
+const statusId = ref(RETURN_FINE)
 const note = ref('')
 const form = useDirty(() => ({ d: returnedOn.value, s: statusId.value, n: note.value.trim() }))
 
@@ -32,7 +32,7 @@ watch(
   (open) => {
     if (!open) return
     returnedOn.value = today.value
-    statusId.value = null
+    statusId.value = RETURN_FINE
     note.value = ''
     errors.clear()
     form.reset()
@@ -57,7 +57,7 @@ async function submit() {
   if (!a || problem.value) return
   errors.clear()
   try {
-    await ret.mutateAsync({ id: a.id, returnedOn: returnedOn.value, statusId: statusId.value ?? undefined, note: note.value.trim(), version: a.version })
+    await ret.mutateAsync({ id: a.id, returnedOn: returnedOn.value, statusId: statusId.value === RETURN_FINE ? undefined : statusId.value, note: note.value.trim(), version: a.version })
     notify.success(`${a.tag} returned.`)
     visible.value = false
   } catch (err) {
