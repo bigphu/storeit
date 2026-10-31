@@ -25,6 +25,7 @@ import LendDialog from '@/features/borrowing/components/LendDialog.vue'
 import NewTicketDialog from '@/features/borrowing/components/NewTicketDialog.vue'
 import RejectDialog from '@/features/borrowing/components/RejectDialog.vue'
 import ReturnDialog from '@/features/borrowing/components/ReturnDialog.vue'
+import AssetLoans from '@/features/borrowing/components/AssetLoans.vue'
 import { useTicketActions } from '@/features/borrowing/useTicketActions'
 import { fetchAssetPage, useAsset } from '../api'
 import AssetActivity from '../components/AssetActivity.vue'
@@ -48,7 +49,9 @@ const canManageTypes = computed(() => session.can(Perm.TypeManage))
 
 const { data: asset } = useAsset(() => props.id)
 // tab đang mở; Activity chỉ tải khi mở lần đầu
-const tab = ref<'details' | 'activity'>('details')
+const tab = ref<'details' | 'activity' | 'loans'>('details')
+// lịch sử mượn của tài sản (US-12): chỉ người quản lý mượn
+const canSeeLoans = computed(() => session.can(Perm.BorrowManage))
 // hộp "Replace" (US-13)
 const replaceOpen = ref(false)
 const retired = computed(() => !!asset.value?.retired_at)
@@ -167,6 +170,7 @@ usePageKeys((e) => {
       <TabList>
         <Tab value="details">Details</Tab>
         <Tab value="activity">Activity</Tab>
+        <Tab v-if="canSeeLoans" value="loans">Loans</Tab>
       </TabList>
       <TabPanels class="panels">
         <TabPanel value="details">
@@ -267,6 +271,9 @@ usePageKeys((e) => {
         </TabPanel>
         <TabPanel value="activity">
           <AssetActivity v-if="tab === 'activity'" :asset-id="asset.id" />
+        </TabPanel>
+        <TabPanel v-if="canSeeLoans" value="loans">
+          <AssetLoans v-if="tab === 'loans'" :asset-id="asset.id" />
         </TabPanel>
       </TabPanels>
     </Tabs>
