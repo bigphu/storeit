@@ -2,15 +2,14 @@
 import Button from 'primevue/button'
 import Menu from 'primevue/menu'
 import type { MenuItem } from 'primevue/menuitem'
-import Tab from 'primevue/tab'
-import TabList from 'primevue/tablist'
-import Tabs from 'primevue/tabs'
+import Panel from 'primevue/panel'
 import Tag from 'primevue/tag'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLeaveGuard, useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb from '@/components/AppBreadcrumb.vue'
-import DetailHeader from '@/components/DetailHeader.vue'
+import DetailHeader, { type HeaderFact } from '@/components/DetailHeader.vue'
+import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import SaveBar from '@/components/SaveBar.vue'
@@ -57,6 +56,13 @@ const fields: FieldDef[] = [
 ]
 const saved = computed(() => ({ name: profile.value?.name ?? '', owner: profile.value?.owner.name ?? '' }))
 const draft = reactive(emptyDraft())
+// tab chia mục (một điều khiển phân đoạn với bộ lọc của danh sách)
+const sections = computed<SegmentOption<Section>[]>(() => [
+  { value: 'overview', label: 'Overview', dirty: changeCount(draft, 'overview') > 0 },
+  { value: 'columns', label: 'Columns', count: profile.value?.layout.columns.length },
+  { value: 'layout', label: 'Layout' },
+  { value: 'format', label: 'Format' },
+])
 
 // Bố cục: trình sửa nạp lại khi version đổi hay khi Discard (layoutKey); editorSource để Undo
 // của Discard đưa lại bản đang sửa
@@ -144,11 +150,15 @@ function duplicate() {
 const more = ref<InstanceType<typeof Menu>>()
 const moreItems = computed<MenuItem[]>(() => [{ label: 'Duplicate', icon: 'pi pi-clone', command: duplicate }])
 
-const facts = computed(() => {
+// dải thông tin ở đầu trang
+const facts = computed<HeaderFact[]>(() => {
   const p = profile.value
-  if (!p) return ''
-  const n = p.layout.columns.length
-  return `By ${p.owner.name} · ${n} ${n === 1 ? 'column' : 'columns'} · ${p.layout.sheets === 'per_type' ? 'sheet per type' : 'one sheet'}`
+  if (!p) return []
+  return [
+    { label: 'Owner', value: p.owner.name },
+    { label: 'Columns', value: p.layout.columns.length },
+    { label: 'Sheets', value: p.layout.sheets === 'per_type' ? 'One per type' : 'One sheet' },
+  ]
 })
 const fileName = computed(() => exportFileName('report', profile.value?.name, new Date().toISOString().slice(0, 10)))
 const crumbs = computed(() => [{ label: 'Exports', to: '/export-profiles' }, { label: profile.value?.name ?? '…' }])
@@ -157,11 +167,10 @@ const crumbs = computed(() => [{ label: 'Exports', to: '/export-profiles' }, { l
 <template>
   <section v-if="profile">
     <AppBreadcrumb :items="crumbs" />
-    <DetailHeader :title="profile.name" icon="file">
+    <DetailHeader :title="profile.name" icon="file" :facts="facts">
       <template #tags>
         <Tag :value="profile.shared ? 'Shared' : 'Only you'" :severity="profile.shared ? 'info' : 'secondary'" />
       </template>
-      <div>{{ facts }}</div>
       <template #actions>
         <Button label="Export now" icon="pi pi-download" :loading="running" @click="exportNow" />
         <template v-if="canEdit">
@@ -174,16 +183,11 @@ const crumbs = computed(() => [{ label: 'Exports', to: '/export-profiles' }, { l
       </template>
     </DetailHeader>
 
-    <Tabs :value="state.tab" class="section-tabs" @update:value="(v) => updateUrl({ tab: v as Section })">
-      <TabList>
-        <Tab value="overview">Overview<span v-if="changeCount(draft, 'overview')" class="tab-dirty" aria-label="Unsaved changes" /></Tab>
-        <Tab value="columns">Columns <span class="tab-count">{{ profile.layout.columns.length }}</span></Tab>
-        <Tab value="layout">Layout</Tab>
-        <Tab value="format">Format</Tab>
-      </TabList>
-    </Tabs>
+    <SegmentedFilter :model-value="state.tab" :options="sections" label="Sections" class="section-tabs" @update:model-value="(v) => updateUrl({ tab: v })" />
 
-    <OverviewFields v-if="!onLayoutTab" :fields="fields" :saved="saved" :draft="draft" :readonly="!canEdit" />
+    <Panel v-if="!onLayoutTab" header="Details">
+      <OverviewFields :fields="fields" :saved="saved" :draft="draft" :readonly="!canEdit" />
+    </Panel>
     <div v-else class="editor-wrap">
       <ReportEditor
         v-model:tab="editorTab"
@@ -207,21 +211,6 @@ const crumbs = computed(() => [{ label: 'Exports', to: '/export-profiles' }, { l
 </template>
 
 <style scoped>
-.section-tabs {
-  margin-bottom: 1rem;
-}
-.tab-count {
-  font: 0.75rem var(--app-mono);
-  color: var(--p-text-muted-color);
-}
-.tab-dirty {
-  display: inline-block;
-  width: 0.45rem;
-  height: 0.45rem;
-  margin-left: 0.4rem;
-  border-radius: 50%;
-  background: var(--app-warn);
-}
 /* trình sửa có hai cột tự cuộn: cho nó chiều cao cố định */
 .editor-wrap {
   display: flex;

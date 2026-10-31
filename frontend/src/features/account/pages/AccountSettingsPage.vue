@@ -1,10 +1,6 @@
 <script setup lang="ts">
-import Tab from 'primevue/tab'
-import TabList from 'primevue/tablist'
-import TabPanel from 'primevue/tabpanel'
-import TabPanels from 'primevue/tabpanels'
-import Tabs from 'primevue/tabs'
 import { useRouter } from 'vue-router'
+import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
 import ChangePasswordForm from '../components/ChangePasswordForm.vue'
 import PreferencesForm from '../components/PreferencesForm.vue'
 import ProfileForm from '../components/ProfileForm.vue'
@@ -13,25 +9,39 @@ import ProfileForm from '../components/ProfileForm.vue'
 defineProps<{ section: string }>()
 const router = useRouter()
 
-function open(section: string | number) {
+function open(section: string) {
   router.replace(`/account/${section}`)
 }
+const sections: SegmentOption<string>[] = [
+  { value: 'profile', label: 'Profile', icon: 'pi pi-user' },
+  { value: 'password', label: 'Password', icon: 'pi pi-lock' },
+  { value: 'preferences', label: 'Preferences', icon: 'pi pi-sliders-h' },
+]
 </script>
 
 <template>
-  <section>
-    <h1>Account settings</h1>
-    <Tabs :value="section" @update:value="open">
-      <TabList>
-        <Tab value="profile">Profile</Tab>
-        <Tab value="password">Password</Tab>
-        <Tab value="preferences">Preferences</Tab>
-      </TabList>
-      <TabPanels>
-        <TabPanel value="profile"><ProfileForm /></TabPanel>
-        <TabPanel value="password"><ChangePasswordForm /></TabPanel>
-        <TabPanel value="preferences"><PreferencesForm /></TabPanel>
-      </TabPanels>
-    </Tabs>
+  <section class="settings-page">
+    <header class="settings-head">
+      <h1>Settings</h1>
+      <SegmentedFilter :model-value="section" :options="sections" label="Sections" @update:model-value="open" />
+    </header>
+    <ProfileForm v-if="section === 'profile'" />
+    <ChangePasswordForm v-else-if="section === 'password'" />
+    <PreferencesForm v-else-if="section === 'preferences'" />
   </section>
 </template>
+
+<style scoped>
+/* cột cài đặt hẹp như Settings của iOS / macOS: tiêu đề và phân đoạn trên một hàng */
+.settings-page {
+  max-width: 42rem;
+}
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.4rem;
+}
+</style>

@@ -6,15 +6,13 @@ import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
 import Message from 'primevue/message'
 import Select from 'primevue/select'
-import Tab from 'primevue/tab'
-import TabList from 'primevue/tablist'
-import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLeaveGuard, useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb from '@/components/AppBreadcrumb.vue'
-import DetailHeader from '@/components/DetailHeader.vue'
+import DetailHeader, { type HeaderFact } from '@/components/DetailHeader.vue'
+import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import FormDialog from '@/components/FormDialog.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
@@ -59,6 +57,12 @@ const { state, update } = useUrlState(
 
 // Bản nháp chung: Overview (tên, mô tả) và Permissions (tick); một thanh lưu cho tab đang mở
 const draft = reactive(emptyDraft())
+// tab chia mục (một điều khiển phân đoạn với bộ lọc của danh sách)
+const sections = computed<SegmentOption<Section>[]>(() => [
+  { value: 'overview', label: 'Overview', dirty: changeCount(draft, 'overview') > 0 },
+  { value: 'permissions', label: 'Permissions', dirty: changeCount(draft, 'permissions') > 0 },
+  ...(canSeePeople.value ? [{ value: 'people' as const, label: 'People', count: people.value }] : []),
+])
 useTabDirty(() => isDirty(draft))
 useLeaveGuard(() => isDirty(draft))
 const fields = computed<FieldDef[]>(() => [
@@ -82,6 +86,16 @@ const rowChanged = (a: Area) => [a.view, a.manage].some((p) => p && changed.valu
 // Administrator phải giữ "Manage roles", không thì không ai đổi được role nữa (API trả 409)
 const lockout = computed(() => props.id === ADMINISTRATOR_ROLE_ID && !current.value.includes(Perm.RoleManage))
 const people = computed(() => role.value?.member_count ?? 0)
+// dải thông tin ở đầu trang
+const facts = computed<HeaderFact[]>(() =>
+  role.value
+    ? [
+        { label: 'People', value: people.value },
+        { label: 'Permissions', value: `${role.value.permissions.length} of ${ALL_PERMS.length}` },
+        { label: 'Kind', value: role.value.is_system ? 'Built-in' : 'Custom' },
+      ]
+    : [],
+)
 const peopleLabel = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`
 
 const setPerms = useSetRolePermissions()
@@ -206,27 +220,22 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
   <section v-if="role">
     <AppBreadcrumb :items="crumbs" />
 
-    <DetailHeader :title="role.name" icon="shield">
+    <DetailHeader :title="role.name" icon="shield" :facts="facts">
       <template #tags>
         <Tag v-if="role.is_system" value="Built-in" icon="pi pi-lock" severity="secondary" />
         <Tag v-else value="Custom" severity="secondary" />
       </template>
-      <div class="meta">{{ peopleLabel(people) }} · {{ role.permissions.length }} of {{ ALL_PERMS.length }} permissions</div>
       <template v-if="canManage && !role.is_system" #actions>
         <Button label="Delete" icon="pi pi-trash" severity="danger" outlined @click="deleteRole" />
       </template>
     </DetailHeader>
 
-    <Tabs :value="state.tab" class="section-tabs" @update:value="(v) => update({ tab: v as Section })">
-      <TabList>
-        <Tab value="overview">Overview<span v-if="changeCount(draft, 'overview')" class="tab-dirty" aria-label="Unsaved changes" /></Tab>
-        <Tab value="permissions">Permissions<span v-if="changeCount(draft, 'permissions')" class="tab-dirty" aria-label="Unsaved changes" /></Tab>
-        <Tab v-if="canSeePeople" value="people">People <span class="tab-count">{{ people }}</span></Tab>
-      </TabList>
-    </Tabs>
+    <SegmentedFilter :model-value="state.tab" :options="sections" label="Sections" class="section-tabs" @update:model-value="(v) => update({ tab: v })" />
 
     <template v-if="state.tab === 'overview'">
-      <OverviewFields :fields="fields" :saved="savedFields" :draft="draft" :readonly="!canManage" />
+      <Panel header="Details">
+        <OverviewFields :fields="fields" :saved="savedFields" :draft="draft" :readonly="!canManage" />
+      </Panel>
       <SaveBar v-if="canManage && changeCount(draft, 'overview')" :count="changeCount(draft, 'overview')" :saving="saving" @save="saveDetails" @discard="discard('overview')" />
     </template>
 
@@ -367,15 +376,6 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
 </template>
 
 <style scoped>
-/* tab còn thay đổi chưa lưu */
-.tab-dirty {
-  display: inline-block;
-  width: 0.45rem;
-  height: 0.45rem;
-  margin-left: 0.4rem;
-  border-radius: 50%;
-  background: var(--app-warn);
-}
 .mark {
   flex: none;
   display: grid;
@@ -395,13 +395,6 @@ const crumbs = computed(() => [{ label: 'Roles', to: '/roles' }, { label: role.v
 .meta,
 .small {
   font-size: 0.85rem;
-}
-.section-tabs {
-  margin-bottom: 1rem;
-}
-.tab-count {
-  font: 0.75rem var(--app-mono);
-  color: var(--p-text-muted-color);
 }
 .block-msg {
   margin-bottom: 0.75rem;

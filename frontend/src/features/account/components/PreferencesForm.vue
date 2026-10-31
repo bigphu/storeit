@@ -2,9 +2,11 @@
 import Button from 'primevue/button'
 import Chip from 'primevue/chip'
 import Select from 'primevue/select'
-import SelectButton from 'primevue/selectbutton'
 import ToggleSwitch from 'primevue/toggleswitch'
 import { computed } from 'vue'
+import SegmentedFilter from '@/components/SegmentedFilter.vue'
+import SettingsGroup from '@/components/SettingsGroup.vue'
+import SettingsRow from '@/components/SettingsRow.vue'
 import { PAGE_SIZES, tableLabel, usePreferences, withTableSize } from '@/lib/preferences'
 import { useAssetTypes } from '@/features/asset-types/api'
 
@@ -13,13 +15,13 @@ const store = usePreferences()
 const { data: types } = useAssetTypes(true)
 
 const themes = [
-  { label: 'Match my device', value: 'system' },
-  { label: 'Light', value: 'light' },
-  { label: 'Dark', value: 'dark' },
+  { label: 'Auto', value: 'system' as const, icon: 'pi pi-desktop' },
+  { label: 'Light', value: 'light' as const, icon: 'pi pi-sun' },
+  { label: 'Dark', value: 'dark' as const, icon: 'pi pi-moon' },
 ]
 const densities = [
-  { label: 'Comfortable', value: 'comfortable' },
-  { label: 'Compact', value: 'compact' },
+  { label: 'Comfortable', value: 'comfortable' as const },
+  { label: 'Compact', value: 'compact' as const },
 ]
 
 // Các bảng đã chọn số dòng riêng (khác mặc định)
@@ -40,69 +42,36 @@ function useDefaultEverywhere() {
 </script>
 
 <template>
-  <div class="form">
-    <div class="field">
-      <span id="pref-theme">Theme</span>
-      <SelectButton
-        v-model="store.prefs.theme"
-        :options="themes"
-        option-label="label"
-        option-value="value"
-        :allow-empty="false"
-        aria-labelledby="pref-theme"
-      />
-    </div>
-    <div class="field">
-      <span id="pref-density">Table density</span>
-      <SelectButton
-        v-model="store.prefs.density"
-        :options="densities"
-        option-label="label"
-        option-value="value"
-        :allow-empty="false"
-        aria-labelledby="pref-density"
-      />
-    </div>
-    <div class="field">
-      <label for="pref-rows">Default rows per page</label>
-      <Select v-model="store.prefs.defaultPageSize" input-id="pref-rows" :options="PAGE_SIZES" class="narrow" />
-      <small>Used by every table where you haven't picked a size. Each table also has its own rows control under it.</small>
-    </div>
-    <div class="toggle-row">
-      <ToggleSwitch v-model="store.prefs.reopenTabs" input-id="pref-reopen" />
-      <label for="pref-reopen">
-        Reopen my tabs when I sign in
-        <small>Off: only pinned tabs come back.</small>
-      </label>
-    </div>
-    <div v-if="ownSizes.length" class="field">
-      <span>Tables with their own size</span>
-      <div class="actions">
-        <Chip
-          v-for="t in ownSizes"
-          :key="t.key"
-          :label="`${t.label} · ${t.size}`"
-          removable
-          @remove="useDefault(t.key)"
-        />
-      </div>
-      <span><Button label="Use the default everywhere" text size="small" @click="useDefaultEverywhere" /></span>
-    </div>
-    <small>Preferences are saved for your account on this device.</small>
+  <div class="settings">
+    <SettingsGroup title="Appearance">
+      <SettingsRow label="Theme">
+        <SegmentedFilter v-model="store.prefs.theme" :options="themes" label="Theme" />
+      </SettingsRow>
+      <SettingsRow label="Table density" hint="Compact fits more rows on screen.">
+        <SegmentedFilter v-model="store.prefs.density" :options="densities" label="Table density" />
+      </SettingsRow>
+    </SettingsGroup>
+
+    <SettingsGroup title="Tables">
+      <SettingsRow label="Default rows per page" hint="For every table where you haven't picked a size." for="pref-rows">
+        <Select v-model="store.prefs.defaultPageSize" input-id="pref-rows" :options="PAGE_SIZES" class="narrow" />
+      </SettingsRow>
+      <SettingsRow v-if="ownSizes.length" label="Tables with their own size" hint="Remove one to use the default again." stacked>
+        <Chip v-for="t in ownSizes" :key="t.key" :label="`${t.label} · ${t.size}`" removable @remove="useDefault(t.key)" />
+        <Button label="Use the default everywhere" text size="small" @click="useDefaultEverywhere" />
+      </SettingsRow>
+    </SettingsGroup>
+
+    <SettingsGroup title="Tabs" footer="Preferences are saved for your account on this device.">
+      <SettingsRow label="Reopen my tabs when I sign in" hint="Off: only pinned tabs come back." for="pref-reopen">
+        <ToggleSwitch v-model="store.prefs.reopenTabs" input-id="pref-reopen" />
+      </SettingsRow>
+    </SettingsGroup>
   </div>
 </template>
 
 <style scoped>
 .narrow {
-  width: 8rem;
-}
-.toggle-row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-start;
-}
-.toggle-row label {
-  display: flex;
-  flex-direction: column;
+  width: 7rem;
 }
 </style>

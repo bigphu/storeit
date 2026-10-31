@@ -2,19 +2,16 @@
 import Avatar from 'primevue/avatar'
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
-import Chip from 'primevue/chip'
 import Menu from 'primevue/menu'
 import type { MenuItem } from 'primevue/menuitem'
 import Message from 'primevue/message'
 import Panel from 'primevue/panel'
-import Tab from 'primevue/tab'
-import TabList from 'primevue/tablist'
-import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
 import { computed, reactive, ref, watch } from 'vue'
 import { useLeaveGuard, useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb from '@/components/AppBreadcrumb.vue'
-import DetailHeader from '@/components/DetailHeader.vue'
+import DetailHeader, { type HeaderFact } from '@/components/DetailHeader.vue'
+import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
 import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import SaveBar from '@/components/SaveBar.vue'
 import { useRoles } from '@/features/roles/api'
@@ -42,6 +39,16 @@ useTabTitle(() => account.value?.name)
 const roles = useRoles()
 const actions = useAccountActions()
 const self = computed(() => !!account.value && actions.isSelf(account.value))
+// dải thông tin ở đầu trang: email, vai trò, lần đăng nhập gần nhất
+const facts = computed<HeaderFact[]>(() => {
+  const a = account.value
+  if (!a) return []
+  return [
+    { label: 'Email', value: a.email },
+    { label: 'Roles', value: a.roles.length ? a.roles.map((r) => r.name).join(', ') : 'No roles' },
+    { label: 'Last sign-in', value: a.last_sign_in_at ? relativeTime(a.last_sign_in_at) : 'Never' },
+  ]
+})
 
 type Section = 'overview' | 'roles'
 const { state, update } = useUrlState(
@@ -52,6 +59,11 @@ const label = (s: string) => s[0].toUpperCase() + s.slice(1)
 
 // Bản nháp chung cho mọi tab: Overview (tên) và Roles (tick); một thanh lưu cho tab đang mở
 const draft = reactive(emptyDraft())
+// tab chia mục (một điều khiển phân đoạn với bộ lọc của danh sách)
+const sections = computed<SegmentOption<Section>[]>(() => [
+  { value: 'overview', label: 'Overview', dirty: changeCount(draft, 'overview') > 0 },
+  { value: 'roles', label: 'Roles', count: account.value?.roles.length, dirty: changeCount(draft, 'roles') > 0 },
+])
 useTabDirty(() => isDirty(draft))
 useLeaveGuard(() => isDirty(draft))
 const fields: FieldDef[] = [
@@ -116,7 +128,7 @@ const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: 
   <section v-if="account">
     <AppBreadcrumb :items="crumbs" />
 
-    <DetailHeader :title="account.name">
+    <DetailHeader :title="account.name" :facts="facts">
       <template #media>
         <Avatar :label="initials(account.name)" shape="circle" size="xlarge" :class="['avatar', { muted: account.status === 'disabled' }]" />
       </template>
@@ -124,11 +136,6 @@ const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: 
         <Tag :value="label(account.status)" :severity="statusSeverity(account.status)" />
         <Tag v-if="self" value="You" severity="secondary" />
       </template>
-      <div>{{ account.email }}</div>
-      <div class="chips">
-        <Chip v-for="r in account.roles" :key="r.id" :label="r.name" icon="pi pi-shield" />
-        <span v-if="!account.roles.length">No roles</span>
-      </div>
       <template v-if="canManage" #actions>
         <Button v-if="account.status === 'disabled'" label="Enable" severity="secondary" outlined @click="actions.enable(account)" />
         <span v-else v-tooltip.top="self ? 'You can’t disable yourself' : undefined">
@@ -147,13 +154,7 @@ const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: 
       </template>
     </DetailHeader>
 
-    <Tabs :value="state.tab" class="section-tabs" @update:value="(v) => update({ tab: v as Section })">
-      <TabList>
-        <Tab value="overview">Overview<span v-if="changeCount(draft, 'overview')" class="tab-dirty" aria-label="Unsaved changes" /></Tab>
-        <Tab value="roles">Roles <span class="tab-count">{{ account.roles.length }}</span><span v-if="changeCount(draft, 'roles')" class="tab-dirty" aria-label="Unsaved changes" /></Tab>
-        <Tab value="activity" disabled>Activity · later</Tab>
-      </TabList>
-    </Tabs>
+    <SegmentedFilter :model-value="state.tab" :options="sections" label="Sections" class="section-tabs" @update:model-value="(v) => update({ tab: v })" />
 
     <div v-if="state.tab === 'overview'" class="grid">
       <Panel header="Profile">
@@ -244,31 +245,6 @@ const crumbs = computed(() => [{ label: 'Accounts', to: '/accounts' }, { label: 
   color: var(--p-text-muted-color);
 }
 .muted {
-  color: var(--p-text-muted-color);
-}
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-}
-.chips :deep(.p-chip) {
-  padding: 0.1rem 0.6rem;
-  font-size: 0.8rem;
-}
-.section-tabs {
-  margin-bottom: 1rem;
-}
-/* tab còn thay đổi chưa lưu */
-.tab-dirty {
-  display: inline-block;
-  width: 0.45rem;
-  height: 0.45rem;
-  margin-left: 0.4rem;
-  border-radius: 50%;
-  background: var(--app-warn);
-}
-.tab-count {
-  font: 0.75rem var(--app-mono);
   color: var(--p-text-muted-color);
 }
 .grid {

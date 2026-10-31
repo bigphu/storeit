@@ -5,6 +5,8 @@ import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Tag from 'primevue/tag'
 import { computed, ref, watch } from 'vue'
+import SettingsGroup from '@/components/SettingsGroup.vue'
+import SettingsRow from '@/components/SettingsRow.vue'
 import { useSession } from '@/lib/auth/session'
 import { isApiError } from '@/lib/errors'
 import { useFormErrors } from '@/lib/forms'
@@ -53,34 +55,35 @@ async function save() {
 </script>
 
 <template>
-  <form v-if="session.me" class="form" @submit.prevent="save">
+  <form v-if="session.me" class="settings" @submit.prevent="save">
+    <!-- thẻ người dùng như đầu trang Settings của iOS -->
     <div class="who">
       <Avatar :label="initials" shape="circle" size="xlarge" />
-      <div>
+      <div class="who-text">
         <div class="who-name">{{ session.me.account.name }}</div>
         <div class="who-email">{{ session.me.account.email }}</div>
       </div>
+      <div class="who-roles">
+        <Tag v-for="r in session.me.roles" :key="r.id" :value="r.name" severity="secondary" />
+      </div>
     </div>
     <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
-    <div class="field">
-      <label for="profile-name">Display name</label>
-      <InputText id="profile-name" v-model="name" required maxlength="200" />
-      <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
-    </div>
-    <div class="field">
-      <label for="profile-email">Email</label>
-      <InputText id="profile-email" :model-value="session.me.account.email" disabled />
-      <small>Used to sign in. Ask an administrator to change it.</small>
-    </div>
-    <div class="field">
-      <span>Roles</span>
-      <div class="actions">
+
+    <SettingsGroup title="Profile">
+      <SettingsRow label="Display name" for="profile-name" stacked>
+        <InputText id="profile-name" v-model="name" required maxlength="200" fluid />
+        <small v-if="errors.fields.value.name" class="field-error">{{ errors.fields.value.name }}</small>
+      </SettingsRow>
+      <SettingsRow label="Email" hint="Used to sign in. Ask an administrator to change it.">
+        <span class="muted">{{ session.me.account.email }}</span>
+      </SettingsRow>
+      <SettingsRow label="Roles" hint="Assigned by an administrator.">
         <Tag v-for="r in session.me.roles" :key="r.id" :value="r.name" severity="secondary" />
-        <span v-if="!session.me.roles.length">No roles</span>
-      </div>
-      <small>Roles are assigned by an administrator.</small>
-    </div>
-    <div class="actions">
+        <span v-if="!session.me.roles.length" class="muted">No roles</span>
+      </SettingsRow>
+    </SettingsGroup>
+
+    <div class="settings-actions">
       <Button
         type="submit"
         label="Save"
@@ -95,18 +98,37 @@ async function save() {
 .who {
   display: flex;
   align-items: center;
-  gap: 0.9rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.6rem;
+  border: 1px solid var(--app-hair);
+  border-radius: 14px;
+  background: var(--app-panel);
+  box-shadow: var(--app-card-shadow);
 }
 .who :deep(.p-avatar) {
-  background: var(--p-highlight-background);
-  color: var(--p-highlight-color);
-  font-weight: 600;
+  background: linear-gradient(160deg, var(--app-brand), var(--app-brand-strong));
+  color: #fff;
+  font-weight: 700;
+}
+.who-text {
+  flex: 1;
+  min-width: 10rem;
 }
 .who-name {
-  font-weight: 600;
-  font-size: 1.05rem;
+  font: 700 1.15rem var(--app-display);
+  letter-spacing: -0.02em;
 }
 .who-email {
+  color: var(--p-text-muted-color);
+}
+.who-roles {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.muted {
   color: var(--p-text-muted-color);
 }
 </style>

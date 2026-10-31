@@ -6,7 +6,8 @@ import Tag from 'primevue/tag'
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppBreadcrumb from '@/components/AppBreadcrumb.vue'
-import DetailHeader from '@/components/DetailHeader.vue'
+import CodeTag from '@/components/CodeTag.vue'
+import DetailHeader, { type HeaderFact } from '@/components/DetailHeader.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useTabTitle } from '@/app/tabs/tabPage'
 import { formatDate, formatDateTime } from '@/lib/dates'
@@ -26,6 +27,18 @@ const specs = computed(() => (ticket.value ? requirementLabels(ticket.value.requ
 const actions = useTicketActions()
 
 useTabTitle(() => (ticket.value ? requestCode(ticket.value.number) : undefined))
+
+// dải thông tin ở đầu trang: gửi lúc nào, cần từ ngày nào, trả trước ngày nào
+const facts = computed<HeaderFact[]>(() => {
+  const t = ticket.value
+  if (!t) return []
+  return [
+    { label: 'Requested by', value: t.requester.name },
+    { label: 'Sent', value: formatDateTime(t.created_at) },
+    { label: 'Needed from', value: formatDate(t.needed_from) },
+    { label: 'Return by', value: t.return_by ? formatDate(t.return_by) : 'Not set' },
+  ]
+})
 const crumbs = computed(() => [
   actions.canManage.value ? { label: 'Requests', to: '/borrowing/tickets' } : { label: 'My requests', to: '/borrowing/mine' },
   { label: ticket.value ? requestCode(ticket.value.number) : '…' },
@@ -35,13 +48,10 @@ const crumbs = computed(() => [
 <template>
   <section v-if="ticket">
     <AppBreadcrumb :items="crumbs" />
-    <DetailHeader :title="requestCode(ticket.number)" icon="box">
+    <DetailHeader :title="`${ticket.asset_type.name} for ${ticket.requester.name}`" :code="requestCode(ticket.number)" icon="box" :facts="facts">
       <template #tags>
         <Tag :value="TICKET_STATE_LABEL[ticket.state]" :severity="TICKET_STATE_TONE[ticket.state]" />
       </template>
-      <div>
-        {{ ticket.requester.name }} asked for a {{ ticket.asset_type.name }} · sent {{ formatDateTime(ticket.created_at) }}
-      </div>
       <template #actions>
         <Button v-if="actions.can.approve(ticket)" label="Approve…" icon="pi pi-check" @click="actions.askApprove(ticket)" />
         <Button
@@ -55,9 +65,9 @@ const crumbs = computed(() => [
       </template>
     </DetailHeader>
 
-    <div class="panels">
+    <div class="detail-cards">
       <Panel header="Request">
-        <dl class="facts">
+        <dl class="props">
           <dt>Requested by</dt>
           <dd>{{ ticket.requester.name }} <span class="muted">· {{ ticket.requester.email }}</span></dd>
           <dt>Type</dt>
@@ -67,14 +77,10 @@ const crumbs = computed(() => [
             <span v-if="!specs.length" class="muted">None</span>
             <span v-else class="chips"><Chip v-for="(s, i) in specs" :key="i" :label="s" /></span>
           </dd>
-          <dt>Needed from</dt>
-          <dd>{{ formatDate(ticket.needed_from) }}</dd>
-          <dt>Return by</dt>
-          <dd>{{ ticket.return_by ? formatDate(ticket.return_by) : 'Not set' }}</dd>
           <template v-if="ticket.suggested_asset">
             <dt>Asked for</dt>
             <dd>
-              <RouterLink :to="`/assets/${ticket.suggested_asset.id}`" class="mono">{{ ticket.suggested_asset.tag }}</RouterLink>
+              <RouterLink :to="`/assets/${ticket.suggested_asset.id}`"><CodeTag :code="ticket.suggested_asset.tag" /></RouterLink>
               · {{ ticket.suggested_asset.name }}
             </dd>
           </template>
@@ -85,13 +91,13 @@ const crumbs = computed(() => [
         </dl>
       </Panel>
       <Panel header="Decision">
-        <dl class="facts">
+        <dl class="props">
           <dt>Status</dt>
           <dd>{{ TICKET_STATE_LABEL[ticket.state] }}</dd>
           <template v-if="ticket.asset">
             <dt>Asset</dt>
             <dd>
-              <RouterLink :to="`/assets/${ticket.asset.id}`" class="mono">{{ ticket.asset.tag }}</RouterLink> · {{ ticket.asset.name }}
+              <RouterLink :to="`/assets/${ticket.asset.id}`"><CodeTag :code="ticket.asset.tag" /></RouterLink> · {{ ticket.asset.name }}
             </dd>
           </template>
           <template v-if="ticket.loan">
@@ -122,24 +128,6 @@ const crumbs = computed(() => [
 </template>
 
 <style scoped>
-.panels {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-  gap: 1rem;
-  margin-top: 1rem;
-}
-.facts {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0.5rem 1rem;
-  margin: 0;
-}
-.facts dt {
-  color: var(--p-text-muted-color);
-}
-.facts dd {
-  margin: 0;
-}
 .chips {
   display: inline-flex;
   flex-wrap: wrap;

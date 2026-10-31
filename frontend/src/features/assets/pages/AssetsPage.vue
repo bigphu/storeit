@@ -39,6 +39,7 @@ import { kindSeverity, statusKinds, useStatuses } from '@/features/statuses/api'
 import { assetListQuery, assetQuery, useAsset, useAssetList } from '../api'
 import EmptyState from '@/components/EmptyState.vue'
 import KeyHint from '@/components/KeyHint.vue'
+import CodeTag from '@/components/CodeTag.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import AttributeFilterPopover from '../components/AttributeFilterPopover.vue'
 import BulkActionDialog from '../components/BulkActionDialog.vue'
@@ -593,9 +594,9 @@ watch(rows, (list) => {
       @sort="onSort"
     >
       <Column v-if="canManage || canExport" selection-mode="multiple" header-style="width: 3rem" body-class="select-cell" />
-      <Column header="Tag" sort-field="tag" sortable body-class="tag-cell">
+      <Column header="Tag" sort-field="tag" sortable>
         <template #body="{ data: a }: { data: AssetListItem }">
-          <RouterLink :to="`/assets/${a.id}`">{{ a.tag }}</RouterLink>
+          <RouterLink :to="`/assets/${a.id}`"><CodeTag :code="a.tag" /></RouterLink>
         </template>
       </Column>
       <Column header="Name" sort-field="name" sortable>

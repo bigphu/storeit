@@ -28,6 +28,7 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { assetKeys, useAsset } from '@/features/assets/api'
 import { type LoanParams, useBusinessDay, useLoans } from '../api'
 import { loanStateTag, type Period, periodRange, requestCode } from '../borrowing'
+import CodeTag from '@/components/CodeTag.vue'
 import ReturnDialog from '../components/ReturnDialog.vue'
 
 // Khoản mượn (US-10..12): Out now (mặc định, quá hạn lên trước), Returned hay All; lọc theo kỳ
@@ -216,7 +217,7 @@ const table = useListTable({ open: openAsset, showMenu: rowMenu.showContext })
     >
       <Column header="Asset">
         <template #body="{ data: l }: { data: Loan }">
-          <RouterLink :to="`/assets/${l.asset.id}`" class="mono">{{ l.asset.tag }}</RouterLink>
+          <RouterLink :to="`/assets/${l.asset.id}`"><CodeTag :code="l.asset.tag" /></RouterLink>
           <span class="cell-sub">{{ l.asset.name }}</span>
         </template>
       </Column>
@@ -240,7 +241,7 @@ const table = useListTable({ open: openAsset, showMenu: rowMenu.showContext })
       </Column>
       <Column header="Request">
         <template #body="{ data: l }: { data: Loan }">
-          <RouterLink v-if="l.ticket_id" :to="`/borrowing/tickets/${l.ticket_id}`">{{ requestCode(l.ticket_number) }}</RouterLink>
+          <RouterLink v-if="l.ticket_id" :to="`/borrowing/tickets/${l.ticket_id}`"><CodeTag :code="requestCode(l.ticket_number)" /></RouterLink>
           <span v-else class="muted">Lent directly</span>
         </template>
       </Column>
@@ -264,10 +265,6 @@ const table = useListTable({ open: openAsset, showMenu: rowMenu.showContext })
 </template>
 
 <style scoped>
-.mono {
-  font-family: var(--app-font-mono, ui-monospace, monospace);
-  font-weight: 600;
-}
 .cell-sub {
   display: block;
   margin-top: 0.2rem;

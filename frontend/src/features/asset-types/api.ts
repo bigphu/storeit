@@ -58,7 +58,7 @@ const attrPath = (typeID: string, attributeID: string) => ({ params: { path: { t
 
 export function useCreateAssetType() {
   return useTypeMutation(
-    (body: { code: string; name: string; description?: string }) =>
+    (body: { code: string; tag_prefix?: string; name: string; description?: string }) =>
       unwrap(inventoryApi.POST('/asset-types', { body })),
     false,
   )
@@ -66,7 +66,7 @@ export function useCreateAssetType() {
 
 export function useUpdateAssetType() {
   return useTypeMutation(
-    ({ id, ...body }: { id: string; name?: string; description?: string; can_borrow?: boolean; version: number }) =>
+    ({ id, ...body }: { id: string; name?: string; description?: string; tag_prefix?: string; can_borrow?: boolean; version: number }) =>
       unwrap(inventoryApi.PATCH('/asset-types/{typeID}', { ...typePath(id), body })),
     false,
   )

@@ -25,6 +25,7 @@ import { fromTableSort, toTableSort } from '@/features/assets/listQuery'
 import { type TicketParams, useTickets, useTypeAttributes } from '../api'
 import { requestCode, requirementLabels, TICKET_STATE_LABEL, TICKET_STATE_TONE } from '../borrowing'
 import { useTicketActions } from '../useTicketActions'
+import CodeTag from '@/components/CodeTag.vue'
 import ApproveDialog from './ApproveDialog.vue'
 import RejectDialog from './RejectDialog.vue'
 
@@ -160,7 +161,7 @@ const emptyText = computed(() =>
   >
     <Column header="Request" sort-field="number" sortable>
       <template #body="{ data: t }: { data: BorrowTicket }">
-        <RouterLink :to="`/borrowing/tickets/${t.id}`" class="num">{{ requestCode(t.number) }}</RouterLink>
+        <RouterLink :to="`/borrowing/tickets/${t.id}`"><CodeTag :code="requestCode(t.number)" /></RouterLink>
       </template>
     </Column>
     <Column v-if="!mine" header="Requested by">
@@ -190,7 +191,7 @@ const emptyText = computed(() =>
     </Column>
     <Column header="Asset">
       <template #body="{ data: t }: { data: BorrowTicket }">
-        <RouterLink v-if="t.asset" :to="`/assets/${t.asset.id}`" class="mono">{{ t.asset.tag }}</RouterLink>
+        <RouterLink v-if="t.asset" :to="`/assets/${t.asset.id}`"><CodeTag :code="t.asset.tag" /></RouterLink>
         <span v-else class="muted">—</span>
       </template>
     </Column>
@@ -218,12 +219,6 @@ const emptyText = computed(() =>
 </template>
 
 <style scoped>
-.num {
-  font-weight: 600;
-}
-.mono {
-  font-family: var(--app-font-mono, ui-monospace, monospace);
-}
 .muted {
   color: var(--p-text-muted-color);
 }

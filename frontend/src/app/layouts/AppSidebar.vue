@@ -70,7 +70,7 @@ const workspace = computed<NavItem[]>(() => {
   if (session.can(Perm.BorrowRequest)) {
     borrowing.push(
       { label: 'My requests', icon: 'pi pi-ticket', route: '/borrowing/mine', active: name.value === 'my-tickets' },
-      { label: 'My loans', icon: 'pi pi-clock', route: '/borrowing/mine/loans', active: name.value === 'my-loans' },
+      { label: 'My loans', icon: 'pi pi-briefcase', route: '/borrowing/mine/loans', active: name.value === 'my-loans' },
     )
   }
   if (session.can(Perm.BorrowManage)) {
@@ -82,7 +82,7 @@ const workspace = computed<NavItem[]>(() => {
         count: ticketCounts.value?.waiting || undefined,
         active: name.value === 'tickets' || name.value === 'ticket',
       },
-      { label: 'Loans', icon: 'pi pi-clock', route: '/borrowing/loans', active: name.value === 'loans' },
+      { label: 'Loans', icon: 'pi pi-arrow-right-arrow-left', route: '/borrowing/loans', active: name.value === 'loans' },
     )
   }
   if (borrowing.length) items.push({ label: 'Borrowing', items: borrowing })
@@ -193,17 +193,19 @@ const model = computed(() => (nav.scopeTypeId.value ? scoped.value : workspace.v
   min-width: 0;
   padding: 0;
 }
-/* nhãn nhóm (Configuration, Administration) kiểu demo */
+/* nhãn nhóm (Inventory, Borrowing, Setup, People) kiểu sidebar iOS: chữ đậm vừa, mờ, không in hoa */
 .nav-menu :deep(.p-menu-submenu-label) {
-  font: 500 0.66rem var(--app-mono);
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  font: 600 0.78rem var(--app-body);
+  letter-spacing: 0;
   color: var(--p-text-muted-color);
-  padding: 1rem 0.6rem 0.3rem;
+  padding: 1.1rem 0.7rem 0.35rem;
   background: transparent;
 }
 .nav-menu :deep(.p-menu-item-content) {
-  border-radius: 7px;
+  border-radius: 10px;
+}
+.nav-menu :deep(.p-menu-item + .p-menu-item) {
+  margin-top: 1px;
 }
 .back {
   padding: 0.25rem 0.6rem 0.6rem;
@@ -243,13 +245,16 @@ const model = computed(() => (nav.scopeTypeId.value ? scoped.value : workspace.v
   align-items: center;
   gap: 0.65rem;
   width: 100%;
-  border-radius: 7px;
+  min-height: 2.25rem;
+  box-sizing: border-box;
+  border-radius: 10px;
   color: var(--p-text-color);
+  font-weight: 500;
   text-decoration: none;
 }
 .nav-icon {
   width: 1.15rem;
-  font-size: 0.95rem;
+  font-size: 1rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -266,7 +271,7 @@ const model = computed(() => (nav.scopeTypeId.value ? scoped.value : workspace.v
   padding-left: 0.85rem;
   width: calc(100% - 1.15rem);
   border-left: 1px solid var(--app-line);
-  border-radius: 0 7px 7px 0;
+  border-radius: 0 10px 10px 0;
   padding-top: 0.35rem;
   padding-bottom: 0.35rem;
 }

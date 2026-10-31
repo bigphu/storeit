@@ -200,7 +200,7 @@ export const routes: RouteRecordRaw[] = [
         name: 'account-settings',
         component: () => import('@/features/account/pages/AccountSettingsPage.vue'),
         props: true,
-        meta: { title: 'Account settings', icon: 'pi pi-user-edit' },
+        meta: { title: 'Settings', icon: 'pi pi-user-edit' },
       },
       { path: ':path(.*)*', name: 'not-found', component: () => import('./pages/NotFoundPage.vue'), meta: { title: 'Not found', icon: 'pi pi-question-circle' } },
     ],

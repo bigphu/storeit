@@ -12,6 +12,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AddCard from '@/components/AddCard.vue'
 import CardGrid from '@/components/CardGrid.vue'
+import CodeTag from '@/components/CodeTag.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import KeyHint from '@/components/KeyHint.vue'
 import { usePageKeys } from '@/lib/pageKeys'
@@ -133,9 +134,12 @@ const code = ref('')
 const codeTouched = ref(false)
 const name = ref('')
 const description = ref('')
+// tiền tố tag: để trống thì backend lấy 3 chữ / số đầu của mã (thêm số nếu loại khác đã dùng)
+const tagPrefix = ref('')
+const prefixHint = computed(() => code.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3) || 'LAP')
 const errors = useFormErrors()
 const create = useCreateAssetType()
-const form = useDirty(() => ({ c: code.value.trim(), n: name.value.trim(), d: description.value.trim() }))
+const form = useDirty(() => ({ c: code.value.trim(), p: tagPrefix.value.trim(), n: name.value.trim(), d: description.value.trim() }))
 watch(name, (n) => {
   if (!codeTouched.value) code.value = codeFromName(n)
 })
@@ -150,7 +154,7 @@ usePageKeys((e) => {
   }
 })
 function openCreate() {
-  code.value = name.value = description.value = ''
+  code.value = name.value = description.value = tagPrefix.value = ''
   codeTouched.value = false
   errors.clear()
   form.reset()
@@ -160,7 +164,7 @@ function openCreate() {
 async function submit() {
   errors.clear()
   try {
-    const t = await create.mutateAsync({ code: code.value, name: name.value, description: description.value })
+    const t = await create.mutateAsync({ code: code.value, tag_prefix: tagPrefix.value.trim() || undefined, name: name.value, description: description.value })
     creating.value = false
     // mở trang của loại ở Attributes, nút "Add attribute" sẵn focus
     await router.push({ path: settingsPath(t), query: { tab: 'attributes', new: '1' } })
@@ -247,7 +251,7 @@ watch(types, (list) => {
             <h3>
               <InlineCell :value="t.name" label="name" :editable="canManage" @save="(v) => rename(t, v)">{{ t.name }}</InlineCell>
             </h3>
-            <code>{{ t.code }}</code>
+            <CodeTag :code="t.code" />
           </div>
           <span v-if="t.is_system" v-tooltip.top="'Built-in type'" class="lock" aria-label="Built-in">
             <i class="pi pi-lock" />
@@ -298,7 +302,7 @@ watch(types, (list) => {
               <InlineCell :value="t.name" label="name" :editable="canManage" @save="(v) => rename(t, v)">
                 <RouterLink :to="listOf(t)">{{ t.name }}</RouterLink>
               </InlineCell>
-              <code class="sub-code">{{ t.code }}</code>
+              <CodeTag :code="t.code" class="sub-code" />
             </div>
           </div>
         </template>
@@ -375,6 +379,12 @@ watch(types, (list) => {
         <small v-if="errors.fields.value.code" class="field-error">{{ errors.fields.value.code }}</small>
       </div>
       <div class="field">
+        <label for="type-prefix">Tag prefix</label>
+        <InputText id="type-prefix" v-model="tagPrefix" class="mono prefix-input" maxlength="10" :placeholder="prefixHint" />
+        <small>New assets get tags like {{ (tagPrefix.trim() || prefixHint).toUpperCase() }}-0001. Leave empty to use {{ prefixHint }}.</small>
+        <small v-if="errors.fields.value.tag_prefix" class="field-error">{{ errors.fields.value.tag_prefix }}</small>
+      </div>
+      <div class="field">
         <label for="type-desc">Description</label>
         <Textarea id="type-desc" v-model="description" rows="3" />
       </div>
@@ -403,9 +413,7 @@ watch(types, (list) => {
 }
 .title code,
 .sub-code {
-  display: block;
-  font-size: 0.78rem;
-  color: var(--p-text-muted-color);
+  margin-top: 0.15rem;
 }
 .mark {
   flex: none;

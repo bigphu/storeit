@@ -2,21 +2,20 @@
 import { useQueryClient } from '@tanstack/vue-query'
 import Button from 'primevue/button'
 import Panel from 'primevue/panel'
-import Tab from 'primevue/tab'
-import TabList from 'primevue/tablist'
-import TabPanel from 'primevue/tabpanel'
-import TabPanels from 'primevue/tabpanels'
-import Tabs from 'primevue/tabs'
 import Tag from 'primevue/tag'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTabId, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
+import CodeTag from '@/components/CodeTag.vue'
+import DetailHeader, { type HeaderFact } from '@/components/DetailHeader.vue'
 import KeyHint from '@/components/KeyHint.vue'
+import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
 import { Perm } from '@/lib/auth/permissions'
 import { useSession } from '@/lib/auth/session'
 import { formatDate, formatDateTime } from '@/lib/dates'
 import { usePageKeys } from '@/lib/pageKeys'
+import { relativeTime } from '@/lib/people'
 import { kindSeverity } from '@/features/statuses/api'
 import { useAssetType } from '@/features/asset-types/api'
 import { useTicket } from '@/features/borrowing/api'
@@ -50,6 +49,12 @@ const canManageTypes = computed(() => session.can(Perm.TypeManage))
 const { data: asset } = useAsset(() => props.id)
 // tab đang mở; Activity chỉ tải khi mở lần đầu
 const tab = ref<'details' | 'activity' | 'loans'>('details')
+// tab chia mục (một điều khiển phân đoạn với bộ lọc của danh sách)
+const sections = computed<SegmentOption<'details' | 'activity' | 'loans'>[]>(() => [
+  { value: 'details', label: 'Details' },
+  { value: 'activity', label: 'Activity' },
+  ...(canSeeLoans.value ? [{ value: 'loans' as const, label: 'Loans' }] : []),
+])
 // lịch sử mượn của tài sản (US-12): chỉ người quản lý mượn
 const canSeeLoans = computed(() => session.can(Perm.BorrowManage))
 // hộp "Replace" (US-13)
@@ -85,6 +90,19 @@ const ctx = computed(() => {
   return c && c.ids.includes(props.id) ? c : null
 })
 const pos = computed(() => (ctx.value ? position(ctx.value, props.id) : null))
+
+// dải thông tin ở đầu trang: loại, ai đang giữ, ngày mua, lần sửa gần nhất
+const facts = computed<HeaderFact[]>(() => {
+  const a = asset.value
+  if (!a) return []
+  const b = borrowing.value
+  return [
+    { label: 'Type', value: a.asset_type.name, to: typeListLocation(a.asset_type.id, listContext.views) },
+    { label: b?.state === 'reserved' ? 'Reserved for' : 'Holder', value: b ? b.account.name : '—' },
+    { label: 'Purchased', value: formatDate(a.purchase_date) },
+    { label: 'Updated', value: relativeTime(a.updated_at) },
+  ]
+})
 
 const crumbs = computed<Crumb[]>(() => {
   const a = asset.value
@@ -126,157 +144,134 @@ usePageKeys((e) => {
 <template>
   <section v-if="asset">
     <AppBreadcrumb :items="crumbs" />
-    <div class="page-header">
-      <h1 class="asset-title">
-        <span class="tag-no">{{ asset.tag }}</span>
-        <span>{{ asset.name }}</span>
+    <DetailHeader :title="asset.name" :code="asset.tag" icon="box" :facts="facts">
+      <template #tags>
         <Tag :value="asset.status.name" :severity="kindSeverity(asset.status.kind)" />
-      </h1>
-      <span v-if="pos" class="stepper" aria-label="Position in the list">
-        <Button icon="pi pi-angle-left" text rounded aria-label="Previous asset (J)" title="Previous (J)" :disabled="pos.index === 0" @click="step(-1)" />
-        <span>{{ pos.index + 1 }} of {{ pos.total }}</span>
-        <Button icon="pi pi-angle-right" text rounded aria-label="Next asset (K)" title="Next (K)" :disabled="pos.index + 1 >= pos.total" @click="step(1)" />
-      </span>
-    </div>
-
-    <div v-if="canManage || canLend || canAsk || canReturn || (heldTicket && ticketActions.canManage.value)" class="actions page-actions">
-      <template v-if="canManage">
-        <template v-if="!retired">
-          <Button aria-label="Edit (E)" @click="(e: MouseEvent) => actions.edit(asset!, e)">
-            <i class="pi pi-pencil" aria-hidden="true" />
-            <span>Edit</span>
-            <KeyHint keys="E" />
-          </Button>
-          <template v-if="!borrowing">
-            <Button label="Retire" icon="pi pi-ban" severity="secondary" outlined @click="actions.askRetire(asset)" />
-            <Button label="Replace…" icon="pi pi-sync" severity="secondary" outlined @click="replaceOpen = true" />
+      </template>
+      <template #actions>
+        <template v-if="canManage">
+          <template v-if="!retired">
+            <Button aria-label="Edit (E)" @click="(e: MouseEvent) => actions.edit(asset!, e)">
+              <i class="pi pi-pencil" aria-hidden="true" />
+              <span>Edit</span>
+              <KeyHint keys="E" />
+            </Button>
+            <template v-if="!borrowing">
+              <Button label="Retire" icon="pi pi-ban" severity="secondary" outlined @click="actions.askRetire(asset)" />
+              <Button label="Replace…" icon="pi pi-sync" severity="secondary" outlined @click="replaceOpen = true" />
+            </template>
           </template>
+          <!-- tài sản bị thay: khôi phục là hoàn tác thay thế -->
+          <Button v-else-if="asset.replaced_by" label="Undo replacement" icon="pi pi-undo" @click="actions.undoReplacement(asset)" />
+          <Button v-else label="Restore" icon="pi pi-replay" @click="actions.restore(asset)" />
         </template>
-        <!-- tài sản bị thay: khôi phục là hoàn tác thay thế -->
-        <Button v-else-if="asset.replaced_by" label="Undo replacement" icon="pi pi-undo" @click="actions.undoReplacement(asset)" />
-        <Button v-else label="Restore" icon="pi pi-replay" @click="actions.restore(asset)" />
+        <template v-if="heldTicket && ticketActions.canManage.value">
+          <Button label="Hand over" icon="pi pi-arrow-right-arrow-left" @click="ticketActions.doHandOver(heldTicket)" />
+          <Button label="Cancel reservation" severity="secondary" outlined @click="ticketActions.doCancel(heldTicket)" />
+        </template>
+        <Button v-if="canReturn" label="Record return…" icon="pi pi-reply" @click="returnOpen = true" />
+        <Button v-if="canLend" label="Lend…" icon="pi pi-arrow-right-arrow-left" severity="secondary" outlined @click="lendOpen = true" />
+        <Button v-if="canAsk" label="Borrow this…" icon="pi pi-ticket" severity="secondary" outlined @click="askOpen = true" />
+        <span v-if="pos" class="stepper" aria-label="Position in the list">
+          <Button icon="pi pi-angle-left" text rounded aria-label="Previous asset (J)" title="Previous (J)" :disabled="pos.index === 0" @click="step(-1)" />
+          <span>{{ pos.index + 1 }} of {{ pos.total }}</span>
+          <Button icon="pi pi-angle-right" text rounded aria-label="Next asset (K)" title="Next (K)" :disabled="pos.index + 1 >= pos.total" @click="step(1)" />
+        </span>
       </template>
-      <template v-if="heldTicket && ticketActions.canManage.value">
-        <Button label="Hand over" icon="pi pi-arrow-right-arrow-left" @click="ticketActions.doHandOver(heldTicket)" />
-        <Button label="Cancel reservation" severity="secondary" outlined @click="ticketActions.doCancel(heldTicket)" />
-      </template>
-      <Button v-if="canReturn" label="Record return…" icon="pi pi-reply" @click="returnOpen = true" />
-      <Button v-if="canLend" label="Lend…" icon="pi pi-arrow-right-arrow-left" severity="secondary" outlined @click="lendOpen = true" />
-      <Button v-if="canAsk" label="Borrow this…" icon="pi pi-ticket" severity="secondary" outlined @click="askOpen = true" />
-    </div>
+    </DetailHeader>
 
     <!-- Details | Activity: lịch sử hoạt động của tài sản -->
-    <Tabs v-model:value="tab">
-      <TabList>
-        <Tab value="details">Details</Tab>
-        <Tab value="activity">Activity</Tab>
-        <Tab v-if="canSeeLoans" value="loans">Loans</Tab>
-      </TabList>
-      <TabPanels class="panels">
-        <TabPanel value="details">
-          <div class="cards">
-            <Panel header="Asset">
-              <dl class="props">
-                <dt>Tag</dt>
-                <dd class="mono">{{ asset.tag }}</dd>
-                <dt>Type</dt>
-                <dd>
-                  <RouterLink :to="typeListLocation(asset.asset_type.id, listContext.views)">{{ asset.asset_type.name }}</RouterLink>
-                </dd>
-                <dt>Status</dt>
-                <dd>{{ asset.status.name }}</dd>
-                <dt>Description</dt>
-                <dd class="pre">{{ asset.description || '—' }}</dd>
-                <dt>Purchased</dt>
-                <dd>{{ formatDate(asset.purchase_date) }}</dd>
-                <template v-if="asset.retired_at">
-                  <dt>Retired</dt>
-                  <dd>{{ formatDateTime(asset.retired_at) }}</dd>
-                  <dt>Retired because</dt>
-                  <dd>{{ asset.retired_reason || '—' }}</dd>
+    <SegmentedFilter v-model="tab" :options="sections" label="Sections" class="section-tabs" />
+    <template v-if="tab === 'details'">
+      <div class="detail-cards">
+        <Panel header="Details">
+          <dl class="props">
+            <dt>Description</dt>
+            <dd class="pre">{{ asset.description || '—' }}</dd>
+            <dt>Purchased</dt>
+            <dd>{{ formatDate(asset.purchase_date) }}</dd>
+            <template v-if="asset.retired_at">
+              <dt>Retired</dt>
+              <dd>{{ formatDateTime(asset.retired_at) }}</dd>
+              <dt>Retired because</dt>
+              <dd>{{ asset.retired_reason || '—' }}</dd>
+            </template>
+            <dt>Created</dt>
+            <dd>{{ formatDateTime(asset.created_at) }}</dd>
+            <dt>Updated</dt>
+            <dd>{{ formatDateTime(asset.updated_at) }}</dd>
+          </dl>
+        </Panel>
+        <Panel :header="`${asset.asset_type.name} attributes`">
+          <dl v-if="asset.attributes.length" class="props">
+            <template v-for="a in asset.attributes" :key="a.key">
+              <dt>{{ a.label }}</dt>
+              <dd class="pre">{{ formatValue(a) }}</dd>
+            </template>
+          </dl>
+          <p v-else class="muted">
+            This type has no attributes yet.
+            <RouterLink v-if="canManageTypes" :to="`/types/${asset.asset_type.id}/settings`">Add some in the type's settings</RouterLink>
+          </p>
+        </Panel>
+        <!-- đang giữ chỗ hay đang cho mượn (US-10) -->
+        <Panel v-if="borrowing" header="Borrowing">
+          <dl class="props">
+            <template v-if="borrowing.state === 'reserved'">
+              <dt>Reserved for</dt>
+              <dd>
+                {{ borrowing.account.name }}
+                <template v-if="borrowing.ticket">
+                  · <RouterLink v-if="seeTicket" :to="`/borrowing/tickets/${borrowing.ticket.id}`"><CodeTag :code="requestCode(borrowing.ticket.number)" /></RouterLink>
+                  <CodeTag v-else :code="requestCode(borrowing.ticket.number)" />
                 </template>
-                <dt>Created</dt>
-                <dd>{{ formatDateTime(asset.created_at) }}</dd>
-                <dt>Updated</dt>
-                <dd>{{ formatDateTime(asset.updated_at) }}</dd>
-              </dl>
-            </Panel>
-            <Panel :header="`${asset.asset_type.name} attributes`">
-              <dl v-if="asset.attributes.length" class="props">
-                <template v-for="a in asset.attributes" :key="a.key">
-                  <dt>{{ a.label }}</dt>
-                  <dd class="pre">{{ formatValue(a) }}</dd>
+              </dd>
+            </template>
+            <template v-else>
+              <dt>On loan to</dt>
+              <dd>
+                {{ borrowing.account.name }}
+                <template v-if="borrowing.ticket">
+                  · <RouterLink v-if="seeTicket" :to="`/borrowing/tickets/${borrowing.ticket.id}`"><CodeTag :code="requestCode(borrowing.ticket.number)" /></RouterLink>
+                  <CodeTag v-else :code="requestCode(borrowing.ticket.number)" />
                 </template>
-              </dl>
-              <p v-else class="muted">
-                This type has no attributes yet.
-                <RouterLink v-if="canManageTypes" :to="`/types/${asset.asset_type.id}/settings`">Add some in the type's settings</RouterLink>
-              </p>
-            </Panel>
-            <!-- đang giữ chỗ hay đang cho mượn (US-10) -->
-            <Panel v-if="borrowing" header="Borrowing">
-              <dl class="props">
-                <template v-if="borrowing.state === 'reserved'">
-                  <dt>Reserved for</dt>
-                  <dd>
-                    {{ borrowing.account.name }}
-                    <template v-if="borrowing.ticket">
-                      · <RouterLink v-if="seeTicket" :to="`/borrowing/tickets/${borrowing.ticket.id}`">{{ requestCode(borrowing.ticket.number) }}</RouterLink>
-                      <span v-else>{{ requestCode(borrowing.ticket.number) }}</span>
-                    </template>
-                  </dd>
-                </template>
-                <template v-else>
-                  <dt>On loan to</dt>
-                  <dd>
-                    {{ borrowing.account.name }}
-                    <template v-if="borrowing.ticket">
-                      · <RouterLink v-if="seeTicket" :to="`/borrowing/tickets/${borrowing.ticket.id}`">{{ requestCode(borrowing.ticket.number) }}</RouterLink>
-                      <span v-else>{{ requestCode(borrowing.ticket.number) }}</span>
-                    </template>
-                  </dd>
-                  <dt>Since</dt>
-                  <dd>{{ formatDate(borrowing.since) }}</dd>
-                </template>
-                <dt>Return by</dt>
-                <dd>
-                  {{ borrowing.return_by ? formatDate(borrowing.return_by) : 'Not set' }}
-                  <Tag v-if="borrowing.overdue_days > 0" :value="overdueLabel(borrowing.overdue_days)" severity="danger" class="overdue" />
-                </dd>
-              </dl>
-            </Panel>
-            <!-- liên kết thay thế: lần ngược nguồn gốc qua "Replaces" -->
-            <Panel v-if="asset.replaced_by || asset.replaces.length" header="Replacement">
-              <dl class="props">
-                <template v-if="asset.replaced_by">
-                  <dt>Replaced by</dt>
-                  <dd>
-                    <RouterLink :to="`/assets/${asset.replaced_by.id}`" class="mono">{{ asset.replaced_by.tag }}</RouterLink>
-                    · {{ asset.replaced_by.name }} · {{ formatDate(asset.replaced_by.replaced_on) }}
-                    <div class="pre muted">{{ asset.replaced_by.reason }}</div>
-                  </dd>
-                </template>
-                <template v-if="asset.replaces.length">
-                  <dt>Replaces</dt>
-                  <dd>
-                    <div v-for="r in asset.replaces" :key="r.id">
-                      <RouterLink :to="`/assets/${r.id}`" class="mono">{{ r.tag }}</RouterLink>
-                      · {{ r.name }} · {{ formatDate(r.replaced_on) }}
-                    </div>
-                  </dd>
-                </template>
-              </dl>
-            </Panel>
-          </div>
-        </TabPanel>
-        <TabPanel value="activity">
-          <AssetActivity v-if="tab === 'activity'" :asset-id="asset.id" />
-        </TabPanel>
-        <TabPanel v-if="canSeeLoans" value="loans">
-          <AssetLoans v-if="tab === 'loans'" :asset-id="asset.id" />
-        </TabPanel>
-      </TabPanels>
-    </Tabs>
+              </dd>
+              <dt>Since</dt>
+              <dd>{{ formatDate(borrowing.since) }}</dd>
+            </template>
+            <dt>Return by</dt>
+            <dd>
+              {{ borrowing.return_by ? formatDate(borrowing.return_by) : 'Not set' }}
+              <Tag v-if="borrowing.overdue_days > 0" :value="overdueLabel(borrowing.overdue_days)" severity="danger" class="overdue" />
+            </dd>
+          </dl>
+        </Panel>
+        <!-- liên kết thay thế: lần ngược nguồn gốc qua "Replaces" -->
+        <Panel v-if="asset.replaced_by || asset.replaces.length" header="Replacement">
+          <dl class="props">
+            <template v-if="asset.replaced_by">
+              <dt>Replaced by</dt>
+              <dd>
+                <RouterLink :to="`/assets/${asset.replaced_by.id}`"><CodeTag :code="asset.replaced_by.tag" /></RouterLink>
+                · {{ asset.replaced_by.name }} · {{ formatDate(asset.replaced_by.replaced_on) }}
+                <div class="pre muted">{{ asset.replaced_by.reason }}</div>
+              </dd>
+            </template>
+            <template v-if="asset.replaces.length">
+              <dt>Replaces</dt>
+              <dd>
+                <div v-for="r in asset.replaces" :key="r.id">
+                  <RouterLink :to="`/assets/${r.id}`"><CodeTag :code="r.tag" /></RouterLink>
+                  · {{ r.name }} · {{ formatDate(r.replaced_on) }}
+                </div>
+              </dd>
+            </template>
+          </dl>
+        </Panel>
+      </div>
+    </template>
+    <AssetActivity v-else-if="tab === 'activity'" :asset-id="asset.id" />
+    <AssetLoans v-else-if="tab === 'loans' && canSeeLoans" :asset-id="asset.id" />
 
     <RetireDialog v-model:visible="actions.retireOpen.value" :asset="actions.retireTarget.value" />
     <!-- luôn gắn (không v-if theo retired): thay xong tài sản retire ngay, hộp bị gỡ trước khi
@@ -296,37 +291,6 @@ usePageKeys((e) => {
 .pre {
   white-space: pre-wrap;
 }
-.asset-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6rem;
-}
-.tag-no {
-  font: 500 1rem var(--app-mono);
-  color: var(--p-text-muted-color);
-}
-.asset-title :deep(.p-tag) {
-  font-family: var(--app-body);
-  font-size: 0.75rem;
-}
-.page-actions {
-  margin-bottom: 0.75rem;
-}
-.page-actions kbd {
-  margin-left: 0.25rem;
-  font-size: 0.7rem;
-}
-.panels {
-  padding: 1rem 0 0;
-  background: transparent;
-}
-.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
-  gap: 1rem;
-  align-items: start;
-}
 .muted {
   color: var(--p-text-muted-color);
   margin: 0;
@@ -336,6 +300,7 @@ usePageKeys((e) => {
   align-items: center;
   gap: 0.25rem;
   font-variant-numeric: tabular-nums;
-  margin-right: 0.5rem;
+  margin-left: 0.25rem;
+  color: var(--p-text-muted-color);
 }
 </style>

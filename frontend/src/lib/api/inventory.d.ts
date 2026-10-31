@@ -812,6 +812,8 @@ export interface components {
         AssetType: {
             id: components["schemas"]["ID"];
             code: string;
+            /** @description New assets of this type get the tag <tag_prefix>-<next number>, e.g. LAP-0091 */
+            tag_prefix: string;
             name: string;
             description: string;
             is_system: boolean;
@@ -884,6 +886,8 @@ export interface components {
         };
         CreateAssetTypeRequest: {
             code: string;
+            /** @description A-Z and 0-9, unique among types. Omitted or "" = the first 3 letters or digits of the code */
+            tag_prefix?: string;
             name: string;
             description?: string;
             /** @description Default false */
@@ -894,6 +898,8 @@ export interface components {
             name?: string;
             description?: string;
             can_borrow?: boolean;
+            /** @description Only affects assets created afterwards */
+            tag_prefix?: string;
             /** Format: int32 */
             version: number;
         };
@@ -1246,7 +1252,8 @@ export interface components {
             attributes: components["schemas"]["AttributeValue"][];
         };
         CreateAssetRequest: {
-            tag: string;
+            /** @description Omitted or "" = generated from the type's tag prefix (LAP-0091). Imports may still send their own tag */
+            tag?: string;
             name: string;
             description?: string;
             asset_type_id: components["schemas"]["ID"];

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
+import Panel from 'primevue/panel'
 import Tag from 'primevue/tag'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useLeaveGuard, useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb from '@/components/AppBreadcrumb.vue'
-import DetailHeader from '@/components/DetailHeader.vue'
+import DetailHeader, { type HeaderFact } from '@/components/DetailHeader.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import SaveBar from '@/components/SaveBar.vue'
@@ -36,6 +37,17 @@ const assetsLink = computed(() => ({
   path: '/assets',
   query: { status_id: props.id, ...(status.value?.kind === 'retired' ? { include_retired: 'true' } : {}) },
 }))
+// dải thông tin ở đầu trang: nhóm, số tài sản, vị trí trong làn, mặc định hay không
+const facts = computed<HeaderFact[]>(() => {
+  const s = status.value
+  if (!s) return []
+  return [
+    { label: 'Kind', value: KIND_INFO[s.kind].label },
+    { label: 'Assets', value: assets.value, to: assetsLink.value },
+    { label: 'Position', value: position.value ? `${position.value} of ${lane.value.length}` : '—' },
+    { label: 'Default', value: s.is_default ? 'Yes' : 'No' },
+  ]
+})
 
 const fields: FieldDef[] = [
   { key: 'name', label: 'Name', maxlength: 100 },
@@ -83,15 +95,12 @@ const crumbs = computed(() => [{ label: 'Statuses', to: '/statuses' }, { label: 
 <template>
   <section v-if="status">
     <AppBreadcrumb :items="crumbs" />
-    <DetailHeader :title="status.name" icon="tag">
+    <DetailHeader :title="status.name" icon="tag" :facts="facts">
       <template #tags>
         <Tag :value="KIND_INFO[status.kind].label" :severity="kindSeverity(status.kind)" />
         <Tag v-if="status.is_default" value="Default" severity="success" />
         <Tag v-if="status.archived_at" value="Archived" severity="secondary" />
       </template>
-      <div>
-        {{ assets }} {{ assets === 1 ? 'asset' : 'assets' }}<template v-if="position"> · {{ position }} of {{ lane.length }} in {{ KIND_INFO[status.kind].label }}</template>
-      </div>
       <template #actions>
         <Button v-slot="slot" as-child text>
           <RouterLink :to="assetsLink" :class="slot.class">View {{ assets }} {{ assets === 1 ? 'asset' : 'assets' }} <i class="pi pi-arrow-right" aria-hidden="true" /></RouterLink>
@@ -112,7 +121,9 @@ const crumbs = computed(() => [{ label: 'Statuses', to: '/statuses' }, { label: 
       </template>
     </DetailHeader>
 
-    <OverviewFields :fields="fields" :saved="saved" :draft="draft" :readonly="!canManage" />
+    <Panel header="Details">
+      <OverviewFields :fields="fields" :saved="saved" :draft="draft" :readonly="!canManage" />
+    </Panel>
     <SaveBar v-if="canManage && changeCount(draft, 'overview')" :count="changeCount(draft, 'overview')" :saving="saving" @save="save" @discard="discard" />
   </section>
   <EmptyState v-else-if="!isLoading" icon="pi pi-tag" text="This status doesn't exist." />

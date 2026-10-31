@@ -3,6 +3,8 @@ import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Password from 'primevue/password'
 import { computed, ref } from 'vue'
+import SettingsGroup from '@/components/SettingsGroup.vue'
+import SettingsRow from '@/components/SettingsRow.vue'
 import { identityApi } from '@/lib/api/client'
 import { unwrap } from '@/lib/errors'
 import { useFormErrors } from '@/lib/forms'
@@ -34,41 +36,23 @@ async function submit() {
 </script>
 
 <template>
-  <form class="form" @submit.prevent="submit">
-    <Message severity="info">Changing your password signs out your other devices.</Message>
+  <form class="settings" @submit.prevent="submit">
     <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
-    <div class="field">
-      <label for="current">Current password</label>
-      <Password
-        v-model="current"
-        input-id="current"
-        :feedback="false"
-        toggle-mask
-        autocomplete="current-password"
-        required
-      />
-      <small v-if="errors.fields.value.current_password" class="field-error">
-        {{ errors.fields.value.current_password }}
-      </small>
-    </div>
-    <div class="field">
-      <label for="password">New password</label>
-      <Password v-model="password" input-id="password" toggle-mask autocomplete="new-password" required />
-      <small v-if="errors.fields.value.new_password" class="field-error">{{ errors.fields.value.new_password }}</small>
-    </div>
-    <div class="field">
-      <label for="confirm">Confirm new password</label>
-      <Password
-        v-model="confirm"
-        input-id="confirm"
-        :feedback="false"
-        toggle-mask
-        autocomplete="new-password"
-        required
-      />
-      <small v-if="mismatch" class="field-error">Passwords don't match</small>
-    </div>
-    <div class="actions">
+    <SettingsGroup title="Change password" footer="Changing your password signs out your other devices.">
+      <SettingsRow label="Current password" for="current" stacked>
+        <Password v-model="current" input-id="current" :feedback="false" toggle-mask autocomplete="current-password" required fluid />
+        <small v-if="errors.fields.value.current_password" class="field-error">{{ errors.fields.value.current_password }}</small>
+      </SettingsRow>
+      <SettingsRow label="New password" for="password" stacked>
+        <Password v-model="password" input-id="password" toggle-mask autocomplete="new-password" required fluid />
+        <small v-if="errors.fields.value.new_password" class="field-error">{{ errors.fields.value.new_password }}</small>
+      </SettingsRow>
+      <SettingsRow label="Confirm new password" for="confirm" stacked>
+        <Password v-model="confirm" input-id="confirm" :feedback="false" toggle-mask autocomplete="new-password" required fluid />
+        <small v-if="mismatch" class="field-error">Passwords don't match</small>
+      </SettingsRow>
+    </SettingsGroup>
+    <div class="settings-actions">
       <Button type="submit" label="Change password" :loading="busy" :disabled="mismatch" />
     </div>
   </form>

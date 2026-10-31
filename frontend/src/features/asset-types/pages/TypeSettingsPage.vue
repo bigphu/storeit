@@ -3,16 +3,15 @@ import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import Column from 'primevue/column'
 import DataTable, { type DataTableRowReorderEvent } from 'primevue/datatable'
-import Tab from 'primevue/tab'
-import TabList from 'primevue/tablist'
-import Tabs from 'primevue/tabs'
+import Panel from 'primevue/panel'
 import Tag from 'primevue/tag'
 import ToggleSwitch from 'primevue/toggleswitch'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useLeaveGuard, useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
 import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
-import DetailHeader from '@/components/DetailHeader.vue'
+import DetailHeader, { type HeaderFact } from '@/components/DetailHeader.vue'
+import SegmentedFilter, { type SegmentOption } from '@/components/SegmentedFilter.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import OverviewFields, { type FieldDef } from '@/components/OverviewFields.vue'
 import SaveBar from '@/components/SaveBar.vue'
@@ -48,6 +47,16 @@ const { data: type, isLoading } = useAssetType(() => props.typeId)
 const { data: allTypes } = useAssetTypes(true, true)
 const assetCount = computed(() => allTypes.value?.find((t) => t.id === props.typeId)?.asset_count ?? 0)
 const activeAttributes = computed(() => (type.value?.attributes ?? []).filter((a) => !a.removed).length)
+// dải thông tin ở đầu trang
+const facts = computed<HeaderFact[]>(() => {
+  const t = type.value
+  if (!t) return []
+  return [
+    { label: 'Assets', value: assetCount.value, to: typeListLocation(t.id, listContext.views) },
+    { label: 'Attributes', value: activeAttributes.value },
+    { label: 'Borrowing', value: t.can_borrow ? 'Can be borrowed' : 'Not borrowable' },
+  ]
+})
 
 type Section = 'overview' | 'attributes'
 const { state, update: updateUrl } = useUrlState(
@@ -106,11 +115,22 @@ const nextPosition = computed(() => Math.max(0, ...(type.value?.attributes ?? []
 // Overview: sửa tại chỗ, gom vào thanh lưu (Ctrl/⌘ S); Save và Discard đều có Undo
 const fields: FieldDef[] = [
   { key: 'name', label: 'Name', maxlength: 100 },
-  { key: 'code', label: 'Code', lock: 'Part of every asset tag, so it can’t change.' },
+  { key: 'code', label: 'Code', lock: 'Identifies the type in exports and imports, so it can’t change.' },
+  { key: 'tag_prefix', label: 'Tag prefix', maxlength: 10 },
   { key: 'description', label: 'Description', kind: 'textarea' },
 ]
-const saved = computed(() => ({ name: type.value?.name ?? '', code: type.value?.code ?? '', description: type.value?.description ?? '' }))
+const saved = computed(() => ({
+  name: type.value?.name ?? '',
+  code: type.value?.code ?? '',
+  tag_prefix: type.value?.tag_prefix ?? '',
+  description: type.value?.description ?? '',
+}))
 const draft = reactive(emptyDraft())
+// tab chia mục (một điều khiển phân đoạn với bộ lọc của danh sách)
+const sections = computed<SegmentOption<Section>[]>(() => [
+  { value: 'overview', label: 'Overview', dirty: changeCount(draft, 'overview') > 0 },
+  { value: 'attributes', label: 'Attributes', count: activeAttributes.value },
+])
 useTabDirty(() => isDirty(draft))
 useLeaveGuard(() => isDirty(draft))
 const saveOverview = useTypeOverviewSave()
@@ -230,12 +250,11 @@ const table = useListTable<Attribute>({ open: (a) => openAttribute(a), clickable
 <template>
   <section v-if="type">
     <AppBreadcrumb :items="crumbs" />
-    <DetailHeader :title="type.name" icon="sitemap">
+    <DetailHeader :title="type.name" :code="type.code" icon="sitemap" :facts="facts">
       <template #tags>
         <Tag :value="type.archived_at ? 'Archived' : 'Active'" :severity="type.archived_at ? 'secondary' : 'success'" />
         <Tag v-if="type.is_system" value="Built-in" icon="pi pi-lock" severity="secondary" />
       </template>
-      <div>Code <code>{{ type.code }}</code> · {{ assetCount }} {{ assetCount === 1 ? 'asset' : 'assets' }} · {{ activeAttributes }} {{ activeAttributes === 1 ? 'attribute' : 'attributes' }}</div>
       <template #actions>
         <Button v-slot="slot" as-child text>
           <RouterLink :to="typeListLocation(type.id, listContext.views)" :class="slot.class">View {{ assetCount }} {{ assetCount === 1 ? 'asset' : 'assets' }} <i class="pi pi-arrow-right" aria-hidden="true" /></RouterLink>
@@ -244,15 +263,12 @@ const table = useListTable<Attribute>({ open: (a) => openAttribute(a), clickable
       </template>
     </DetailHeader>
 
-    <Tabs :value="state.tab" class="section-tabs" @update:value="(v) => updateUrl({ tab: v as Section })">
-      <TabList>
-        <Tab value="overview">Overview<span v-if="changeCount(draft, 'overview')" class="tab-dirty" aria-label="Unsaved changes" /></Tab>
-        <Tab value="attributes">Attributes <span class="tab-count">{{ activeAttributes }}</span></Tab>
-      </TabList>
-    </Tabs>
+    <SegmentedFilter :model-value="state.tab" :options="sections" label="Sections" class="section-tabs" @update:model-value="(v) => updateUrl({ tab: v })" />
 
     <template v-if="state.tab === 'overview'">
-      <OverviewFields :fields="fields" :saved="saved" :draft="draft" :readonly="!canManage" />
+      <Panel header="Details">
+        <OverviewFields :fields="fields" :saved="saved" :draft="draft" :readonly="!canManage" />
+      </Panel>
       <div class="borrow-row">
         <ToggleSwitch
           :model-value="type.can_borrow"
@@ -360,22 +376,6 @@ const table = useListTable<Attribute>({ open: (a) => openAttribute(a), clickable
 .borrow-hint {
   color: var(--p-text-muted-color);
   font-size: 0.9rem;
-}
-.section-tabs {
-  margin-bottom: 1rem;
-}
-.tab-count {
-  font: 0.75rem var(--app-mono);
-  color: var(--p-text-muted-color);
-}
-/* tab còn thay đổi chưa lưu */
-.tab-dirty {
-  display: inline-block;
-  width: 0.45rem;
-  height: 0.45rem;
-  margin-left: 0.4rem;
-  border-radius: 50%;
-  background: var(--app-warn);
 }
 .attr-head {
   display: flex;

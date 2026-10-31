@@ -3,6 +3,7 @@ import AutoComplete, { type AutoCompleteCompleteEvent } from 'primevue/autocompl
 import DatePicker from 'primevue/datepicker'
 import Textarea from 'primevue/textarea'
 import { computed, ref, watch } from 'vue'
+import CodeTag from '@/components/CodeTag.vue'
 import FormDialog from '@/components/FormDialog.vue'
 import { announce } from '@/lib/actions'
 import type { AssetListItem } from '@/lib/api/types'
@@ -124,7 +125,7 @@ async function submit() {
       >
         <template #option="{ option }: { option: AssetListItem }">
           <span class="opt">
-            <span class="mono">{{ option.tag }}</span> · {{ option.name }}
+            <CodeTag :code="option.tag" /> · {{ option.name }}
             <small>· {{ option.asset_type_name }} · {{ option.status_name }}</small>
           </span>
         </template>

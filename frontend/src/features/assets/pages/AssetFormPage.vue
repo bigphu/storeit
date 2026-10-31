@@ -10,6 +10,7 @@ import { useRouter } from 'vue-router'
 import { useTabDirty, useTabTitle } from '@/app/tabs/tabPage'
 import { useTabs } from '@/app/tabs/useTabs'
 import AppBreadcrumb, { type Crumb } from '@/components/AppBreadcrumb.vue'
+import CodeTag from '@/components/CodeTag.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { fromDateString, toDateString } from '@/lib/dates'
 import { announce } from '@/lib/actions'
@@ -35,7 +36,6 @@ const errors = useFormErrors()
 const isEdit = computed(() => !!props.id)
 const { data: asset, refetch } = useAsset(() => props.id)
 
-const tag = ref('')
 const name = ref('')
 const description = ref('')
 const typeId = ref<string | null>(props.typeId ?? null)
@@ -77,7 +77,6 @@ let valuesFor: string | null = null
 // Chưa lưu: so form với lúc vừa nạp xong (chấm trên tab, hỏi lại khi đóng tab)
 const formState = computed(() =>
   JSON.stringify({
-    tag: tag.value,
     name: name.value,
     description: description.value,
     typeId: typeId.value,
@@ -97,7 +96,6 @@ watch(
   () => {
     const a = asset.value
     if (!a) return
-    tag.value = a.tag
     name.value = a.name
     description.value = a.description
     typeId.value = a.asset_type.id
@@ -160,7 +158,7 @@ async function submit() {
     const saved =
       isEdit.value && asset.value
         ? await replace.mutateAsync({ id: asset.value.id, version: asset.value.version, ...body })
-        : await create.mutateAsync({ tag: tag.value, ...body })
+        : await create.mutateAsync(body)
     clean.value = formState.value
     if (before)
       announce(saved, {
@@ -209,10 +207,16 @@ const crumbs = computed<Crumb[]>(() => {
     <form v-if="!isEdit || asset" class="form" @submit.prevent="submit">
       <Message v-if="errors.general.value" severity="error">{{ errors.general.value }}</Message>
 
+      <!-- tag tự sinh theo tiền tố của loại (LAP-0091) khi lưu; sửa thì chỉ xem, không đổi được -->
       <div class="field">
-        <label for="tag">Tag</label>
-        <InputText id="tag" v-model="tag" :disabled="isEdit" required placeholder="LAP-0001" />
-        <small v-if="!isEdit">A-Z, 0-9, '.', '_' or '-'. Can't be changed later.</small>
+        <span>Tag</span>
+        <div class="tag-line">
+          <CodeTag v-if="isEdit && asset" :code="asset.tag" />
+          <template v-else>
+            <CodeTag v-if="selectedType?.tag_prefix" :code="`${selectedType.tag_prefix}-…`" />
+            <small>{{ selectedType?.tag_prefix ? 'Given automatically when you save.' : 'Given automatically when you save, from the type you pick.' }}</small>
+          </template>
+        </div>
         <small v-if="errors.fields.value.tag" class="field-error">{{ errors.fields.value.tag }}</small>
       </div>
       <div class="field">
@@ -284,6 +288,15 @@ const crumbs = computed<Crumb[]>(() => {
 </template>
 
 <style scoped>
+.tag-line {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2rem;
+}
+.tag-line small {
+  color: var(--p-text-muted-color);
+}
 .dirty-note {
   display: inline-flex;
   align-items: center;

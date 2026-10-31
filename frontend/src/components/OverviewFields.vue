@@ -117,9 +117,25 @@ const shown = (f: FieldDef) => {
 .overview-fields {
   display: grid;
   grid-template-columns: 10rem minmax(0, 1fr);
-  gap: 0.85rem 1.2rem;
+  column-gap: 1.2rem;
   align-items: start;
-  max-width: 44rem;
+}
+/* hai cột trên trang chi tiết: dòng nhãn / giá trị ngăn bằng vạch mảnh như dl.props */
+.overview-fields:not(.stacked) > * {
+  padding-block: 0.5rem;
+}
+.overview-fields:not(.stacked) > :nth-child(n + 3) {
+  border-top: 1px solid var(--app-hair);
+}
+.overview-fields:not(.stacked) > :nth-child(-n + 2) {
+  padding-top: 0;
+}
+/* nhãn cạnh ô nhập: hạ xuống ngang dòng chữ trong ô */
+.overview-fields:not(.stacked) > label.lbl {
+  padding-top: 1rem;
+}
+.overview-fields:not(.stacked) > label.lbl:first-child {
+  padding-top: 0.5rem;
 }
 .overview-fields.stacked {
   grid-template-columns: minmax(0, 1fr);

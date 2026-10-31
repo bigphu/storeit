@@ -53,14 +53,40 @@ const filledField = {
 // Rê chuột lên dòng bảng: sắc màu chính rất nhạt (người dùng chọn riêng cho bảng)
 const rowHover = 'var(--app-row-hover)'
 
-// Tag đặc: nền là sắc đậm của vai trò, chữ trắng đậm, bo tròn (spec "Tags"); hai theme như nhau
-const solidTags = {
-  primary: { background: 'var(--app-brand-strong)', color: 'var(--app-on-color)' },
-  success: { background: 'var(--app-brand-strong)', color: 'var(--app-on-color)' },
-  info: { background: 'var(--app-info-strong)', color: 'var(--app-on-color)' },
-  warn: { background: 'var(--app-warn-strong)', color: 'var(--app-on-color)' },
-  danger: { background: 'var(--app-danger-strong)', color: 'var(--app-on-color)' },
-  secondary: { background: 'var(--app-neutral-strong)', color: 'var(--app-on-color)' },
+// Tag nhạt kiểu iOS: nền là sắc soft của vai trò, chữ là sắc ink, bo tròn; hai theme lấy biến
+// của theme đó nên đọc rõ ở cả sáng và tối
+const softTags = {
+  primary: { background: 'var(--app-brand-soft)', color: 'var(--app-brand-ink)' },
+  success: { background: 'var(--app-brand-soft)', color: 'var(--app-brand-ink)' },
+  info: { background: 'var(--app-info-soft)', color: 'var(--app-info-ink)' },
+  warn: { background: 'var(--app-warn-soft)', color: 'var(--app-warn-ink)' },
+  danger: { background: 'var(--app-danger-soft)', color: 'var(--app-danger-ink)' },
+  secondary: { background: 'var(--app-neutral-soft)', color: 'var(--app-neutral-ink)' },
+}
+
+// Màu chính: xanh đậm, chữ trắng ở cả hai theme (Aura tối mặc định là xanh nhạt chữ đen)
+const brandPrimary = {
+  color: '{primary.600}',
+  contrastColor: '#ffffff',
+  hoverColor: '{primary.500}',
+  activeColor: '{primary.700}',
+}
+
+// Điều khiển phân đoạn kiểu iOS (SelectButton, SegmentedFilter): rãnh xám trong, lựa chọn đang
+// bật là viên nổi (--app-segment); giống tab chia mục (.section-tabs trong base.css)
+const segmentScheme = {
+  root: {
+    background: 'var(--app-fill)',
+    checkedBackground: 'var(--app-fill)',
+    hoverBackground: 'var(--app-fill)',
+    borderColor: 'transparent',
+    checkedBorderColor: 'transparent',
+    color: '{text.muted.color}',
+    hoverColor: '{text.color}',
+    checkedColor: '{text.color}',
+  },
+  content: { checkedBackground: 'var(--app-segment)' },
+  icon: { color: '{text.muted.color}', hoverColor: '{text.color}', checkedColor: '{text.color}' },
 }
 
 // Công tắc kiểu iOS: 44×27, núm trắng, bật là xanh
@@ -86,6 +112,7 @@ export const StoreItPreset = definePreset(Aura, {
     navigation: { item: { borderRadius: '8px' } },
     colorScheme: {
       light: {
+        primary: brandPrimary,
         surface: iosGray,
         content: { background: '#ffffff', hoverBackground: 'var(--app-fill)', borderColor: 'var(--app-line)' },
         formField: { ...filledField, placeholderColor: '{surface.500}', iconColor: '{surface.500}' },
@@ -95,6 +122,7 @@ export const StoreItPreset = definePreset(Aura, {
         navigation: navHover('var(--app-fill)'),
       },
       dark: {
+        primary: brandPrimary,
         surface: iosGray,
         content: { background: '#1c1c1e', hoverBackground: 'var(--app-fill)', borderColor: 'var(--app-line)' },
         formField: { ...filledField, placeholderColor: '{surface.500}', iconColor: '{surface.500}' },
@@ -111,8 +139,8 @@ export const StoreItPreset = definePreset(Aura, {
   },
   components: {
     tag: {
-      root: { fontSize: '0.76rem', fontWeight: '700', padding: '0.12rem 0.55rem', borderRadius: '999px' },
-      colorScheme: { light: solidTags, dark: solidTags },
+      root: { fontSize: '0.75rem', fontWeight: '600', padding: '0.18rem 0.6rem', borderRadius: '999px' },
+      colorScheme: { light: softTags, dark: softTags },
     },
     datatable: {
       row: { hoverBackground: rowHover, hoverColor: '{text.color}' },
@@ -134,10 +162,16 @@ export const StoreItPreset = definePreset(Aura, {
       },
     },
     // Thẻ (Panel, Card): bo góc lớn, viền mảnh, bóng mềm
-    panel: { root: { borderRadius: '14px' } },
-    card: { root: { borderRadius: '14px', shadow: 'var(--app-card-shadow)' } },
-    dialog: { root: { borderRadius: '18px' } },
-    button: { root: { borderRadius: '10px' } },
+    panel: { root: { borderRadius: '16px' } },
+    card: { root: { borderRadius: '16px', shadow: 'var(--app-card-shadow)' } },
+    dialog: { root: { borderRadius: '20px' } },
+    button: { root: { borderRadius: '10px', paddingX: '0.9rem', paddingY: '0.5rem', gap: '0.45rem' } },
+    togglebutton: {
+      root: { padding: '0', fontWeight: '500' },
+      content: { padding: '0.38rem 1rem', borderRadius: '8px', checkedShadow: 'var(--app-segment-shadow)' },
+      colorScheme: { light: segmentScheme, dark: segmentScheme },
+    },
+    selectbutton: { root: { borderRadius: '11px' } },
     toggleswitch: {
       root: { width: '44px', height: '27px', gap: '2px', borderWidth: '0', slideDuration: '0.25s' },
       handle: { size: '23px' },

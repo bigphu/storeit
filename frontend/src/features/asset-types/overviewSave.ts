@@ -1,17 +1,21 @@
-// Lưu tên, mô tả của loại (trang chi tiết, ngăn kéo, ô sửa tại chỗ) và archive/restore, có
-// Undo. PATCH cần đủ tên và mô tả cùng version
+// Lưu tên, mô tả, tiền tố tag của loại (trang chi tiết, ngăn kéo, ô sửa tại chỗ) và archive/restore,
+// có Undo. PATCH gửi đủ cả ba cùng version
 import type { AssetType } from '@/lib/api/types'
 import { runAction } from '@/lib/actions'
 import type { DraftValue } from '@/lib/detailDraft'
 import { useArchiveAssetType, useRestoreAssetType, useUpdateAssetType } from './api'
 
-type TypeRef = Pick<AssetType, 'id' | 'name' | 'description' | 'version'>
+type TypeRef = Pick<AssetType, 'id' | 'name' | 'description' | 'tag_prefix' | 'version'>
 
 export function useTypeOverviewSave() {
   const update = useUpdateAssetType()
   return (t: TypeRef, changes: Record<string, DraftValue>) => {
-    const saved = { name: t.name, description: t.description }
-    const next = { name: String(changes.name ?? t.name), description: String(changes.description ?? t.description) }
+    const saved = { name: t.name, description: t.description, tag_prefix: t.tag_prefix }
+    const next = {
+      name: String(changes.name ?? t.name),
+      description: String(changes.description ?? t.description),
+      tag_prefix: String(changes.tag_prefix ?? t.tag_prefix).trim().toUpperCase(),
+    }
     return runAction({
       run: () => update.mutateAsync({ id: t.id, version: t.version, ...next }),
       done: `${next.name} saved.`,

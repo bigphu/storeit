@@ -91,9 +91,10 @@ function useAssetMutation<V, R>(fn: (v: V) => Promise<R>, toast = true) {
 
 const path = (id: string) => ({ params: { path: { assetID: id } } })
 
+// tag không gửi: backend tự sinh theo tiền tố của loại (LAP-0091)
 export function useCreateAsset() {
   return useAssetMutation(
-    (body: AssetBody & { tag: string }) => unwrap(inventoryApi.POST('/assets', { body })),
+    (body: AssetBody & { tag?: string }) => unwrap(inventoryApi.POST('/assets', { body })),
     false,
   )
 }

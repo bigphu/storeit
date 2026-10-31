@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppLogo from '@/components/AppLogo.vue'
 import Button from 'primevue/button'
 import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
@@ -126,32 +127,41 @@ onBeforeUnmount(() => {
 <template>
   <div class="shell">
     <header class="topbar">
-      <Button v-if="narrow" icon="pi pi-bars" text rounded class="nav-toggle" aria-label="Open navigation" @click="navOpen = true" />
-      <RouterLink to="/assets" class="brand">StoreIt</RouterLink>
-      <!-- màn hẹp: nút biểu tượng gọn thay cho ô "Go to asset type… Ctrl K" -->
-      <Button
-        v-if="session.can(Perm.AssetRead) && narrow"
-        icon="pi pi-search"
-        text
-        rounded
-        aria-label="Go to asset type"
-        title="Go to asset type"
-        @click="switcherOpen = true"
-      />
-      <Button
-        v-else-if="session.can(Perm.AssetRead)"
-        severity="secondary"
-        outlined
-        size="small"
-        class="go-type"
-        @click="switcherOpen = true"
-      >
-        <span>Go to asset type…</span>
-        <kbd>Ctrl K</kbd>
-      </Button>
-      <Button icon="pi pi-question-circle" text rounded aria-label="Keyboard shortcuts (?)" title="Keyboard shortcuts (?)" @click="helpOpen = true" />
-      <span class="spacer" />
-      <AccountMenu />
+      <!-- Logo -->
+      <div class="topbar-left">
+        <Button v-if="narrow" icon="pi pi-bars" text rounded class="nav-toggle" aria-label="Open navigation" @click="navOpen = true" />
+        <RouterLink to="/assets" class="brand" aria-label="StoreIt home"><AppLogo /></RouterLink>
+      </div>
+
+      <!-- Util -->
+      <span class="utilities">
+        <Button
+          v-if="session.can(Perm.AssetRead) && narrow"
+          icon="pi pi-search"
+          text
+          rounded
+          aria-label="Go to asset type"
+          title="Go to asset type"
+          @click="switcherOpen = true"
+        />
+        <Button
+          v-else-if="session.can(Perm.AssetRead)"
+          severity="secondary"
+          outlined
+          size="small"
+          class="go-type"
+          @click="switcherOpen = true"
+        >
+          <span>Go to asset type…</span>
+          <kbd>Ctrl K</kbd>
+        </Button>
+        <Button icon="pi pi-question-circle" text rounded aria-label="Keyboard shortcuts (?)" title="Keyboard shortcuts (?)" @click="helpOpen = true" />
+      </span>
+
+      <!-- Profile -->
+      <div class="topbar-right">
+        <AccountMenu />
+      </div>
     </header>
     <AppSidebar v-if="!narrow" @switch-type="switcherOpen = true" />
     <SideDrawer
@@ -167,7 +177,7 @@ onBeforeUnmount(() => {
     </SideDrawer>
     <div class="work">
       <TabBar @switch="switchTo" />
-      <main ref="content" class="content">
+      <main ref="content" class="content app-patterned">
         <!-- Mỗi tab giữ trang của nó (bộ lọc, cuộn, form đang nhập) khi chuyển tab -->
         <EmptyState v-if="!tabs.tabs.length" icon="pi pi-clone" text="No open tabs. Open a page from the sidebar or press Ctrl K." />
         <RouterView v-else v-slot="{ Component, route: r }">
@@ -217,21 +227,42 @@ onBeforeUnmount(() => {
   grid-template-columns: 15.5rem minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   height: 100vh;
+  width: 100vw;
 }
 .topbar {
   grid-column: 1 / -1;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr; /* Forces perfect centering of the middle item */
   align-items: center;
-  gap: 0.75rem;
   padding: 0.5rem 1rem;
   background: var(--p-content-background);
   border-bottom: 1px solid var(--app-line);
+  width: 100%;
 }
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 1.6rem;
+}
+.utilities {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.topbar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+/* logo nhỏ hơn ở thanh trên: cao ngang ô "Go to asset type…" */
 .brand {
-  font: 800 1.1rem var(--app-display);
-  letter-spacing: -0.01em;
+  display: inline-flex;
   color: inherit;
   text-decoration: none;
+}
+.brand :deep(.app-logo) {
+  font-size: 1.05rem;
 }
 /* ô "Go to asset type…" trông như ô tìm kiếm */
 .go-type {
@@ -261,7 +292,6 @@ onBeforeUnmount(() => {
   padding: 1.1rem 1.4rem 2.5rem;
   min-width: 0;
   overflow: auto;
-  background: var(--p-content-background);
 }
 @media (max-width: 760px) {
   /* sidebar ở trong ngăn kéo: chỉ còn thanh trên và phần làm việc */

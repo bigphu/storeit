@@ -2,6 +2,7 @@
 import Button from 'primevue/button'
 import Timeline from 'primevue/timeline'
 import { computed, reactive } from 'vue'
+import CodeTag from '@/components/CodeTag.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import { formatDateTime } from '@/lib/dates'
@@ -69,7 +70,7 @@ function toggle(key: string) {
           <p class="summary">
             <strong>{{ activitySummary(item).who }}</strong>
             <template v-for="(part, i) in summaryParts(item)" :key="i">
-              <RouterLink v-if="part.link && item.related" :to="`/assets/${item.related.id}`" class="mono">{{ part.text }}</RouterLink>
+              <RouterLink v-if="part.link && item.related" :to="`/assets/${item.related.id}`"><CodeTag :code="part.text" /></RouterLink>
               <template v-else>{{ ` ${part.text}`.replace(/^ (?=:)/, '') }}</template>
             </template>
             <time class="when" :datetime="item.occurred_at" :title="formatDateTime(item.occurred_at)">{{ relativeTime(item.occurred_at, now) }}</time>

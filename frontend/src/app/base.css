@@ -49,6 +49,11 @@
   --app-bar: rgba(120, 120, 128, 0.22);
   --app-thumb: rgba(60, 60, 67, 0.3);
   --app-card-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 30px rgba(0, 0, 0, 0.09);
+  /* ô đang chọn của điều khiển phân đoạn (segmented control) và bóng của nó */
+  --app-segment: #ffffff;
+  /* hoa văn nền: lưới chấm rất mờ trên nền xám (body, vùng nội dung, trang công khai) */
+  --app-pattern-dot: rgba(60, 60, 67, 0.13);
+  --app-segment-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04);
   --app-ease: cubic-bezier(0.32, 0.72, 0, 1);
   /* nền phụ, màu nhấn, liên kết */
   --app-soft: var(--app-fill);
@@ -70,6 +75,9 @@
   --app-bar: rgba(120, 120, 128, 0.36);
   --app-thumb: rgba(235, 235, 245, 0.28);
   --app-card-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.08) inset, 0 1px 0 rgba(255, 255, 255, 0.07) inset, 0 10px 30px rgba(0, 0, 0, 0.42), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --app-segment: #636366;
+  --app-pattern-dot: rgba(235, 235, 245, 0.07);
+  --app-segment-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
   --app-brand-ink: #34d399;
   --app-brand-soft: color-mix(in srgb, #10b981 20%, transparent);
   --app-info-ink: #38bdf8;
@@ -119,13 +127,20 @@
   --p-datatable-body-cell-padding: 0.375rem 0.5rem;
 }
 
+/* nền có hoa văn: lưới chấm 22px cố định theo màn hình (các vùng cùng dùng thì chấm thẳng hàng) */
+body,
+.app-patterned {
+  background-color: var(--app-ground);
+  background-image: radial-gradient(var(--app-pattern-dot) 1px, transparent 1.3px);
+  background-size: 22px 22px;
+  background-attachment: fixed;
+}
 body {
   margin: 0;
   font: 13.5px/1.45 var(--app-body);
   letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: var(--app-ground);
   color: var(--p-text-color);
 }
 h1,
@@ -256,17 +271,48 @@ kbd {
   font-size: 0.85rem;
   color: var(--p-text-muted-color);
 }
+/* nút cuối trang cài đặt (SettingsGroup): canh phải dưới nhóm cuối */
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.1rem;
+}
 .actions {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
   align-items: center;
 }
+/* Trang chi tiết (một kiểu cho mọi trang): các mục là thẻ (Panel) xếp lưới; trong thẻ là danh
+   sách nhãn / giá trị kiểu iOS, mỗi dòng ngăn bằng vạch mảnh (dl.props, OverviewFields) */
+.detail-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 1rem;
+  align-items: start;
+}
 dl.props {
   display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0.5rem 1.25rem;
+  grid-template-columns: minmax(7rem, max-content) minmax(0, 1fr);
+  column-gap: 1.25rem;
   margin: 0;
+}
+dl.props > dt,
+dl.props > dd {
+  padding: 0.55rem 0;
+}
+dl.props > dt:not(:first-of-type),
+dl.props > dt:not(:first-of-type) + dd {
+  border-top: 1px solid var(--app-hair);
+}
+dl.props > dt:first-of-type,
+dl.props > dt:first-of-type + dd {
+  padding-top: 0;
+}
+dl.props > dt:last-of-type,
+dl.props > dt:last-of-type + dd {
+  padding-bottom: 0;
 }
 dl.props dt {
   color: var(--p-text-muted-color);
@@ -282,7 +328,7 @@ section + section {
 /* Bảng: thẻ bo góc lớn nổi bằng bóng mềm, viền mảnh, hàng tiêu đề nền phụ, số thẳng cột */
 .p-datatable {
   border: 1px solid var(--app-hair);
-  border-radius: 14px;
+  border-radius: 16px;
   overflow: hidden;
   background: var(--app-panel);
   box-shadow: var(--app-card-shadow);
@@ -294,10 +340,62 @@ section + section {
   font-weight: 600;
   color: var(--p-text-muted-color);
 }
-/* Thẻ (Panel): nổi trên nền xám như thẻ của iOS */
+/* Thẻ (Panel): nổi trên nền xám như thẻ của iOS, tiêu đề đậm */
 .p-panel {
   border-color: var(--app-hair);
   box-shadow: var(--app-card-shadow);
+}
+.p-panel .p-panel-title {
+  font: 600 0.95rem var(--app-display);
+  letter-spacing: -0.01em;
+}
+
+/* Nút kiểu iOS: chữ đậm vừa; nút phụ (secondary outlined) là nút "xám" nền xám trong, không viền */
+.p-button {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.p-button.p-button-secondary.p-button-outlined {
+  background: var(--app-fill);
+  border-color: transparent;
+  color: var(--p-text-color);
+}
+.p-button.p-button-secondary.p-button-outlined:not(:disabled):hover {
+  background: var(--app-bar);
+  border-color: transparent;
+  color: var(--p-text-color);
+}
+.p-button.p-button-danger.p-button-outlined {
+  background: var(--app-danger-soft);
+  border-color: transparent;
+}
+/* phím tắt trong nút (KeyHint): viên mờ theo màu chữ của nút */
+.p-button kbd {
+  border-color: transparent;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  color: inherit;
+  opacity: 0.85;
+}
+
+/* Điều khiển phân đoạn duy nhất (SegmentedFilter trên SelectButton): bộ lọc của danh sách và tab
+   chia mục của trang chi tiết. Rãnh xám bo 11px đệm 3px, các lựa chọn cách 2px, viên đang bật bo
+   8px chữ đậm (kích thước ở theme.ts; SegmentedFilter giữ chỗ cho chữ đậm nên không đổi cỡ) */
+.p-selectbutton {
+  gap: 2px;
+  padding: 3px;
+  background: var(--app-fill);
+  border-radius: 11px;
+}
+.p-selectbutton .p-togglebutton {
+  background: transparent;
+  border-radius: 8px;
+}
+.p-togglebutton.p-togglebutton-checked {
+  font-weight: 600;
+}
+/* tab chia mục của trang chi tiết (SegmentedFilter class="section-tabs"): cách nội dung bên dưới */
+.p-selectbutton.section-tabs {
+  margin-bottom: 1rem;
 }
 /* Mỗi dòng của bảng nằm trên một dòng chữ: ô không xuống dòng; bảng rộng hơn chỗ thì cuộn
    ngang trong khung (khung ngoài giữ bo góc). Bảng table-layout: fixed (làn trạng thái, cột
@@ -395,19 +493,21 @@ section + section {
 .p-datatable .p-datatable-tbody > tr.p-datatable-row-selected > td.row-menu-col {
   background: linear-gradient(var(--app-selected), var(--app-selected)), var(--p-datatable-row-background, var(--p-content-background));
 }
-/* Mã tài sản (tag): chữ mono, màu liên kết */
-.tag-cell,
-.tag-cell a {
-  font-family: var(--app-mono);
-  color: var(--app-link);
+/* Liên kết là một mã tự sinh (CodeTag): không gạch chân, viên đậm lên khi rê chuột */
+a:has(> .code-tag) {
   text-decoration: none;
 }
-/* Tag: cùng bề rộng, chữ ở giữa, không xuống dòng (cột trạng thái thẳng hàng); nhãn dài
-   hơn bề rộng chung thì tag dài ra thay vì bị cắt */
+a:hover > .code-tag {
+  background: var(--app-brand-soft);
+}
+/* Tag: không xuống dòng; trong bảng cùng bề rộng, chữ ở giữa (cột trạng thái thẳng hàng),
+   nhãn dài hơn bề rộng chung thì tag dài ra thay vì bị cắt */
 .p-tag {
-  min-width: 7.5rem;
   justify-content: center;
   white-space: nowrap;
+}
+.p-datatable .p-tag {
+  min-width: 6.5rem;
 }
 .p-chip {
   font-size: 0.85rem;

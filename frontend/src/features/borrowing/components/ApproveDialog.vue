@@ -17,6 +17,7 @@ import { assetKeys } from '@/features/assets/api'
 import { useAssetType } from '@/features/asset-types/api'
 import { useApproveTicket } from '../api'
 import { parseRequirement, requestCode, requirementLabels, satisfies, shortDay } from '../borrowing'
+import CodeTag from '@/components/CodeTag.vue'
 
 // Duyệt phiếu: chọn một tài sản đang rảnh của loại được hỏi. Bảng có một cột cho mỗi yêu cầu;
 // tài sản thoả mọi yêu cầu lên trước, còn lại mờ đi và gạch ô không thoả. Duyệt là giữ chỗ
@@ -148,7 +149,7 @@ async function submit() {
           </template>
         </Column>
         <Column header="Tag">
-          <template #body="{ data: r }: { data: Row }"><label :for="`pick-${r.id}`" class="mono">{{ r.tag }}</label></template>
+          <template #body="{ data: r }: { data: Row }"><label :for="`pick-${r.id}`"><CodeTag :code="r.tag" /></label></template>
         </Column>
         <Column field="name" header="Name" />
         <Column v-for="(req, i) in reqs" :key="req.key + i" :header="req.label">

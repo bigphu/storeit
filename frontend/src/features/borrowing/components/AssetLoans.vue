@@ -11,6 +11,7 @@ import type { Loan } from '@/lib/api/types'
 import { formatDate } from '@/lib/dates'
 import { useLoans } from '../api'
 import { loanStateTag, requestCode } from '../borrowing'
+import CodeTag from '@/components/CodeTag.vue'
 
 // Lịch sử mượn của một tài sản (US-12, người quản lý): mọi khoản, mới nhất trước
 const props = defineProps<{ assetId: string }>()
@@ -38,7 +39,7 @@ const { data, isLoading } = useLoans(computed(() => ({ asset_id: props.assetId, 
     </Column>
     <Column header="Request">
       <template #body="{ data: l }: { data: Loan }">
-        <RouterLink v-if="l.ticket_id" :to="`/borrowing/tickets/${l.ticket_id}`">{{ requestCode(l.ticket_number) }}</RouterLink>
+        <RouterLink v-if="l.ticket_id" :to="`/borrowing/tickets/${l.ticket_id}`"><CodeTag :code="requestCode(l.ticket_number)" /></RouterLink>
         <span v-else class="muted">Lent directly</span>
       </template>
     </Column>
