@@ -971,7 +971,26 @@ paths:
           schema: { type: boolean }
         - name: sort
           in: query
-          schema: { type: string, enum: [started_on, -started_on, return_by, -return_by] }
+          schema: { type: string, enum: [started_on, -started_on, return_by, -return_by, returned_on, -returned_on] }
+        - name: state
+          in: query
+          description: active (default, not returned yet), returned, or all
+          schema: { type: string, enum: [active, returned, all] }
+        - name: from
+          in: query
+          description: Period start; a loan matches when it was out at any point in [from, to]
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+        - name: q
+          in: query
+          description: Asset tag or name, or the borrower's name or email
+          schema: { type: string, maxLength: 100 }
+        - name: asset_id
+          in: query
+          description: One asset's loans (inventory.borrow.manage)
+          schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
         - $ref: '../../../api/common.yaml#/components/parameters/Page'
         - $ref: '../../../api/common.yaml#/components/parameters/PageSize'
       responses:
@@ -1528,7 +1547,9 @@ components:
         ticket_number: { type: integer, format: int64, description: 0 for a direct loan }
         started_on: { type: string, format: date }
         return_by: { type: string, format: date, nullable: true }
-        overdue_days: { type: integer, description: 0 when not overdue }
+        overdue_days: { type: integer, description: 0 when not overdue or returned }
+        returned_on: { type: string, format: date, nullable: true }
+        return_note: { type: string }
 
     LoanPage:
       allOf:

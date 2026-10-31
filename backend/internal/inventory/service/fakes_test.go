@@ -681,8 +681,8 @@ type fakeBorrowing struct {
 	lastFilter domain.TicketFilter
 	overdueOn  []time.Time
 	returns    []domain.LoanReturn
-	// loansOf: borrowerID của lần ListActiveLoans gần nhất (nil là mọi người)
-	loansOf *uuid.UUID
+	// lastLoanFilter: bộ lọc của lần ListLoans gần nhất
+	lastLoanFilter domain.LoanFilter
 }
 
 func newFakeBorrowing() *fakeBorrowing {
@@ -852,10 +852,10 @@ func (f *fakeBorrowing) GetLoan(_ context.Context, id uuid.UUID) (domain.Loan, e
 	return l, nil
 }
 
-func (f *fakeBorrowing) ListActiveLoans(_ context.Context, _ time.Time, borrowerID *uuid.UUID, _ string, _, _ int) ([]domain.Loan, int64, error) {
+func (f *fakeBorrowing) ListLoans(_ context.Context, _ time.Time, lf domain.LoanFilter) ([]domain.Loan, int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.loansOf = borrowerID
+	f.lastLoanFilter = lf
 	return nil, 0, nil
 }
 

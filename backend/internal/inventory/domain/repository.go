@@ -227,8 +227,7 @@ type BorrowingRepository interface {
 	LoanForTicket(ctx context.Context, ticketID uuid.UUID) (*Loan, error)
 	ApprovedTicketFor(ctx context.Context, assetID uuid.UUID) (*BorrowTicket, error)
 	GetLoan(ctx context.Context, id uuid.UUID) (Loan, error)
-	// ListActiveLoans: borrowerID nil là mọi người
-	ListActiveLoans(ctx context.Context, today time.Time, borrowerID *uuid.UUID, sort string, page, pageSize int) ([]Loan, int64, error)
+	ListLoans(ctx context.Context, today time.Time, f LoanFilter) ([]Loan, int64, error)
 	// Return ghi nhận trả khoản mượn đang hiệu lực của tài sản: ErrNoActiveLoan, ErrAssetChanged
 	Return(ctx context.Context, assetID uuid.UUID, r LoanReturn, version int32) (Loan, error)
 	QueueOverdueEmails(ctx context.Context, today time.Time, limit int) (int, error)

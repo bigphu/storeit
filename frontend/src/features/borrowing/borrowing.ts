@@ -42,6 +42,37 @@ export function returnFormError(returnedOn: string, startedOn: string, today: st
   return null
 }
 
+// Kỳ của lịch sử mượn (US-12): khoản ở ngoài lúc nào đó trong kỳ (backend lọc)
+export type Period = 'any' | 'this_month' | 'last_month' | 'last_30' | 'custom'
+
+// tính trên ngày "YYYY-MM-DD" theo UTC để không lệch múi giờ của máy
+const ymd = (d: Date) => d.toISOString().slice(0, 10)
+const utc = (s: string) => new Date(`${s}T00:00:00Z`)
+
+// periodRange: kỳ của một lựa chọn sẵn, tính từ hôm nay của ứng dụng (today "YYYY-MM-DD")
+export function periodRange(p: Exclude<Period, 'any' | 'custom'>, today: string): { from: string; to: string } {
+  const t = utc(today)
+  const y = t.getUTCFullYear()
+  const m = t.getUTCMonth()
+  switch (p) {
+    case 'this_month':
+      return { from: ymd(new Date(Date.UTC(y, m, 1))), to: today }
+    case 'last_month':
+      return { from: ymd(new Date(Date.UTC(y, m - 1, 1))), to: ymd(new Date(Date.UTC(y, m, 0))) }
+    case 'last_30':
+      return { from: ymd(new Date(t.getTime() - 29 * 86_400_000)), to: today }
+  }
+}
+
+// loanStateTag: nhãn và màu trạng thái của một khoản mượn; trả sau hạn là "Returned late"
+export function loanStateTag(l: { overdue_days: number; return_by?: string | null; returned_on?: string | null }): { label: string; tone: Tone } {
+  if (l.returned_on) {
+    return l.return_by && l.returned_on > l.return_by ? { label: 'Returned late', tone: 'warn' } : { label: 'Returned', tone: 'success' }
+  }
+  if (l.overdue_days > 0) return { label: overdueLabel(l.overdue_days), tone: 'danger' }
+  return { label: 'On loan', tone: 'info' }
+}
+
 // ticketLoanLabel: dòng khoản mượn trên trang phiếu đã giao
 export function ticketLoanLabel(loan: { started_on: string; returned_on?: string | null }): string {
   return loan.returned_on ? `Returned on ${shortDay(loan.returned_on)}` : `On loan since ${shortDay(loan.started_on)}`

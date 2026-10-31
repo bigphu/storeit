@@ -19,12 +19,12 @@ type Querier interface {
 	ClearDefaultStatus(ctx context.Context, kind string) error
 	// Số tài sản chưa retire của mỗi loại, tách theo kind của status (sidebar, trang loại)
 	CountActiveAssetsByTypeAndKind(ctx context.Context) ([]CountActiveAssetsByTypeAndKindRow, error)
-	CountActiveLoans(ctx context.Context, borrowerID *uuid.UUID) (int64, error)
 	CountAssets(ctx context.Context, arg CountAssetsParams) (int64, error)
 	// Số tài sản (kể cả đã retire) đang dùng mỗi status
 	CountAssetsByStatus(ctx context.Context) ([]CountAssetsByStatusRow, error)
 	CountBorrowTickets(ctx context.Context, arg CountBorrowTicketsParams) (int64, error)
 	CountBorrowTicketsByState(ctx context.Context) ([]CountBorrowTicketsByStateRow, error)
+	CountLoans(ctx context.Context, arg CountLoansParams) (int64, error)
 	CreateAsset(ctx context.Context, arg CreateAssetParams) (InventoryAsset, error)
 	CreateAssetType(ctx context.Context, arg CreateAssetTypeParams) (InventoryAssetType, error)
 	CreateAttribute(ctx context.Context, arg CreateAttributeParams) (InventoryAssetTypeAttribute, error)
@@ -71,9 +71,6 @@ type Querier interface {
 	InsertReplacement(ctx context.Context, arg InsertReplacementParams) error
 	// Nhãn thuộc tính đang dùng của mọi loại, theo thứ tự hiển thị (thẻ ở trang loại)
 	ListActiveAttributeLabels(ctx context.Context) ([]ListActiveAttributeLabelsRow, error)
-	// Khoản đang mượn: theo cột sort nếu có; mặc định quá hạn trước (hạn sớm nhất trước), rồi
-	// theo hạn, rồi mới bắt đầu trước
-	ListActiveLoans(ctx context.Context, arg ListActiveLoansParams) ([]ListActiveLoansRow, error)
 	// Khoá mọi status đang dùng khi đổi thứ tự
 	ListActiveStatusesForUpdate(ctx context.Context) ([]InventoryAssetStatus, error)
 	// Loại hệ thống (GENERAL) đứng đầu, rồi theo tên
@@ -89,6 +86,10 @@ type Querier interface {
 	ListBorrowTickets(ctx context.Context, arg ListBorrowTicketsParams) ([]InventoryBorrowTicket, error)
 	// Của mình và mọi profile được chia sẻ
 	ListExportProfiles(ctx context.Context, ownerID uuid.UUID) ([]InventoryExportProfile, error)
+	// Khoản mượn theo trạng thái (active: chưa trả, returned, all), người mượn, tài sản, kỳ và từ
+	// khoá (tag/tên tài sản, hay người mượn service đã tìm). Sắp theo cột sort nếu có; không thì quá
+	// hạn trước (hạn sớm nhất trước), rồi theo hạn, rồi mới bắt đầu trước
+	ListLoans(ctx context.Context, arg ListLoansParams) ([]ListLoansRow, error)
 	ListOptionsForType(ctx context.Context, assetTypeID uuid.UUID) ([]InventoryAssetAttributeOption, error)
 	// Khoản quá hạn chưa báo, khoá để hai lần quét cùng lúc không báo trùng
 	ListOverdueUnnotifiedLoans(ctx context.Context, arg ListOverdueUnnotifiedLoansParams) ([]InventoryLoan, error)

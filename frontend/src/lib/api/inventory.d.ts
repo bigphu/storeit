@@ -1186,8 +1186,11 @@ export interface components {
             started_on: string;
             /** Format: date */
             return_by?: string | null;
-            /** @description 0 when not overdue */
+            /** @description 0 when not overdue or returned */
             overdue_days: number;
+            /** Format: date */
+            returned_on?: string | null;
+            return_note?: string;
         };
         LoanPage: components["schemas"]["Paged"] & {
             items: components["schemas"]["Loan"][];
@@ -2778,7 +2781,16 @@ export interface operations {
             query?: {
                 /** @description Only the caller's own loans */
                 mine?: boolean;
-                sort?: "started_on" | "-started_on" | "return_by" | "-return_by";
+                sort?: "started_on" | "-started_on" | "return_by" | "-return_by" | "returned_on" | "-returned_on";
+                /** @description active (default, not returned yet), returned, or all */
+                state?: "active" | "returned" | "all";
+                /** @description Period start; a loan matches when it was out at any point in [from, to] */
+                from?: string;
+                to?: string;
+                /** @description Asset tag or name, or the borrower's name or email */
+                q?: string;
+                /** @description One asset's loans (inventory.borrow.manage) */
+                asset_id?: components["schemas"]["ID"];
                 page?: components["parameters"]["Page"];
                 page_size?: components["parameters"]["PageSize"];
             };

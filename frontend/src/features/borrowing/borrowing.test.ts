@@ -3,6 +3,8 @@ import type { Status } from '@/lib/api/types'
 import {
   canSeeTicket,
   isBorrowingStatus,
+  loanStateTag,
+  periodRange,
   ON_LOAN_STATUS_ID,
   RESERVED_STATUS_ID,
   TICKET_STATE_LABEL,
@@ -111,6 +113,24 @@ describe('ticketLoanLabel', () => {
   it('says whether the loan is still out', () => {
     expect(ticketLoanLabel({ started_on: '2026-11-01' })).toBe('On loan since 1 Nov')
     expect(ticketLoanLabel({ started_on: '2026-11-01', returned_on: '2026-11-03' })).toBe('Returned on 3 Nov')
+  })
+})
+
+describe('periodRange', () => {
+  it('turns a preset into dates from the business day', () => {
+    expect(periodRange('this_month', '2026-10-31')).toEqual({ from: '2026-10-01', to: '2026-10-31' })
+    expect(periodRange('last_month', '2026-10-31')).toEqual({ from: '2026-09-01', to: '2026-09-30' })
+    expect(periodRange('last_30', '2026-10-31')).toEqual({ from: '2026-10-02', to: '2026-10-31' })
+    expect(periodRange('last_month', '2026-01-15')).toEqual({ from: '2025-12-01', to: '2025-12-31' })
+  })
+})
+
+describe('loanStateTag', () => {
+  it('tells loans out from returned ones', () => {
+    expect(loanStateTag({ overdue_days: 0 })).toEqual({ label: 'On loan', tone: 'info' })
+    expect(loanStateTag({ overdue_days: 3, return_by: '2026-10-27' })).toEqual({ label: 'Overdue 3 days', tone: 'danger' })
+    expect(loanStateTag({ overdue_days: 0, return_by: '2026-11-07', returned_on: '2026-11-05' })).toEqual({ label: 'Returned', tone: 'success' })
+    expect(loanStateTag({ overdue_days: 0, return_by: '2026-11-07', returned_on: '2026-11-09' })).toEqual({ label: 'Returned late', tone: 'warn' })
   })
 })
 

@@ -350,12 +350,12 @@ func TestBorrowing_QueueOverdueEmails(t *testing.T) {
 	if n, err := r.borrowing.QueueOverdueEmails(ctx, borrowToday, 100); err != nil || n != 0 {
 		t.Errorf("second scan = %d, %v; want 0", n, err)
 	}
-	loans, total, err := r.borrowing.ListActiveLoans(ctx, borrowToday, nil, "", 1, 50)
+	loans, total, err := r.borrowing.ListLoans(ctx, borrowToday, domain.LoanFilter{State: "active", Page: 1, PageSize: 50})
 	if err != nil || total < 2 || loans[0].ID != lateLoan.ID {
 		t.Errorf("active loans: first = %+v (total %d, %v), want the overdue one first", loans, total, err)
 	}
 	// Sắp theo cột: ngày bắt đầu mới nhất trước
-	loans, _, err = r.borrowing.ListActiveLoans(ctx, borrowToday, nil, "-started_on", 1, 50)
+	loans, _, err = r.borrowing.ListLoans(ctx, borrowToday, domain.LoanFilter{State: "active", Sort: "-started_on", Page: 1, PageSize: 50})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -479,9 +479,77 @@ func TestBorrowing_ActiveLoansOfBorrower(t *testing.T) {
 	me := uuid.New()
 	_, mine := lentAsset(t, r, me)
 	lentAsset(t, r, uuid.New())
-	loans, total, err := r.borrowing.ListActiveLoans(context.Background(), borrowToday, &me, "", 1, 50)
+	loans, total, err := r.borrowing.ListLoans(context.Background(), borrowToday, domain.LoanFilter{State: "active", BorrowerID: &me, Page: 1, PageSize: 50})
 	if err != nil || total != 1 || len(loans) != 1 || loans[0].ID != mine.ID {
 		t.Errorf("my loans = %+v (total %d, %v), want only mine", loans, total, err)
+	}
+}
+
+// pastLoan: khoản mượn bắt đầu start, đã trả ngày back
+func pastLoan(t *testing.T, r repos, borrower uuid.UUID, start, back string) (domain.Asset, domain.Loan) {
+	t.Helper()
+	d := func(s string) time.Time { v, _ := time.Parse(time.DateOnly, s); return v }
+	ty := borrowType(t, r, true)
+	a := borrowAsset(t, r, ty.ID, domain.AvailableStatusID)
+	l, err := r.borrowing.Lend(actorCtx(), a.ID, borrower, d(start), nil, a.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a = getAsset(t, r, a.ID)
+	if _, err := r.borrowing.Return(actorCtx(), a.ID, domain.LoanReturn{ReturnedOn: d(back), StatusID: domain.AvailableStatusID}, a.Version); err != nil {
+		t.Fatal(err)
+	}
+	return a, l
+}
+
+// loanSet: id các khoản trong danh sách (DB test dùng chung, chỉ xét khoản của test)
+func loanSet(t *testing.T, r repos, f domain.LoanFilter) map[uuid.UUID]bool {
+	t.Helper()
+	f.Page, f.PageSize = 1, 200
+	loans, _, err := r.borrowing.ListLoans(context.Background(), borrowToday, f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[uuid.UUID]bool{}
+	for _, l := range loans {
+		out[l.ID] = true
+	}
+	return out
+}
+
+// Kỳ = khoản đang ở ngoài lúc nào đó trong kỳ: bắt đầu trước kỳ mà trả trong kỳ vẫn tính
+func TestBorrowing_ListLoansPeriod(t *testing.T) {
+	r := newRepos(t)
+	who := uuid.New()
+	_, a := pastLoan(t, r, who, "2026-10-01", "2026-10-05")
+	_, b := pastLoan(t, r, who, "2026-09-20", "2026-10-02")
+	_, c := pastLoan(t, r, who, "2026-09-01", "2026-09-30")
+	from, to := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC)
+	got := loanSet(t, r, domain.LoanFilter{State: "all", BorrowerID: &who, From: &from, To: &to})
+	if !got[a.ID] || !got[b.ID] || got[c.ID] {
+		t.Errorf("October: a %v b %v c %v; want a and b only", got[a.ID], got[b.ID], got[c.ID])
+	}
+	if got := loanSet(t, r, domain.LoanFilter{State: "returned", BorrowerID: &who}); len(got) != 3 {
+		t.Errorf("returned = %d loans, want 3", len(got))
+	}
+	if got := loanSet(t, r, domain.LoanFilter{State: "active", BorrowerID: &who}); len(got) != 0 {
+		t.Errorf("active = %d loans, want 0", len(got))
+	}
+}
+
+// Tìm theo tag tài sản hoặc người mượn: hợp của hai, không trùng dòng; lọc theo một tài sản
+func TestBorrowing_ListLoansSearch(t *testing.T) {
+	r := newRepos(t)
+	assetA, a := pastLoan(t, r, uuid.New(), "2026-10-01", "2026-10-05")
+	assetB, b := pastLoan(t, r, uuid.New(), "2026-10-01", "2026-10-05")
+	cWho := uuid.New()
+	_, c := pastLoan(t, r, cWho, "2026-10-01", "2026-10-05")
+	got := loanSet(t, r, domain.LoanFilter{State: "all", Q: assetA.Tag, MatchBorrowers: []uuid.UUID{cWho}})
+	if len(got) != 2 || !got[a.ID] || !got[c.ID] {
+		t.Errorf("search = %v, want a and c", got)
+	}
+	if got := loanSet(t, r, domain.LoanFilter{State: "all", AssetID: &assetB.ID}); len(got) != 1 || !got[b.ID] {
+		t.Errorf("asset filter = %v, want only b", got)
 	}
 }
 

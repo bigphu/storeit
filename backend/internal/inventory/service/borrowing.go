@@ -431,21 +431,54 @@ func (s *Service) LendAsset(ctx context.Context, assetID, borrowerID uuid.UUID, 
 	return s.view(ctx, a)
 }
 
-// ListLoans: khoản đang mượn; mine là của chính actor (quyền mượn nào cũng được), không thì của
-// mọi người (borrow.manage)
-func (s *Service) ListLoans(ctx context.Context, mine bool, sort string, page, pageSize int) ([]LoanView, int64, error) {
-	var borrower *uuid.UUID
-	if mine {
+// LoanQuery: danh sách khoản mượn (US-12). Mine: của chính actor; State "active" (mặc định),
+// "returned", "all"; From/To là kỳ; Q tìm theo tag/tên tài sản hay người mượn
+type LoanQuery struct {
+	Mine           bool
+	State          string
+	From, To       *time.Time
+	AssetID        *uuid.UUID
+	Q, Sort        string
+	Page, PageSize int
+}
+
+// ListLoans: khoản mượn; Mine là của chính actor (quyền mượn nào cũng được), còn lại (cả lịch sử
+// một tài sản) cần borrow.manage
+func (s *Service) ListLoans(ctx context.Context, lq LoanQuery) ([]LoanView, int64, error) {
+	f := domain.LoanFilter{State: lq.State, From: lq.From, To: lq.To, AssetID: lq.AssetID, Sort: lq.Sort, Page: lq.Page, PageSize: lq.PageSize}
+	if lq.Mine && lq.AssetID == nil {
 		actor, _, err := borrowActor(ctx)
 		if err != nil {
 			return nil, 0, err
 		}
-		borrower = &actor.AccountID
-	} else if _, err := auth.Require(ctx, domain.PermBorrowManage); err != nil {
+		f.BorrowerID = &actor.AccountID
+	} else if a, err := auth.Require(ctx, domain.PermBorrowManage); err != nil {
 		return nil, 0, err
+	} else if lq.Mine {
+		f.BorrowerID = &a.AccountID
+	}
+	switch f.State {
+	case "":
+		f.State = "active"
+	case "active", "returned", "all":
+	default:
+		return nil, 0, loanField("state", "must be active, returned or all")
+	}
+	if f.From != nil && f.To != nil && f.From.After(*f.To) {
+		return nil, 0, loanField("from", "must not be after to")
+	}
+	if f.Q = strings.TrimSpace(lq.Q); f.Q != "" {
+		accs, err := s.accounts.SearchAccounts(ctx, f.Q, maxTicketSearchPeople)
+		if err != nil {
+			return nil, 0, err
+		}
+		f.MatchBorrowers = make([]uuid.UUID, len(accs))
+		for i, acc := range accs {
+			f.MatchBorrowers[i] = acc.ID
+		}
 	}
 	today := s.today()
-	loans, total, err := s.borrowing.ListActiveLoans(ctx, today, borrower, sort, page, pageSize)
+	loans, total, err := s.borrowing.ListLoans(ctx, today, f)
 	if err != nil {
 		return nil, 0, err
 	}

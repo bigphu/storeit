@@ -100,25 +100,42 @@ FROM inventory.loans l
 LEFT JOIN inventory.borrow_tickets t ON t.id = l.ticket_id
 WHERE l.asset_id = @asset_id AND l.returned_on IS NULL;
 
--- Khoản đang mượn: theo cột sort nếu có; mặc định quá hạn trước (hạn sớm nhất trước), rồi
--- theo hạn, rồi mới bắt đầu trước
--- name: ListActiveLoans :many
+-- Khoản mượn theo trạng thái (active: chưa trả, returned, all), người mượn, tài sản, kỳ và từ
+-- khoá (tag/tên tài sản, hay người mượn service đã tìm). Sắp theo cột sort nếu có; không thì quá
+-- hạn trước (hạn sớm nhất trước), rồi theo hạn, rồi mới bắt đầu trước
+-- name: ListLoans :many
 SELECT l.*, coalesce(t.number, 0)::bigint AS ticket_number
 FROM inventory.loans l
+JOIN inventory.assets a ON a.id = l.asset_id
 LEFT JOIN inventory.borrow_tickets t ON t.id = l.ticket_id
-WHERE l.returned_on IS NULL
+WHERE (@state::text = 'all' OR (@state::text = 'active') = (l.returned_on IS NULL))
   AND (sqlc.narg('borrower_id')::uuid IS NULL OR l.borrower_id = sqlc.narg('borrower_id')::uuid)
+  AND (sqlc.narg('asset_id')::uuid IS NULL OR l.asset_id = sqlc.narg('asset_id')::uuid)
+  -- kỳ [from, to]: khoản ở ngoài lúc nào đó trong kỳ (bắt đầu không sau to, chưa trả trước from)
+  AND (sqlc.narg('to_day')::date IS NULL OR l.started_on <= sqlc.narg('to_day')::date)
+  AND (sqlc.narg('from_day')::date IS NULL OR l.returned_on IS NULL OR l.returned_on >= sqlc.narg('from_day')::date)
+  AND (NOT @has_q::boolean OR a.tag ILIKE @q_like OR a.name ILIKE @q_like OR l.borrower_id = ANY(@q_borrowers::uuid[]))
 ORDER BY CASE WHEN @sort::text = 'started_on' THEN l.started_on END ASC,
          CASE WHEN @sort::text = '-started_on' THEN l.started_on END DESC,
          CASE WHEN @sort::text = 'return_by' THEN l.return_by END ASC NULLS LAST,
          CASE WHEN @sort::text = '-return_by' THEN l.return_by END DESC NULLS LAST,
-         (l.return_by IS NOT NULL AND l.return_by < @today::date) DESC,
+         CASE WHEN @sort::text = 'returned_on' THEN l.returned_on END ASC NULLS LAST,
+         CASE WHEN @sort::text = '-returned_on' THEN l.returned_on END DESC NULLS LAST,
+         (l.returned_on IS NULL AND l.return_by IS NOT NULL AND l.return_by < @today::date) DESC,
          l.return_by ASC NULLS LAST, l.started_on DESC, l.id
 LIMIT @lim OFFSET @off;
 
--- name: CountActiveLoans :one
-SELECT count(*) FROM inventory.loans
-WHERE returned_on IS NULL AND (sqlc.narg('borrower_id')::uuid IS NULL OR borrower_id = sqlc.narg('borrower_id')::uuid);
+-- name: CountLoans :one
+SELECT count(*)
+FROM inventory.loans l
+JOIN inventory.assets a ON a.id = l.asset_id
+WHERE (@state::text = 'all' OR (@state::text = 'active') = (l.returned_on IS NULL))
+  AND (sqlc.narg('borrower_id')::uuid IS NULL OR l.borrower_id = sqlc.narg('borrower_id')::uuid)
+  AND (sqlc.narg('asset_id')::uuid IS NULL OR l.asset_id = sqlc.narg('asset_id')::uuid)
+  -- kỳ [from, to]: khoản ở ngoài lúc nào đó trong kỳ (bắt đầu không sau to, chưa trả trước from)
+  AND (sqlc.narg('to_day')::date IS NULL OR l.started_on <= sqlc.narg('to_day')::date)
+  AND (sqlc.narg('from_day')::date IS NULL OR l.returned_on IS NULL OR l.returned_on >= sqlc.narg('from_day')::date)
+  AND (NOT @has_q::boolean OR a.tag ILIKE @q_like OR a.name ILIKE @q_like OR l.borrower_id = ANY(@q_borrowers::uuid[]));
 
 -- Khoản quá hạn chưa báo, khoá để hai lần quét cùng lúc không báo trùng
 -- name: ListOverdueUnnotifiedLoans :many

@@ -163,7 +163,14 @@ the type isn't archived and its status is of kind `available` (`domain.Borrowabl
   the ticket) or by a direct lend (`POST /assets/{id}/lend`, any active account). The loan
   starts on the business day in `INVENTORY_TIME_ZONE` (default Asia/Ho_Chi_Minh). Hand-over
   refuses a disabled requester (422 field `requester`). `GET /loans?mine=true` lists the
-  caller's own active loans.
+  caller's own loans.
+- **Loan history** (US-12, `GET /loans`): `state` = `active` (default) | `returned` | `all`;
+  `from`/`to` keep loans that were out at any point in the period (`started_on <= to` and not
+  returned before `from`; `from > to` → 422 field `from`); `q` matches asset tag or name, or
+  the borrower (identity search, up to 1000 people); `asset_id` for one asset;
+  `sort` also takes `returned_on`. Default order: active → overdue first, otherwise newest
+  first. Loans carry `returned_on` and `return_note`. Everything except `mine=true` without
+  `asset_id` needs `borrow.manage`.
 - **Returns** (US-11, `POST /assets/{id}/return {returned_on, status_id?, note?, version}`,
   `borrow.manage` only): closes the asset's active loan (`returned_on`, `returned_by`,
   `return_note`; the loan is kept) and moves the asset to `status_id` (omitted: the default
@@ -206,7 +213,7 @@ the type isn't archived and its status is of kind `available` (`domain.Borrowabl
 | `POST /asset-statuses`, `PATCH /asset-statuses/{statusID}`, `POST …/archive`, `POST …/restore`, `PUT /asset-statuses/order` | `inventory.status.manage` |
 | `POST /assets/export` | `inventory.asset.read` + `inventory.asset.export` |
 | `POST /borrow-tickets`; `GET /borrow-tickets`, `GET /borrow-tickets/{ticketID}`, `POST …/cancel` for your own tickets; `GET /borrowing/today` (the app's business day, also with `inventory.borrow.manage`); `GET /loans?mine=true` | `inventory.borrow.request` |
-| `GET /borrow-tickets` and `GET …/{ticketID}` for everyone's, `GET /borrow-tickets/summary`, `POST …/approve`, `POST …/reject`, `POST …/cancel` (approved), `POST …/hand-over`, `POST /assets/{assetID}/lend`, `POST /assets/{assetID}/return`, `GET /loans` (overdue first; `sort=started_on|return_by`, `-` for descending), `GET /borrowers?q=` | `inventory.borrow.manage` |
+| `GET /borrow-tickets` and `GET …/{ticketID}` for everyone's, `GET /borrow-tickets/summary`, `POST …/approve`, `POST …/reject`, `POST …/cancel` (approved), `POST …/hand-over`, `POST /assets/{assetID}/lend`, `POST /assets/{assetID}/return`, `GET /loans` (history filters, see Loan history; overdue first by default; `sort=started_on|return_by`, `-` for descending), `GET /borrowers?q=` | `inventory.borrow.manage` |
 | `GET`/`POST /export-profiles`, `GET /export-profiles/{profileID}` | `inventory.asset.export` |
 | `PATCH`/`DELETE /export-profiles/{profileID}`, `POST …/restore` | `inventory.asset.export`, and the profile's owner; a shared profile of someone else also needs `inventory.export_profile.manage` |
 
