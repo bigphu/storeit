@@ -1362,6 +1362,40 @@ func TestBorrowingOverHTTP(t *testing.T) {
 	if es := decode[returnedEntry](t, a.do("GET", "/api/v1/assets/"+x.ID+"/activity", admin, nil), 200).Items; len(es) == 0 || es[0].Kind != "returned" || es[0].StatusName != "Under repair" {
 		t.Errorf("latest activity = %+v, want returned · Under repair", es)
 	}
+	// Lịch sử mượn (US-12): khoản đã trả vẫn xem được; người mượn chỉ thấy của mình
+	type historyPage struct {
+		Items []struct {
+			Asset      struct{ ID string }
+			ReturnedOn *string `json:"returned_on"`
+		}
+	}
+	hasReturned := func(p historyPage) bool {
+		for _, l := range p.Items {
+			if l.Asset.ID == x.ID && l.ReturnedOn != nil && *l.ReturnedOn == day {
+				return true
+			}
+		}
+		return false
+	}
+	if p := decode[historyPage](t, a.do("GET", "/api/v1/loans?state=returned&page_size=200", officer, nil), 200); !hasReturned(p) {
+		t.Errorf("returned loans lack x returned on %s", day)
+	}
+	if p := decode[historyPage](t, a.do("GET", "/api/v1/loans?mine=true&state=all", empTok, nil), 200); !hasReturned(p) {
+		t.Errorf("employee's history lacks x")
+	}
+	if rec := a.do("GET", "/api/v1/loans?state=all", empTok, nil); rec.Code != 403 {
+		t.Errorf("employee lists everyone's history = %d, want 403", rec.Code)
+	}
+	if rec := a.do("GET", "/api/v1/loans?mine=true&asset_id="+x.ID, empTok, nil); rec.Code != 403 {
+		t.Errorf("employee reads an asset's history = %d, want 403", rec.Code)
+	}
+	if p := decode[historyPage](t, a.do("GET", "/api/v1/loans?state=all&asset_id="+x.ID, officer, nil), 200); len(p.Items) != 1 || !hasReturned(p) {
+		t.Errorf("x's history = %+v, want its one returned loan", p)
+	}
+	rec = a.do("GET", "/api/v1/loans?state=all&from=2026-11-02&to=2026-11-01", officer, nil)
+	if _, fields := problem(t, rec); rec.Code != 422 || len(fields) == 0 || !strings.HasPrefix(fields[0], "from") {
+		t.Errorf("from after to = %d %v, want 422 on from", rec.Code, fields)
+	}
 	for _, p := range []string{"/api/v1/borrow-tickets", "/api/v1/loans", "/api/v1/borrowers", "/api/v1/borrow-tickets/summary"} {
 		if rec := a.do("GET", p, "", nil); rec.Code != 401 {
 			t.Errorf("GET %s without token = %d, want 401", p, rec.Code)

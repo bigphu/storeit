@@ -120,7 +120,11 @@ func (h *Handler) ReturnAsset(ctx context.Context, req api.ReturnAssetRequestObj
 
 func (h *Handler) ListLoans(ctx context.Context, req api.ListLoansRequestObject) (api.ListLoansResponseObject, error) {
 	page, size := paging(req.Params.Page, req.Params.PageSize)
-	loans, total, err := h.svc.ListLoans(ctx, service.LoanQuery{Mine: deref(req.Params.Mine), Sort: string(deref(req.Params.Sort)), Page: page, PageSize: size})
+	loans, total, err := h.svc.ListLoans(ctx, service.LoanQuery{
+		Mine: deref(req.Params.Mine), State: string(deref(req.Params.State)), From: fromAPIDate(req.Params.From),
+		To: fromAPIDate(req.Params.To), AssetID: req.Params.AssetId, Q: deref(req.Params.Q),
+		Sort: string(deref(req.Params.Sort)), Page: page, PageSize: size,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +134,10 @@ func (h *Handler) ListLoans(ctx context.Context, req api.ListLoansRequestObject)
 			Id: l.ID, Asset: api.AssetRef{Id: l.Asset.ID, Tag: l.Asset.Tag, Name: l.Asset.Name}, AssetTypeName: l.TypeName,
 			Borrower: api.Person{Id: l.Borrower.ID, Name: l.Borrower.Name, Email: l.Borrower.Email},
 			TicketId: l.TicketID, TicketNumber: l.TicketNumber, StartedOn: *toAPIDate(&l.StartedOn),
-			ReturnBy: toAPIDate(l.ReturnBy), OverdueDays: l.OverdueDays,
+			ReturnBy: toAPIDate(l.ReturnBy), OverdueDays: l.OverdueDays, ReturnedOn: toAPIDate(l.ReturnedOn),
+		}
+		if l.ReturnNote != "" {
+			out.Items[i].ReturnNote = &l.ReturnNote
 		}
 	}
 	return out, nil
