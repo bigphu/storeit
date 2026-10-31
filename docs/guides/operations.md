@@ -43,6 +43,8 @@ Never edit `*.gen.go`, `events/db` or the generated `frontend/src/lib/api/*.d.ts
 
 ## Production
 
+For releases with new features or migrations, follow [Shipping features and migrations](/guides/deploying/).
+
 1. `make images TAG=1.0.0 REGISTRY=registry.example.com`, then push both images.
 2. Copy `.env.prod.example` to `.env` and set the image names, `APP_URL` and `MAIL_FROM`.
 3. `sh deploy/scripts/init.sh` on the server for new secrets and certificates.
