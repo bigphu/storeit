@@ -120,7 +120,7 @@ func (h *Handler) ReturnAsset(ctx context.Context, req api.ReturnAssetRequestObj
 
 func (h *Handler) ListLoans(ctx context.Context, req api.ListLoansRequestObject) (api.ListLoansResponseObject, error) {
 	page, size := paging(req.Params.Page, req.Params.PageSize)
-	loans, total, err := h.svc.ListLoans(ctx, deref(req.Params.Mine), string(deref(req.Params.Sort)), page, size)
+	loans, total, err := h.svc.ListLoans(ctx, service.LoanQuery{Mine: deref(req.Params.Mine), Sort: string(deref(req.Params.Sort)), Page: page, PageSize: size})
 	if err != nil {
 		return nil, err
 	}
