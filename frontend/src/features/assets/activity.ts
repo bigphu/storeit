@@ -1,7 +1,7 @@
 // Lịch sử hoạt động của tài sản: câu tóm tắt mỗi dòng, thời gian tương đối, chữ dài cần thu
 import type { AssetActivityEntry } from '@/lib/api/types'
 import { formatDay } from '@/lib/dates'
-import { shortDay } from '@/features/borrowing/borrowing'
+import { requestCode, shortDay } from '@/features/borrowing/borrowing'
 
 export type ActivityEntry = AssetActivityEntry
 
@@ -39,7 +39,7 @@ export function activitySummary(e: ActivityEntry): { who: string; text: string }
 // borrowingTail: "Phạm Thu Hà (ticket #12) · return by 7 Nov" của các mục mượn (US-10)
 function borrowingTail(e: ActivityEntry): string {
   let s = e.person?.name ?? 'someone'
-  if (e.ticket_number) s += ` (ticket #${e.ticket_number})`
+  if (e.ticket_number) s += ` (${requestCode(e.ticket_number)})`
   if (e.return_by) s += ` · return by ${shortDay(e.return_by)}`
   return s
 }

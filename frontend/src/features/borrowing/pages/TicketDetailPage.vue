@@ -12,7 +12,7 @@ import { useTabTitle } from '@/app/tabs/tabPage'
 import { formatDate, formatDateTime } from '@/lib/dates'
 import { useAssetType } from '@/features/asset-types/api'
 import { useTicket } from '../api'
-import { requirementLabels, TICKET_STATE_LABEL, TICKET_STATE_TONE, ticketLoanLabel } from '../borrowing'
+import { requestCode, requirementLabels, TICKET_STATE_LABEL, TICKET_STATE_TONE, ticketLoanLabel } from '../borrowing'
 import ApproveDialog from '../components/ApproveDialog.vue'
 import RejectDialog from '../components/RejectDialog.vue'
 import { useTicketActions } from '../useTicketActions'
@@ -25,17 +25,17 @@ const { data: type } = useAssetType(() => ticket.value?.asset_type.id)
 const specs = computed(() => (ticket.value ? requirementLabels(ticket.value.requirements, type.value?.attributes ?? []) : []))
 const actions = useTicketActions()
 
-useTabTitle(() => (ticket.value ? `Ticket #${ticket.value.number}` : undefined))
+useTabTitle(() => (ticket.value ? requestCode(ticket.value.number) : undefined))
 const crumbs = computed(() => [
-  actions.canManage.value ? { label: 'Tickets', to: '/borrowing/tickets' } : { label: 'My tickets', to: '/borrowing/mine' },
-  { label: ticket.value ? `#${ticket.value.number}` : '…' },
+  actions.canManage.value ? { label: 'Requests', to: '/borrowing/tickets' } : { label: 'My requests', to: '/borrowing/mine' },
+  { label: ticket.value ? requestCode(ticket.value.number) : '…' },
 ])
 </script>
 
 <template>
   <section v-if="ticket">
     <AppBreadcrumb :items="crumbs" />
-    <DetailHeader :title="`Ticket #${ticket.number}`" icon="box">
+    <DetailHeader :title="requestCode(ticket.number)" icon="box">
       <template #tags>
         <Tag :value="TICKET_STATE_LABEL[ticket.state]" :severity="TICKET_STATE_TONE[ticket.state]" />
       </template>
@@ -51,7 +51,7 @@ const crumbs = computed(() => [
           @click="actions.doHandOver(ticket)"
         />
         <Button v-if="actions.can.reject(ticket)" label="Reject…" severity="secondary" outlined @click="actions.askReject(ticket)" />
-        <Button v-if="actions.can.cancel(ticket)" label="Cancel ticket" severity="secondary" outlined @click="actions.doCancel(ticket)" />
+        <Button v-if="actions.can.cancel(ticket)" label="Cancel request" severity="secondary" outlined @click="actions.doCancel(ticket)" />
       </template>
     </DetailHeader>
 
@@ -118,7 +118,7 @@ const crumbs = computed(() => [
     <ApproveDialog v-model:visible="actions.approveOpen.value" :ticket="actions.approveTarget.value" />
     <RejectDialog v-model:visible="actions.rejectOpen.value" :ticket="actions.rejectTarget.value" :cancel="actions.rejectCancel.value" />
   </section>
-  <EmptyState v-else-if="!isLoading" icon="pi pi-ticket" text="This ticket doesn't exist, or it isn't yours." />
+  <EmptyState v-else-if="!isLoading" icon="pi pi-ticket" text="This request doesn't exist, or it isn't yours." />
 </template>
 
 <style scoped>

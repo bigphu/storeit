@@ -27,7 +27,7 @@ import { fromTableSort, toTableSort } from '@/features/assets/listQuery'
 import { useQueryClient } from '@tanstack/vue-query'
 import { assetKeys, useAsset } from '@/features/assets/api'
 import { type LoanParams, useBusinessDay, useLoans } from '../api'
-import { loanStateTag, type Period, periodRange } from '../borrowing'
+import { loanStateTag, type Period, periodRange, requestCode } from '../borrowing'
 import ReturnDialog from '../components/ReturnDialog.vue'
 
 // Khoản mượn (US-10..12): Out now (mặc định, quá hạn lên trước), Returned hay All; lọc theo kỳ
@@ -238,9 +238,9 @@ const table = useListTable({ open: openAsset, showMenu: rowMenu.showContext })
           <Tag :value="loanStateTag(l).label" :severity="loanStateTag(l).tone" />
         </template>
       </Column>
-      <Column header="Ticket">
+      <Column header="Request">
         <template #body="{ data: l }: { data: Loan }">
-          <RouterLink v-if="l.ticket_id" :to="`/borrowing/tickets/${l.ticket_id}`">#{{ l.ticket_number }}</RouterLink>
+          <RouterLink v-if="l.ticket_id" :to="`/borrowing/tickets/${l.ticket_id}`">{{ requestCode(l.ticket_number) }}</RouterLink>
           <span v-else class="muted">Lent directly</span>
         </template>
       </Column>

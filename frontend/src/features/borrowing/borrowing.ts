@@ -88,6 +88,11 @@ export const TICKET_STATE_LABEL: Record<TicketState, string> = {
 
 // Màu tag của trạng thái phiếu (lib/tones): chờ cần chú ý, sẵn sàng nhận đang diễn ra, đã giao
 // là xong việc, từ chối là hỏng, huỷ thì không hoạt động
+// requestCode: số phiếu mượn hiện như mã tự sinh của tài sản (REQ-0004), một kiểu ở mọi nơi
+export function requestCode(n: number): string {
+  return `REQ-${String(n).padStart(4, '0')}`
+}
+
 export const TICKET_STATE_TONE: Record<TicketState, Tone> = {
   waiting: 'warn',
   approved: 'info',

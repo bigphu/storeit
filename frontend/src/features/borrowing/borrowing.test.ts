@@ -13,6 +13,7 @@ import {
   parseRequirement,
   pickableStatuses,
   requirementLabels,
+  requestCode,
   RETURN_FINE,
   returnConditionOptions,
   returnFormError,
@@ -21,6 +22,13 @@ import {
   shortDay,
   ticketFormError,
 } from './borrowing'
+
+describe('requestCode', () => {
+  it('shows a request number as an auto-generated code like asset tags', () => {
+    expect(requestCode(4)).toBe('REQ-0004')
+    expect(requestCode(12345)).toBe('REQ-12345')
+  })
+})
 
 describe('pickableStatuses', () => {
   it('leaves out Reserved and On loan, which only borrowing sets', () => {

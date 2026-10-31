@@ -14,7 +14,7 @@ export const PERM_LABEL: Record<PermCode, string> = {
   [Perm.AssetExport]: 'Export assets to Excel',
   [Perm.ExportProfileManage]: 'Manage shared export profiles',
   [Perm.BorrowRequest]: 'Ask to borrow assets',
-  [Perm.BorrowManage]: 'Approve tickets and lend assets',
+  [Perm.BorrowManage]: 'Approve requests and lend assets',
 }
 
 // Role hệ thống có ID cố định (backend identity/domain/permissions.go)
@@ -43,7 +43,7 @@ export const AREAS: Area[] = [
   { module: 'Inventory', label: 'Assets', hint: 'Assets, plus viewing types and statuses', view: Perm.AssetRead, manage: Perm.AssetManage },
   { module: 'Inventory', label: 'Asset types', hint: 'Types, custom attributes and options', viaView: Perm.AssetRead, manage: Perm.TypeManage },
   { module: 'Inventory', label: 'Statuses', hint: 'Status names, kinds and defaults', viaView: Perm.AssetRead, manage: Perm.StatusManage },
-  { module: 'Inventory', label: 'Borrowing', hint: 'Borrow tickets, lending and loans', view: Perm.BorrowRequest, manage: Perm.BorrowManage },
+  { module: 'Inventory', label: 'Borrowing', hint: 'Borrow requests, lending and loans', view: Perm.BorrowRequest, manage: Perm.BorrowManage },
 ]
 
 export const ALL_PERMS = Object.keys(PERM_LABEL) as PermCode[]

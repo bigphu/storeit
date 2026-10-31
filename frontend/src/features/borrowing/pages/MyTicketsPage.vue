@@ -18,10 +18,10 @@ usePageKeys((e) => {
 
 <template>
   <section>
-    <PageHeader title="My tickets" subtitle="Ask to borrow an asset and follow your requests.">
-      <Button aria-label="New ticket (N)" @click="creating = true">
+    <PageHeader title="My requests" subtitle="Ask to borrow an asset and follow your requests.">
+      <Button aria-label="New request (N)" @click="creating = true">
         <i class="pi pi-plus" aria-hidden="true" />
-        <span>New ticket</span>
+        <span>New request</span>
         <KeyHint keys="N" />
       </Button>
     </PageHeader>

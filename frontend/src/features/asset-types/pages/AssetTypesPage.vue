@@ -212,7 +212,7 @@ watch(types, (list) => {
 
 <template>
   <section>
-    <PageHeader title="Asset types" subtitle="What kinds of things you track, and which fields each one has.">
+    <PageHeader title="Types" subtitle="What kinds of things you track, and which fields each one has.">
       <Button v-if="canManage" aria-label="New type (N)" @click="openCreate">
         <i class="pi pi-plus" aria-hidden="true" />
         <span>New type</span>

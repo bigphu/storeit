@@ -153,7 +153,7 @@ async function submitCreate() {
 
 <template>
   <section>
-    <PageHeader title="Export profiles" subtitle="Saved report layouts. Shared ones can be used by everyone who can export.">
+    <PageHeader title="Exports" subtitle="Saved report layouts. Shared ones can be used by everyone who can export.">
       <Button aria-label="New profile (N)" @click="openCreate">
         <i class="pi pi-plus" aria-hidden="true" />
         <span>New profile</span>

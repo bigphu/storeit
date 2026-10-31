@@ -7,7 +7,7 @@ import TicketTable from '../components/TicketTable.vue'
 
 <template>
   <section>
-    <PageHeader title="Tickets" subtitle="Requests to borrow assets. Approve one by reserving an asset, then hand it over." />
+    <PageHeader title="Requests" subtitle="Requests to borrow assets. Approve one by reserving an asset, then hand it over." />
     <TicketTable :mine="false" />
   </section>
 </template>

@@ -23,12 +23,12 @@ import { useKeepScrollOnPage, useListTable, useRowMenu } from '@/lib/tableRows'
 import { queryInt, queryString, useUrlState } from '@/lib/urlState'
 import { fromTableSort, toTableSort } from '@/features/assets/listQuery'
 import { type TicketParams, useTickets, useTypeAttributes } from '../api'
-import { requirementLabels, TICKET_STATE_LABEL, TICKET_STATE_TONE } from '../borrowing'
+import { requestCode, requirementLabels, TICKET_STATE_LABEL, TICKET_STATE_TONE } from '../borrowing'
 import { useTicketActions } from '../useTicketActions'
 import ApproveDialog from './ApproveDialog.vue'
 import RejectDialog from './RejectDialog.vue'
 
-// Bảng phiếu mượn dùng chung: My tickets (mine: chỉ phiếu của mình) và Tickets của người quản
+// Bảng phiếu mượn dùng chung: My requests (mine: chỉ phiếu của mình) và Requests của người quản
 // lý (cột người gửi, tìm kiếm, mặc định chỉ phiếu đang chờ). Bấm dòng mở trang phiếu.
 const props = defineProps<{ mine: boolean }>()
 
@@ -123,7 +123,7 @@ const rowMenu = useRowMenu<BorrowTicket>((t) => {
 })
 const table = useListTable({ open: openTicket, showMenu: rowMenu.showContext })
 const emptyText = computed(() =>
-  state.value.q ? 'No tickets match this search.' : props.mine ? 'You have no tickets here yet.' : 'No tickets here.',
+  state.value.q ? 'No requests match this search.' : props.mine ? 'You have no requests here yet.' : 'No requests here.',
 )
 </script>
 
@@ -132,7 +132,7 @@ const emptyText = computed(() =>
     <SegmentedFilter v-model="show" :options="filterOptions" label="Show" />
     <IconField v-if="!mine">
       <InputIcon class="pi pi-search" />
-      <InputText v-model="search" placeholder="Search person or type" aria-label="Search tickets" />
+      <InputText v-model="search" placeholder="Search person or type" aria-label="Search requests" />
     </IconField>
     <slot name="toolbar" />
   </div>
@@ -158,9 +158,9 @@ const emptyText = computed(() =>
     @page="onPage"
     @sort="onSort"
   >
-    <Column header="#" sort-field="number" sortable>
+    <Column header="Request" sort-field="number" sortable>
       <template #body="{ data: t }: { data: BorrowTicket }">
-        <RouterLink :to="`/borrowing/tickets/${t.id}`" class="num">#{{ t.number }}</RouterLink>
+        <RouterLink :to="`/borrowing/tickets/${t.id}`" class="num">{{ requestCode(t.number) }}</RouterLink>
       </template>
     </Column>
     <Column v-if="!mine" header="Requested by">

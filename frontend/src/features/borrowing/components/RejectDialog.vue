@@ -6,6 +6,7 @@ import type { BorrowTicket } from '@/lib/api/types'
 import { useDirty, useFormErrors } from '@/lib/forms'
 import { notify } from '@/lib/notify'
 import { useCancelTicket, useRejectTicket } from '../api'
+import { requestCode } from '../borrowing'
 
 // Từ chối phiếu đang chờ (lý do bắt buộc), hoặc người quản lý huỷ phiếu đã duyệt của người khác
 // (cancel: lý do tuỳ chọn). Người gửi nhận thư kèm lý do
@@ -43,7 +44,7 @@ async function submit() {
     const body = { id: t.id, reason: reason.value.trim(), version: t.version }
     if (props.cancel) await cancelTicket.mutateAsync(body)
     else await reject.mutateAsync(body)
-    notify.success(`Ticket #${t.number} ${props.cancel ? 'cancelled' : 'rejected'}.`)
+    notify.success(`${requestCode(t.number)} ${props.cancel ? 'cancelled' : 'rejected'}.`)
     visible.value = false
   } catch (err) {
     errors.set(err)
@@ -55,8 +56,8 @@ async function submit() {
   <FormDialog
     v-model:visible="visible"
     :icon="cancel ? 'alert' : 'error'"
-    :title="ticket ? `${verb} ticket #${ticket.number}` : `${verb} ticket`"
-    :action="`${verb} ticket`"
+    :title="ticket ? `${verb} ${requestCode(ticket.number)}` : `${verb} request`"
+    :action="`${verb} request`"
     :busy="busy"
     :error="errors.general.value"
     :dirty="form.dirty.value"
@@ -64,7 +65,7 @@ async function submit() {
     @submit="submit"
   >
     <p v-if="ticket" class="note">
-      {{ ticket.requester.name }} gets an email {{ cancel ? 'saying the ticket was cancelled, with your reason if you give one' : 'with this reason' }}.
+      {{ ticket.requester.name }} gets an email {{ cancel ? 'saying the request was cancelled, with your reason if you give one' : 'with this reason' }}.
       <template v-if="cancel && ticket.asset"> {{ ticket.asset.tag }} is no longer reserved and becomes available.</template>
     </p>
     <div class="field">

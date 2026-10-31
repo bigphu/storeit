@@ -11,8 +11,8 @@ import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
 import { useTicketCounts } from '@/features/borrowing/api'
 import { useTypeNav } from '../useTypeNav'
 
-// Sidebar hai cấp: cấp workspace (mọi tài sản, cấu hình, quản trị) và cấp loại
-// (khi đang ở trong một loại: Assets, Settings, sau này Activity, Reports)
+// Sidebar hai cấp: cấp workspace theo nhóm Inventory, Borrowing, Setup, People (bản làm lại
+// giao diện) và cấp loại (khi đang ở trong một loại: Assets, Settings)
 const emit = defineEmits<{ switchType: [] }>()
 
 interface NavItem extends MenuItem {
@@ -21,7 +21,6 @@ interface NavItem extends MenuItem {
   active?: boolean
   sub?: boolean
   toggle?: boolean
-  later?: boolean
 }
 
 const session = useSession()
@@ -41,9 +40,10 @@ const name = computed(() => String(route.name))
 
 const workspace = computed<NavItem[]>(() => {
   const items: NavItem[] = []
+  const inventory: NavItem[] = []
   if (session.can(Perm.AssetRead)) {
     const total = (types.value ?? []).reduce((n, t) => n + (t.asset_count ?? 0), 0)
-    items.push({
+    inventory.push({
       key: 'all',
       label: 'All assets',
       icon: 'pi pi-box',
@@ -54,7 +54,7 @@ const workspace = computed<NavItem[]>(() => {
     })
     if (allOpen.value) {
       for (const t of types.value ?? []) {
-        items.push({
+        inventory.push({
           key: t.id,
           label: t.name,
           route: nav.listFor(t.id),
@@ -64,18 +64,19 @@ const workspace = computed<NavItem[]>(() => {
       }
     }
   }
+  if (inventory.length) items.push({ label: 'Inventory', items: inventory })
   // Mượn (US-10, US-11): phiếu của tôi, đồ tôi đang mượn; người quản lý thêm hàng chờ duyệt (có số) và đồ đang cho mượn
   const borrowing: NavItem[] = []
   if (session.can(Perm.BorrowRequest)) {
     borrowing.push(
-      { label: 'My tickets', icon: 'pi pi-ticket', route: '/borrowing/mine', active: name.value === 'my-tickets' },
+      { label: 'My requests', icon: 'pi pi-ticket', route: '/borrowing/mine', active: name.value === 'my-tickets' },
       { label: 'My loans', icon: 'pi pi-clock', route: '/borrowing/mine/loans', active: name.value === 'my-loans' },
     )
   }
   if (session.can(Perm.BorrowManage)) {
     borrowing.push(
       {
-        label: 'Tickets',
+        label: 'Requests',
         icon: 'pi pi-inbox',
         route: '/borrowing/tickets',
         count: ticketCounts.value?.waiting || undefined,
@@ -87,12 +88,12 @@ const workspace = computed<NavItem[]>(() => {
   if (borrowing.length) items.push({ label: 'Borrowing', items: borrowing })
   if (session.can(Perm.AssetRead)) {
     items.push({
-      label: 'Configuration',
+      label: 'Setup',
       items: [
-        { label: 'Asset types', icon: 'pi pi-sitemap', route: '/types', active: name.value === 'types' },
+        { label: 'Types', icon: 'pi pi-sitemap', route: '/types', active: name.value === 'types' },
         { label: 'Statuses', icon: 'pi pi-tag', route: '/statuses', active: name.value === 'statuses' },
         ...(session.can(Perm.AssetExport)
-          ? [{ label: 'Export profiles', icon: 'pi pi-file-export', route: '/export-profiles', active: name.value === 'export-profiles' }]
+          ? [{ label: 'Exports', icon: 'pi pi-file-export', route: '/export-profiles', active: name.value === 'export-profiles' }]
           : []),
       ],
     })
@@ -114,7 +115,7 @@ const workspace = computed<NavItem[]>(() => {
       active: name.value.startsWith('role'),
     })
   }
-  if (admin.length) items.push({ label: 'Administration', items: admin })
+  if (admin.length) items.push({ label: 'People', items: admin })
   return items
 })
 
@@ -124,8 +125,6 @@ const scoped = computed<NavItem[]>(() => {
   return [
     { label: 'Assets', icon: 'pi pi-database', route: nav.listFor(id), count, active: name.value !== 'type-settings' },
     { label: 'Settings', icon: 'pi pi-cog', route: `/types/${id}/settings`, active: name.value === 'type-settings' },
-    { label: 'Activity', icon: 'pi pi-history', disabled: true, later: true },
-    { label: 'Reports', icon: 'pi pi-chart-bar', disabled: true, later: true },
   ]
 })
 
@@ -147,12 +146,7 @@ const model = computed(() => (nav.scopeTypeId.value ? scoped.value : workspace.v
 
     <Menu :model="model" class="nav-menu">
       <template #item="{ item, props }">
-        <span v-if="item.later" class="nav-link is-later" v-bind="props.action">
-          <i v-if="item.icon" :class="[item.icon, 'nav-icon']" aria-hidden="true" />
-          <span class="nav-label">{{ item.label }}</span>
-          <span class="nav-count">later</span>
-        </span>
-        <RouterLink v-else-if="item.route" v-slot="{ href, navigate }" :to="item.route" custom>
+        <RouterLink v-if="item.route" v-slot="{ href, navigate }" :to="item.route" custom>
           <a
             :href="href"
             v-bind="props.action"
@@ -285,13 +279,6 @@ const model = computed(() => (nav.scopeTypeId.value ? scoped.value : workspace.v
 .nav-link.is-active .nav-icon {
   color: var(--app-accent);
 }
-.nav-link.is-later {
-  color: var(--p-text-muted-color);
-  cursor: default;
-}
-.nav-link.is-later .nav-icon {
-  opacity: 0.55;
-}
 .nav-label {
   flex: 1;
   min-width: 0;
@@ -301,10 +288,6 @@ const model = computed(() => (nav.scopeTypeId.value ? scoped.value : workspace.v
   font: 0.75rem var(--app-mono);
   color: var(--p-text-muted-color);
   font-variant-numeric: tabular-nums;
-}
-.nav-link.is-later .nav-count {
-  font-family: var(--app-body);
-  font-style: italic;
 }
 .toggle {
   width: 1.4rem;

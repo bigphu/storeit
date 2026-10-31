@@ -19,7 +19,7 @@ import { attrFilterLabel } from '@/features/assets/filterChips'
 import type { AttrFilterRow } from '@/features/assets/listQuery'
 import { useAssetType, useAssetTypes } from '@/features/asset-types/api'
 import { useBusinessDay, useCreateTicket } from '../api'
-import { ticketFormError } from '../borrowing'
+import { requestCode, ticketFormError } from '../borrowing'
 
 // Phiếu mượn mới: loại tài sản cho mượn được, yêu cầu thuộc tính chọn bằng bộ lọc của danh
 // sách (đếm ngay số tài sản khớp và đang rảnh), ngày cần, hạn trả (tuỳ chọn), ghi chú.
@@ -117,7 +117,7 @@ async function submit() {
       return_by: returnBy.value || undefined,
       note: note.value.trim() || undefined,
     })
-    notify.success(`Ticket #${t.number} sent.`)
+    notify.success(`${requestCode(t.number)} sent.`)
     visible.value = false
     emit('created', t)
   } catch (err) {

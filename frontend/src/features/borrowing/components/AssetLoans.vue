@@ -10,7 +10,7 @@ import TableSkeleton from '@/components/TableSkeleton.vue'
 import type { Loan } from '@/lib/api/types'
 import { formatDate } from '@/lib/dates'
 import { useLoans } from '../api'
-import { loanStateTag } from '../borrowing'
+import { loanStateTag, requestCode } from '../borrowing'
 
 // Lịch sử mượn của một tài sản (US-12, người quản lý): mọi khoản, mới nhất trước
 const props = defineProps<{ assetId: string }>()
@@ -36,9 +36,9 @@ const { data, isLoading } = useLoans(computed(() => ({ asset_id: props.assetId, 
         <Tag :value="loanStateTag(l).label" :severity="loanStateTag(l).tone" />
       </template>
     </Column>
-    <Column header="Ticket">
+    <Column header="Request">
       <template #body="{ data: l }: { data: Loan }">
-        <RouterLink v-if="l.ticket_id" :to="`/borrowing/tickets/${l.ticket_id}`">#{{ l.ticket_number }}</RouterLink>
+        <RouterLink v-if="l.ticket_id" :to="`/borrowing/tickets/${l.ticket_id}`">{{ requestCode(l.ticket_number) }}</RouterLink>
         <span v-else class="muted">Lent directly</span>
       </template>
     </Column>

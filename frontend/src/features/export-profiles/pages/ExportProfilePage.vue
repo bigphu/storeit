@@ -151,7 +151,7 @@ const facts = computed(() => {
   return `By ${p.owner.name} · ${n} ${n === 1 ? 'column' : 'columns'} · ${p.layout.sheets === 'per_type' ? 'sheet per type' : 'one sheet'}`
 })
 const fileName = computed(() => exportFileName('report', profile.value?.name, new Date().toISOString().slice(0, 10)))
-const crumbs = computed(() => [{ label: 'Export profiles', to: '/export-profiles' }, { label: profile.value?.name ?? '…' }])
+const crumbs = computed(() => [{ label: 'Exports', to: '/export-profiles' }, { label: profile.value?.name ?? '…' }])
 </script>
 
 <template>

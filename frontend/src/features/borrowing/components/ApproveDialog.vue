@@ -16,7 +16,7 @@ import { notify } from '@/lib/notify'
 import { assetKeys } from '@/features/assets/api'
 import { useAssetType } from '@/features/asset-types/api'
 import { useApproveTicket } from '../api'
-import { parseRequirement, requirementLabels, satisfies, shortDay } from '../borrowing'
+import { parseRequirement, requestCode, requirementLabels, satisfies, shortDay } from '../borrowing'
 
 // Duyệt phiếu: chọn một tài sản đang rảnh của loại được hỏi. Bảng có một cột cho mỗi yêu cầu;
 // tài sản thoả mọi yêu cầu lên trước, còn lại mờ đi và gạch ô không thoả. Duyệt là giữ chỗ
@@ -111,7 +111,7 @@ async function submit() {
     v-model:visible="visible"
     icon="tick"
     size="l"
-    :title="ticket ? `Approve ticket #${ticket.number}` : 'Approve ticket'"
+    :title="ticket ? `Approve ${requestCode(ticket.number)}` : 'Approve request'"
     :action="pickedRow ? `Approve and reserve ${pickedRow.tag}` : 'Approve and reserve'"
     :busy="approve.isPending.value"
     :error="errors.general.value"

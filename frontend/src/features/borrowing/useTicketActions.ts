@@ -11,6 +11,7 @@ import { confirmAction } from '@/lib/confirm'
 import { describeError } from '@/lib/errors'
 import { notify } from '@/lib/notify'
 import { useCancelTicket, useHandOver } from './api'
+import { requestCode } from './borrowing'
 
 export function useTicketActions() {
   const session = useSession()
@@ -51,7 +52,7 @@ export function useTicketActions() {
       const r = await handOver.mutateAsync({ id: t.id, version: t.version })
       notify.success(`${r.asset?.tag ?? 'Asset'} handed over to ${r.requester.name}.`)
     } catch (err) {
-      notify.error(`Couldn't hand over ticket #${t.number}.`, { detail: describeError(err) })
+      notify.error(`Couldn't hand over ${requestCode(t.number)}.`, { detail: describeError(err) })
     }
   }
 
@@ -60,19 +61,19 @@ export function useTicketActions() {
     if (!isOwn(t)) return askReject(t, true)
     const reserved = t.state === 'approved' && t.asset
     const ok = await confirmAction({
-      title: `Cancel ticket #${t.number}?`,
+      title: `Cancel ${requestCode(t.number)}?`,
       body: 'The request is withdrawn.',
       impact: reserved ? [`${t.asset!.tag} is no longer reserved and becomes available.`] : undefined,
-      action: 'Cancel ticket',
+      action: 'Cancel request',
       danger: false,
       icon: 'alert',
     })
     if (!ok) return
     try {
       await cancel.mutateAsync({ id: t.id, version: t.version })
-      notify.success(`Ticket #${t.number} cancelled.`)
+      notify.success(`${requestCode(t.number)} cancelled.`)
     } catch (err) {
-      notify.error(`Couldn't cancel ticket #${t.number}.`, { detail: describeError(err) })
+      notify.error(`Couldn't cancel ${requestCode(t.number)}.`, { detail: describeError(err) })
     }
   }
 
@@ -82,7 +83,7 @@ export function useTicketActions() {
     if (can.approve(t)) items.push({ label: 'Approve…', icon: 'pi pi-check', command: () => askApprove(t) })
     if (can.reject(t)) items.push({ label: 'Reject…', icon: 'pi pi-times', command: () => askReject(t) })
     if (can.handOver(t)) items.push({ label: 'Hand over', icon: 'pi pi-arrow-right-arrow-left', command: () => doHandOver(t) })
-    if (can.cancel(t)) items.push({ label: 'Cancel ticket', icon: 'pi pi-ban', command: () => doCancel(t) })
+    if (can.cancel(t)) items.push({ label: 'Cancel request', icon: 'pi pi-ban', command: () => doCancel(t) })
     return items
   }
 

@@ -84,7 +84,7 @@ export const routes: RouteRecordRaw[] = [
         path: 'types',
         name: 'types',
         component: () => import('@/features/asset-types/pages/AssetTypesPage.vue'),
-        meta: { title: 'Asset types', icon: 'pi pi-sitemap', perm: Perm.AssetRead },
+        meta: { title: 'Types', icon: 'pi pi-sitemap', perm: Perm.AssetRead },
       },
       {
         path: 'types/:typeId/assets',
@@ -126,7 +126,7 @@ export const routes: RouteRecordRaw[] = [
         path: 'export-profiles',
         name: 'export-profiles',
         component: () => import('@/features/export-profiles/pages/ExportProfilesPage.vue'),
-        meta: { title: 'Export profiles', icon: 'pi pi-file-export', perm: Perm.AssetExport },
+        meta: { title: 'Exports', icon: 'pi pi-file-export', perm: Perm.AssetExport },
       },
       {
         path: 'export-profiles/:id',
@@ -140,7 +140,7 @@ export const routes: RouteRecordRaw[] = [
         path: 'borrowing/mine',
         name: 'my-tickets',
         component: () => import('@/features/borrowing/pages/MyTicketsPage.vue'),
-        meta: { title: 'My tickets', icon: 'pi pi-ticket', perm: Perm.BorrowRequest },
+        meta: { title: 'My requests', icon: 'pi pi-ticket', perm: Perm.BorrowRequest },
       },
       {
         path: 'borrowing/mine/loans',
@@ -152,14 +152,14 @@ export const routes: RouteRecordRaw[] = [
         path: 'borrowing/tickets',
         name: 'tickets',
         component: () => import('@/features/borrowing/pages/TicketsPage.vue'),
-        meta: { title: 'Tickets', icon: 'pi pi-inbox', perm: Perm.BorrowManage },
+        meta: { title: 'Requests', icon: 'pi pi-inbox', perm: Perm.BorrowManage },
       },
       {
         path: 'borrowing/tickets/:id',
         name: 'ticket',
         component: () => import('@/features/borrowing/pages/TicketDetailPage.vue'),
         props: true,
-        meta: { title: 'Ticket', icon: 'pi pi-ticket', perm: Perm.BorrowRequest },
+        meta: { title: 'Request', icon: 'pi pi-ticket', perm: Perm.BorrowRequest },
       },
       {
         path: 'borrowing/loans',

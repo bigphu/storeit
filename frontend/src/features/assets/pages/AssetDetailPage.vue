@@ -20,7 +20,7 @@ import { usePageKeys } from '@/lib/pageKeys'
 import { kindSeverity } from '@/features/statuses/api'
 import { useAssetType } from '@/features/asset-types/api'
 import { useTicket } from '@/features/borrowing/api'
-import { canSeeTicket, overdueLabel } from '@/features/borrowing/borrowing'
+import { canSeeTicket, overdueLabel, requestCode } from '@/features/borrowing/borrowing'
 import LendDialog from '@/features/borrowing/components/LendDialog.vue'
 import NewTicketDialog from '@/features/borrowing/components/NewTicketDialog.vue'
 import RejectDialog from '@/features/borrowing/components/RejectDialog.vue'
@@ -221,8 +221,8 @@ usePageKeys((e) => {
                   <dd>
                     {{ borrowing.account.name }}
                     <template v-if="borrowing.ticket">
-                      · <RouterLink v-if="seeTicket" :to="`/borrowing/tickets/${borrowing.ticket.id}`">ticket #{{ borrowing.ticket.number }}</RouterLink>
-                      <span v-else>ticket #{{ borrowing.ticket.number }}</span>
+                      · <RouterLink v-if="seeTicket" :to="`/borrowing/tickets/${borrowing.ticket.id}`">{{ requestCode(borrowing.ticket.number) }}</RouterLink>
+                      <span v-else>{{ requestCode(borrowing.ticket.number) }}</span>
                     </template>
                   </dd>
                 </template>
@@ -231,8 +231,8 @@ usePageKeys((e) => {
                   <dd>
                     {{ borrowing.account.name }}
                     <template v-if="borrowing.ticket">
-                      · <RouterLink v-if="seeTicket" :to="`/borrowing/tickets/${borrowing.ticket.id}`">ticket #{{ borrowing.ticket.number }}</RouterLink>
-                      <span v-else>ticket #{{ borrowing.ticket.number }}</span>
+                      · <RouterLink v-if="seeTicket" :to="`/borrowing/tickets/${borrowing.ticket.id}`">{{ requestCode(borrowing.ticket.number) }}</RouterLink>
+                      <span v-else>{{ requestCode(borrowing.ticket.number) }}</span>
                     </template>
                   </dd>
                   <dt>Since</dt>
