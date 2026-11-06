@@ -158,19 +158,28 @@ const countLoans = `-- name: CountLoans :one
 SELECT count(*)
 FROM inventory.loans l
 JOIN inventory.assets a ON a.id = l.asset_id
-WHERE ($1::text = 'all' OR ($1::text = 'active') = (l.returned_on IS NULL))
-  AND ($2::uuid IS NULL OR l.borrower_id = $2::uuid)
-  AND ($3::uuid IS NULL OR l.asset_id = $3::uuid)
+WHERE ($1::text = 'all'
+       OR ($1::text = 'active' AND l.returned_on IS NULL)
+       OR ($1::text = 'returned' AND l.returned_on IS NOT NULL)
+       -- quá hạn: chưa trả và hạn trả trước hôm nay (không có hạn thì không bao giờ quá hạn)
+       OR ($1::text = 'overdue' AND l.returned_on IS NULL AND l.return_by < $2::date)
+       -- trả muộn: trả sau hạn (trả đúng ngày hạn hay không có hạn thì không muộn)
+       OR ($1::text = 'returned_late' AND l.returned_on > l.return_by))
+  AND ($3::uuid IS NULL OR l.borrower_id = $3::uuid)
+  AND ($4::uuid IS NULL OR l.asset_id = $4::uuid)
+  AND ($5::uuid IS NULL OR a.asset_type_id = $5::uuid)
   -- kỳ [from, to]: khoản ở ngoài lúc nào đó trong kỳ (bắt đầu không sau to, chưa trả trước from)
-  AND ($4::date IS NULL OR l.started_on <= $4::date)
-  AND ($5::date IS NULL OR l.returned_on IS NULL OR l.returned_on >= $5::date)
-  AND (NOT $6::boolean OR a.tag ILIKE $7 OR a.name ILIKE $7 OR l.borrower_id = ANY($8::uuid[]))
+  AND ($6::date IS NULL OR l.started_on <= $6::date)
+  AND ($7::date IS NULL OR l.returned_on IS NULL OR l.returned_on >= $7::date)
+  AND (NOT $8::boolean OR a.tag ILIKE $9 OR a.name ILIKE $9 OR l.borrower_id = ANY($10::uuid[]))
 `
 
 type CountLoansParams struct {
 	State      string
+	Today      pgtype.Date
 	BorrowerID *uuid.UUID
 	AssetID    *uuid.UUID
+	TypeID     *uuid.UUID
 	ToDay      pgtype.Date
 	FromDay    pgtype.Date
 	HasQ       bool
@@ -181,8 +190,10 @@ type CountLoansParams struct {
 func (q *Queries) CountLoans(ctx context.Context, arg CountLoansParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countLoans,
 		arg.State,
+		arg.Today,
 		arg.BorrowerID,
 		arg.AssetID,
+		arg.TypeID,
 		arg.ToDay,
 		arg.FromDay,
 		arg.HasQ,
@@ -641,35 +652,43 @@ SELECT l.id, l.asset_id, l.borrower_id, l.ticket_id, l.lent_by, l.started_on, l.
 FROM inventory.loans l
 JOIN inventory.assets a ON a.id = l.asset_id
 LEFT JOIN inventory.borrow_tickets t ON t.id = l.ticket_id
-WHERE ($1::text = 'all' OR ($1::text = 'active') = (l.returned_on IS NULL))
-  AND ($2::uuid IS NULL OR l.borrower_id = $2::uuid)
-  AND ($3::uuid IS NULL OR l.asset_id = $3::uuid)
+WHERE ($1::text = 'all'
+       OR ($1::text = 'active' AND l.returned_on IS NULL)
+       OR ($1::text = 'returned' AND l.returned_on IS NOT NULL)
+       -- quá hạn: chưa trả và hạn trả trước hôm nay (không có hạn thì không bao giờ quá hạn)
+       OR ($1::text = 'overdue' AND l.returned_on IS NULL AND l.return_by < $2::date)
+       -- trả muộn: trả sau hạn (trả đúng ngày hạn hay không có hạn thì không muộn)
+       OR ($1::text = 'returned_late' AND l.returned_on > l.return_by))
+  AND ($3::uuid IS NULL OR l.borrower_id = $3::uuid)
+  AND ($4::uuid IS NULL OR l.asset_id = $4::uuid)
+  AND ($5::uuid IS NULL OR a.asset_type_id = $5::uuid)
   -- kỳ [from, to]: khoản ở ngoài lúc nào đó trong kỳ (bắt đầu không sau to, chưa trả trước from)
-  AND ($4::date IS NULL OR l.started_on <= $4::date)
-  AND ($5::date IS NULL OR l.returned_on IS NULL OR l.returned_on >= $5::date)
-  AND (NOT $6::boolean OR a.tag ILIKE $7 OR a.name ILIKE $7 OR l.borrower_id = ANY($8::uuid[]))
-ORDER BY CASE WHEN $9::text = 'started_on' THEN l.started_on END ASC,
-         CASE WHEN $9::text = '-started_on' THEN l.started_on END DESC,
-         CASE WHEN $9::text = 'return_by' THEN l.return_by END ASC NULLS LAST,
-         CASE WHEN $9::text = '-return_by' THEN l.return_by END DESC NULLS LAST,
-         CASE WHEN $9::text = 'returned_on' THEN l.returned_on END ASC NULLS LAST,
-         CASE WHEN $9::text = '-returned_on' THEN l.returned_on END DESC NULLS LAST,
-         (l.returned_on IS NULL AND l.return_by IS NOT NULL AND l.return_by < $10::date) DESC,
+  AND ($6::date IS NULL OR l.started_on <= $6::date)
+  AND ($7::date IS NULL OR l.returned_on IS NULL OR l.returned_on >= $7::date)
+  AND (NOT $8::boolean OR a.tag ILIKE $9 OR a.name ILIKE $9 OR l.borrower_id = ANY($10::uuid[]))
+ORDER BY CASE WHEN $11::text = 'started_on' THEN l.started_on END ASC,
+         CASE WHEN $11::text = '-started_on' THEN l.started_on END DESC,
+         CASE WHEN $11::text = 'return_by' THEN l.return_by END ASC NULLS LAST,
+         CASE WHEN $11::text = '-return_by' THEN l.return_by END DESC NULLS LAST,
+         CASE WHEN $11::text = 'returned_on' THEN l.returned_on END ASC NULLS LAST,
+         CASE WHEN $11::text = '-returned_on' THEN l.returned_on END DESC NULLS LAST,
+         (l.returned_on IS NULL AND l.return_by IS NOT NULL AND l.return_by < $2::date) DESC,
          l.return_by ASC NULLS LAST, l.started_on DESC, l.id
-LIMIT $12 OFFSET $11
+LIMIT $13 OFFSET $12
 `
 
 type ListLoansParams struct {
 	State      string
+	Today      pgtype.Date
 	BorrowerID *uuid.UUID
 	AssetID    *uuid.UUID
+	TypeID     *uuid.UUID
 	ToDay      pgtype.Date
 	FromDay    pgtype.Date
 	HasQ       bool
 	QLike      string
 	QBorrowers []uuid.UUID
 	Sort       string
-	Today      pgtype.Date
 	Off        int32
 	Lim        int32
 }
@@ -690,21 +709,23 @@ type ListLoansRow struct {
 	TicketNumber      int64
 }
 
-// Khoản mượn theo trạng thái (active: chưa trả, returned, all), người mượn, tài sản, kỳ và từ
-// khoá (tag/tên tài sản, hay người mượn service đã tìm). Sắp theo cột sort nếu có; không thì quá
+// Khoản mượn theo trạng thái (active: chưa trả, overdue: chưa trả và quá hạn, returned, returned_late:
+// trả sau hạn, all), người mượn, tài sản, loại tài sản, kỳ và từ khoá (tag/tên tài sản, hay người mượn
+// service đã tìm). Sắp theo cột sort nếu có; không thì quá
 // hạn trước (hạn sớm nhất trước), rồi theo hạn, rồi mới bắt đầu trước
 func (q *Queries) ListLoans(ctx context.Context, arg ListLoansParams) ([]ListLoansRow, error) {
 	rows, err := q.db.Query(ctx, listLoans,
 		arg.State,
+		arg.Today,
 		arg.BorrowerID,
 		arg.AssetID,
+		arg.TypeID,
 		arg.ToDay,
 		arg.FromDay,
 		arg.HasQ,
 		arg.QLike,
 		arg.QBorrowers,
 		arg.Sort,
-		arg.Today,
 		arg.Off,
 		arg.Lim,
 	)

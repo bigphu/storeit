@@ -1396,6 +1396,20 @@ func TestBorrowingOverHTTP(t *testing.T) {
 	if _, fields := problem(t, rec); rec.Code != 422 || len(fields) == 0 || !strings.HasPrefix(fields[0], "from") {
 		t.Errorf("from after to = %d %v, want 422 on from", rec.Code, fields)
 	}
+	// Lọc theo trạng thái và loại (US-20): hai trạng thái mới qua được bộ kiểm tra yêu cầu, loại lạ cho trang rỗng
+	for _, st := range []string{"overdue", "returned_late"} {
+		if rec := a.do("GET", "/api/v1/loans?state="+st, officer, nil); rec.Code != 200 {
+			t.Errorf("state=%s = %d, want 200", st, rec.Code)
+		}
+	}
+	if p := decode[historyPage](t, a.do("GET", "/api/v1/loans?state=all&type_id="+uuid.NewString(), officer, nil), 200); len(p.Items) != 0 {
+		t.Errorf("unknown type lists %d loans, want none", len(p.Items))
+	}
+	for _, q := range []string{"state=late", "type_id=nope"} {
+		if rec := a.do("GET", "/api/v1/loans?"+q, officer, nil); rec.Code < 400 || rec.Code >= 500 {
+			t.Errorf("%s = %d, want a 4xx", q, rec.Code)
+		}
+	}
 	for _, p := range []string{"/api/v1/borrow-tickets", "/api/v1/loans", "/api/v1/borrowers", "/api/v1/borrow-tickets/summary"} {
 		if rec := a.do("GET", p, "", nil); rec.Code != 401 {
 			t.Errorf("GET %s without token = %d, want 401", p, rec.Code)

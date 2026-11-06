@@ -47,6 +47,19 @@ func TestListLoans_Filters(t *testing.T) {
 	if f := b.borrowing.lastLoanFilter; f.Q != "nguyen" || f.MatchBorrowers == nil {
 		t.Errorf("search filter = %+v, want trimmed q and the matched people", f)
 	}
+	for _, st := range []string{"overdue", "returned_late"} {
+		if _, _, err := b.svc.ListLoans(officer, LoanQuery{State: st}); err != nil || b.borrowing.lastLoanFilter.State != st {
+			t.Errorf("state %s: filter %q, %v; want it passed on", st, b.borrowing.lastLoanFilter.State, err)
+		}
+	}
+	// lọc theo loại không mở rộng "của tôi" sang người khác
+	ty := uuid.New()
+	if _, _, err := b.svc.ListLoans(emp, LoanQuery{Mine: true, State: "overdue", TypeID: &ty}); err != nil {
+		t.Fatal(err)
+	}
+	if f := b.borrowing.lastLoanFilter; f.BorrowerID == nil || *f.BorrowerID != me || f.TypeID == nil || *f.TypeID != ty {
+		t.Errorf("mine with a type: filter = %+v, want the actor's loans of that type", f)
+	}
 	if _, _, err := b.svc.ListLoans(officer, LoanQuery{}); err != nil || b.borrowing.lastLoanFilter.State != "active" {
 		t.Errorf("default state = %q, %v; want active", b.borrowing.lastLoanFilter.State, err)
 	}

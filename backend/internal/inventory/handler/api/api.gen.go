@@ -376,9 +376,11 @@ func (e ListLoansParamsSort) Valid() bool {
 
 // Defines values for ListLoansParamsState.
 const (
-	ListLoansParamsStateActive   ListLoansParamsState = "active"
-	ListLoansParamsStateAll      ListLoansParamsState = "all"
-	ListLoansParamsStateReturned ListLoansParamsState = "returned"
+	ListLoansParamsStateActive       ListLoansParamsState = "active"
+	ListLoansParamsStateAll          ListLoansParamsState = "all"
+	ListLoansParamsStateOverdue      ListLoansParamsState = "overdue"
+	ListLoansParamsStateReturned     ListLoansParamsState = "returned"
+	ListLoansParamsStateReturnedLate ListLoansParamsState = "returned_late"
 )
 
 // Valid indicates whether the value is a known member of the ListLoansParamsState enum.
@@ -388,7 +390,11 @@ func (e ListLoansParamsState) Valid() bool {
 		return true
 	case ListLoansParamsStateAll:
 		return true
+	case ListLoansParamsStateOverdue:
+		return true
 	case ListLoansParamsStateReturned:
+		return true
+	case ListLoansParamsStateReturnedLate:
 		return true
 	default:
 		return false
@@ -1230,7 +1236,7 @@ type ListLoansParams struct {
 	Mine *bool                `form:"mine,omitempty" json:"mine,omitempty"`
 	Sort *ListLoansParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
-	// State active (default, not returned yet), returned, or all
+	// State active (default, not returned yet), overdue (not returned, return_by before today), returned, returned_late (returned after return_by), or all
 	State *ListLoansParamsState `form:"state,omitempty" json:"state,omitempty"`
 
 	// From Period start; a loan matches when it was out at any point in [from, to]
@@ -1241,7 +1247,10 @@ type ListLoansParams struct {
 	Q *string `form:"q,omitempty" json:"q,omitempty"`
 
 	// AssetId One asset's loans (inventory.borrow.manage)
-	AssetId  *externalRef0.ID       `form:"asset_id,omitempty" json:"asset_id,omitempty"`
+	AssetId *externalRef0.ID `form:"asset_id,omitempty" json:"asset_id,omitempty"`
+
+	// TypeId Only loans of assets of this type; an unknown type gives an empty page
+	TypeId   *externalRef0.ID       `form:"type_id,omitempty" json:"type_id,omitempty"`
 	Page     *externalRef0.Page     `form:"page,omitempty" json:"page,omitempty"`
 	PageSize *externalRef0.PageSize `form:"page_size,omitempty" json:"page_size,omitempty"`
 }
@@ -3560,6 +3569,19 @@ func (siw *ServerInterfaceWrapper) ListLoans(w http.ResponseWriter, r *http.Requ
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "asset_id"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "asset_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "type_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "type_id", r.URL.Query(), &params.TypeId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type_id", Err: err})
 		}
 		return
 	}
@@ -7907,11 +7929,12 @@ var swaggerSpec = []string{
 	"9UiALI3CBjujUiErCJTre17F/vVmO+YNt+ZTnQCfs8Pd66MSR3a04K7JgSaNI3X5QYPNl5imtIkREoNC",
 	"mciJJJjmpGVTFefVuLoOmTGj1es1q69zqaH9ljkK/5IQouLujJUgy3PWHBEzI7fk2qhuVmLKzWH/FjNF",
 	"VK6QEuy6MU8LAlSiWRrBs9Wxh+qJObnTKs6qri6gJMHpLX0TKzGvLh1LXSiUqUx5HHdUdbOt0l86Xt45",
-	"lsNsuX/YCL15yf3zeYPL9aa044bBbWi72uio/xiLzTD/U/uqkiRoGiu3+9KTOIsNwkCO02SBj3FKWKy9",
-	"HAeAtM9jKEU25nA2wNSmKugeMIDoGEaMUCENhi96KRuGINjzuuIOOkTsuUDm74xfh1LBFh3F28+jqAyl",
-	"YC3J0Zrlt3jZWmwr1l6NENtMPkX7M4zSmhIsqmjAamWK/gjC8VLmNL4cgI2caSNwq27p2VQays5C5S+M",
-	"M1yJ8Nei9gCkaPtQHnBA9SVVKRxnhXydTrxKtro9eL94LiGtXJhG8mZpEuwHEik7p3vB6+ev/18AAAD/",
-	"/w==",
+	"lsNsuX/YCL15yf3zeYPL9aa044bBbWi72uio/xiLzVA5HOIMw4b7Wwj5KkCni2sXxGZYeQTHnQQJDBv5",
+	"uKqfeTGA8YIlSdA0Cm8hppcfhIFZowMQFzaJfl/O0AQoj3FKWKw9KweAtJ9lKI8JzOFsgKlNj9B9ZwDR",
+	"MYwYoUIaKV/0UjYMQbDndQUldFjac2nN342/jowEW3QUbw+RohqVwoJkAesKuMXLFmpb8f1qVNpmDyp+",
+	"m2EI15R9UYUKViuN5JEGejH5rX59k4Jo3/4BIAoZPaHKwTseYeiTU2WwAB6OxFjF2ddXNOuPIGFBSuUm",
+	"iQpaBLcR09ZINFlGlJ0Vkm06+aGWAg9ASv0P5dkPVN/flZQyKxruNClWx47bnviL5xLEyrtrDqUsTYL9",
+	"QGJj53QveP389f8LAAD//w==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

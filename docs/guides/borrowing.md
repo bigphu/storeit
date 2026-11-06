@@ -34,9 +34,19 @@ status is an *available* kind. The asset list's **Borrowable now** filter shows 
 
 ## Loans and history
 
-`Borrowing → Loans` shows loans **out now** (overdue first), **returned**, or **all**, filtered by period: a loan
-counts when it was out at any point in the period. Search by asset tag or name, or by the borrower. Each asset's
-page has a Loans tab, and `My loans` shows a person's own loans.
+`Borrowing → Loans` lists every loan. Filter it by **status**, which uses the same words as the tags on each row:
+
+| Status | Shows |
+|---|---|
+| Out now | Not returned yet, overdue first |
+| Overdue | Not returned, and the return date has passed (due today is not overdue; a loan with no return date is never overdue) |
+| Returned | Brought back |
+| Returned late | Brought back after its return date (the same day, or no return date, is not late) |
+| All | Everything |
+
+Filters combine: pick an asset **type**, a **period** (a loan counts when it was out at any point in the period), and
+search by asset tag or name, or by the borrower. Each asset's page has a Loans tab, and `My loans` shows a person's own
+loans with the same status, type and period filters and a search by asset.
 
 ## Emails
 
