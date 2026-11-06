@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { reactive, readonly } from 'vue'
 import type { AssetListItem, ExportLayout } from '@/lib/api/types'
-import { cleanSheetName, cloneLayout, excludeFields, includeAttributes, profilePatch, dataPreviewSheets, defaultHeader, exportFileName, defaultReportLayout, editorColumns, editorRowsFor, type EditorColumn, fieldOptions, reorderVisible, normalizeLayout, previewSheets, sheetNameInput, skippedKeys, type TypeInfo, withColumns } from './layout'
+import { cleanSheetName, cloneLayout, excludeFields, includeAttributes, profilePatch, dataPreviewSheets, defaultHeader, exportFileName, defaultReportLayout, editorColumns, editorRowsFor, type EditorColumn, fieldOptions, reorderVisible, normalizeLayout, previewSheets, profileOptionLabel, sheetNameInput, skippedKeys, type TypeInfo, withColumns } from './layout'
 
 const laptop: TypeInfo = { id: 'L', name: 'Laptop', code: 'LAPTOP', attributes: [{ key: 'ram_gb', label: 'RAM', data_type: 'number', unit: 'GB' }, { key: 'cpu', label: 'CPU', data_type: 'text' }] }
 const phone: TypeInfo = { id: 'P', name: 'Phone', code: 'PHONE', attributes: [{ key: 'imei', label: 'IMEI', data_type: 'text' }] }
@@ -178,5 +178,16 @@ describe('v1.0.2 report defaults and scoped column editor', () => {
     const reordered = [visible[2], visible[0], visible[1]] // name, tag, attr:ram_gb
     // ô của dòng hiện (0, 1, 2) được lấp theo thứ tự mới; ô 3, 4 giữ nguyên
     expect(reorderVisible(cols, reordered).map((c) => c.field)).toEqual(['name', 'tag', 'attr:ram_gb', 'attr:size_in', 'attr:gone'])
+  })
+})
+
+describe('profileOptionLabel', () => {
+  const p = { name: 'Monthly', owner: { id: 'u1', name: 'Alice' } }
+  it('shows only the name for your own profile', () => {
+    expect(profileOptionLabel(p, 'u1')).toBe('Monthly')
+  })
+  it('adds the owner for someone else’s, so same-named profiles differ', () => {
+    expect(profileOptionLabel(p, 'u2')).toBe('Monthly · Alice')
+    expect(profileOptionLabel(p, undefined)).toBe('Monthly · Alice')
   })
 })

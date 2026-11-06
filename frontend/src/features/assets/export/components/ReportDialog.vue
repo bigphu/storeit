@@ -14,7 +14,7 @@ import { useSession } from '@/lib/auth/session'
 import { useFormErrors } from '@/lib/forms'
 import { notify } from '@/lib/notify'
 import { useCreateExportProfile, useExportProfiles, useUpdateExportProfile } from '../api'
-import { cleanSheetName, defaultReportLayout, exportFileName, normalizeLayout, profilePatch } from '../layout'
+import { cleanSheetName, defaultReportLayout, exportFileName, normalizeLayout, profileOptionLabel, profilePatch } from '../layout'
 import { useExport } from '../useExport'
 import { type ExportScope, usePreviewData } from '../usePreviewData'
 import ReportEditor from './ReportEditor.vue'
@@ -162,7 +162,7 @@ async function download() {
     <!-- Cạnh tiêu đề: profile, trạng thái, lưu; không thêm hàng nào trên vùng cuộn -->
     <template #header-extra>
       <div class="title-bar">
-        <Select v-model="profileId" aria-label="Export profile" :options="profiles ?? []" option-label="name" option-value="id" placeholder="No profile" show-clear size="small" class="profile-select" />
+        <Select v-model="profileId" aria-label="Export profile" :options="profiles ?? []" :option-label="(p: ExportProfile) => profileOptionLabel(p, session.me?.account.id)" option-value="id" placeholder="No profile" show-clear size="small" class="profile-select" />
         <i v-if="profile && !profile.can_edit" v-tooltip.bottom="`Shared by ${profile.owner.name}`" class="pi pi-lock state" aria-label="Shared by someone else" />
         <i v-else-if="profile?.shared" v-tooltip.bottom="'Shared with everyone who can export'" class="pi pi-users state" aria-label="Shared" />
         <Tag v-if="dirty" value="Unsaved" severity="warn" class="unsaved" />

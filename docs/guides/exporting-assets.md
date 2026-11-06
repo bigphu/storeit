@@ -48,3 +48,11 @@ A profile stores a name and a report layout. It is private to its owner unless `
 Exporting needs `inventory.asset.read` and `inventory.asset.export`. Changing or deleting a profile needs
 `inventory.asset.export` and being its owner; changing someone else's shared profile also needs
 `inventory.export_profile.manage`.
+
+### Profile names
+
+- A name is trimmed and must be 1 to 100 characters, with no control characters.
+- Names are unique per owner, ignoring case, among profiles that aren't deleted. Two people can each have a profile
+  called "Monthly"; pickers show the owner next to someone else's profile so you can tell them apart.
+- Renaming a profile into a name its owner already uses, or restoring a deleted profile whose name was reused, is a
+  409 `/errors/export-profile-name-taken`. The profile stays as it was.
