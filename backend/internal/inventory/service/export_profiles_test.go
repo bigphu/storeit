@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -75,6 +76,30 @@ func TestExportProfiles_ValidatesInput(t *testing.T) {
 	if _, err := e.svc.CreateExportProfile(ctx, ExportProfileInput{Name: "  ", Layout: domain.DefaultReportLayout()}); !errors.Is(err, domain.ErrInvalidLabel) {
 		t.Errorf("blank name: %v", err)
 	}
+	// tên: tối đa 100 ký tự (không phải byte), không ký tự điều khiển
+	for _, name := range []string{strings.Repeat("a", 101), "a\tb", "a\u0000b"} {
+		if _, err := e.svc.CreateExportProfile(ctx, ExportProfileInput{Name: name, Layout: domain.DefaultReportLayout()}); !errors.Is(err, domain.ErrInvalidLabel) {
+			t.Errorf("name %q: %v, want ErrInvalidLabel", name, err)
+		}
+	}
+	long := strings.Repeat("ạ", 100)
+	if p, err := e.svc.CreateExportProfile(ctx, ExportProfileInput{Name: long, Layout: domain.DefaultReportLayout()}); err != nil || p.Name != long {
+		t.Errorf("100 accented characters: %v", err)
+	}
+	// sửa: tên và layout sai bị từ chối trước khi chạm kho; không có quyền export thì 403
+	cur, _ := e.svc.CreateExportProfile(ctx, ExportProfileInput{Name: "edit", Layout: domain.DefaultReportLayout()})
+	blank := " "
+	if _, err := e.svc.UpdateExportProfile(ctx, cur.ID, domain.ExportProfileChange{Name: &blank, Version: cur.Version}); !errors.Is(err, domain.ErrInvalidLabel) {
+		t.Errorf("rename to blank: %v", err)
+	}
+	if _, err := e.svc.UpdateExportProfile(ctx, cur.ID, domain.ExportProfileChange{Layout: &bad, Version: cur.Version}); !errors.Is(err, domain.ErrInvalidExportLayout) {
+		t.Errorf("bad layout on update: %v", err)
+	}
+	noExport := actorWith(uuid.New(), domain.PermAssetRead)
+	if _, err := e.svc.CreateExportProfile(noExport, ExportProfileInput{Name: "x", Layout: domain.DefaultReportLayout()}); status(err) != 403 {
+		t.Errorf("create without asset.export: %v", err)
+	}
+
 	p, err := e.svc.CreateExportProfile(ctx, ExportProfileInput{Name: "x", Layout: domain.ExportLayout{Columns: []domain.ExportColumn{{Field: "tag"}}}})
 	if err != nil || p.Layout.Header != domain.HeaderBold {
 		t.Errorf("defaults not applied: %+v, %v", p.Layout, err)
