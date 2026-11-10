@@ -22,13 +22,14 @@ import { formatDate, fromDateString, toDateString } from '@/lib/dates'
 import { openLocation } from '@/lib/navigation'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
 import { useKeepScrollOnPage, useListTable, useRowMenu } from '@/lib/tableRows'
-import { queryInt, queryString, useUrlState } from '@/lib/urlState'
+import { useUrlState } from '@/lib/urlState'
 import { fromTableSort, toTableSort } from '@/features/assets/listQuery'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useAssetTypes } from '@/features/asset-types/api'
 import { assetKeys, useAsset } from '@/features/assets/api'
-import { type LoanParams, useBusinessDay, useLoans } from '../api'
-import { loanStateTag, type Period, periodRange, requestCode } from '../borrowing'
+import { useBusinessDay, useLoans } from '../api'
+import { loanStateTag, type Period, requestCode } from '../borrowing'
+import { type LoanShow, type LoanSort, loanEmptyText, loanParams, parseLoanQuery, serializeLoanQuery } from '../loanQuery'
 import CodeTag from '@/components/CodeTag.vue'
 import ReturnDialog from '../components/ReturnDialog.vue'
 
@@ -37,58 +38,13 @@ import ReturnDialog from '../components/ReturnDialog.vue'
 // trong kỳ) và từ khoá (tag/tên tài sản, người mượn). Bấm dòng mở tài sản. mine: khoản của chính
 // mình (My loans), chỉ xem.
 const props = defineProps<{ mine?: boolean }>()
-type Sort = NonNullable<LoanParams['sort']>
-type Show = NonNullable<LoanParams['state']>
-const SORTS: Sort[] = ['started_on', '-started_on', 'return_by', '-return_by', 'returned_on', '-returned_on']
-const SHOWS: Show[] = ['active', 'overdue', 'returned', 'returned_late', 'all']
-const PERIODS: Period[] = ['any', 'this_month', 'last_month', 'last_30', 'custom']
+type Sort = LoanSort
+type Show = LoanShow
 const { size: pageSize, set: setPageSize } = usePageSize(props.mine ? 'my-loans' : 'loans')
-const { state, update } = useUrlState(
-  (q) => {
-    const sort = queryString(q.sort) as Sort | undefined
-    const show = queryString(q.show) as Show | undefined
-    const period = queryString(q.period) as Period | undefined
-    return {
-      show: show && SHOWS.includes(show) ? show : ('active' as Show),
-      period: period && PERIODS.includes(period) ? period : ('any' as Period),
-      from: queryString(q.from) ?? '',
-      to: queryString(q.to) ?? '',
-      q: queryString(q.q) ?? '',
-      type: queryString(q.type) ?? '',
-      sort: sort && SORTS.includes(sort) ? sort : undefined,
-      page: queryInt(q.page, 1),
-    }
-  },
-  (s) => ({
-    show: s.show === 'active' ? undefined : s.show,
-    period: s.period === 'any' ? undefined : s.period,
-    from: s.period === 'custom' && s.from ? s.from : undefined,
-    to: s.period === 'custom' && s.to ? s.to : undefined,
-    q: s.q || undefined,
-    type: s.type || undefined,
-    sort: s.sort,
-    page: s.page > 1 ? String(s.page) : undefined,
-  }),
-)
+const { state, update } = useUrlState(parseLoanQuery, serializeLoanQuery)
 
 const today = useBusinessDay(true)
-// kỳ đang lọc: lựa chọn sẵn tính từ hôm nay của ứng dụng; Custom lấy from/to trên URL
-const range = computed<{ from?: string; to?: string }>(() => {
-  const p = state.value.period
-  if (p === 'any') return {}
-  if (p === 'custom') return { from: state.value.from || undefined, to: state.value.to || undefined }
-  return periodRange(p, today.value)
-})
-const params = computed<LoanParams>(() => ({
-  mine: props.mine || undefined,
-  state: state.value.show,
-  ...range.value,
-  q: state.value.q || undefined,
-  type_id: state.value.type || undefined,
-  sort: state.value.sort,
-  page: state.value.page,
-  page_size: pageSize.value,
-}))
+const params = computed(() => loanParams(state.value, { mine: props.mine, today: today.value, pageSize: pageSize.value }))
 
 const showOptions: SegmentOption<Show>[] = [
   { label: 'Out now', value: 'active' },
@@ -121,11 +77,7 @@ watch(search, (q) => {
   timer = setTimeout(() => update({ q, page: 1 }), 300)
 })
 
-const emptyText = computed(() => {
-  if (state.value.q || state.value.type || state.value.period !== 'any') return 'No loans match these filters.'
-  if (state.value.show === 'active') return props.mine ? 'You have nothing on loan.' : 'Nothing is on loan right now.'
-  return props.mine ? "You haven't returned anything yet." : 'No loans yet.'
-})
+const emptyText = computed(() => loanEmptyText(state.value, props.mine))
 
 const tableSort = computed(() => toTableSort(state.value.sort))
 function onSort(e: DataTableSortEvent) {
