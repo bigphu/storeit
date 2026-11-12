@@ -90,6 +90,44 @@ func TestService_BusinessDay(t *testing.T) {
 	}
 }
 
+// US-21: máy chủ chạy TZ=UTC, còn "hôm nay" và quá hạn tính theo ngày Việt Nam. 16:59 UTC
+// ngày 9/11 là 23:59 ở HCM (vẫn ngày 9); 17:00 UTC là 00:00 ngày 10/11, lúc khoản hạn trả 9/11
+// bắt đầu quá hạn. Khoản hạn trả 10/11 thì chưa quá hạn ở cả hai thời điểm.
+func TestOverdue_VietnamDayBoundary(t *testing.T) {
+	due9, due10 := day("2026-11-09"), day("2026-11-10")
+	cases := []struct {
+		name                string
+		now                 time.Time
+		today               string
+		overdue9, overdue10 int
+	}{
+		{"23:59 in HCM", time.Date(2026, 11, 9, 16, 59, 0, 0, time.UTC), "2026-11-09", 0, 0},
+		{"00:00 in HCM", time.Date(2026, 11, 9, 17, 0, 0, 0, time.UTC), "2026-11-10", 1, 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			b := newBorrowEnv(t, c.now)
+			today := b.svc.today()
+			if !today.Equal(day(c.today)) {
+				t.Fatalf("today() = %v, want %s", today, c.today)
+			}
+			if n := (domain.Loan{ReturnBy: &due9}).OverdueDays(today); n != c.overdue9 {
+				t.Errorf("due 2026-11-09: OverdueDays = %d, want %d", n, c.overdue9)
+			}
+			if n := (domain.Loan{ReturnBy: &due10}).OverdueDays(today); n != c.overdue10 {
+				t.Errorf("due 2026-11-10: OverdueDays = %d, want %d", n, c.overdue10)
+			}
+			// SQL của danh sách (quá hạn lên đầu, bộ lọc Overdue) so return_by với đúng ngày này
+			if _, _, err := b.svc.ListLoans(officer, LoanQuery{}); err != nil {
+				t.Fatal(err)
+			}
+			if got := b.borrowing.lastLoanToday; !got.Equal(day(c.today)) {
+				t.Errorf("ListLoans got today %v, want %s", got, c.today)
+			}
+		})
+	}
+}
+
 // Account người gửi bị khoá giữa lúc duyệt và lúc giao: không giao, giữ nguyên chỗ
 func TestBorrowing_HandOverDisabledRequester(t *testing.T) {
 	b := newBorrowEnv(t, time.Date(2026, 10, 30, 3, 0, 0, 0, time.UTC))

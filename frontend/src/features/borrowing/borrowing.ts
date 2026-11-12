@@ -1,6 +1,6 @@
 // Mượn tài sản (US-10): nhãn, kiểm form phiếu mượn, đọc yêu cầu thuộc tính thành chữ
 import type { Attribute, Status, TicketState } from '@/lib/api/types'
-import { fromDateString } from '@/lib/dates'
+import { formatDate, fromDateString } from '@/lib/dates'
 import type { Tone } from '@/lib/tones'
 import { attrFilterLabel } from '@/features/assets/filterChips'
 import type { AttrFilterRow } from '@/features/assets/listQuery'
@@ -99,6 +99,11 @@ export const TICKET_STATE_TONE: Record<TicketState, Tone> = {
   handed_over: 'success',
   rejected: 'danger',
   cancelled: 'secondary',
+}
+
+// returnByLabel: hạn trả của khoản mượn; không có hạn thì ghi rõ "No due date" (không bao giờ quá hạn)
+export function returnByLabel(returnBy?: string | null): string {
+  return returnBy ? formatDate(returnBy) : 'No due date'
 }
 
 // overdueLabel: "Overdue 5 days"; chưa quá hạn thì rỗng

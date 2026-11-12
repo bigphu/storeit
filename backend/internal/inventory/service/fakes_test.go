@@ -686,6 +686,8 @@ type fakeBorrowing struct {
 	returns    []domain.LoanReturn
 	// lastLoanFilter: bộ lọc của lần ListLoans gần nhất
 	lastLoanFilter domain.LoanFilter
+	// lastLoanToday: "hôm nay" service truyền cho lần ListLoans gần nhất
+	lastLoanToday time.Time
 }
 
 func newFakeBorrowing() *fakeBorrowing {
@@ -855,10 +857,11 @@ func (f *fakeBorrowing) GetLoan(_ context.Context, id uuid.UUID) (domain.Loan, e
 	return l, nil
 }
 
-func (f *fakeBorrowing) ListLoans(_ context.Context, _ time.Time, lf domain.LoanFilter) ([]domain.Loan, int64, error) {
+func (f *fakeBorrowing) ListLoans(_ context.Context, today time.Time, lf domain.LoanFilter) ([]domain.Loan, int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.lastLoanFilter = lf
+	f.lastLoanToday = today
 	return nil, 0, nil
 }
 

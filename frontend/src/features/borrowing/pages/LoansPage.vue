@@ -27,8 +27,9 @@ import { fromTableSort, toTableSort } from '@/features/assets/listQuery'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useAssetTypes } from '@/features/asset-types/api'
 import { assetKeys, useAsset } from '@/features/assets/api'
-import { useBusinessDay, useLoans } from '../api'
-import { loanStateTag, type Period, requestCode } from '../borrowing'
+
+import { useBusinessDay, useLoans, type LoanParams } from '../api'
+import { loanStateTag, type Period, requestCode, periodRange, returnByLabel } from '../borrowing'
 import { type LoanShow, type LoanSort, loanEmptyText, loanParams, parseLoanQuery, serializeLoanQuery } from '../loanQuery'
 import CodeTag from '@/components/CodeTag.vue'
 import ReturnDialog from '../components/ReturnDialog.vue'
@@ -200,7 +201,7 @@ const table = useListTable({ open: openAsset, showMenu: rowMenu.showContext })
         <template #body="{ data: l }: { data: Loan }">{{ formatDate(l.started_on) }}</template>
       </Column>
       <Column header="Return by" sort-field="return_by" sortable>
-        <template #body="{ data: l }: { data: Loan }">{{ formatDate(l.return_by) }}</template>
+        <template #body="{ data: l }: { data: Loan }">{{ returnByLabel(l.return_by) }}</template>
       </Column>
       <Column v-if="state.show !== 'active' && state.show !== 'overdue'" header="Returned on" sort-field="returned_on" sortable>
         <template #body="{ data: l }: { data: Loan }">{{ l.returned_on ? formatDate(l.returned_on) : '—' }}</template>

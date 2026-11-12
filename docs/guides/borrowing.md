@@ -48,6 +48,9 @@ Filters combine: pick an asset **type**, a **period** (a loan counts when it was
 search by asset tag or name, or by the borrower. Each asset's page has a Loans tab, and `My loans` shows a person's own
 loans with the same status, type and period filters and a search by asset.
 
+A loan is overdue from the day after its return-by date, in the app's time zone. A loan without a return-by date
+shows **No due date** and is never overdue.
+
 ## Emails
 
 The worker sends these, in the background, and skips them when they no longer apply (the request moved on, the
