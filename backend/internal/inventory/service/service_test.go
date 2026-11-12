@@ -20,11 +20,12 @@ type env struct {
 	statuses *fakeStatuses
 	assets   *fakeAssets
 	profiles *fakeProfiles
+	imports  *fakeImports
 }
 
 func newEnv() *env {
-	e := &env{types: newFakeTypes(), statuses: newFakeStatuses(), assets: newFakeAssets(), profiles: newFakeProfiles()}
-	e.svc = New(Deps{Types: e.types, Statuses: e.statuses, Assets: e.assets, Profiles: e.profiles, Accounts: fakeAccounts{}})
+	e := &env{types: newFakeTypes(), statuses: newFakeStatuses(), assets: newFakeAssets(), profiles: newFakeProfiles(), imports: newFakeImports()}
+	e.svc = New(Deps{Types: e.types, Statuses: e.statuses, Assets: e.assets, Profiles: e.profiles, Imports: e.imports, Accounts: fakeAccounts{}})
 	return e
 }
 
@@ -493,8 +494,8 @@ func TestGeneratedTagsAndPrefixes(t *testing.T) {
 		t.Errorf("laptop prefix = %q, want LAP", typ.TagPrefix)
 	}
 	v, err := e.svc.CreateAsset(manager, "  ", AssetInput{Name: "X", TypeID: typ.ID, Attributes: map[string]any{"serial": "S1"}})
-	if err != nil || v.Tag != "" {
-		t.Fatalf("blank tag: tag=%q err=%v, want the repository to generate it", v.Tag, err)
+	if err != nil || v.Tag != "AUTO-0001" {
+		t.Fatalf("blank tag: tag=%q err=%v, want the repository to generate it (AUTO-0001 in the fake)", v.Tag, err)
 	}
 	if _, err := e.svc.CreateAsset(manager, "bad tag!", AssetInput{Name: "X", TypeID: typ.ID}); !errors.Is(err, domain.ErrInvalidTag) {
 		t.Errorf("bad tag: %v", err)

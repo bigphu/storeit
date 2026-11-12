@@ -19,6 +19,8 @@ type Deps struct {
 	Statuses domain.StatusRepository
 	Assets   domain.AssetRepository
 	Profiles domain.ExportProfileRepository
+	// Imports: lịch sử import Excel (US-06)
+	Imports  domain.ImportRepository
 	Accounts idcontract.AccountReader // tên chủ profile, tên người export trong tiêu đề báo cáo
 	// Events đọc event của tài sản cho lịch sử hoạt động (repository tài sản cài sẵn)
 	Events AssetEventReader
@@ -40,6 +42,7 @@ type Service struct {
 	statuses      domain.StatusRepository
 	assets        domain.AssetRepository
 	profiles      domain.ExportProfileRepository
+	imports       domain.ImportRepository
 	accounts      idcontract.AccountReader
 	events        AssetEventReader
 	exportMaxRows int
@@ -63,7 +66,7 @@ func New(d Deps) *Service {
 		now = time.Now
 	}
 	return &Service{
-		types: d.Types, statuses: d.Statuses, assets: d.Assets, profiles: d.Profiles, accounts: d.Accounts, events: d.Events,
+		types: d.Types, statuses: d.Statuses, assets: d.Assets, profiles: d.Profiles, imports: d.Imports, accounts: d.Accounts, events: d.Events,
 		exportMaxRows: maxRows, borrowing: d.Borrowing, loc: loc, now: now, mail: d.Mail, appURL: d.AppURL,
 	}
 }

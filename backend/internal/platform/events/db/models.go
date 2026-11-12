@@ -124,6 +124,21 @@ type InventoryAssetAttributeValue struct {
 	ValueOptionID *uuid.UUID
 }
 
+type InventoryAssetImport struct {
+	ID           uuid.UUID
+	AccountID    uuid.UUID
+	FileName     string
+	FileSha256   string
+	HasCreates   bool
+	RowCount     int32
+	CreatedCount int32
+	UpdatedCount int32
+	SkippedCount int32
+	FailedCount  int32
+	CreatedAt    time.Time
+	FinishedAt   *time.Time
+}
+
 type InventoryAssetReplacement struct {
 	OldAssetID uuid.UUID
 	NewAssetID uuid.UUID

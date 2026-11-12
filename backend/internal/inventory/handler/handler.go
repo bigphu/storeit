@@ -10,10 +10,12 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
 
+	"storeit/internal/inventory/domain"
 	"storeit/internal/inventory/handler/api"
 	"storeit/internal/inventory/service"
 	"storeit/internal/platform/auth"
 	"storeit/internal/platform/jwt"
+	"storeit/internal/platform/middleware"
 	"storeit/internal/platform/web"
 )
 
@@ -41,6 +43,10 @@ func (h *Handler) Mount(r chi.Router, tokens *jwt.Provider) error {
 	if err != nil {
 		return fmt.Errorf("inventory: load openapi spec: %w", err)
 	}
+	// import Excel: thân request là file (tối đa MaxImportBytes), lớn hơn giới hạn chung của server;
+	// phải đứng sau ValidateRequests trong Middlewares
+	upload := middleware.ForOperations(web.MustOperations(spec, baseURL, "POST /api/v1/assets/import"),
+		middleware.BodyLimit(domain.MaxImportBytes+4096))
 	strict := api.NewStrictHandlerWithOptions(h, nil, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  web.RequestError,
 		ResponseErrorHandlerFunc: web.WriteProblem,
@@ -50,6 +56,7 @@ func (h *Handler) Mount(r chi.Router, tokens *jwt.Provider) error {
 		BaseURL:    baseURL,
 		Middlewares: []api.MiddlewareFunc{
 			web.ValidateRequests(spec, baseURL),
+			upload,
 			auth.Middleware(tokens),
 		},
 		ErrorHandlerFunc: web.RequestError,

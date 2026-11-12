@@ -3,11 +3,11 @@
 `backend/internal/inventory`: asset types with typed custom attributes and tag prefixes,
 statuses, and assets (create with generated tags, view, full update, retire, restore, search,
 bulk actions), replacement, activity history, borrowing (requests, loans, returns, emails),
-Excel export and export profiles. Platform APIs: `docs/platform.md`. User-facing overview:
+Excel export and export profiles, Excel import. Platform APIs: `docs/platform.md`. User-facing overview:
 `docs/guides/inventory-model.md` and `docs/guides/borrowing.md` at the repo root.
 
 Not built yet: parent/child assets, QR redirect (`GET /a/{tag}`, `TODO(M4)` in
-`handler/redirect.go`), Excel import (`TODO(M5)` in `service/import.go`), validation of
+`handler/redirect.go`), validation of
 `location_id` and `holder_member_id` against a directory module.
 
 ## Layout
@@ -226,6 +226,7 @@ the type isn't archived and its status is of kind `available` (`domain.Borrowabl
 | `POST /asset-types`, `PATCH /asset-types/{typeID}`, `POST …/archive`, `POST …/restore`, attributes (`POST`, `PATCH`, `DELETE`, `POST …/restore`, `PUT …/attributes/order`), options (`POST`, `PATCH`, `DELETE`, `POST …/restore`, `PUT …/options/order`) | `inventory.type.manage` |
 | `POST /asset-statuses`, `PATCH /asset-statuses/{statusID}`, `POST …/archive`, `POST …/restore`, `PUT /asset-statuses/order` | `inventory.status.manage` |
 | `POST /assets/export` | `inventory.asset.read` + `inventory.asset.export` |
+| `POST /assets/import`, `GET /assets/import/template` | `inventory.asset.manage` |
 | `POST /borrow-tickets`; `GET /borrow-tickets`, `GET /borrow-tickets/{ticketID}`, `POST …/cancel` for your own tickets; `GET /borrowing/today` (the app's business day, also with `inventory.borrow.manage`); `GET /loans?mine=true` | `inventory.borrow.request` |
 | `GET /borrow-tickets` and `GET …/{ticketID}` for everyone's, `GET /borrow-tickets/summary`, `POST …/approve`, `POST …/reject`, `POST …/cancel` (approved), `POST …/hand-over`, `POST /assets/{assetID}/lend`, `POST /assets/{assetID}/return`, `GET /loans` (history filters, see Loan history; overdue first by default; `sort=started_on|return_by`, `-` for descending), `GET /borrowers?q=` | `inventory.borrow.manage` |
 | `GET`/`POST /export-profiles`, `GET /export-profiles/{profileID}` | `inventory.asset.export` |
@@ -268,6 +269,42 @@ nothing. Code: `service/bulk.go`.
 `assets_exported` (see Export); `inventory.asset_reserved`, `asset_reservation_cancelled`,
 `asset_lent`, `asset_returned` on assets and `inventory.borrow_ticket_created`, `_approved`, `_rejected`,
 `_cancelled`, `_handed_over` on the `borrow_ticket` aggregate (see Borrowing).
+
+## Import (US-06)
+
+Reads the Data export layout back. The file is uploaded raw (`application/octet-stream`, up to
+5 MB and 5000 rows; the route has its own `BodyLimit`, mounted after `ValidateRequests` because
+the validator does not read non-JSON bodies). Code: `service/import.go`, `domain/import.go`,
+`spreadsheet/reader.go` and `template.go`, `repository/import_repository.go`.
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /assets/import?mode=preview\|commit&file_name=` | Plan the file (preview writes nothing) or apply it; returns `ImportReport` |
+| `GET /assets/import/template` | `.xlsx` with one header-only sheet per active type, with drop-down lists |
+
+Permission is `inventory.asset.manage` (no new permission). Both modes plan from the file; a
+commit does not trust an earlier preview.
+
+- **Sheets:** one per asset type, named by the type code (case-insensitive). Columns: `tag`, `name`
+  (required), `description`, `status`, `purchase_date`, `attr:<key>`. A missing optional column
+  is simply not touched. File-level problems (not an `.xlsx`, too large or too many rows, unknown
+  sheet, a sheet twice, missing `tag` or `name`, unknown column) are 422 `/errors/invalid-import-file`
+  or `/errors/import-too-large` and nothing is written.
+- **Rows:** the result of each is `create`, `update`, `skip` (existing asset, nothing changes) or
+  `fail` with a message and the Excel row number. A tag that is empty gets a generated tag from
+  the type's prefix. An existing tag updates only the columns present; a blank cell keeps the
+  current value. Tag, type, retired state and the Reserved/On loan status never change. A tag
+  that exists under another type fails the row; a retired asset fails ("Restore it before
+  importing changes"); a tag twice in the file fails every row that uses it.
+- **Commit:** each row is saved in its own transaction through the same `Create`/`Replace` as the
+  forms, so rules and activity history apply. A row that changed meanwhile fails with the
+  others kept. No partial result is hidden: the report counts created, updated, skipped, failed.
+- **History:** `inventory.asset_imports` (migration `00011`). A commit first claims its file by
+  SHA-256; a unique partial index on `(file_sha256) WHERE has_creates` refuses the same file twice
+  (409 `/errors/import-already-done`, naming the earlier file and date), so double clicks and
+  re-uploads cannot create duplicates. Files that only update can be run again.
+- Cells are read raw (`RawCellValue`): dates are Excel serial numbers or text in `yyyy-mm-dd`,
+  `d/m/yyyy`, `d mmm yyyy`; booleans `TRUE`/`FALSE`/`1`/`0`/yes/no.
 
 ## Export (US-07 to US-09)
 

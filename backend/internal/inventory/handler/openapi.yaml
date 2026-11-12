@@ -504,6 +504,55 @@ paths:
               schema: { type: string, format: binary }
         default: { $ref: '#/components/responses/Problem' }
 
+  /assets/import:
+    post:
+      operationId: importAssets
+      summary: Check (mode=preview) or import (mode=commit) assets from an .xlsx file (inventory.asset.manage)
+      description: >
+        The file is the request body (application/octet-stream). One sheet per asset type, named by
+        the type code; row 1 holds the column names (tag, name, description, status, purchase_date,
+        attr:<key>), as in Export data. An empty tag creates an asset with a generated tag, a tag
+        that exists updates that asset (only the columns present; blank cells keep the current
+        value). Preview writes nothing. Commit saves each row in its own transaction; rows with a
+        problem are left out and listed. A file that creates assets can be committed once
+        (409 `/errors/import-already-done`).
+      parameters:
+        - name: mode
+          in: query
+          required: true
+          schema: { type: string, enum: [preview, commit] }
+        - name: file_name
+          in: query
+          description: The file's name, for the import history (default import.xlsx)
+          schema: { type: string, maxLength: 255 }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: What happens (or happened) to every row
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportReport' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /assets/import/template:
+    get:
+      operationId: downloadImportTemplate
+      summary: The import template as .xlsx (inventory.asset.manage)
+      responses:
+        "200":
+          description: One sheet per active asset type, header row only
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        default: { $ref: '#/components/responses/Problem' }
+
   /export-profiles:
     get:
       operationId: listExportProfiles
@@ -1789,6 +1838,46 @@ components:
           type: array
           maxItems: 200
           items: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+
+    ImportReport:
+      type: object
+      required: [file_name, committed, sheets, counts, rows]
+      properties:
+        file_name: { type: string }
+        committed: { type: boolean, description: false for a preview }
+        sheets:
+          type: array
+          items:
+            type: object
+            required: [name, type_code, rows]
+            properties:
+              name: { type: string }
+              type_code: { type: string }
+              rows: { type: integer, format: int32 }
+        counts:
+          type: object
+          required: [create, update, skip, fail]
+          properties:
+            create: { type: integer, format: int32 }
+            update: { type: integer, format: int32 }
+            skip: { type: integer, format: int32, description: Existing assets with nothing to change }
+            fail: { type: integer, format: int32 }
+        rows:
+          type: array
+          description: In file order, sheet by sheet; row is the Excel row number (row 2 is the first data row)
+          items: { $ref: '#/components/schemas/ImportRow' }
+
+    ImportRow:
+      type: object
+      required: [sheet, row, tag, name, result, message]
+      properties:
+        sheet: { type: string }
+        row: { type: integer, format: int32 }
+        tag: { type: string, description: 'As in the file (normalised); after a commit, the tag the asset has, generated ones included' }
+        name: { type: string }
+        result: { type: string, enum: [create, update, skip, fail] }
+        message: { type: string, description: What will happen, what happened, or what is wrong }
+        asset_id: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
 
     ExportRequest:
       type: object

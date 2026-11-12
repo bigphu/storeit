@@ -367,6 +367,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check (mode=preview) or import (mode=commit) assets from an .xlsx file (inventory.asset.manage)
+         * @description The file is the request body (application/octet-stream). One sheet per asset type, named by the type code; row 1 holds the column names (tag, name, description, status, purchase_date, attr:<key>), as in Export data. An empty tag creates an asset with a generated tag, a tag that exists updates that asset (only the columns present; blank cells keep the current value). Preview writes nothing. Commit saves each row in its own transaction; rows with a problem are left out and listed. A file that creates assets can be committed once (409 `/errors/import-already-done`).
+         */
+        post: operations["importAssets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assets/import/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The import template as .xlsx (inventory.asset.manage) */
+        get: operations["downloadImportTemplate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/export-profiles": {
         parameters: {
             query?: never;
@@ -1357,6 +1394,45 @@ export interface components {
             sort?: string;
             ids?: components["schemas"]["ID"][];
         };
+        ImportReport: {
+            file_name: string;
+            /** @description false for a preview */
+            committed: boolean;
+            sheets: {
+                name: string;
+                type_code: string;
+                /** Format: int32 */
+                rows: number;
+            }[];
+            counts: {
+                /** Format: int32 */
+                create: number;
+                /** Format: int32 */
+                update: number;
+                /**
+                 * Format: int32
+                 * @description Existing assets with nothing to change
+                 */
+                skip: number;
+                /** Format: int32 */
+                fail: number;
+            };
+            /** @description In file order, sheet by sheet; row is the Excel row number (row 2 is the first data row) */
+            rows: components["schemas"]["ImportRow"][];
+        };
+        ImportRow: {
+            sheet: string;
+            /** Format: int32 */
+            row: number;
+            /** @description As in the file (normalised); after a commit, the tag the asset has, generated ones included */
+            tag: string;
+            name: string;
+            /** @enum {string} */
+            result: "create" | "update" | "skip" | "fail";
+            /** @description What will happen */
+            message: string;
+            asset_id?: components["schemas"]["ID"];
+        };
         ExportRequest: {
             /** @enum {string} */
             mode: "data" | "report";
@@ -2114,6 +2190,57 @@ export interface operations {
                     "Content-Disposition"?: string;
                     /** @description Attribute keys in the layout that no exported type has, comma-separated */
                     "X-Export-Skipped-Columns"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    importAssets: {
+        parameters: {
+            query: {
+                mode: "preview" | "commit";
+                /** @description The file's name, for the import history (default import.xlsx) */
+                file_name?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description What happens (or happened) to every row */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportReport"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    downloadImportTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One sheet per active asset type, header row only */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
                     [name: string]: unknown;
                 };
                 content: {

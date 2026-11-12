@@ -22,6 +22,7 @@ describe('routes', () => {
   it('keeps app pages private and names them', () => {
     expect(isPublic('/assets')).toBe(false)
     expect(router.resolve('/assets/123/edit').name).toBe('asset-edit')
+    expect(router.resolve('/assets/import').name).toBe('asset-import')
     expect(router.resolve('/accounts/abc').name).toBe('account')
     expect(router.resolve('/nope/at/all').name).toBe('not-found')
     expect(isPublic('/nope/at/all')).toBe(false)

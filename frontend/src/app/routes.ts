@@ -66,6 +66,12 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: 'New asset', icon: 'pi pi-plus', perm: Perm.AssetManage },
       },
       {
+        path: 'assets/import',
+        name: 'asset-import',
+        component: () => import('@/features/assets/import/ImportPage.vue'),
+        meta: { title: 'Import assets', icon: 'pi pi-upload', perm: Perm.AssetManage },
+      },
+      {
         path: 'assets/:id',
         name: 'asset',
         component: () => import('@/features/assets/pages/AssetDetailPage.vue'),

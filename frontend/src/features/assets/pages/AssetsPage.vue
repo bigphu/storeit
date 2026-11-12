@@ -478,6 +478,16 @@ watch(rows, (list) => {
           severity="secondary"
           outlined
         />
+        <Button
+          v-if="canManage"
+          as="router-link"
+          to="/assets/import"
+          label="Import"
+          style="text-decoration: none"
+          icon="pi pi-upload"
+          severity="secondary"
+          outlined
+        />
         <Button v-if="canManage" as="router-link" :to="newPath" style="text-decoration: none" :aria-label="`${newLabel} (N)`">
           <i class="pi pi-plus" aria-hidden="true" />
           <span>{{ newLabel }}</span>
