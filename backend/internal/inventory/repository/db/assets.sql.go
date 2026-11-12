@@ -566,6 +566,46 @@ func (q *Queries) ListAssets(ctx context.Context, arg ListAssetsParams) ([]ListA
 	return items, nil
 }
 
+const listAssetsByTags = `-- name: ListAssetsByTags :many
+SELECT id, tag, name, description, asset_type_id, status_id, location_id, holder_member_id, purchase_date, retired_at, retired_reason, version, created_at, updated_at FROM inventory.assets WHERE tag = ANY($1::text[])
+`
+
+// Tài sản theo tag (import tìm tài sản đã có); tag đã viết hoa
+func (q *Queries) ListAssetsByTags(ctx context.Context, tags []string) ([]InventoryAsset, error) {
+	rows, err := q.db.Query(ctx, listAssetsByTags, tags)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InventoryAsset{}
+	for rows.Next() {
+		var i InventoryAsset
+		if err := rows.Scan(
+			&i.ID,
+			&i.Tag,
+			&i.Name,
+			&i.Description,
+			&i.AssetTypeID,
+			&i.StatusID,
+			&i.LocationID,
+			&i.HolderMemberID,
+			&i.PurchaseDate,
+			&i.RetiredAt,
+			&i.RetiredReason,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listValuesForAssets = `-- name: ListValuesForAssets :many
 SELECT asset_id, attribute_id, data_type, value_text, coalesce(value_number::text, '')::text AS value_number,
        value_date, value_bool, value_option_id

@@ -68,7 +68,12 @@ var (
 
 	ErrInvalidExportLayout = errs.Unprocessable("/errors/invalid-export-layout", "Invalid export layout")
 	ErrExportTooLarge      = errs.Unprocessable("/errors/export-too-large", "Too many rows to export")
-	ErrInvalidTimeZone     = errs.Unprocessable("/errors/invalid-time-zone", "Unknown time zone",
+	ErrImportTooLarge      = errs.Unprocessable("/errors/import-too-large", "The file is too large to import")
+	// ErrInvalidImportFile: lỗi cấp file (không đọc được, sheet hay cột sai); mỗi lỗi một FieldError
+	// với Field là "sheet" hay "SHEET!cột" và Detail là điều cần sửa
+	ErrInvalidImportFile = errs.Unprocessable("/errors/invalid-import-file", "The file doesn't match the import template")
+	ErrImportAlreadyDone = errs.Conflict("/errors/import-already-done", "This file was already imported")
+	ErrInvalidTimeZone   = errs.Unprocessable("/errors/invalid-time-zone", "Unknown time zone",
 		errs.WithFields(errs.FieldError{Field: "tz", Detail: "must be an IANA time zone name such as Asia/Ho_Chi_Minh"}))
 	ErrInvalidExportIDs = errs.Unprocessable("/errors/invalid-export-selection", "Invalid selection",
 		errs.WithDetail("Choose between 1 and 200 assets to export."),

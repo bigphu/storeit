@@ -62,6 +62,7 @@ func New(d Deps) (*Module, error) {
 		Events:   assets,
 
 		Profiles:      repository.NewExportProfileRepository(d.Pool, d.Outbox),
+		Imports:       repository.NewImportRepository(d.Pool),
 		Accounts:      d.Accounts,
 		ExportMaxRows: d.Config.ExportMaxRows,
 

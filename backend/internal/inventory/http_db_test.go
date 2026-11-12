@@ -72,6 +72,7 @@ func newAppClock(t *testing.T, maxRows int, now func() time.Time) *app {
 		Events:   assets,
 
 		Profiles:      repository.NewExportProfileRepository(pool, outbox),
+		Imports:       repository.NewImportRepository(pool),
 		Accounts:      stubAccounts{names: names},
 		ExportMaxRows: maxRows,
 		Now:           now,

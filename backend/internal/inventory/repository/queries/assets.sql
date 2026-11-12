@@ -17,6 +17,10 @@ FROM t
 LEFT JOIN inventory.assets a ON a.tag ~ ('^' || t.tag_prefix || '-[0-9]{1,9}$')
 GROUP BY t.tag_prefix;
 
+-- Tài sản theo tag (import tìm tài sản đã có); tag đã viết hoa
+-- name: ListAssetsByTags :many
+SELECT * FROM inventory.assets WHERE tag = ANY(@tags::text[]);
+
 -- name: GetAsset :one
 SELECT * FROM inventory.assets WHERE id = @id;
 

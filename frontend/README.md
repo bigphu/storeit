@@ -206,3 +206,12 @@ Selection styling lives in `app/theme.ts` (token preset over Aura) and `app/base
 - The preview formatting must match `backend/internal/inventory/spreadsheet/format.go`,
   or the preview and the downloaded file will differ.
 - The Exports page (`src/features/export-profiles/`) lists saved report layouts.
+
+## Excel import
+
+- `src/features/assets/import/`: `ImportPage.vue` (route `/assets/import`, permission
+  `inventory.asset.manage`; Upload, Review, Done), `api` (raw file upload, preview and commit,
+  template download) and `format` (result filter, summary text, CSV of failed rows).
+- The page keeps the chosen file in memory; Import sends the same file again with `mode=commit`
+  and the server plans it again. Rules are in `backend/docs/inventory.md`.
+- The Import button sits next to New asset on the assets list.

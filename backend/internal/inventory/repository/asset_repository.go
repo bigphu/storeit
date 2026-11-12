@@ -78,6 +78,39 @@ func (r *AssetRepository) Get(ctx context.Context, id uuid.UUID) (domain.Asset, 
 	return loadAsset(ctx, r.q, id)
 }
 
+// ByTags: tài sản theo tag, kèm giá trị thuộc tính, trong hai truy vấn (không một truy vấn mỗi tài sản)
+func (r *AssetRepository) ByTags(ctx context.Context, tags []string) ([]domain.Asset, error) {
+	if len(tags) == 0 {
+		return nil, nil
+	}
+	rows, err := r.q.ListAssetsByTags(ctx, tags)
+	if err != nil {
+		return nil, fmt.Errorf("inventory: list assets by tags: %w", err)
+	}
+	out := make([]domain.Asset, len(rows))
+	at := make(map[uuid.UUID]int, len(rows))
+	ids := make([]uuid.UUID, len(rows))
+	for i, row := range rows {
+		out[i] = toAsset(row)
+		at[row.ID], ids[i] = i, row.ID
+	}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	values, err := r.q.ListValuesForAssets(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("inventory: list values: %w", err)
+	}
+	for _, v := range values {
+		i := at[v.AssetID]
+		out[i].Values = append(out[i].Values, toValue(db.ListAssetValuesRow{
+			AttributeID: v.AttributeID, DataType: v.DataType, ValueText: v.ValueText, ValueNumber: v.ValueNumber,
+			ValueDate: v.ValueDate, ValueBool: v.ValueBool, ValueOptionID: v.ValueOptionID,
+		}))
+	}
+	return out, nil
+}
+
 func (r *AssetRepository) List(ctx context.Context, f domain.AssetFilter) ([]domain.AssetListItem, int64, error) {
 	items, err := r.page(ctx, r.q, f)
 	if err != nil {

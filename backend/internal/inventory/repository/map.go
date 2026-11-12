@@ -40,6 +40,7 @@ var uniqueErrors = map[string]error{
 	"assets_tag_key":                      domain.ErrTagTaken,
 	"asset_types_code_key":                domain.ErrTypeCodeTaken,
 	"asset_types_tag_prefix_key":          domain.ErrTagPrefixTaken,
+	"asset_imports_file_with_creates":     domain.ErrImportAlreadyDone,
 	"asset_types_name_lower":              domain.ErrTypeNameTaken,
 	"asset_type_attributes_key_key":       domain.ErrAttributeKeyTaken,
 	"asset_type_attributes_label_lower":   domain.ErrAttributeLabelTaken,

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -354,6 +355,7 @@ func (f *fakeStatuses) archive(id uuid.UUID) {
 }
 
 type fakeAssets struct {
+	replaceErr error // nếu có, Replace trả lỗi này (test lỗi giữa chừng)
 	mu         sync.Mutex
 	assets     map[uuid.UUID]domain.Asset
 	lastFilter domain.AssetFilter // bộ lọc List nhận gần nhất
@@ -365,6 +367,9 @@ func newFakeAssets() *fakeAssets { return &fakeAssets{assets: map[uuid.UUID]doma
 func (f *fakeAssets) Create(_ context.Context, tag string, in domain.AssetFields) (domain.Asset, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if tag == "" { // như repository thật: tag trống thì kho tự sinh
+		tag = fmt.Sprintf("AUTO-%04d", len(f.assets)+1)
+	}
 	for _, a := range f.assets {
 		if a.Tag == tag {
 			return domain.Asset{}, domain.ErrTagTaken
@@ -379,6 +384,51 @@ func apply(a domain.Asset, in domain.AssetFields) domain.Asset {
 	a.Name, a.Description, a.TypeID, a.StatusID = in.Name, in.Description, in.TypeID, in.StatusID
 	a.LocationID, a.HolderMemberID, a.PurchaseDate, a.Values = in.LocationID, in.HolderMemberID, in.PurchaseDate, in.Values
 	return a
+}
+
+func (f *fakeAssets) ByTags(_ context.Context, tags []string) ([]domain.Asset, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []domain.Asset
+	for _, a := range f.assets {
+		if slices.Contains(tags, a.Tag) {
+			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+
+// fakeImports: lịch sử import trong bộ nhớ; chặn file có dòng tạo mới đã giữ chỗ như chỉ mục duy nhất
+type fakeImports struct {
+	mu      sync.Mutex
+	claimed map[string]bool
+	records []domain.ImportRecord
+	counts  map[uuid.UUID]domain.ImportCounts
+}
+
+func newFakeImports() *fakeImports {
+	return &fakeImports{claimed: map[string]bool{}, counts: map[uuid.UUID]domain.ImportCounts{}}
+}
+
+func (f *fakeImports) Claim(_ context.Context, rec domain.ImportRecord) (uuid.UUID, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if rec.HasCreates && f.claimed[rec.SHA256] {
+		return uuid.Nil, domain.ErrImportAlreadyDone
+	}
+	if rec.HasCreates {
+		f.claimed[rec.SHA256] = true
+	}
+	rec.ID = uuid.New()
+	f.records = append(f.records, rec)
+	return rec.ID, nil
+}
+
+func (f *fakeImports) Finish(_ context.Context, id uuid.UUID, c domain.ImportCounts) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.counts[id] = c
+	return nil
 }
 
 func (f *fakeAssets) RecordReplacement(context.Context, uuid.UUID, uuid.UUID, time.Time, string, uuid.UUID, int32) (domain.Asset, error) {
@@ -446,6 +496,9 @@ func (f *fakeAssets) List(_ context.Context, filter domain.AssetFilter) ([]domai
 func (f *fakeAssets) Replace(_ context.Context, id uuid.UUID, in domain.AssetFields, version int32) (domain.Asset, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.replaceErr != nil {
+		return domain.Asset{}, f.replaceErr
+	}
 	a, ok := f.assets[id]
 	if !ok {
 		return domain.Asset{}, domain.ErrAssetNotFound

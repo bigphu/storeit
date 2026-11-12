@@ -15,6 +15,9 @@ type Querier interface {
 	ArchiveStatus(ctx context.Context, id uuid.UUID) (InventoryAssetStatus, error)
 	AttributeHasValues(ctx context.Context, attributeID uuid.UUID) (bool, error)
 	CancelBorrowTicket(ctx context.Context, arg CancelBorrowTicketParams) (InventoryBorrowTicket, error)
+	// Đặt chỗ cho một lần import trước khi xử lý dòng nào. Chỉ mục duy nhất (file_sha256) WHERE
+	// has_creates làm lần thứ hai của cùng file có dòng tạo mới bị từ chối (23505)
+	ClaimImport(ctx context.Context, arg ClaimImportParams) error
 	// Chuyển cờ mặc định: bỏ cờ của kind trước, rồi đặt cho status mới (cùng tx)
 	ClearDefaultStatus(ctx context.Context, kind string) error
 	// Số tài sản chưa retire của mỗi loại, tách theo kind của status (sidebar, trang loại)
@@ -36,6 +39,7 @@ type Querier interface {
 	// Xoá mềm
 	DeleteExportProfile(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteReplacement(ctx context.Context, oldAssetID uuid.UUID) error
+	FinishImport(ctx context.Context, arg FinishImportParams) error
 	GetActiveLoanForAsset(ctx context.Context, assetID uuid.UUID) (GetActiveLoanForAssetRow, error)
 	GetActiveLoanForUpdate(ctx context.Context, assetID uuid.UUID) (InventoryLoan, error)
 	// Phiếu đang giữ chỗ tài sản (nhiều nhất một)
@@ -48,6 +52,8 @@ type Querier interface {
 	GetAttributeForUpdate(ctx context.Context, arg GetAttributeForUpdateParams) (InventoryAssetTypeAttribute, error)
 	GetBorrowTicket(ctx context.Context, id uuid.UUID) (InventoryBorrowTicket, error)
 	GetBorrowTicketForUpdate(ctx context.Context, id uuid.UUID) (InventoryBorrowTicket, error)
+	// Lần import có dòng tạo mới đã giữ chỗ cho file này (để báo ngày giờ và người làm)
+	GetCreatingImportBySHA(ctx context.Context, fileSha256 string) (InventoryAssetImport, error)
 	GetDefaultStatus(ctx context.Context, kind string) (InventoryAssetStatus, error)
 	GetExportProfile(ctx context.Context, id uuid.UUID) (InventoryExportProfile, error)
 	// Kể cả profile đã xoá (khôi phục, kiểm tra quyền khôi phục)
@@ -79,6 +85,8 @@ type Querier interface {
 	ListAssetValues(ctx context.Context, assetID uuid.UUID) ([]ListAssetValuesRow, error)
 	// giá trị của thuộc tính để sắp (sort_attr NULL thì không khớp dòng nào)
 	ListAssets(ctx context.Context, arg ListAssetsParams) ([]ListAssetsRow, error)
+	// Tài sản theo tag (import tìm tài sản đã có); tag đã viết hoa
+	ListAssetsByTags(ctx context.Context, tags []string) ([]InventoryAsset, error)
 	// Mọi thuộc tính của loại, kể cả đã gỡ, theo thứ tự hiển thị
 	ListAttributes(ctx context.Context, assetTypeID uuid.UUID) ([]InventoryAssetTypeAttribute, error)
 	// Lọc: trạng thái (rỗng là mọi trạng thái), người gửi (nil là mọi người), từ khoá (service

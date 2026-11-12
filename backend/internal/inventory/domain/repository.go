@@ -184,6 +184,9 @@ type AssetRepository interface {
 	Create(ctx context.Context, tag string, f AssetFields) (Asset, error)
 	// Get: kèm giá trị thuộc tính; ErrAssetNotFound
 	Get(ctx context.Context, id uuid.UUID) (Asset, error)
+	// ByTags: tài sản có tag trong danh sách (tag đã chuẩn hoá), kèm giá trị thuộc tính; tag không
+	// có thì vắng trong kết quả. Kể cả tài sản đã retire (tag là duy nhất trên mọi tài sản)
+	ByTags(ctx context.Context, tags []string) ([]Asset, error)
 	// RecordReplacement: oldID được thay bằng newID, cũ retire (ErrAssetRetired, ErrAssetChanged,
 	// ErrInvalidReplacement); event asset_replaced, asset_replaces
 	RecordReplacement(ctx context.Context, oldID, newID uuid.UUID, replacedOn time.Time, reason string, retiredStatus uuid.UUID, version int32) (Asset, error)
