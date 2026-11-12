@@ -2789,8 +2789,8 @@ export interface operations {
                 /** @description Only the caller's own loans */
                 mine?: boolean;
                 sort?: "started_on" | "-started_on" | "return_by" | "-return_by" | "returned_on" | "-returned_on";
-                /** @description active (default, not returned yet), returned, or all */
-                state?: "active" | "returned" | "all";
+                /** @description active (default, not returned yet), overdue (not returned, return_by before today), returned, returned_late (returned after return_by), or all */
+                state?: "active" | "overdue" | "returned" | "returned_late" | "all";
                 /** @description Period start; a loan matches when it was out at any point in [from, to] */
                 from?: string;
                 to?: string;
@@ -2798,6 +2798,8 @@ export interface operations {
                 q?: string;
                 /** @description One asset's loans (inventory.borrow.manage) */
                 asset_id?: components["schemas"]["ID"];
+                /** @description Only loans of assets of this type; an unknown type gives an empty page */
+                type_id?: components["schemas"]["ID"];
                 page?: components["parameters"]["Page"];
                 page_size?: components["parameters"]["PageSize"];
             };
@@ -2807,7 +2809,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description One page of active loans */
+            /** @description One page of loans */
             200: {
                 headers: {
                     [name: string]: unknown;

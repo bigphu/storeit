@@ -101,14 +101,16 @@ type Loan struct {
 	CreatedAt    time.Time
 }
 
-// LoanFilter: danh sách khoản mượn (US-12). State "active" (mặc định), "returned", "all"; From/To
-// là kỳ (khoản ở ngoài lúc nào đó trong kỳ); Q khớp tag/tên tài sản hay một trong MatchBorrowers
-// (service tìm người theo Q)
+// LoanFilter: danh sách khoản mượn (US-12, US-20). State "active" (mặc định), "overdue" (chưa trả,
+// quá hạn), "returned", "returned_late" (trả sau hạn), "all", khớp nhãn trên dòng; From/To là kỳ
+// (khoản ở ngoài lúc nào đó trong kỳ); TypeID là loại của tài sản; Q khớp tag/tên tài sản hay một
+// trong MatchBorrowers (service tìm người theo Q)
 type LoanFilter struct {
 	State          string
 	From, To       *time.Time
 	BorrowerID     *uuid.UUID
 	AssetID        *uuid.UUID
+	TypeID         *uuid.UUID
 	Q              string
 	MatchBorrowers []uuid.UUID
 	Sort           string

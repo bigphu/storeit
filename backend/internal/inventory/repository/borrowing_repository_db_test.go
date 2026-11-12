@@ -488,16 +488,34 @@ func TestBorrowing_ActiveLoansOfBorrower(t *testing.T) {
 // pastLoan: khoản mượn bắt đầu start, đã trả ngày back
 func pastLoan(t *testing.T, r repos, borrower uuid.UUID, start, back string) (domain.Asset, domain.Loan) {
 	t.Helper()
-	d := func(s string) time.Time { v, _ := time.Parse(time.DateOnly, s); return v }
+	return loanAt(t, r, borrower, start, "", back)
+}
+
+// loanAt: khoản mượn bắt đầu start; returnBy rỗng là không có hạn, back rỗng là chưa trả. Mỗi khoản
+// lấy một loại mới nên lọc theo loại tách được từng khoản
+func loanAt(t *testing.T, r repos, borrower uuid.UUID, start, returnBy, back string) (domain.Asset, domain.Loan) {
+	t.Helper()
+	d := func(s string) *time.Time {
+		if s == "" {
+			return nil
+		}
+		v, err := time.Parse(time.DateOnly, s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &v
+	}
 	ty := borrowType(t, r, true)
 	a := borrowAsset(t, r, ty.ID, domain.AvailableStatusID)
-	l, err := r.borrowing.Lend(actorCtx(), a.ID, borrower, d(start), nil, a.Version)
+	l, err := r.borrowing.Lend(actorCtx(), a.ID, borrower, *d(start), d(returnBy), a.Version)
 	if err != nil {
 		t.Fatal(err)
 	}
 	a = getAsset(t, r, a.ID)
-	if _, err := r.borrowing.Return(actorCtx(), a.ID, domain.LoanReturn{ReturnedOn: d(back), StatusID: domain.AvailableStatusID}, a.Version); err != nil {
-		t.Fatal(err)
+	if back != "" {
+		if _, err := r.borrowing.Return(actorCtx(), a.ID, domain.LoanReturn{ReturnedOn: *d(back), StatusID: domain.AvailableStatusID}, a.Version); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return a, l
 }
@@ -534,6 +552,59 @@ func TestBorrowing_ListLoansPeriod(t *testing.T) {
 	}
 	if got := loanSet(t, r, domain.LoanFilter{State: "active", BorrowerID: &who}); len(got) != 0 {
 		t.Errorf("active = %d loans, want 0", len(got))
+	}
+}
+
+// Trạng thái khớp nhãn của dòng: quá hạn cần hạn trả trước hôm nay, trả muộn cần trả sau hạn
+func TestBorrowing_ListLoansStatus(t *testing.T) {
+	r := newRepos(t)
+	who := uuid.New()
+	_, overdue := loanAt(t, r, who, "2026-10-01", "2026-10-20", "")
+	_, dueToday := loanAt(t, r, who, "2026-10-01", "2026-10-30", "")
+	_, noDue := loanAt(t, r, who, "2026-10-01", "", "")
+	_, late := loanAt(t, r, who, "2026-10-01", "2026-10-10", "2026-10-12")
+	_, sameDay := loanAt(t, r, who, "2026-10-01", "2026-10-10", "2026-10-10")
+	_, noDueBack := loanAt(t, r, who, "2026-10-01", "", "2026-10-12")
+	want := map[string][]domain.Loan{
+		"overdue":       {overdue},
+		"active":        {overdue, dueToday, noDue},
+		"returned_late": {late},
+		"returned":      {late, sameDay, noDueBack},
+		"all":           {overdue, dueToday, noDue, late, sameDay, noDueBack},
+	}
+	for state, loans := range want {
+		got := loanSet(t, r, domain.LoanFilter{State: state, BorrowerID: &who})
+		if len(got) != len(loans) {
+			t.Errorf("%s: %d loans, want %d", state, len(got), len(loans))
+		}
+		for _, l := range loans {
+			if !got[l.ID] {
+				t.Errorf("%s: missing loan %s", state, l.ID)
+			}
+		}
+	}
+}
+
+// Loại kết hợp AND với trạng thái; total khớp trang; loại không có khoản nào cho trang rỗng, không lỗi
+func TestBorrowing_ListLoansType(t *testing.T) {
+	r := newRepos(t)
+	ctx := context.Background()
+	who := uuid.New()
+	a, la := pastLoan(t, r, who, "2026-10-01", "2026-10-05")
+	pastLoan(t, r, who, "2026-10-01", "2026-10-05")
+	f := domain.LoanFilter{State: "all", BorrowerID: &who, TypeID: &a.TypeID, Page: 1, PageSize: 50}
+	loans, total, err := r.borrowing.ListLoans(ctx, borrowToday, f)
+	if err != nil || total != 1 || len(loans) != 1 || loans[0].ID != la.ID {
+		t.Errorf("type filter = %+v (total %d, %v), want only a", loans, total, err)
+	}
+	f.State = "active"
+	if _, total, err := r.borrowing.ListLoans(ctx, borrowToday, f); err != nil || total != 0 {
+		t.Errorf("type AND state: total %d, %v; want 0", total, err)
+	}
+	none := uuid.New()
+	f.State, f.TypeID = "all", &none
+	if loans, total, err := r.borrowing.ListLoans(ctx, borrowToday, f); err != nil || total != 0 || len(loans) != 0 {
+		t.Errorf("unknown type = %+v (total %d, %v), want an empty page", loans, total, err)
 	}
 }
 

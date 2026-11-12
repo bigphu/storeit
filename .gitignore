@@ -29,3 +29,6 @@ desktop.ini
 docs/StoreIT-*.md
 backend/docs/*.pdf
 backend/docs/tasks/
+
+# Bằng chứng từng task (ảnh chụp, log test): giữ trên máy, không đưa vào repo
+/evidence/

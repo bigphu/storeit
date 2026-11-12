@@ -86,8 +86,9 @@ type Querier interface {
 	ListBorrowTickets(ctx context.Context, arg ListBorrowTicketsParams) ([]InventoryBorrowTicket, error)
 	// Của mình và mọi profile được chia sẻ
 	ListExportProfiles(ctx context.Context, ownerID uuid.UUID) ([]InventoryExportProfile, error)
-	// Khoản mượn theo trạng thái (active: chưa trả, returned, all), người mượn, tài sản, kỳ và từ
-	// khoá (tag/tên tài sản, hay người mượn service đã tìm). Sắp theo cột sort nếu có; không thì quá
+	// Khoản mượn theo trạng thái (active: chưa trả, overdue: chưa trả và quá hạn, returned, returned_late:
+	// trả sau hạn, all), người mượn, tài sản, loại tài sản, kỳ và từ khoá (tag/tên tài sản, hay người mượn
+	// service đã tìm). Sắp theo cột sort nếu có; không thì quá
 	// hạn trước (hạn sớm nhất trước), rồi theo hạn, rồi mới bắt đầu trước
 	ListLoans(ctx context.Context, arg ListLoansParams) ([]ListLoansRow, error)
 	ListOptionsForType(ctx context.Context, assetTypeID uuid.UUID) ([]InventoryAssetAttributeOption, error)

@@ -122,7 +122,7 @@ func (h *Handler) ListLoans(ctx context.Context, req api.ListLoansRequestObject)
 	page, size := paging(req.Params.Page, req.Params.PageSize)
 	loans, total, err := h.svc.ListLoans(ctx, service.LoanQuery{
 		Mine: deref(req.Params.Mine), State: string(deref(req.Params.State)), From: fromAPIDate(req.Params.From),
-		To: fromAPIDate(req.Params.To), AssetID: req.Params.AssetId, Q: deref(req.Params.Q),
+		To: fromAPIDate(req.Params.To), AssetID: req.Params.AssetId, TypeID: req.Params.TypeId, Q: deref(req.Params.Q),
 		Sort: string(deref(req.Params.Sort)), Page: page, PageSize: size,
 	})
 	if err != nil {

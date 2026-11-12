@@ -100,17 +100,25 @@ FROM inventory.loans l
 LEFT JOIN inventory.borrow_tickets t ON t.id = l.ticket_id
 WHERE l.asset_id = @asset_id AND l.returned_on IS NULL;
 
--- Khoản mượn theo trạng thái (active: chưa trả, returned, all), người mượn, tài sản, kỳ và từ
--- khoá (tag/tên tài sản, hay người mượn service đã tìm). Sắp theo cột sort nếu có; không thì quá
+-- Khoản mượn theo trạng thái (active: chưa trả, overdue: chưa trả và quá hạn, returned, returned_late:
+-- trả sau hạn, all), người mượn, tài sản, loại tài sản, kỳ và từ khoá (tag/tên tài sản, hay người mượn
+-- service đã tìm). Sắp theo cột sort nếu có; không thì quá
 -- hạn trước (hạn sớm nhất trước), rồi theo hạn, rồi mới bắt đầu trước
 -- name: ListLoans :many
 SELECT l.*, coalesce(t.number, 0)::bigint AS ticket_number
 FROM inventory.loans l
 JOIN inventory.assets a ON a.id = l.asset_id
 LEFT JOIN inventory.borrow_tickets t ON t.id = l.ticket_id
-WHERE (@state::text = 'all' OR (@state::text = 'active') = (l.returned_on IS NULL))
+WHERE (@state::text = 'all'
+       OR (@state::text = 'active' AND l.returned_on IS NULL)
+       OR (@state::text = 'returned' AND l.returned_on IS NOT NULL)
+       -- quá hạn: chưa trả và hạn trả trước hôm nay (không có hạn thì không bao giờ quá hạn)
+       OR (@state::text = 'overdue' AND l.returned_on IS NULL AND l.return_by < @today::date)
+       -- trả muộn: trả sau hạn (trả đúng ngày hạn hay không có hạn thì không muộn)
+       OR (@state::text = 'returned_late' AND l.returned_on > l.return_by))
   AND (sqlc.narg('borrower_id')::uuid IS NULL OR l.borrower_id = sqlc.narg('borrower_id')::uuid)
   AND (sqlc.narg('asset_id')::uuid IS NULL OR l.asset_id = sqlc.narg('asset_id')::uuid)
+  AND (sqlc.narg('type_id')::uuid IS NULL OR a.asset_type_id = sqlc.narg('type_id')::uuid)
   -- kỳ [from, to]: khoản ở ngoài lúc nào đó trong kỳ (bắt đầu không sau to, chưa trả trước from)
   AND (sqlc.narg('to_day')::date IS NULL OR l.started_on <= sqlc.narg('to_day')::date)
   AND (sqlc.narg('from_day')::date IS NULL OR l.returned_on IS NULL OR l.returned_on >= sqlc.narg('from_day')::date)
@@ -129,9 +137,16 @@ LIMIT @lim OFFSET @off;
 SELECT count(*)
 FROM inventory.loans l
 JOIN inventory.assets a ON a.id = l.asset_id
-WHERE (@state::text = 'all' OR (@state::text = 'active') = (l.returned_on IS NULL))
+WHERE (@state::text = 'all'
+       OR (@state::text = 'active' AND l.returned_on IS NULL)
+       OR (@state::text = 'returned' AND l.returned_on IS NOT NULL)
+       -- quá hạn: chưa trả và hạn trả trước hôm nay (không có hạn thì không bao giờ quá hạn)
+       OR (@state::text = 'overdue' AND l.returned_on IS NULL AND l.return_by < @today::date)
+       -- trả muộn: trả sau hạn (trả đúng ngày hạn hay không có hạn thì không muộn)
+       OR (@state::text = 'returned_late' AND l.returned_on > l.return_by))
   AND (sqlc.narg('borrower_id')::uuid IS NULL OR l.borrower_id = sqlc.narg('borrower_id')::uuid)
   AND (sqlc.narg('asset_id')::uuid IS NULL OR l.asset_id = sqlc.narg('asset_id')::uuid)
+  AND (sqlc.narg('type_id')::uuid IS NULL OR a.asset_type_id = sqlc.narg('type_id')::uuid)
   -- kỳ [from, to]: khoản ở ngoài lúc nào đó trong kỳ (bắt đầu không sau to, chưa trả trước from)
   AND (sqlc.narg('to_day')::date IS NULL OR l.started_on <= sqlc.narg('to_day')::date)
   AND (sqlc.narg('from_day')::date IS NULL OR l.returned_on IS NULL OR l.returned_on >= sqlc.narg('from_day')::date)

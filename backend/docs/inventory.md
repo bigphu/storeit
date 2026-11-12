@@ -172,13 +172,18 @@ the type isn't archived and its status is of kind `available` (`domain.Borrowabl
   starts on the business day in `INVENTORY_TIME_ZONE` (default Asia/Ho_Chi_Minh). Hand-over
   refuses a disabled requester (422 field `requester`). `GET /loans?mine=true` lists the
   caller's own loans.
-- **Loan history** (US-12, `GET /loans`): `state` = `active` (default) | `returned` | `all`;
-  `from`/`to` keep loans that were out at any point in the period (`started_on <= to` and not
-  returned before `from`; `from > to` → 422 field `from`); `q` matches asset tag or name, or
-  the borrower (identity search, up to 1000 people); `asset_id` for one asset;
-  `sort` also takes `returned_on`. Default order: active → overdue first, otherwise newest
-  first. Loans carry `returned_on` and `return_note`. Everything except `mine=true` without
-  `asset_id` needs `borrow.manage`.
+- **Loan history** (US-12 and US-20, `GET /loans`): `state` = `active` (default, not returned) |
+  `overdue` (not returned and `return_by` before today; no due date is never overdue, due today is
+  not overdue) | `returned` | `returned_late` (`returned_on` after `return_by`; same day or no due
+  date is not late) | `all`, the same words as the tags on a row. `from`/`to` keep loans that were
+  out at any point in the period (`started_on <= to` and not returned before `from`; `from > to` →
+  422 field `from`); `q` matches asset tag or name, or the borrower (identity search, up to 1000
+  people); `type_id` keeps loans of assets of that type (an unknown type is an empty page, not an
+  error); `asset_id` for one asset; `sort` also takes `returned_on`. Filters combine with AND, and
+  `total` counts the same set as the page. Default order: `active` and `overdue` → overdue first, then
+  by due date; every other state newest first. Loans carry `returned_on` and `return_note`. Everything
+  except `mine=true` without `asset_id` needs `borrow.manage`; `mine=true` takes the same filters and
+  stays limited to the caller's own loans.
 - **Returns** (US-11, `POST /assets/{id}/return {returned_on, status_id?, note?, version}`,
   `borrow.manage` only): closes the asset's active loan (`returned_on`, `returned_by`,
   `return_note`; the loan is kept) and moves the asset to `status_id` (omitted: the default

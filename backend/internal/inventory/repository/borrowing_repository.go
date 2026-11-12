@@ -439,8 +439,8 @@ func (r *BorrowingRepository) ListLoans(ctx context.Context, today time.Time, f 
 		state = "active"
 	}
 	sort := f.Sort
-	if sort == "" && state != "active" {
-		sort = "-started_on" // lịch sử: mới nhất trước
+	if sort == "" && state != "active" && state != "overdue" {
+		sort = "-started_on" // lịch sử: mới nhất trước; đang mượn và quá hạn giữ thứ tự quá hạn trước
 	}
 	q := strings.TrimSpace(f.Q)
 	borrowers := f.MatchBorrowers
@@ -449,7 +449,7 @@ func (r *BorrowingRepository) ListLoans(ctx context.Context, today time.Time, f 
 	}
 	like := "%" + likeEscaper.Replace(q) + "%"
 	rows, err := r.q.ListLoans(ctx, db.ListLoansParams{
-		State: state, BorrowerID: f.BorrowerID, AssetID: f.AssetID, FromDay: toPgDate(f.From), ToDay: toPgDate(f.To),
+		State: state, BorrowerID: f.BorrowerID, AssetID: f.AssetID, TypeID: f.TypeID, FromDay: toPgDate(f.From), ToDay: toPgDate(f.To),
 		HasQ: q != "", QLike: like, QBorrowers: borrowers, Sort: sort, Today: toPgDate(&today),
 		Off: int32((page - 1) * size), Lim: int32(size),
 	})
@@ -457,8 +457,8 @@ func (r *BorrowingRepository) ListLoans(ctx context.Context, today time.Time, f 
 		return nil, 0, fmt.Errorf("inventory: list loans: %w", err)
 	}
 	total, err := r.q.CountLoans(ctx, db.CountLoansParams{
-		State: state, BorrowerID: f.BorrowerID, AssetID: f.AssetID, FromDay: toPgDate(f.From), ToDay: toPgDate(f.To),
-		HasQ: q != "", QLike: like, QBorrowers: borrowers,
+		State: state, BorrowerID: f.BorrowerID, AssetID: f.AssetID, TypeID: f.TypeID, FromDay: toPgDate(f.From), ToDay: toPgDate(f.To),
+		HasQ: q != "", QLike: like, QBorrowers: borrowers, Today: toPgDate(&today),
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("inventory: count loans: %w", err)

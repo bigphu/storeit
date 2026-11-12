@@ -51,7 +51,7 @@ const items = computed<MenuItem[]>(() => [
   ...recent.value.map((p) => ({
     label: p.name,
     icon: 'pi pi-bolt',
-    meta: p.owner.id === session.me?.account.id ? 'Mine' : p.shared ? 'Shared' : '',
+    meta: p.owner.id === session.me?.account.id ? 'Mine' : p.owner.name,
     disabled: running.value,
     command: () => run({ mode: 'report', filters: props.scope.filters, profile_id: p.id }, `${p.name}.xlsx`, { rows: props.scope.count }),
   })),

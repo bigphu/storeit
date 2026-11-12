@@ -22,72 +22,36 @@ import { formatDate, fromDateString, toDateString } from '@/lib/dates'
 import { openLocation } from '@/lib/navigation'
 import { PAGE_SIZES, usePageSize } from '@/lib/preferences'
 import { useKeepScrollOnPage, useListTable, useRowMenu } from '@/lib/tableRows'
-import { queryInt, queryString, useUrlState } from '@/lib/urlState'
+import { useUrlState } from '@/lib/urlState'
 import { fromTableSort, toTableSort } from '@/features/assets/listQuery'
 import { useQueryClient } from '@tanstack/vue-query'
+import { useAssetTypes } from '@/features/asset-types/api'
 import { assetKeys, useAsset } from '@/features/assets/api'
-import { type LoanParams, useBusinessDay, useLoans } from '../api'
-import { loanStateTag, type Period, periodRange, requestCode, returnByLabel } from '../borrowing'
+
+import { useBusinessDay, useLoans } from '../api'
+import { loanStateTag, type Period, requestCode, returnByLabel } from '../borrowing'
+import { type LoanShow, type LoanSort, loanEmptyText, loanParams, parseLoanQuery, serializeLoanQuery } from '../loanQuery'
 import CodeTag from '@/components/CodeTag.vue'
 import ReturnDialog from '../components/ReturnDialog.vue'
 
-// Khoản mượn (US-10..12): Out now (mặc định, quá hạn lên trước), Returned hay All; lọc theo kỳ
-// (khoản ở ngoài lúc nào đó trong kỳ) và từ khoá (tag/tên tài sản, người mượn). Bấm dòng mở tài
-// sản. mine: khoản của chính mình (My loans), chỉ xem.
+// Khoản mượn (US-10..12, US-20): trạng thái (Out now mặc định, quá hạn lên trước; Overdue, Returned,
+// Returned late, All, cùng tên với nhãn trên dòng), loại tài sản, kỳ (khoản ở ngoài lúc nào đó
+// trong kỳ) và từ khoá (tag/tên tài sản, người mượn). Bấm dòng mở tài sản. mine: khoản của chính
+// mình (My loans), chỉ xem.
 const props = defineProps<{ mine?: boolean }>()
-type Sort = NonNullable<LoanParams['sort']>
-type Show = 'active' | 'returned' | 'all'
-const SORTS: Sort[] = ['started_on', '-started_on', 'return_by', '-return_by', 'returned_on', '-returned_on']
-const SHOWS: Show[] = ['active', 'returned', 'all']
-const PERIODS: Period[] = ['any', 'this_month', 'last_month', 'last_30', 'custom']
+type Sort = LoanSort
+type Show = LoanShow
 const { size: pageSize, set: setPageSize } = usePageSize(props.mine ? 'my-loans' : 'loans')
-const { state, update } = useUrlState(
-  (q) => {
-    const sort = queryString(q.sort) as Sort | undefined
-    const show = queryString(q.show) as Show | undefined
-    const period = queryString(q.period) as Period | undefined
-    return {
-      show: show && SHOWS.includes(show) ? show : ('active' as Show),
-      period: period && PERIODS.includes(period) ? period : ('any' as Period),
-      from: queryString(q.from) ?? '',
-      to: queryString(q.to) ?? '',
-      q: queryString(q.q) ?? '',
-      sort: sort && SORTS.includes(sort) ? sort : undefined,
-      page: queryInt(q.page, 1),
-    }
-  },
-  (s) => ({
-    show: s.show === 'active' ? undefined : s.show,
-    period: s.period === 'any' ? undefined : s.period,
-    from: s.period === 'custom' && s.from ? s.from : undefined,
-    to: s.period === 'custom' && s.to ? s.to : undefined,
-    q: s.q || undefined,
-    sort: s.sort,
-    page: s.page > 1 ? String(s.page) : undefined,
-  }),
-)
+const { state, update } = useUrlState(parseLoanQuery, serializeLoanQuery)
 
 const today = useBusinessDay(true)
-// kỳ đang lọc: lựa chọn sẵn tính từ hôm nay của ứng dụng; Custom lấy from/to trên URL
-const range = computed<{ from?: string; to?: string }>(() => {
-  const p = state.value.period
-  if (p === 'any') return {}
-  if (p === 'custom') return { from: state.value.from || undefined, to: state.value.to || undefined }
-  return periodRange(p, today.value)
-})
-const params = computed<LoanParams>(() => ({
-  mine: props.mine || undefined,
-  state: state.value.show,
-  ...range.value,
-  q: state.value.q || undefined,
-  sort: state.value.sort,
-  page: state.value.page,
-  page_size: pageSize.value,
-}))
+const params = computed(() => loanParams(state.value, { mine: props.mine, today: today.value, pageSize: pageSize.value }))
 
 const showOptions: SegmentOption<Show>[] = [
   { label: 'Out now', value: 'active' },
+  { label: 'Overdue', value: 'overdue' },
   { label: 'Returned', value: 'returned' },
+  { label: 'Returned late', value: 'returned_late' },
   { label: 'All', value: 'all' },
 ]
 const show = computed({ get: () => state.value.show, set: (v: Show) => update({ show: v, page: 1 }) })
@@ -105,6 +69,8 @@ function onRange(v: unknown) {
   if (from && to) update({ from: toDateString(from) ?? '', to: toDateString(to) ?? '', page: 1 })
 }
 
+// loại của khoản mượn cũ vẫn có thể đã lưu trữ, nên lấy cả loại đã lưu trữ
+const { data: types } = useAssetTypes(true)
 const search = ref(state.value.q)
 let timer: ReturnType<typeof setTimeout> | undefined
 watch(search, (q) => {
@@ -112,11 +78,7 @@ watch(search, (q) => {
   timer = setTimeout(() => update({ q, page: 1 }), 300)
 })
 
-const emptyText = computed(() => {
-  if (state.value.q || state.value.period !== 'any') return 'No loans match these filters.'
-  if (state.value.show === 'active') return props.mine ? 'You have nothing on loan.' : 'Nothing is on loan right now.'
-  return props.mine ? "You haven't returned anything yet." : 'No loans yet.'
-})
+const emptyText = computed(() => loanEmptyText(state.value, props.mine))
 
 const tableSort = computed(() => toTableSort(state.value.sort))
 function onSort(e: DataTableSortEvent) {
@@ -188,9 +150,19 @@ const table = useListTable({ open: openAsset, showMenu: rowMenu.showContext })
         show-icon
         @update:model-value="onRange"
       />
-      <IconField v-if="!mine">
+      <Select
+        :model-value="state.type || null"
+        :options="types ?? []"
+        option-label="name"
+        option-value="id"
+        placeholder="All types"
+        show-clear
+        aria-label="Asset type"
+        @update:model-value="(v: string | null) => update({ type: v ?? '', page: 1 })"
+      />
+      <IconField>
         <InputIcon class="pi pi-search" />
-        <InputText v-model="search" placeholder="Search asset or person" aria-label="Search loans" />
+        <InputText v-model="search" :placeholder="mine ? 'Search your loans by asset' : 'Search asset or person'" aria-label="Search loans" />
       </IconField>
     </div>
     <RowMenus :menu="rowMenu" />
@@ -231,7 +203,7 @@ const table = useListTable({ open: openAsset, showMenu: rowMenu.showContext })
       <Column header="Return by" sort-field="return_by" sortable>
         <template #body="{ data: l }: { data: Loan }">{{ returnByLabel(l.return_by) }}</template>
       </Column>
-      <Column v-if="state.show !== 'active'" header="Returned on" sort-field="returned_on" sortable>
+      <Column v-if="state.show !== 'active' && state.show !== 'overdue'" header="Returned on" sort-field="returned_on" sortable>
         <template #body="{ data: l }: { data: Loan }">{{ l.returned_on ? formatDate(l.returned_on) : '—' }}</template>
       </Column>
       <Column header="Status">

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/xuri/excelize/v2"
 
 	idcontract "storeit/internal/identity/contract"
@@ -35,14 +36,22 @@ type app struct {
 	t      *testing.T
 	h      http.Handler
 	tokens *jwt.Provider
+	pool   *pgxpool.Pool
+	// names: tên các tài khoản giả (stubAccounts); test đăng ký trước khi gọi API
+	names map[uuid.UUID]string
 }
 
 func newApp(t *testing.T) *app { return newAppWith(t, 0) }
 
 // newAppWith dựng app với trần số dòng export (0 là mặc định của service)
-func newAppWith(t *testing.T, maxRows int) *app {
+func newAppWith(t *testing.T, maxRows int) *app { return newAppClock(t, maxRows, nil) }
+
+// newAppClock: như newAppWith, với đồng hồ của service (nil là giờ thật). Đóng băng đồng hồ khi test
+// so ngày với "hôm nay" của app, để không lệch nếu chạy qua nửa đêm
+func newAppClock(t *testing.T, maxRows int, now func() time.Time) *app {
 	t.Helper()
 	pool := dbtest.Pool(t)
+	names := map[uuid.UUID]string{}
 	client, err := jobs.NewInsertClient(pool, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -63,15 +72,16 @@ func newAppWith(t *testing.T, maxRows int) *app {
 		Events:   assets,
 
 		Profiles:      repository.NewExportProfileRepository(pool, outbox),
-		Accounts:      stubAccounts{},
+		Accounts:      stubAccounts{names: names},
 		ExportMaxRows: maxRows,
+		Now:           now,
 		Borrowing:     repository.NewBorrowingRepository(pool, outbox, jobs.NewRiver(client)),
 	})
 	srv := server.New(server.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err := handler.New(svc).Mount(srv.Router(), tokens); err != nil {
 		t.Fatal(err)
 	}
-	return &app{t: t, h: srv.Handler(), tokens: tokens}
+	return &app{t: t, h: srv.Handler(), tokens: tokens, pool: pool, names: names}
 }
 
 // token phát access token mang đúng các quyền cho trước (không cần identity)
@@ -638,23 +648,38 @@ func TestReorderOverHTTP(t *testing.T) {
 	}
 }
 
-// stubAccounts trả tên cố định, thay cho identity trong test
-type stubAccounts struct{}
+// stubAccounts thay cho identity trong test: tên lấy từ names, không có thì "Người dùng";
+// SearchAccounts khớp names theo chuỗi con, không phân biệt hoa thường
+type stubAccounts struct{ names map[uuid.UUID]string }
 
-func (stubAccounts) GetAccount(_ context.Context, id uuid.UUID) (idcontract.Account, error) {
-	return idcontract.Account{ID: id, Name: "Người dùng", Active: true}, nil
+func (s stubAccounts) account(id uuid.UUID) idcontract.Account {
+	name, ok := s.names[id]
+	if !ok {
+		name = "Người dùng"
+	}
+	return idcontract.Account{ID: id, Name: name, Active: true}
 }
 
-func (stubAccounts) GetAccounts(_ context.Context, ids []uuid.UUID) ([]idcontract.Account, error) {
+func (s stubAccounts) GetAccount(_ context.Context, id uuid.UUID) (idcontract.Account, error) {
+	return s.account(id), nil
+}
+
+func (s stubAccounts) GetAccounts(_ context.Context, ids []uuid.UUID) ([]idcontract.Account, error) {
 	out := make([]idcontract.Account, len(ids))
 	for i, id := range ids {
-		out[i] = idcontract.Account{ID: id, Name: "Người dùng", Active: true}
+		out[i] = s.account(id)
 	}
 	return out, nil
 }
 
-func (stubAccounts) SearchAccounts(context.Context, string, int) ([]idcontract.Account, error) {
-	return nil, nil
+func (s stubAccounts) SearchAccounts(_ context.Context, q string, _ int) ([]idcontract.Account, error) {
+	var out []idcontract.Account
+	for id, name := range s.names {
+		if strings.Contains(strings.ToLower(name), strings.ToLower(q)) {
+			out = append(out, s.account(id))
+		}
+	}
+	return out, nil
 }
 
 func TestExportOverHTTP(t *testing.T) {
@@ -1395,6 +1420,20 @@ func TestBorrowingOverHTTP(t *testing.T) {
 	rec = a.do("GET", "/api/v1/loans?state=all&from=2026-11-02&to=2026-11-01", officer, nil)
 	if _, fields := problem(t, rec); rec.Code != 422 || len(fields) == 0 || !strings.HasPrefix(fields[0], "from") {
 		t.Errorf("from after to = %d %v, want 422 on from", rec.Code, fields)
+	}
+	// Lọc theo trạng thái và loại (US-20): hai trạng thái mới qua được bộ kiểm tra yêu cầu, loại lạ cho trang rỗng
+	for _, st := range []string{"overdue", "returned_late"} {
+		if rec := a.do("GET", "/api/v1/loans?state="+st, officer, nil); rec.Code != 200 {
+			t.Errorf("state=%s = %d, want 200", st, rec.Code)
+		}
+	}
+	if p := decode[historyPage](t, a.do("GET", "/api/v1/loans?state=all&type_id="+uuid.NewString(), officer, nil), 200); len(p.Items) != 0 {
+		t.Errorf("unknown type lists %d loans, want none", len(p.Items))
+	}
+	for _, q := range []string{"state=late", "type_id=nope"} {
+		if rec := a.do("GET", "/api/v1/loans?"+q, officer, nil); rec.Code < 400 || rec.Code >= 500 {
+			t.Errorf("%s = %d, want a 4xx", q, rec.Code)
+		}
 	}
 	for _, p := range []string{"/api/v1/borrow-tickets", "/api/v1/loans", "/api/v1/borrowers", "/api/v1/borrow-tickets/summary"} {
 		if rec := a.do("GET", p, "", nil); rec.Code != 401 {

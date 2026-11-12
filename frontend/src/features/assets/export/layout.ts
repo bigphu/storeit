@@ -167,6 +167,12 @@ export function profilePatch(
   return Object.keys(out).length ? out : null
 }
 
+// profileOptionLabel: tên trong ô chọn profile; của người khác thì kèm chủ, vì hai người có thể
+// đặt cùng một tên và nếu không sẽ không phân biệt được
+export function profileOptionLabel(p: { name: string; owner: { id: string; name: string } }, meId: string | undefined): string {
+  return p.owner.id === meId ? p.name : `${p.name} · ${p.owner.name}`
+}
+
 // exportFileName: tên file như server đặt (service/export.go exportFileName); day là YYYY-MM-DD
 export function exportFileName(mode: 'data' | 'report', profileName: string | undefined, day: string): string {
   if (mode === 'data') return `storeit-assets-${day}.xlsx`

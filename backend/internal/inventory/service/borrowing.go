@@ -431,13 +431,15 @@ func (s *Service) LendAsset(ctx context.Context, assetID, borrowerID uuid.UUID, 
 	return s.view(ctx, a)
 }
 
-// LoanQuery: danh sách khoản mượn (US-12). Mine: của chính actor; State "active" (mặc định),
-// "returned", "all"; From/To là kỳ; Q tìm theo tag/tên tài sản hay người mượn
+// LoanQuery: danh sách khoản mượn (US-12, US-20). Mine: của chính actor; State "active" (mặc
+// định), "overdue", "returned", "returned_late", "all"; From/To là kỳ; TypeID là loại tài sản; Q tìm
+// theo tag/tên tài sản hay người mượn
 type LoanQuery struct {
 	Mine           bool
 	State          string
 	From, To       *time.Time
 	AssetID        *uuid.UUID
+	TypeID         *uuid.UUID
 	Q, Sort        string
 	Page, PageSize int
 }
@@ -445,7 +447,7 @@ type LoanQuery struct {
 // ListLoans: khoản mượn; Mine là của chính actor (quyền mượn nào cũng được), còn lại (cả lịch sử
 // một tài sản) cần borrow.manage
 func (s *Service) ListLoans(ctx context.Context, lq LoanQuery) ([]LoanView, int64, error) {
-	f := domain.LoanFilter{State: lq.State, From: lq.From, To: lq.To, AssetID: lq.AssetID, Sort: lq.Sort, Page: lq.Page, PageSize: lq.PageSize}
+	f := domain.LoanFilter{State: lq.State, From: lq.From, To: lq.To, AssetID: lq.AssetID, TypeID: lq.TypeID, Sort: lq.Sort, Page: lq.Page, PageSize: lq.PageSize}
 	if lq.Mine && lq.AssetID == nil {
 		actor, _, err := borrowActor(ctx)
 		if err != nil {
@@ -460,9 +462,9 @@ func (s *Service) ListLoans(ctx context.Context, lq LoanQuery) ([]LoanView, int6
 	switch f.State {
 	case "":
 		f.State = "active"
-	case "active", "returned", "all":
+	case "active", "overdue", "returned", "returned_late", "all":
 	default:
-		return nil, 0, loanField("state", "must be active, returned or all")
+		return nil, 0, loanField("state", "must be active, overdue, returned, returned_late or all")
 	}
 	if f.From != nil && f.To != nil && f.From.After(*f.To) {
 		return nil, 0, loanField("from", "must not be after to")

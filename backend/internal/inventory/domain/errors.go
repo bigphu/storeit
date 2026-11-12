@@ -97,8 +97,10 @@ var (
 		errs.WithDetail("Built-in statuses cannot be archived or change kind."))
 	ErrStatusIsDefault = errs.Conflict("/errors/status-is-default", "Default status",
 		errs.WithDetail("Make another status the default of this kind before archiving it."))
-	ErrExportProfileNameTaken = errs.Conflict("/errors/export-profile-name-taken", "You already have a profile with this name")
-	ErrExportProfileChanged   = errs.Conflict("/errors/export-profile-changed", "Profile changed",
+	// Không nói "bạn": người quản lý đổi tên hay khôi phục profile của người khác cũng gặp lỗi này
+	ErrExportProfileNameTaken = errs.Conflict("/errors/export-profile-name-taken", "Export profile name already in use",
+		errs.WithDetail("Another profile of the same owner already uses this name."))
+	ErrExportProfileChanged = errs.Conflict("/errors/export-profile-changed", "Profile changed",
 		errs.WithDetail("The profile was changed by someone else. Reload it and try again."))
 	ErrExportProfileForbidden = errs.Forbidden("/errors/export-profile-forbidden", "Can't change this profile",
 		errs.WithDetail("Only its owner, or someone who can manage export profiles, can change a shared profile."))

@@ -3,6 +3,7 @@ package repository_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -129,5 +130,42 @@ func TestExportProfiles_RestoreChecksTheLockedRow(t *testing.T) {
 	}
 	if cur, err := r.profiles.GetAny(ctx, p.ID); err != nil || cur.DeletedAt == nil {
 		t.Errorf("profile after refused restore: deleted_at %v, err %v; want still deleted", cur.DeletedAt, err)
+	}
+}
+
+// Luật tên (US-09): đổi tên vào tên đã có (khác hoa thường vẫn trùng) và khôi phục profile mà
+// tên đã bị dùng lại đều bị từ chối, profile giữ nguyên
+func TestExportProfiles_NameRules(t *testing.T) {
+	r := newRepos(t)
+	ctx := actorCtx()
+	owner, lay := uuid.New(), domain.DefaultReportLayout()
+	a, err := r.profiles.Create(ctx, domain.NewExportProfile{OwnerID: owner, Name: "Alpha " + uniq(), Layout: lay})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := r.profiles.Create(ctx, domain.NewExportProfile{OwnerID: owner, Name: "Beta " + uniq(), Layout: lay})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	taken := strings.ToUpper(b.Name)
+	if _, err := r.profiles.Update(ctx, a.ID, domain.ExportProfileChange{Name: &taken, Version: a.Version}); !errors.Is(err, domain.ErrExportProfileNameTaken) {
+		t.Errorf("rename into a taken name: %v", err)
+	}
+	if got, err := r.profiles.Get(ctx, a.ID); err != nil || got.Name != a.Name || got.Version != a.Version {
+		t.Errorf("profile after a refused rename = %+v, %v", got, err)
+	}
+
+	if err := r.profiles.Delete(ctx, b.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.profiles.Create(ctx, domain.NewExportProfile{OwnerID: owner, Name: b.Name, Layout: lay}); err != nil {
+		t.Fatalf("the name of a deleted profile is free again: %v", err)
+	}
+	if _, err := r.profiles.Restore(ctx, b.ID, nil); !errors.Is(err, domain.ErrExportProfileNameTaken) {
+		t.Errorf("restore over a reused name: %v", err)
+	}
+	if got, err := r.profiles.GetAny(ctx, b.ID); err != nil || got.DeletedAt == nil {
+		t.Errorf("profile after a refused restore = %+v, %v; want still deleted", got, err)
 	}
 }

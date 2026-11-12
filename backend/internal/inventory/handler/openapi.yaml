@@ -974,8 +974,10 @@ paths:
           schema: { type: string, enum: [started_on, -started_on, return_by, -return_by, returned_on, -returned_on] }
         - name: state
           in: query
-          description: active (default, not returned yet), returned, or all
-          schema: { type: string, enum: [active, returned, all] }
+          description: >-
+            active (default, not returned yet), overdue (not returned, return_by before today),
+            returned, returned_late (returned after return_by), or all
+          schema: { type: string, enum: [active, overdue, returned, returned_late, all] }
         - name: from
           in: query
           description: Period start; a loan matches when it was out at any point in [from, to]
@@ -991,11 +993,15 @@ paths:
           in: query
           description: One asset's loans (inventory.borrow.manage)
           schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
+        - name: type_id
+          in: query
+          description: Only loans of assets of this type; an unknown type gives an empty page
+          schema: { $ref: '../../../api/common.yaml#/components/schemas/ID' }
         - $ref: '../../../api/common.yaml#/components/parameters/Page'
         - $ref: '../../../api/common.yaml#/components/parameters/PageSize'
       responses:
         "200":
-          description: One page of active loans
+          description: One page of loans
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LoanPage' }
