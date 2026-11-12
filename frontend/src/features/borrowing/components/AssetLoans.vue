@@ -10,7 +10,7 @@ import TableSkeleton from '@/components/TableSkeleton.vue'
 import type { Loan } from '@/lib/api/types'
 import { formatDate } from '@/lib/dates'
 import { useLoans } from '../api'
-import { loanStateTag, requestCode } from '../borrowing'
+import { loanStateTag, requestCode, returnByLabel } from '../borrowing'
 import CodeTag from '@/components/CodeTag.vue'
 
 // Lịch sử mượn của một tài sản (US-12, người quản lý): mọi khoản, mới nhất trước
@@ -27,7 +27,7 @@ const { data, isLoading } = useLoans(computed(() => ({ asset_id: props.assetId, 
       <template #body="{ data: l }: { data: Loan }">{{ formatDate(l.started_on) }}</template>
     </Column>
     <Column header="Return by">
-      <template #body="{ data: l }: { data: Loan }">{{ formatDate(l.return_by) }}</template>
+      <template #body="{ data: l }: { data: Loan }">{{ returnByLabel(l.return_by) }}</template>
     </Column>
     <Column header="Returned on">
       <template #body="{ data: l }: { data: Loan }">{{ l.returned_on ? formatDate(l.returned_on) : '—' }}</template>

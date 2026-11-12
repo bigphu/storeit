@@ -27,7 +27,7 @@ import { fromTableSort, toTableSort } from '@/features/assets/listQuery'
 import { useQueryClient } from '@tanstack/vue-query'
 import { assetKeys, useAsset } from '@/features/assets/api'
 import { type LoanParams, useBusinessDay, useLoans } from '../api'
-import { loanStateTag, type Period, periodRange, requestCode } from '../borrowing'
+import { loanStateTag, type Period, periodRange, requestCode, returnByLabel } from '../borrowing'
 import CodeTag from '@/components/CodeTag.vue'
 import ReturnDialog from '../components/ReturnDialog.vue'
 
@@ -229,7 +229,7 @@ const table = useListTable({ open: openAsset, showMenu: rowMenu.showContext })
         <template #body="{ data: l }: { data: Loan }">{{ formatDate(l.started_on) }}</template>
       </Column>
       <Column header="Return by" sort-field="return_by" sortable>
-        <template #body="{ data: l }: { data: Loan }">{{ formatDate(l.return_by) }}</template>
+        <template #body="{ data: l }: { data: Loan }">{{ returnByLabel(l.return_by) }}</template>
       </Column>
       <Column v-if="state.show !== 'active'" header="Returned on" sort-field="returned_on" sortable>
         <template #body="{ data: l }: { data: Loan }">{{ l.returned_on ? formatDate(l.returned_on) : '—' }}</template>

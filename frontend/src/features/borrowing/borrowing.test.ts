@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Status } from '@/lib/api/types'
+import { formatDate } from '@/lib/dates'
 import {
   canSeeTicket,
   isBorrowingStatus,
@@ -16,6 +17,7 @@ import {
   requestCode,
   RETURN_FINE,
   returnConditionOptions,
+  returnByLabel,
   returnFormError,
   ticketLoanLabel,
   satisfies,
@@ -62,6 +64,12 @@ describe('labels', () => {
   it('shows a date as day and short month', () => {
     expect(shortDay('2026-11-07')).toBe('7 Nov')
     expect(shortDay(undefined)).toBe('')
+  })
+  it('says No due date for a loan without a return-by date', () => {
+    expect(returnByLabel(null)).toBe('No due date')
+    expect(returnByLabel(undefined)).toBe('No due date')
+    expect(returnByLabel('2026-11-09')).toBe(formatDate('2026-11-09'))
+    expect(returnByLabel('2026-11-09')).not.toBe('No due date')
   })
 })
 
