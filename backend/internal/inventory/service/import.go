@@ -322,6 +322,7 @@ func (s *Service) planImport(ctx context.Context, data []byte) (*importPlan, err
 			for _, a := range active {
 				codes = append(codes, a.Code)
 			}
+			slices.Sort(codes) // thứ tự cố định, dễ tìm trong gợi ý
 			if len(codes) > 12 {
 				codes = append(codes[:12], "…")
 			}
